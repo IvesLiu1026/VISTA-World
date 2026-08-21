@@ -348,6 +348,24 @@ class GitHubAppRestAdapterTests(unittest.TestCase):
             self.adapter(Transport(oversized)).read_branch_sha(
                 CANONICAL_REPOSITORY, "main"
             )
+        oversized_not_found = GitHubResponse(
+            status=404,
+            headers=(),
+            body=b" " * (MAX_RESPONSE_BYTES + 1),
+        )
+        with self.assertRaisesRegex(GitHubAdapterError, "oversized"):
+            self.adapter(Transport(oversized_not_found)).read_branch_sha(
+                CANONICAL_REPOSITORY, BRANCH
+            )
+        oversized_retry = GitHubResponse(
+            status=503,
+            headers=(),
+            body=b" " * (MAX_RESPONSE_BYTES + 1),
+        )
+        with self.assertRaisesRegex(GitHubAdapterError, "oversized"):
+            self.adapter(Transport(oversized_retry)).read_branch_sha(
+                CANONICAL_REPOSITORY, "main"
+            )
         nonfinite = GitHubResponse(
             status=200,
             headers=(("Content-Type", "application/json"),),

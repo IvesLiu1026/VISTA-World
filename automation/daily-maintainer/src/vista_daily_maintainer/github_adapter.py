@@ -631,6 +631,9 @@ class GitHubAppRestAdapter:
                 or type(response.body) is not bytes
             ):
                 raise GitHubAdapterError("GitHub transport returned invalid data")
+            if len(response.body) > MAX_RESPONSE_BYTES:
+                raise GitHubAdapterError("GitHub response is oversized")
+            _headers(response.headers)
             if 300 <= response.status < 400:
                 raise GitHubAdapterError("GitHub redirect is forbidden")
             if method == "GET" and response.status in {502, 503, 504}:
@@ -647,8 +650,6 @@ class GitHubAppRestAdapter:
         expected_status = 201 if method == "POST" else 200
         if response.status != expected_status:
             raise GitHubAdapterError("GitHub API returned an unexpected status")
-        if len(response.body) > MAX_RESPONSE_BYTES:
-            raise GitHubAdapterError("GitHub response is oversized")
         content_type = headers.get("content-type", "").split(";", 1)[0].strip().lower()
         if content_type not in {"application/json", "application/vnd.github+json"}:
             raise GitHubAdapterError("GitHub response content type is invalid")
