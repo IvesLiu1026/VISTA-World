@@ -501,6 +501,7 @@ class FakeRuntime:
 
 
 def make_principal(policy: Policy) -> PrincipalSnapshot:
+    app = policy.principal_mode is PrincipalMode.GITHUB_APP
     return PrincipalSnapshot(
         mode=policy.principal_mode,
         actor=policy.expected_actor,
@@ -508,12 +509,16 @@ def make_principal(policy: Policy) -> PrincipalSnapshot:
         installation_id=policy.installation_id,
         repository=CANONICAL_REPOSITORY,
         permissions=policy.permissions,
-        repository_scoped=policy.principal_mode is PrincipalMode.GITHUB_APP,
-        is_admin=policy.principal_mode is PrincipalMode.CLI_BOOTSTRAP,
+        repository_scoped=app,
+        is_admin=not app,
         can_bypass_branch_protection=(
             policy.principal_mode is PrincipalMode.CLI_BOOTSTRAP
         ),
         committer=GitIdentity(policy.committer_name, policy.committer_email),
+        authority_sha256="a" * 64 if app else None,
+        protected_policy_sha256=(
+            hashlib.sha256(policy.canonical_bytes).hexdigest() if app else None
+        ),
     )
 
 
@@ -536,7 +541,6 @@ class FakeGitHub:
         self.fail_stage: str | None = None
         self.open_actor = policy.expected_actor
         self.open_draft = True
-        self.commit_read_head_override: str | None = None
         self.final_pr_read_mode: str | None = None
 
     def inspect_principal(self, repository: str, mode: PrincipalMode):
@@ -550,13 +554,6 @@ class FakeGitHub:
     def read_branch_sha(self, repository: str, branch: str):
         self._fail("branch")
         return self.branches.get(branch)
-
-    def read_commit(self, repository: str, head_sha: str):
-        self._fail("commit")
-        commit = self.commits[head_sha]
-        if self.commit_read_head_override is not None:
-            return replace(commit, head_sha=self.commit_read_head_override)
-        return commit
 
     def list_pull_requests(self, repository: str, head_branch: str):
         self._fail("list-pr")
@@ -623,6 +620,7 @@ class FakeGit:
         self.bad_commit: dict[str, object] = {}
         self.skip_remote_branch_write = False
         self.commit_read_head_override: str | None = None
+        self.remote_commit_read_head_override: str | None = None
 
     def inspect_patch(self, worktree: Path, base_sha: str):
         return self.patch
@@ -654,6 +652,18 @@ class FakeGit:
         commit = self.commits[head_sha]
         if self.commit_read_head_override is not None:
             return replace(commit, head_sha=self.commit_read_head_override)
+        return commit
+
+    def inspect_remote_commit(
+        self,
+        worktree: Path,
+        repository: str,
+        branch: str,
+        head_sha: str,
+    ):
+        commit = self.github.commits[head_sha]
+        if self.remote_commit_read_head_override is not None:
+            return replace(commit, head_sha=self.remote_commit_read_head_override)
         return commit
 
     def push_new_branch(self, worktree: Path, spec) -> None:
@@ -842,7 +852,7 @@ class PublisherContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             fixture = Fixture(Path(temporary))
             fixture.publish()
-            fixture.github.commit_read_head_override = OTHER_HEAD_SHA
+            fixture.git.remote_commit_read_head_override = OTHER_HEAD_SHA
             with self.assertRaisesRegex(
                 PublicationPreflightError, "returned another commit"
             ):
@@ -856,7 +866,7 @@ class PublisherContractTests(unittest.TestCase):
                 if stage == "local":
                     fixture.git.commit_read_head_override = OTHER_HEAD_SHA
                 else:
-                    fixture.github.commit_read_head_override = OTHER_HEAD_SHA
+                    fixture.git.remote_commit_read_head_override = OTHER_HEAD_SHA
                 with self.assertRaisesRegex(
                     PublicationPreflightError, "returned another commit"
                 ):
@@ -1138,6 +1148,8 @@ class PublisherContractTests(unittest.TestCase):
             replace(make_principal(policy), repository_scoped=False),
             replace(make_principal(policy), is_admin=True),
             replace(make_principal(policy), can_bypass_branch_protection=True),
+            replace(make_principal(policy), authority_sha256=None),
+            replace(make_principal(policy), protected_policy_sha256="f" * 64),
         )
         for principal in cases:
             with (

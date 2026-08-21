@@ -411,6 +411,8 @@ class PrincipalSnapshot:
     is_admin: bool
     can_bypass_branch_protection: bool
     committer: GitIdentity
+    authority_sha256: str | None
+    protected_policy_sha256: str | None
 
 
 @dataclass(frozen=True)
@@ -572,6 +574,14 @@ class GitPort(Protocol):
 
     def inspect_commit(self, worktree: Path, head_sha: str) -> CommitRecord: ...
 
+    def inspect_remote_commit(
+        self,
+        worktree: Path,
+        repository: str,
+        branch: str,
+        head_sha: str,
+    ) -> CommitRecord: ...
+
     def push_new_branch(self, worktree: Path, spec: PushSpec) -> None: ...
 
 
@@ -583,8 +593,6 @@ class GitHubPort(Protocol):
     def inspect_repository(self, repository: str) -> RepositorySnapshot: ...
 
     def read_branch_sha(self, repository: str, branch: str) -> str | None: ...
-
-    def read_commit(self, repository: str, head_sha: str) -> CommitRecord: ...
 
     def list_pull_requests(
         self, repository: str, head_branch: str
@@ -691,6 +699,8 @@ class _PrincipalState:
     is_admin: bool
     can_bypass_branch_protection: bool
     committer: GitIdentity
+    authority_sha256: str | None
+    protected_policy_sha256: str | None
 
 
 _T = TypeVar("_T")
@@ -773,7 +783,7 @@ class Publisher:
                 raise PublicationConflictError(
                     "existing pull request cannot be reconciled without one branch"
                 )
-            remote_commit = self._read_remote_commit(remote_head)
+            remote_commit = self._read_remote_commit(repo, evidence.branch, remote_head)
             self._validate_commit(remote_commit, commit_spec, evidence)
             self._validate_pull_request(
                 pull_requests[0], pr_spec, principal, remote_head
@@ -794,7 +804,9 @@ class Publisher:
                 principal,
             )
             self._require_remote_branch(evidence.branch, remote_head)
-            final_remote_commit = self._read_remote_commit(remote_head)
+            final_remote_commit = self._read_remote_commit(
+                repo, evidence.branch, remote_head
+            )
             self._validate_commit(final_remote_commit, commit_spec, evidence)
             if final_remote_commit != remote_commit:
                 raise PublicationPreflightError(
@@ -816,7 +828,7 @@ class Publisher:
         commit: CommitRecord | None = None
         reconciled = remote_head is not None
         if remote_head is not None:
-            commit = self._read_remote_commit(remote_head)
+            commit = self._read_remote_commit(repo, evidence.branch, remote_head)
             self._validate_commit(commit, commit_spec, evidence)
             if local is not None and local.head_sha not in {
                 evidence.base_sha,
@@ -906,7 +918,9 @@ class Publisher:
                 lambda: self._git.push_new_branch(repo, push_spec),
             )
             self._require_remote_branch(evidence.branch, commit.head_sha)
-            remote_commit = self._read_remote_commit(commit.head_sha)
+            remote_commit = self._read_remote_commit(
+                repo, evidence.branch, commit.head_sha
+            )
             self._validate_commit(remote_commit, commit_spec, evidence)
             remote_head = commit.head_sha
         elif remote_head != commit.head_sha:
@@ -915,6 +929,7 @@ class Publisher:
             )
 
         self._before_pr_write(
+            repo,
             remote_head,
             commit_spec,
             envelope_reference,
@@ -929,7 +944,7 @@ class Publisher:
             lambda: self._github.open_draft_pull_request(pr_spec),
         )
         self._require_remote_branch(evidence.branch, remote_head)
-        remote_commit = self._read_remote_commit(remote_head)
+        remote_commit = self._read_remote_commit(repo, evidence.branch, remote_head)
         self._validate_commit(remote_commit, commit_spec, evidence)
         pull_requests = self._read_pull_requests(evidence.branch)
         if len(pull_requests) != 1:
@@ -947,7 +962,9 @@ class Publisher:
             principal,
         )
         self._require_remote_branch(evidence.branch, remote_head)
-        final_remote_commit = self._read_remote_commit(remote_head)
+        final_remote_commit = self._read_remote_commit(
+            repo, evidence.branch, remote_head
+        )
         self._validate_commit(final_remote_commit, commit_spec, evidence)
         if final_remote_commit != remote_commit:
             raise PublicationPreflightError("remote commit changed after PR creation")
@@ -1015,6 +1032,7 @@ class Publisher:
 
     def _before_pr_write(
         self,
+        repo: Path,
         remote_head: str,
         commit_spec: CommitSpec,
         envelope_reference: FinalizedEnvelopeReference,
@@ -1026,7 +1044,7 @@ class Publisher:
     ) -> None:
         self._revalidate_context(policy_reference, policy, runtime, principal, evidence)
         self._require_remote_branch(evidence.branch, remote_head)
-        remote_commit = self._read_remote_commit(remote_head)
+        remote_commit = self._read_remote_commit(repo, evidence.branch, remote_head)
         self._validate_commit(remote_commit, commit_spec, evidence)
         self._revalidate_envelope(envelope_reference, evidence)
 
@@ -1194,10 +1212,20 @@ class Publisher:
             raise PublicationPreflightError("local commit read returned another commit")
         return commit
 
-    def _read_remote_commit(self, head_sha: str) -> CommitRecord:
+    def _read_remote_commit(
+        self,
+        repo: Path,
+        branch: str,
+        head_sha: str,
+    ) -> CommitRecord:
         value = self._port_call(
             "remote commit read",
-            lambda: self._github.read_commit(CANONICAL_REPOSITORY, head_sha),
+            lambda: self._git.inspect_remote_commit(
+                repo,
+                CANONICAL_REPOSITORY,
+                branch,
+                head_sha,
+            ),
         )
         commit = _copy_commit(value)
         if commit.head_sha != head_sha:
@@ -2102,6 +2130,19 @@ def _freeze_principal(value: PrincipalSnapshot) -> _PrincipalState:
     if not isinstance(value.committer, GitIdentity):
         raise PublicationPreflightError("principal committer is invalid")
     committer = GitIdentity(value.committer.name, value.committer.email)
+    authority_sha256 = (
+        None
+        if value.authority_sha256 is None
+        else _copy_sha256(value.authority_sha256, "principal authority digest")
+    )
+    protected_policy_sha256 = (
+        None
+        if value.protected_policy_sha256 is None
+        else _copy_sha256(
+            value.protected_policy_sha256,
+            "principal protected-policy digest",
+        )
+    )
     return _PrincipalState(
         mode=mode,
         actor=actor,
@@ -2113,6 +2154,8 @@ def _freeze_principal(value: PrincipalSnapshot) -> _PrincipalState:
         is_admin=value.is_admin,
         can_bypass_branch_protection=value.can_bypass_branch_protection,
         committer=committer,
+        authority_sha256=authority_sha256,
+        protected_policy_sha256=protected_policy_sha256,
     )
 
 
@@ -2128,12 +2171,25 @@ def _validate_principal(value: _PrincipalState, policy: _PolicyState) -> None:
     ):
         raise PublicationPreflightError("publisher principal is not policy pinned")
     if value.mode is PrincipalMode.GITHUB_APP:
+        if (
+            value.authority_sha256 is None
+            or value.protected_policy_sha256 != policy.canonical_sha256
+        ):
+            raise PublicationPreflightError(
+                "publisher App authority is not protected-policy bound"
+            )
         if not value.repository_scoped:
             raise PublicationPreflightError("publisher App is not repository scoped")
         if value.is_admin or value.can_bypass_branch_protection:
             raise PublicationPreflightError(
                 "publisher App is admin or can bypass protection"
             )
+    elif (
+        value.authority_sha256 is not None or value.protected_policy_sha256 is not None
+    ):
+        raise PublicationPreflightError(
+            "CLI bootstrap principal cannot claim App authority evidence"
+        )
 
 
 def _copy_repository(value: RepositorySnapshot) -> RepositorySnapshot:
