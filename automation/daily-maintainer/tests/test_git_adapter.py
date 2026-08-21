@@ -761,6 +761,17 @@ class GitPublisherAdapterTests(unittest.TestCase):
                 self.git_evidence.sha256,
             )
 
+    def test_fixed_git_config_disables_detached_maintenance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = self.fixture(temporary)
+            config = fixture.adapter._fixed_config()  # noqa: SLF001
+            values = config[1::2]
+            self.assertIn("fetch.writeCommitGraph=false", values)
+            self.assertIn("gc.auto=0", values)
+            self.assertIn("gc.autoDetach=false", values)
+            self.assertIn("maintenance.auto=false", values)
+            self.assertIn("maintenance.autoDetach=false", values)
+
     def test_local_test_transport_is_bare_and_not_an_https_escape_hatch(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = self.fixture(temporary)
