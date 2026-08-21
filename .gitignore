@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*~
+
+# Runtime and generated evidence
+runs/
+tmp/
+logs/
+checkpoints/
+reports/
+Saved/
+Intermediate/
+DerivedDataCache/
+Binaries/
+
+# Large 3D/runtime artifacts stay in external storage
+*.blend
+*.blend1
+*.glb
+*.gltf
+*.uasset
+*.umap
+*.pak

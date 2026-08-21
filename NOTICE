@@ -1,0 +1,12 @@
+VISTA World
+Copyright 2026 VISTA World contributors
+
+Portions of this repository are derived from SimWorld Studio
+(https://github.com/qkaren/SimWorld-Studio), distributed under the
+Apache License, Version 2.0.
+
+VISTA-specific world contracts, verified event projections, compiler logic,
+automation specifications, and subsequent modifications are maintained in this
+standalone repository. Selected commit authorship is preserved in Git history.
+
+This NOTICE is informational and does not modify the Apache License, Version 2.0.

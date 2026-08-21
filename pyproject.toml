@@ -1,0 +1,11 @@
+[project]
+name = "vista-world"
+version = "0.1.0"
+description = "Agent-driven interactive 3D simulation world contracts and tooling"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "jsonschema>=4.26,<5",
+]
+
+[tool.uv]
+package = false

@@ -1,0 +1,53 @@
+{
+  "schema_version": "vista.world.repository-seed-receipt.v1",
+  "source_repository": "IvesLiu1026/SimWorld-Studio",
+  "source_branch": "codex/vista-playable-home-realism",
+  "source_commit": "6eba26d0d2237f8e405ecf82655bf414ee162b84",
+  "source_is_fork": true,
+  "target_repository": "IvesLiu1026/VISTA-World",
+  "target_branch": "main",
+  "visibility": "public",
+  "extraction": {
+    "tool": "git-filter-repo",
+    "version": "2.47.0",
+    "version_commit": "a40bce548d2c",
+    "pre_bootstrap_head": "41238125a2572933f3bcc5cb89b221bb94304978",
+    "retained_commits": 7,
+    "retained_files": 22,
+    "retained_bytes": 246854,
+    "full_commit_map_sha256": "17b88c441ebf8eb857be3f321f96e6685a80e083853e10e1f6056cac64fe3cc6"
+  },
+  "content": {
+    "license_sha256": "c12745ec87379ed895673383b6d81ad675782728c7b5c87b6204817abf339699",
+    "house_sha256": "ccdf385b4ec8b88221ccd5c68eb5553fb7186e5aa5e87095176e1c3c62fec45f",
+    "rooms": 6,
+    "entities": 34,
+    "events": 7
+  },
+  "excluded": [
+    "SimWorld Studio web/server and adapters",
+    "Unreal, Blender, HSSD and packaged-runtime pipelines",
+    "visual profiles and external assets",
+    "binaries, generated packages, receipts, runs and local configuration",
+    "canonical datasets and evidence"
+  ],
+  "validation": {
+    "completed_at": "2026-08-21T16:53:00+08:00",
+    "contract_compiler_tests": {
+      "command": "PYTHONPATH=tools uv run python -m unittest tools.tests.test_vista_playable_home_contracts tools.tests.test_vista_playable_home_compiler -v",
+      "passed": 28,
+      "failed": 0
+    },
+    "secret_scan": {
+      "tool": "gitleaks",
+      "version": "8.30.1",
+      "linux_x64_archive_sha256": "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb",
+      "history_commits_scanned": 7,
+      "history_findings": 0,
+      "working_tree_findings": 0,
+      "redacted_output": true
+    },
+    "git_diff_check": "pass",
+    "symlinks": 0
+  }
+}

@@ -1,0 +1,11 @@
+# Critical automation, policy, dependency, and repository-control surfaces.
+/.github/ @IvesLiu1026
+/AGENTS.md @IvesLiu1026
+/SECURITY.md @IvesLiu1026
+/pyproject.toml @IvesLiu1026
+/uv.lock @IvesLiu1026
+/automation/daily-maintainer/ @IvesLiu1026
+/ops/systemd/ @IvesLiu1026
+/docs/maintenance/backlog.* @IvesLiu1026
+/docs/maintenance/validation-profiles.* @IvesLiu1026
+/docs/maintenance/policy.md @IvesLiu1026
