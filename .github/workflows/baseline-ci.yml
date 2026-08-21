@@ -1,0 +1,106 @@
+name: Baseline CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baseline-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: contracts-and-compiler
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.11.0"
+          enable-cache: false
+
+      - name: Sync locked dependencies
+        run: uv sync --frozen
+
+      - name: Run contract and compiler tests
+        env:
+          PYTHONPATH: tools
+        run: |
+          uv run python -m unittest \
+            tools.tests.test_vista_playable_home_contracts \
+            tools.tests.test_vista_playable_home_compiler -v
+
+      - name: Validate the public world pack
+        env:
+          PYTHONPATH: tools
+        run: |
+          uv run python tools/worlds/playable_home.py validate \
+            --house world_packs/vista_playable_home_r1/house.json \
+            --events-dir world_packs/vista_playable_home_r1/events
+
+      - name: Verify tests did not mutate tracked source
+        run: git diff --exit-code
+
+  policy:
+    name: repository-policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out complete retained history without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Reject symlinks, binaries, and oversized tracked files
+        shell: bash
+        run: |
+          set -euo pipefail
+          symlinks="$(git ls-files -s | awk '$1 == "120000" {print $4}')"
+          if [[ -n "$symlinks" ]]; then
+            printf 'Tracked symlinks are forbidden:\n%s\n' "$symlinks" >&2
+            exit 1
+          fi
+
+          forbidden="$(git ls-files | grep -Ei '\.(blend|blend1|glb|gltf|uasset|umap|pak|pem|key)$' || true)"
+          if [[ -n "$forbidden" ]]; then
+            printf 'Tracked binary/credential extensions are forbidden:\n%s\n' "$forbidden" >&2
+            exit 1
+          fi
+
+          oversized="$(git ls-tree -r -l HEAD | awk '$4 > 1048576 {print $4, $5}')"
+          if [[ -n "$oversized" ]]; then
+            printf 'Tracked files above 1 MiB are forbidden:\n%s\n' "$oversized" >&2
+            exit 1
+          fi
+
+      - name: Install checksum-pinned Gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=8.30.1
+          archive="gitleaks_${version}_linux_x64.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${version}/${archive}"
+          printf '%s  %s\n' \
+            '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb' \
+            "$archive" | sha256sum --check --strict
+          tar -xzf "$archive" gitleaks
+          chmod 0755 gitleaks
+
+      - name: Scan complete Git history for secrets
+        run: ./gitleaks git --no-banner --redact --verbose .
