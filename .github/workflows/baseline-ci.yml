@@ -43,6 +43,19 @@ jobs:
             tools.tests.test_vista_playable_home_contracts \
             tools.tests.test_vista_playable_home_compiler -v
 
+      - name: Validate the Daily Maintainer safety core
+        run: |
+          uv lock --project automation/daily-maintainer --check
+          uv run --project automation/daily-maintainer --locked \
+            python -m unittest discover \
+            -s automation/daily-maintainer/tests \
+            -t automation/daily-maintainer \
+            -p 'test_*.py'
+          uv run --project automation/daily-maintainer --locked \
+            ruff check automation/daily-maintainer
+          uv build --project automation/daily-maintainer \
+            --out-dir "$RUNNER_TEMP/daily-maintainer-dist"
+
       - name: Validate the public world pack
         env:
           PYTHONPATH: tools
