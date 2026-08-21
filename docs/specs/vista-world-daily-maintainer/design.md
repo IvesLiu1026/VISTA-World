@@ -174,13 +174,14 @@ world package receipts, datasets, scenes, reports, generated artifacts and NAS p
 - Publisher opens draft. A separate promotion controller marks it ready only after required checks
   and receipt digest pass. Draft PRs are never directly auto-merged.
 
-Attribution is a product decision, not a hidden implementation detail. Default design uses a bot
-author. If the user explicitly selects personal attribution, the exact author/committer/trailer
-contract must be recorded before rollout.
+Attribution is a product decision, not a hidden implementation detail. The approved v1 contract
+uses the mapped Ives author identity and the mandatory automation trailer. The publisher App remains
+the separately recorded committer/PR actor; this does not represent an unattended commit as manual
+human work.
 
 | Role | Recommended principal | Recorded evidence |
 |---|---|---|
-| Commit author | `VISTA World Maintenance Bot` | author email + automation trailer |
+| Commit author | `Ives Liu <zhiy0517xiang@gmail.com>` | exact author email + `Automated-by: Codex Daily Maintainer` |
 | Git committer | publisher GitHub App/bot | committer identity + signed/verified state |
 | PR actor | repo-scoped publisher App | PR author/login |
 | Promotion actor | separate workflow/App | check/promotion event actor |
