@@ -36,8 +36,10 @@ Depends on: requirements.md, design.md
   - Requirements: R8, R10
   - Validation: headless preflight reports selected principal type, exact App installation or CLI
     login, repo and scopes; test branch/PR round-trip works. Wrong principal fails before mutation.
-  - Progress: `IvesLiu1026` CLI/SSH bootstrap and protected PR round-trip passed. A non-admin,
-    repo-scoped App/principal is still required before unattended publication.
+  - Progress: `IvesLiu1026` CLI/SSH bootstrap and protected PR round-trip passed. A bounded
+    draft-only REST adapter now consumes independently attested App authority, but the protected
+    authority reader, short-lived token issuer and streaming TLS transport remain unimplemented.
+    A real non-admin, repo-scoped App/principal is still required before unattended publication.
 
 - [x] T4. Define candidate and receipt contracts
   - Files: `automation/daily-maintainer/*.schema.json`, typed models
@@ -109,9 +111,14 @@ Depends on: requirements.md, design.md
   - Requirements: R5, R6, R8, R9
   - Validation: fake-GitHub integration proves digest binding, separate principal, draft PR body,
     no force-push/duplicate PR, author/committer/PR actor attribution and no model credential.
-  - Progress: publisher orchestration contract, principal/policy checks and draft-only read-back
-    protocol are implemented. The typed finalizer/authority bridge passed independent acceptance
-    review; immutable spool plus concrete Git/GitHub/runtime adapters remain open.
+  - Progress: publisher orchestration, principal/policy checks, exact finalizer reconstruction,
+    control-owned immutable spool, shell-free Git and bounded draft-only GitHub REST adapters are
+    implemented with local-bare/fake-transport tests. Production HTTPS credentials, authority and
+    transport providers remain open. A prototype publisher/rematerializer bridge was independently
+    rejected and excluded from the integration branch: preflight must precede rematerialization,
+    the canonical spool subject/bundle/policy must be independently bound, filesystem aliases must
+    be rejected, and Git mutations must validate the attested checkout inode at the operation
+    boundary. T10 remains incomplete until all four gates pass exact integration review.
 
 - [ ] T11. Add repo-owned CI and merge policy
   - Files: `.github/workflows/daily-maintainer-ci.yml`, policy docs
@@ -138,6 +145,10 @@ Depends on: requirements.md, design.md
   - Validation: patcher and publisher use distinct credential boundaries; enable/disable/reboot/
     missed-run drill, Asia/Taipei schedule, singleton lock and three-failure halt all pass without
     touching runtime services.
+  - Progress: dormant deployment evidence models distinct control/patcher/publisher UIDs,
+    publisher-read-only inbound spool, separate publisher state, disjoint initially empty roots and
+    patcher-unmounted namespaces. No service, timer, mount namespace or production credential is
+    installed or enabled.
 
 - [ ] T14. Run report-only and canary acceptance
   - Depends on: T5-T13
