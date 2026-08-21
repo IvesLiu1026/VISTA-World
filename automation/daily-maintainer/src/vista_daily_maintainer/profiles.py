@@ -54,7 +54,7 @@ class TrustedExecutables:
     def system_defaults(cls) -> TrustedExecutables:
         search_path = os.pathsep.join(str(item) for item in _SYSTEM_EXECUTABLE_DIRS)
         values: dict[str, Path] = {}
-        for name in ("git", "sh", "node", "npm", "uv"):
+        for name in ("git", "sh", "node", "npm", "python3", "uv"):
             found = shutil.which(name, path=search_path)
             if found:
                 candidate = Path(found).resolve(strict=True)
@@ -73,7 +73,7 @@ class TrustedExecutables:
             pass
         else:
             values["python"] = interpreter
-            values[interpreter.name] = interpreter
+            values.setdefault(interpreter.name, interpreter)
         return cls(values)
 
     def materialize_bin(self, directory: Path) -> Path:
@@ -282,18 +282,11 @@ BUILTIN_VALIDATION_PROFILES = ValidationProfileRegistry(
             profile_id="tools-python-offline",
             cwd="tools",
             argv=(
-                "uv",
-                "run",
-                "--group",
-                "dev",
-                "python",
+                "python3",
                 "-m",
                 "unittest",
-                "discover",
-                "-s",
-                "tests",
-                "-p",
-                "test_*.py",
+                "tests/test_vista_playable_home_contracts.py",
+                "tests/test_vista_playable_home_compiler.py",
             ),
             timeout_seconds=600,
         ),

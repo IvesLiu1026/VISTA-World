@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import json
 import os
 import re
 import stat
@@ -34,29 +35,233 @@ _V1_PROFILE_IDS = frozenset(
 _V1_FORBIDDEN_AUTHORITY = frozenset(
     {
         ".agent",
+        ".agents",
         ".claude",
         ".codex",
         ".github",
+        "accepted",
+        "artifacts",
         "assets",
         "auth",
+        "automation",
         "credentials",
         "datasets",
         "deploy",
         "evidence",
         "infra",
         "infrastructure",
+        "journal",
+        "ledger",
         "network",
         "ops",
+        "outputs",
+        "prompts",
+        "receipts",
+        "reports",
+        "runs",
         "runtime",
+        "scenes",
         "secrets",
         "systemd",
         "ue",
         "unreal",
         "unreal_plugins",
+        "world-packs",
+        "world_packs",
     }
 )
 _V1_FORBIDDEN_AUTHORITY_TOKENS = _V1_FORBIDDEN_AUTHORITY | frozenset(
     {"credential", "secret"}
+)
+_V1_PROTECTED_AUTHORITY_BASENAMES = frozenset(
+    {
+        ".babelrc",
+        ".coveragerc",
+        ".eslintignore",
+        ".eslintrc",
+        ".flake8",
+        ".go-version",
+        ".gitattributes",
+        ".gitignore",
+        ".gitmodules",
+        ".java-version",
+        ".mailmap",
+        ".mcp.json",
+        ".mise.toml",
+        ".node-version",
+        ".nvmrc",
+        ".nycrc",
+        ".npmrc",
+        ".pre-commit-config.yaml",
+        ".pre-commit-config.yml",
+        ".pre-commit-hooks.yaml",
+        ".pre-commit-hooks.yml",
+        ".prettierignore",
+        ".prettierrc",
+        ".pypirc",
+        ".pylintrc",
+        ".python-version",
+        ".ruby-version",
+        ".ruff.toml",
+        ".tool-versions",
+        "backlog.yaml",
+        "biome.json",
+        "biome.jsonc",
+        "build.gradle",
+        "build.gradle.kts",
+        "bun.lock",
+        "bun.lockb",
+        "cargo.lock",
+        "cargo.toml",
+        "cmakelists.txt",
+        "codecov.yaml",
+        "codecov.yml",
+        "composer.json",
+        "composer.lock",
+        "conda-lock.lock",
+        "conda-lock.yaml",
+        "conda-lock.yml",
+        "conda.yaml",
+        "conda.yml",
+        "conftest.py",
+        "constraints.txt",
+        "deno.json",
+        "deno.jsonc",
+        "docker-compose.yaml",
+        "docker-compose.yml",
+        "dockerfile",
+        "environment.lock",
+        "environment.lock.yaml",
+        "environment.lock.yml",
+        "environment.yaml",
+        "environment.yml",
+        "flake.lock",
+        "flake.nix",
+        "gemfile",
+        "gemfile.lock",
+        "go.mod",
+        "go.sum",
+        "gradle.properties",
+        "gradle-wrapper.properties",
+        "hatch.toml",
+        "jest.config.cjs",
+        "jest.config.js",
+        "jest.config.mjs",
+        "jest.config.ts",
+        "justfile",
+        "makefile",
+        "manifest.in",
+        "meson.build",
+        "meson_options.txt",
+        "mise.toml",
+        "mkdocs.yaml",
+        "mkdocs.yml",
+        "mypy.ini",
+        "noxfile.py",
+        "npm-shrinkwrap.json",
+        "nx.json",
+        "package-lock.json",
+        "package.json",
+        "pdm.lock",
+        "pdm.toml",
+        "pipfile",
+        "pipfile.lock",
+        "pixi.lock",
+        "pixi.toml",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "poetry.lock",
+        "poetry.toml",
+        "pom.xml",
+        "pylock.toml",
+        "pyproject.toml",
+        "pyrightconfig.json",
+        "pytest.ini",
+        "requirements.in",
+        "requirements.txt",
+        "ruff.toml",
+        "runtime.txt",
+        "setup.cfg",
+        "setup.py",
+        "shell.nix",
+        "sitecustomize.py",
+        "taskfile.yaml",
+        "taskfile.yml",
+        "tsconfig.json",
+        "turbo.json",
+        "tox.ini",
+        "uv.lock",
+        "uv.toml",
+        "usercustomize.py",
+        "validation-profiles.yaml",
+        "validation_profiles.yaml",
+        "volta.json",
+        "vite.config.cjs",
+        "vite.config.js",
+        "vite.config.mjs",
+        "vite.config.ts",
+        "vitest.config.cjs",
+        "vitest.config.js",
+        "vitest.config.mjs",
+        "vitest.config.ts",
+        "webpack.config.cjs",
+        "webpack.config.js",
+        "webpack.config.mjs",
+        "webpack.config.ts",
+        "yarn.lock",
+    }
+)
+_V1_PROTECTED_AUTHORITY_BASENAME_PREFIXES = (
+    ".babelrc.",
+    ".coveragerc.",
+    ".eslintrc.",
+    ".nycrc.",
+    ".pre-commit-config.",
+    ".pre-commit-hooks.",
+    ".prettierrc.",
+    ".stylelintrc",
+    ".yarnrc",
+    "babel.config.",
+    "codecov.",
+    "conda-lock.",
+    "coverage.",
+    "cypress.config.",
+    "docker-compose.",
+    "dockerfile.",
+    "eslint.config.",
+    "jest.config.",
+    "karma.conf.",
+    "makefile.",
+    "playwright.config.",
+    "prettier.config.",
+    "pylock.",
+    "requirements",
+    "ruff.",
+    "taskfile.",
+    "tsconfig.",
+    "vite.config.",
+    "vitest.config.",
+    "webpack.config.",
+)
+_V1_PROTECTED_AUTHORITY_PATTERN_WITNESSES = frozenset(
+    {
+        ".coveragerc.local",
+        ".eslintrc.json",
+        ".prettierrc.yaml",
+        "cypress.config.ts",
+        "dockerfile.dev",
+        "eslint.config.mjs",
+        "jest.config.ts",
+        "makefile.inc",
+        "playwright.config.ts",
+        "requirements-dev.txt",
+        "ruff.local.toml",
+        "taskfile.local.yaml",
+        "tsconfig.build.json",
+        "vite.config.ts",
+        "vitest.config.ts",
+        "webpack.config.ts",
+    }
 )
 _V1_TIER1_PREFIXES = (
     "contracts/",
@@ -194,8 +399,10 @@ class Candidate:
             raise CandidateContractError("candidate risk tier must be 0, 1, 2, or 3")
         if not isinstance(self.allowed_paths, tuple) or not self.allowed_paths:
             raise CandidateContractError("candidate must own at least one allowed path")
-        if len(set(self.allowed_paths)) != len(self.allowed_paths):
-            raise CandidateContractError("candidate allowed paths must be unique")
+        if tuple(sorted(set(self.allowed_paths))) != self.allowed_paths:
+            raise CandidateContractError(
+                "candidate allowed paths must be sorted and unique"
+            )
         for pattern in self.allowed_paths:
             validate_allowed_path(pattern)
         if not isinstance(self.acceptance, tuple) or not self.acceptance:
@@ -209,8 +416,10 @@ class Candidate:
             raise CandidateContractError(
                 "candidate must reference a validation profile"
             )
-        if len(set(self.validation_profiles)) != len(self.validation_profiles):
-            raise CandidateContractError("candidate validation profiles must be unique")
+        if tuple(sorted(set(self.validation_profiles))) != self.validation_profiles:
+            raise CandidateContractError(
+                "candidate validation profiles must be sorted and unique"
+            )
         for profile_id in self.validation_profiles:
             if not isinstance(profile_id, str) or not _PROFILE_ID.fullmatch(profile_id):
                 raise CandidateContractError(
@@ -258,6 +467,54 @@ class Candidate:
         }
 
 
+def candidate_authorization_payload(candidate: Candidate) -> dict[str, object]:
+    """Return the canonical, complete authority projection for one candidate.
+
+    ``Candidate.normalized_payload`` is intentionally safe for the unprivileged
+    model and therefore omits scheduling and provenance fields.  Every trusted
+    stage uses this complete projection so the verifier, run state, finalizer,
+    and publisher bind the same reviewed authority.
+    """
+
+    if not isinstance(candidate, Candidate):
+        raise CandidateContractError("candidate must use the strict contract")
+    return {
+        "schema_version": "vista.world.daily-maintainer.candidate-authority.v1",
+        "candidate": candidate.normalized_payload(),
+        "state": candidate.state,
+        "not_before": (
+            candidate.not_before.isoformat() if candidate.not_before else None
+        ),
+        "expires_on": candidate.expires_on.isoformat()
+        if candidate.expires_on
+        else None,
+        "source": {
+            "kind": candidate.source.kind,
+            "manifest_revision": candidate.source.manifest_revision,
+            "approved_by": candidate.source.approved_by,
+            "issue_url": candidate.source.issue_url,
+        },
+    }
+
+
+def candidate_authorization_digest(candidate: Candidate) -> str:
+    """Return the lowercase SHA-256 of canonical candidate authority JSON."""
+
+    try:
+        payload = json.dumps(
+            candidate_authorization_payload(candidate),
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8", "strict")
+    except (TypeError, ValueError, UnicodeError) as exc:
+        raise CandidateContractError(
+            "candidate authority is not canonical JSON"
+        ) from exc
+    return hashlib.sha256(payload).hexdigest()
+
+
 @dataclass(frozen=True)
 class Backlog:
     schema_version: str
@@ -265,6 +522,135 @@ class Backlog:
     approved_by: str
     sha256: str
     candidates: tuple[Candidate, ...]
+
+    def __post_init__(self) -> None:
+        _validate_backlog_authority(self)
+
+
+def backlog_candidate_bindings(backlog: Backlog) -> tuple[str, ...]:
+    """Return canonical candidate-ID/digest membership for one strict backlog."""
+
+    _validate_backlog_authority(backlog)
+    bindings = tuple(
+        sorted(
+            f"{candidate.candidate_id}:{candidate_authorization_digest(candidate)}"
+            for candidate in backlog.candidates
+        )
+    )
+    if len(set(bindings)) != len(bindings):
+        raise CandidateContractError("backlog candidate authority must be unique")
+    return bindings
+
+
+def backlog_authorization_digest(backlog: Backlog) -> str:
+    """Bind backlog identity to the complete canonical candidate membership."""
+
+    bindings = backlog_candidate_bindings(backlog)
+    return backlog_authorization_digest_from_bindings(
+        schema_version=backlog.schema_version,
+        manifest_revision=backlog.manifest_revision,
+        approved_by=backlog.approved_by,
+        backlog_sha256=backlog.sha256,
+        candidate_bindings=bindings,
+    )
+
+
+def backlog_authorization_digest_from_bindings(
+    *,
+    schema_version: str,
+    manifest_revision: int,
+    approved_by: str,
+    backlog_sha256: str,
+    candidate_bindings: tuple[str, ...],
+) -> str:
+    """Recompute backlog membership authority from a finalized projection."""
+
+    if schema_version != BACKLOG_SCHEMA_VERSION:
+        raise CandidateContractError("unsupported backlog authority schema")
+    if (
+        isinstance(manifest_revision, bool)
+        or not isinstance(manifest_revision, int)
+        or manifest_revision < 1
+    ):
+        raise CandidateContractError("backlog authority revision must be positive")
+    if not isinstance(approved_by, str) or not _APPROVER.fullmatch(approved_by):
+        raise CandidateContractError("backlog authority approver is invalid")
+    if not isinstance(backlog_sha256, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", backlog_sha256
+    ):
+        raise CandidateContractError("backlog authority digest must be SHA-256")
+    if (
+        not isinstance(candidate_bindings, tuple)
+        or not candidate_bindings
+        or candidate_bindings != tuple(sorted(set(candidate_bindings)))
+    ):
+        raise CandidateContractError(
+            "backlog candidate bindings must be sorted and unique"
+        )
+    binding_pattern = re.compile(r"^VW-DM-[0-9]{4,}:[0-9a-f]{64}$")
+    if any(
+        not isinstance(binding, str) or not binding_pattern.fullmatch(binding)
+        for binding in candidate_bindings
+    ):
+        raise CandidateContractError("backlog candidate binding is invalid")
+    candidate_ids = tuple(binding.split(":", 1)[0] for binding in candidate_bindings)
+    if len(set(candidate_ids)) != len(candidate_ids):
+        raise CandidateContractError("backlog candidate binding IDs must be unique")
+    payload = {
+        "schema_version": "vista.world.daily-maintainer.backlog-authority.v1",
+        "backlog_schema_version": schema_version,
+        "manifest_revision": manifest_revision,
+        "approved_by": approved_by,
+        "backlog_sha256": backlog_sha256,
+        "candidate_bindings": list(candidate_bindings),
+    }
+    try:
+        encoded = json.dumps(
+            payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8", "strict")
+    except (TypeError, ValueError, UnicodeError) as exc:
+        raise CandidateContractError("backlog authority is not canonical JSON") from exc
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _validate_backlog_authority(backlog: Backlog) -> None:
+    if not isinstance(backlog, Backlog):
+        raise CandidateContractError("backlog must use the strict contract")
+    if backlog.schema_version != BACKLOG_SCHEMA_VERSION:
+        raise CandidateContractError("unsupported backlog authority schema")
+    if (
+        isinstance(backlog.manifest_revision, bool)
+        or not isinstance(backlog.manifest_revision, int)
+        or backlog.manifest_revision < 1
+    ):
+        raise CandidateContractError("backlog authority revision must be positive")
+    if not isinstance(backlog.approved_by, str) or not _APPROVER.fullmatch(
+        backlog.approved_by
+    ):
+        raise CandidateContractError("backlog authority approver is invalid")
+    if not isinstance(backlog.sha256, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", backlog.sha256
+    ):
+        raise CandidateContractError("backlog authority digest must be SHA-256")
+    if not isinstance(backlog.candidates, tuple) or not backlog.candidates:
+        raise CandidateContractError("backlog authority candidates must be non-empty")
+    if any(not isinstance(candidate, Candidate) for candidate in backlog.candidates):
+        raise CandidateContractError("backlog authority candidate is invalid")
+    ids = tuple(candidate.candidate_id for candidate in backlog.candidates)
+    if len(set(ids)) != len(ids):
+        raise CandidateContractError("backlog candidate IDs must be unique")
+    if any(
+        candidate.source.manifest_revision != backlog.manifest_revision
+        or candidate.source.approved_by != backlog.approved_by
+        for candidate in backlog.candidates
+    ):
+        raise CandidateContractError(
+            "backlog candidate provenance must match backlog authority"
+        )
 
 
 def _validate_text(value: object, label: str, *, minimum: int, maximum: int) -> None:
@@ -349,6 +735,40 @@ def _is_v1_test_filename(name: str) -> bool:
     )
 
 
+def is_v1_test_scope(path: str) -> bool:
+    """Return whether an actual path or allowlist pattern is test-only in V1."""
+
+    parts = tuple(part.lower() for part in path.split("/") if part)
+    return bool(parts) and (
+        any(part in {"test", "tests", "fixtures", "__snapshots__"} for part in parts)
+        or _is_v1_test_filename(parts[-1])
+    )
+
+
+def is_v1_protected_authority_basename(
+    name: str,
+    *,
+    pattern: bool = False,
+) -> bool:
+    """Share dependency, build, and validation authority policy across gates."""
+
+    lowered = name.lower()
+    if lowered in _V1_PROTECTED_AUTHORITY_BASENAMES or lowered.startswith(
+        _V1_PROTECTED_AUTHORITY_BASENAME_PREFIXES
+    ):
+        return True
+    if (
+        not pattern
+        or lowered in {"*", "**"}
+        or not any(character in lowered for character in "*?")
+    ):
+        return False
+    witnesses = (
+        _V1_PROTECTED_AUTHORITY_BASENAMES | _V1_PROTECTED_AUTHORITY_PATTERN_WITNESSES
+    )
+    return any(path_matches_pattern(witness, lowered) for witness in witnesses)
+
+
 def has_v1_forbidden_authority(path: str, *, pattern: bool = False) -> bool:
     """Return whether a path or scoped pattern crosses a V1 authority boundary.
 
@@ -365,6 +785,12 @@ def has_v1_forbidden_authority(path: str, *, pattern: bool = False) -> bool:
             return True
         if index == len(parts) - 1 and _is_v1_test_filename(part):
             continue
+        if index == len(parts) - 1 and (
+            is_v1_protected_authority_basename(part, pattern=pattern)
+            or part.startswith(".env")
+            or part.endswith((".service", ".socket", ".timer"))
+        ):
+            return True
         tokens = tuple(token for token in re.split(r"[._-]+", part) if token)
         for token in tokens:
             if token in _V1_FORBIDDEN_AUTHORITY_TOKENS:
@@ -397,30 +823,11 @@ def enforce_v1_candidate_policy(candidate: Candidate) -> None:
         )
     for pattern in candidate.allowed_paths:
         lowered = pattern.lower()
-        parts = tuple(part for part in lowered.split("/") if part)
         if pattern == "**" or has_v1_forbidden_authority(pattern, pattern=True):
             raise CandidateContractError(
                 f"V1 candidate policy forbids path authority: {pattern}"
             )
-        is_test_scope = (
-            any(part in {"test", "tests", "fixtures"} for part in parts)
-            or parts[-1].startswith(("test_", "test-"))
-            or parts[-1].endswith(
-                (
-                    "_test.py",
-                    ".test.js",
-                    ".test.jsx",
-                    ".test.mjs",
-                    ".test.ts",
-                    ".test.tsx",
-                    ".spec.js",
-                    ".spec.jsx",
-                    ".spec.mjs",
-                    ".spec.ts",
-                    ".spec.tsx",
-                )
-            )
-        )
+        is_test_scope = is_v1_test_scope(pattern)
         if candidate.risk_tier == 0:
             if not (lowered.startswith("docs/") or is_test_scope):
                 raise CandidateContractError(

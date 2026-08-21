@@ -1,0 +1,1315 @@
+from __future__ import annotations
+
+import dataclasses
+import datetime as dt
+import hashlib
+import json
+import tempfile
+import unittest
+from dataclasses import replace
+from pathlib import Path
+
+from vista_daily_maintainer.candidate import (
+    BACKLOG_SCHEMA_VERSION,
+    Candidate,
+    CandidateContractError,
+    CandidateSource,
+    backlog_authorization_digest_from_bindings,
+    candidate_authorization_digest,
+)
+from vista_daily_maintainer.finalizer import verified_head_digest
+from vista_daily_maintainer.publisher import (
+    AUTOMATION_TRAILER,
+    CANONICAL_REPOSITORY,
+    DEFAULT_BRANCH,
+    FINALIZED_ENVELOPE_SCHEMA,
+    IVES_AUTHOR,
+    PROTECTED_POLICY_SCHEMA,
+    PUBLISHER_ENVIRONMENT_ALLOWLIST,
+    CommitRecord,
+    DraftPullRequestSpec,
+    FinalizedEnvelopeReference,
+    GitIdentity,
+    LocalBranchSnapshot,
+    PatchSnapshot,
+    PrincipalMode,
+    PrincipalSnapshot,
+    ProtectedPolicyReference,
+    PublicationConflictError,
+    PublicationContractError,
+    PublicationOperationError,
+    PublicationPreflightError,
+    Publisher,
+    PullRequestSnapshot,
+    RepositorySnapshot,
+    RuntimeAttestation,
+)
+from vista_daily_maintainer.state import (
+    BranchDisposition,
+    Lifecycle,
+    PublicationSnapshot,
+    RunKey,
+    RunState,
+    StateContractError,
+    state_digest,
+)
+from vista_daily_maintainer.worktree import WorktreeManager
+from vista_daily_maintainer.verifier import (
+    VerificationSubject,
+    isolation_evidence_digest,
+    verification_check_subject_digest,
+)
+
+
+BASE_SHA = "a" * 40
+HEAD_SHA = "b" * 40
+OTHER_HEAD_SHA = "8" * 40
+MOVED_SHA = "f" * 40
+PATCH_SHA256 = "c" * 64
+FINAL_GUARD_SHA256 = "e" * 64
+APP_ACTOR = "vista-world-maintainer[bot]"
+APP_COMMITTER = GitIdentity(
+    "VISTA World Maintainer",
+    "vista-world-maintainer@users.noreply.github.com",
+)
+PERMISSIONS = ("contents:write", "metadata:read", "pull_requests:write")
+
+
+def canonical_json(value: object) -> bytes:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        allow_nan=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+@dataclasses.dataclass(frozen=True)
+class Check:
+    command_id: str
+    output_sha256: str
+    subject_sha256: str | None = None
+    exit_code: int = 0
+    timed_out: bool = False
+
+
+class Envelope:
+    def __init__(self, **changes: object) -> None:
+        self._explicit_fields = frozenset(changes)
+        values: dict[str, object] = {
+            "schema_version": FINALIZED_ENVELOPE_SCHEMA,
+            "finalized": True,
+            "run_date": "2026-08-21",
+            "repository": CANONICAL_REPOSITORY,
+            "base_sha": BASE_SHA,
+            "backlog_sha256": "4" * 64,
+            "backlog_schema_version": BACKLOG_SCHEMA_VERSION,
+            "backlog_manifest_revision": 7,
+            "backlog_approved_by": "IvesLiu1026",
+            "run_remote": "origin",
+            "run_remote_branch": "main",
+            "run_lifecycle": "worktree_ready",
+            "run_branch_disposition": "created",
+            "run_branch_head_sha": BASE_SHA,
+            "run_worktree_path": "/tmp/vista-world-publisher-fixture",
+            "run_observed_remote_sha": BASE_SHA,
+            "run_publication_state": "unknown",
+            "candidate_id": "VW-DM-0001",
+            "candidate_slug": "docs-contract",
+            "candidate_title": "Correct one documented contract drift",
+            "risk_tier": 0,
+            "acceptance": ("The documented command matches the tested CLI.",),
+            "allowed_paths": ("docs/**",),
+            "changed_paths": ("docs/guide.md",),
+            "validation_profile_ids": ("daily-maintainer-core-tests",),
+            "expected_external_side_effects": "none",
+            "candidate_state": "open",
+            "candidate_not_before": None,
+            "candidate_expires_on": None,
+            "source_kind": "curated_backlog",
+            "source_manifest_revision": 7,
+            "source_approved_by": "IvesLiu1026",
+            "source_issue_url": None,
+            "guard_ok": True,
+            "guard_patch_sha256": PATCH_SHA256,
+            "final_guard_ok": True,
+            "final_guard_patch_sha256": PATCH_SHA256,
+            "final_guard_sha256": FINAL_GUARD_SHA256,
+            "mutation_detected": False,
+            "isolation_network_isolated": True,
+            "isolation_credentials_absent": True,
+            "isolation_verified_by": "outer-sandbox-controller",
+            "checks": (
+                Check("git-diff-check", "2" * 64),
+                Check("daily-maintainer-core-tests", "3" * 64),
+            ),
+        }
+        values.update(changes)
+        values.setdefault(
+            "run_id",
+            f"{values['run_date']}/{values['repository']}@{values['base_sha']}",
+        )
+        values.setdefault(
+            "branch_name",
+            (
+                f"codex/daily/{values['run_date']}-{values['candidate_slug']}-"
+                f"{str(values['base_sha'])[:8]}"
+            ),
+        )
+        if "candidate_sha256" not in values:
+            try:
+                values["candidate_sha256"] = self._candidate_digest(values)
+            except CandidateContractError:
+                values["candidate_sha256"] = "0" * 64
+        if "head_sha256" not in values:
+            values["head_sha256"] = verified_head_digest(
+                str(values["base_sha"]),
+                str(values["final_guard_patch_sha256"]),
+                values["changed_paths"],  # type: ignore[arg-type]
+            )
+        if "run_state_sha256" not in values:
+            try:
+                values["run_state_sha256"] = self._run_state_digest(values)
+            except (StateContractError, TypeError, ValueError):
+                values["run_state_sha256"] = "5" * 64
+        values.setdefault(
+            "backlog_candidate_bindings",
+            (f"{values['candidate_id']}:{values['candidate_sha256']}",),
+        )
+        if "backlog_authorization_sha256" not in values:
+            try:
+                values["backlog_authorization_sha256"] = (
+                    self._backlog_authorization_digest(values)
+                )
+            except (CandidateContractError, TypeError, ValueError):
+                values["backlog_authorization_sha256"] = "6" * 64
+        if "verification_subject_sha256" not in values:
+            try:
+                values["verification_subject_sha256"] = self._verification_subject(
+                    values
+                ).sha256
+            except (TypeError, ValueError):
+                values["verification_subject_sha256"] = "7" * 64
+        values.setdefault(
+            "check_subject_sha256",
+            verification_check_subject_digest(
+                str(values["verification_subject_sha256"]),
+                str(values["guard_patch_sha256"]),
+            ),
+        )
+        values["checks"] = tuple(
+            replace(
+                item,
+                subject_sha256=(
+                    item.subject_sha256 or str(values["check_subject_sha256"])
+                ),
+            )
+            for item in values["checks"]  # type: ignore[union-attr]
+        )
+        values.setdefault(
+            "isolation_subject_sha256",
+            values["verification_subject_sha256"],
+        )
+        values.setdefault("isolation_patch_sha256", values["guard_patch_sha256"])
+        values.setdefault(
+            "isolation_evidence_sha256",
+            isolation_evidence_digest(
+                subject_sha256=str(values["isolation_subject_sha256"]),
+                patch_sha256=str(values["isolation_patch_sha256"]),
+                network_isolated=values["isolation_network_isolated"],  # type: ignore[arg-type]
+                credentials_absent=values["isolation_credentials_absent"],  # type: ignore[arg-type]
+                observed_by=str(values["isolation_verified_by"]),
+            ),
+        )
+        for name, value in values.items():
+            setattr(self, name, value)
+        self.canonical_bytes = self._canonical_bytes()
+
+    @staticmethod
+    def _candidate_digest(values: dict[str, object]) -> str:
+        candidate = Candidate(
+            candidate_id=str(values["candidate_id"]),
+            title=str(values["candidate_title"]),
+            risk_tier=values["risk_tier"],  # type: ignore[arg-type]
+            allowed_paths=values["allowed_paths"],  # type: ignore[arg-type]
+            acceptance=values["acceptance"],  # type: ignore[arg-type]
+            validation_profiles=values["validation_profile_ids"],  # type: ignore[arg-type]
+            expected_external_side_effects=str(
+                values["expected_external_side_effects"]
+            ),
+            source=CandidateSource(
+                kind=str(values["source_kind"]),
+                manifest_revision=values["source_manifest_revision"],  # type: ignore[arg-type]
+                approved_by=str(values["source_approved_by"]),
+                issue_url=values["source_issue_url"],  # type: ignore[arg-type]
+            ),
+            state=str(values["candidate_state"]),
+            not_before=(
+                dt.date.fromisoformat(str(values["candidate_not_before"]))
+                if values["candidate_not_before"] is not None
+                else None
+            ),
+            expires_on=(
+                dt.date.fromisoformat(str(values["candidate_expires_on"]))
+                if values["candidate_expires_on"] is not None
+                else None
+            ),
+        )
+        return candidate_authorization_digest(candidate)
+
+    @staticmethod
+    def _run_state_digest(values: dict[str, object]) -> str:
+        state = RunState(
+            key=RunKey(
+                str(values["run_date"]),
+                str(values["repository"]),
+                str(values["base_sha"]),
+            ),
+            candidate_id=str(values["candidate_id"]),
+            candidate_slug=str(values["candidate_slug"]),
+            backlog_sha256=str(values["backlog_sha256"]),
+            candidate_sha256=str(values["candidate_sha256"]),
+            remote=str(values["run_remote"]),
+            remote_branch=str(values["run_remote_branch"]),
+            branch_name=str(values["branch_name"]),
+            lifecycle=Lifecycle(str(values["run_lifecycle"])),
+            branch_disposition=BranchDisposition(str(values["run_branch_disposition"])),
+            branch_head_sha=str(values["run_branch_head_sha"]),
+            worktree_path=str(values["run_worktree_path"]),
+            observed_remote_sha=str(values["run_observed_remote_sha"]),
+            publication=PublicationSnapshot(state=str(values["run_publication_state"])),
+        )
+        return state_digest(state)
+
+    @staticmethod
+    def _backlog_authorization_digest(values: dict[str, object]) -> str:
+        return backlog_authorization_digest_from_bindings(
+            schema_version=str(values["backlog_schema_version"]),
+            manifest_revision=values["backlog_manifest_revision"],  # type: ignore[arg-type]
+            approved_by=str(values["backlog_approved_by"]),
+            backlog_sha256=str(values["backlog_sha256"]),
+            candidate_bindings=values["backlog_candidate_bindings"],  # type: ignore[arg-type]
+        )
+
+    @staticmethod
+    def _verification_subject(values: dict[str, object]) -> VerificationSubject:
+        return VerificationSubject(
+            run_id=str(values["run_id"]),
+            run_date=str(values["run_date"]),
+            repository=str(values["repository"]),
+            base_sha=str(values["base_sha"]),
+            branch_name=str(values["branch_name"]),
+            worktree_path=str(values["run_worktree_path"]),
+            candidate_id=str(values["candidate_id"]),
+            candidate_slug=str(values["candidate_slug"]),
+            backlog_sha256=str(values["backlog_sha256"]),
+            backlog_authorization_sha256=str(values["backlog_authorization_sha256"]),
+            candidate_sha256=str(values["candidate_sha256"]),
+            run_state_sha256=str(values["run_state_sha256"]),
+        )
+
+    def bind_worktree(self, path: Path) -> None:
+        old_check_subject = self.check_subject_sha256
+        self.run_worktree_path = str(path)
+        values = dict(vars(self))
+        try:
+            self.run_state_sha256 = self._run_state_digest(values)
+        except (StateContractError, TypeError, ValueError):
+            self.run_state_sha256 = "5" * 64
+        values["run_state_sha256"] = self.run_state_sha256
+        if "verification_subject_sha256" not in self._explicit_fields:
+            try:
+                self.verification_subject_sha256 = self._verification_subject(
+                    values
+                ).sha256
+            except (TypeError, ValueError):
+                self.verification_subject_sha256 = "7" * 64
+        if "check_subject_sha256" not in self._explicit_fields:
+            self.check_subject_sha256 = verification_check_subject_digest(
+                self.verification_subject_sha256,
+                self.guard_patch_sha256,
+            )
+        self.checks = tuple(
+            replace(
+                item,
+                subject_sha256=(
+                    self.check_subject_sha256
+                    if item.subject_sha256 in {None, old_check_subject}
+                    else item.subject_sha256
+                ),
+            )
+            for item in self.checks
+        )
+        if "isolation_subject_sha256" not in self._explicit_fields:
+            self.isolation_subject_sha256 = self.verification_subject_sha256
+        if "isolation_patch_sha256" not in self._explicit_fields:
+            self.isolation_patch_sha256 = self.guard_patch_sha256
+        if "isolation_evidence_sha256" not in self._explicit_fields:
+            self.isolation_evidence_sha256 = isolation_evidence_digest(
+                subject_sha256=self.isolation_subject_sha256,
+                patch_sha256=self.isolation_patch_sha256,
+                network_isolated=self.isolation_network_isolated,
+                credentials_absent=self.isolation_credentials_absent,
+                observed_by=self.isolation_verified_by,
+            )
+        self.canonical_bytes = self._canonical_bytes()
+
+    def _canonical_bytes(self) -> bytes:
+        return canonical_json(
+            {
+                "schema_version": self.schema_version,
+                "finalized": self.finalized,
+                "run_id": self.run_id,
+                "run_date": self.run_date,
+                "repository": self.repository,
+                "base_sha": self.base_sha,
+                "branch_name": self.branch_name,
+                "backlog_sha256": self.backlog_sha256,
+                "backlog_schema_version": self.backlog_schema_version,
+                "backlog_manifest_revision": self.backlog_manifest_revision,
+                "backlog_approved_by": self.backlog_approved_by,
+                "backlog_candidate_bindings": list(self.backlog_candidate_bindings),
+                "backlog_authorization_sha256": (self.backlog_authorization_sha256),
+                "candidate_sha256": self.candidate_sha256,
+                "run_state_sha256": self.run_state_sha256,
+                "verification_subject_sha256": self.verification_subject_sha256,
+                "check_subject_sha256": self.check_subject_sha256,
+                "run_remote": self.run_remote,
+                "run_remote_branch": self.run_remote_branch,
+                "run_lifecycle": self.run_lifecycle,
+                "run_branch_disposition": self.run_branch_disposition,
+                "run_branch_head_sha": self.run_branch_head_sha,
+                "run_worktree_path": self.run_worktree_path,
+                "run_observed_remote_sha": self.run_observed_remote_sha,
+                "run_publication_state": self.run_publication_state,
+                "candidate_id": self.candidate_id,
+                "candidate_slug": self.candidate_slug,
+                "candidate_title": self.candidate_title,
+                "risk_tier": self.risk_tier,
+                "acceptance": list(self.acceptance),
+                "allowed_paths": list(self.allowed_paths),
+                "changed_paths": list(self.changed_paths),
+                "validation_profile_ids": list(self.validation_profile_ids),
+                "expected_external_side_effects": self.expected_external_side_effects,
+                "candidate_state": self.candidate_state,
+                "candidate_not_before": self.candidate_not_before,
+                "candidate_expires_on": self.candidate_expires_on,
+                "source_kind": self.source_kind,
+                "source_manifest_revision": self.source_manifest_revision,
+                "source_approved_by": self.source_approved_by,
+                "source_issue_url": self.source_issue_url,
+                "guard_ok": self.guard_ok,
+                "guard_patch_sha256": self.guard_patch_sha256,
+                "final_guard_ok": self.final_guard_ok,
+                "final_guard_patch_sha256": self.final_guard_patch_sha256,
+                "final_guard_sha256": self.final_guard_sha256,
+                "head_sha256": self.head_sha256,
+                "mutation_detected": self.mutation_detected,
+                "isolation_network_isolated": self.isolation_network_isolated,
+                "isolation_credentials_absent": self.isolation_credentials_absent,
+                "isolation_verified_by": self.isolation_verified_by,
+                "isolation_subject_sha256": self.isolation_subject_sha256,
+                "isolation_patch_sha256": self.isolation_patch_sha256,
+                "isolation_evidence_sha256": self.isolation_evidence_sha256,
+                "checks": [dataclasses.asdict(item) for item in self.checks],
+            }
+        )
+
+
+class Policy:
+    def __init__(self, *, app: bool = False, **changes: object) -> None:
+        approved_backlog_authorization_sha256 = Envelope().backlog_authorization_sha256
+        values: dict[str, object] = {
+            "schema_version": PROTECTED_POLICY_SCHEMA,
+            "policy_id": "publisher-v1",
+            "repository": CANONICAL_REPOSITORY,
+            "principal_mode": (
+                PrincipalMode.GITHUB_APP if app else PrincipalMode.CLI_BOOTSTRAP
+            ),
+            "expected_actor": APP_ACTOR if app else "IvesLiu1026",
+            "app_id": 1234 if app else None,
+            "installation_id": 5678 if app else None,
+            "permissions": PERMISSIONS,
+            "unattended": app,
+            "committer_name": APP_COMMITTER.name if app else IVES_AUTHOR.name,
+            "committer_email": APP_COMMITTER.email if app else IVES_AUTHOR.email,
+            "publisher_uid": 23456,
+            "publisher_home": "/var/lib/vista-world-publisher",
+            "environment_keys": PUBLISHER_ENVIRONMENT_ALLOWLIST,
+            "runtime_attestor": "systemd-publisher-boundary",
+            "approved_backlog_sha256": "4" * 64,
+            "approved_backlog_authorization_sha256": (
+                approved_backlog_authorization_sha256
+            ),
+        }
+        values.update(changes)
+        for name, value in values.items():
+            setattr(self, name, value)
+        self.canonical_bytes = canonical_json(
+            {
+                "schema_version": self.schema_version,
+                "policy_id": self.policy_id,
+                "repository": self.repository,
+                "principal_mode": PrincipalMode(self.principal_mode).value,
+                "expected_actor": self.expected_actor,
+                "app_id": self.app_id,
+                "installation_id": self.installation_id,
+                "permissions": list(self.permissions),
+                "unattended": self.unattended,
+                "committer_name": self.committer_name,
+                "committer_email": self.committer_email,
+                "publisher_uid": self.publisher_uid,
+                "publisher_home": self.publisher_home,
+                "environment_keys": list(self.environment_keys),
+                "runtime_attestor": self.runtime_attestor,
+                "approved_backlog_sha256": self.approved_backlog_sha256,
+                "approved_backlog_authorization_sha256": (
+                    self.approved_backlog_authorization_sha256
+                ),
+            }
+        )
+
+
+class FakeTrust:
+    def __init__(self, envelope: Envelope, policy: Policy) -> None:
+        self.envelope = envelope
+        self.policy = policy
+
+    def read_finalized_envelope(self, reference: FinalizedEnvelopeReference):
+        return self.envelope
+
+    def read_protected_policy(self, reference: ProtectedPolicyReference):
+        return self.policy
+
+
+class FakeRuntime:
+    def __init__(self, policy: Policy) -> None:
+        self.value = RuntimeAttestation.attest(
+            uid=policy.publisher_uid,
+            home=policy.publisher_home,
+            environment_keys=policy.environment_keys,
+            dedicated_uid=True,
+            home_model_credentials_absent=True,
+            environment_model_credentials_absent=True,
+            model_credential_keys=(),
+            attested_by=policy.runtime_attestor,
+        )
+
+    def inspect_runtime(self) -> RuntimeAttestation:
+        return self.value
+
+
+def make_principal(policy: Policy) -> PrincipalSnapshot:
+    return PrincipalSnapshot(
+        mode=policy.principal_mode,
+        actor=policy.expected_actor,
+        app_id=policy.app_id,
+        installation_id=policy.installation_id,
+        repository=CANONICAL_REPOSITORY,
+        permissions=policy.permissions,
+        repository_scoped=policy.principal_mode is PrincipalMode.GITHUB_APP,
+        is_admin=policy.principal_mode is PrincipalMode.CLI_BOOTSTRAP,
+        can_bypass_branch_protection=(
+            policy.principal_mode is PrincipalMode.CLI_BOOTSTRAP
+        ),
+        committer=GitIdentity(policy.committer_name, policy.committer_email),
+    )
+
+
+class FakeGitHub:
+    def __init__(self, envelope: Envelope, policy: Policy) -> None:
+        self.envelope = envelope
+        self.principal = make_principal(policy)
+        self.repository = RepositorySnapshot(
+            repository=CANONICAL_REPOSITORY,
+            default_branch=DEFAULT_BRANCH,
+            main_sha=envelope.base_sha,
+            public=True,
+            is_fork=False,
+        )
+        self.branches: dict[str, str] = {DEFAULT_BRANCH: envelope.base_sha}
+        self.commits: dict[str, CommitRecord] = {}
+        self.pull_requests: list[PullRequestSnapshot] = []
+        self.open_calls = 0
+        self.list_pr_calls = 0
+        self.fail_stage: str | None = None
+        self.open_actor = policy.expected_actor
+        self.open_draft = True
+        self.commit_read_head_override: str | None = None
+        self.final_pr_read_mode: str | None = None
+
+    def inspect_principal(self, repository: str, mode: PrincipalMode):
+        self._fail("principal")
+        return self.principal
+
+    def inspect_repository(self, repository: str):
+        self._fail("repository")
+        return self.repository
+
+    def read_branch_sha(self, repository: str, branch: str):
+        self._fail("branch")
+        return self.branches.get(branch)
+
+    def read_commit(self, repository: str, head_sha: str):
+        self._fail("commit")
+        commit = self.commits[head_sha]
+        if self.commit_read_head_override is not None:
+            return replace(commit, head_sha=self.commit_read_head_override)
+        return commit
+
+    def list_pull_requests(self, repository: str, head_branch: str):
+        self._fail("list-pr")
+        self.list_pr_calls += 1
+        values = tuple(
+            item for item in self.pull_requests if item.head_branch == head_branch
+        )
+        if self.list_pr_calls == 3 and values:
+            if self.final_pr_read_mode == "duplicate":
+                return (*values, values[0])
+            if self.final_pr_read_mode == "replacement":
+                replacement = replace(
+                    values[0],
+                    number=values[0].number + 1,
+                    url=(
+                        f"https://github.com/{CANONICAL_REPOSITORY}/pull/"
+                        f"{values[0].number + 1}"
+                    ),
+                )
+                return (replacement,)
+        return values
+
+    def open_draft_pull_request(self, spec: DraftPullRequestSpec) -> None:
+        self._fail("open-pr")
+        self.open_calls += 1
+        head_sha = self.branches[spec.head_branch]
+        number = 7
+        self.pull_requests.append(
+            PullRequestSnapshot(
+                number=number,
+                url=f"https://github.com/{CANONICAL_REPOSITORY}/pull/{number}",
+                repository=CANONICAL_REPOSITORY,
+                base_branch=DEFAULT_BRANCH,
+                head_branch=spec.head_branch,
+                head_sha=head_sha,
+                actor=self.open_actor,
+                title=spec.title,
+                body_sha256=spec.body_sha256,
+                state="open",
+                draft=self.open_draft,
+            )
+        )
+
+    def _fail(self, stage: str) -> None:
+        if self.fail_stage == stage:
+            raise RuntimeError("github_pat_" + "S" * 82)
+
+
+class FakeGit:
+    def __init__(self, envelope: Envelope, github: FakeGitHub) -> None:
+        self.envelope = envelope
+        self.github = github
+        self.patch = PatchSnapshot(
+            base_sha=envelope.base_sha,
+            patch_sha256=envelope.final_guard_patch_sha256,
+            head_sha256=envelope.head_sha256,
+            changed_paths=envelope.changed_paths,
+        )
+        self.branches: dict[str, LocalBranchSnapshot] = {}
+        self.commits: dict[str, CommitRecord] = {}
+        self.commit_calls = 0
+        self.push_calls = 0
+        self.create_calls = 0
+        self.bad_commit: dict[str, object] = {}
+        self.skip_remote_branch_write = False
+        self.commit_read_head_override: str | None = None
+
+    def inspect_patch(self, worktree: Path, base_sha: str):
+        return self.patch
+
+    def read_local_branch(self, worktree: Path, branch: str):
+        return self.branches.get(branch)
+
+    def create_branch(self, worktree: Path, branch: str, start_sha: str) -> None:
+        self.create_calls += 1
+        self.branches[branch] = LocalBranchSnapshot(branch, start_sha, True)
+
+    def commit(self, worktree: Path, spec) -> None:
+        self.commit_calls += 1
+        branch = next(name for name, item in self.branches.items() if item.checked_out)
+        record = CommitRecord(
+            head_sha=HEAD_SHA,
+            parent_sha=self.envelope.base_sha,
+            patch_sha256=self.envelope.final_guard_patch_sha256,
+            head_sha256=self.envelope.head_sha256,
+            message=spec.message,
+            author=spec.author,
+            committer=spec.committer,
+        )
+        record = replace(record, **self.bad_commit)
+        self.commits[record.head_sha] = record
+        self.branches[branch] = LocalBranchSnapshot(branch, record.head_sha, True)
+
+    def inspect_commit(self, worktree: Path, head_sha: str):
+        commit = self.commits[head_sha]
+        if self.commit_read_head_override is not None:
+            return replace(commit, head_sha=self.commit_read_head_override)
+        return commit
+
+    def push_new_branch(self, worktree: Path, spec) -> None:
+        self.push_calls += 1
+        if not self.skip_remote_branch_write:
+            self.github.branches[spec.branch] = spec.head_sha
+            self.github.commits[spec.head_sha] = self.commits[spec.head_sha]
+
+
+class Fixture:
+    def __init__(
+        self,
+        root: Path,
+        *,
+        envelope: Envelope | None = None,
+        policy: Policy | None = None,
+    ) -> None:
+        self.root = root
+        self.envelope = envelope or Envelope()
+        self.envelope.bind_worktree(root)
+        self.policy = policy or Policy(
+            approved_backlog_sha256=self.envelope.backlog_sha256,
+            approved_backlog_authorization_sha256=(
+                self.envelope.backlog_authorization_sha256
+            ),
+        )
+        self.trust = FakeTrust(self.envelope, self.policy)
+        self.runtime = FakeRuntime(self.policy)
+        self.github = FakeGitHub(self.envelope, self.policy)
+        self.git = FakeGit(self.envelope, self.github)
+        self.publisher = Publisher(
+            git=self.git,
+            github=self.github,
+            trust=self.trust,
+            runtime=self.runtime,
+        )
+
+    @property
+    def envelope_reference(self) -> FinalizedEnvelopeReference:
+        return FinalizedEnvelopeReference(
+            "run-envelope",
+            hashlib.sha256(self.envelope.canonical_bytes).hexdigest(),
+        )
+
+    @property
+    def policy_reference(self) -> ProtectedPolicyReference:
+        return ProtectedPolicyReference(
+            self.policy.policy_id,
+            hashlib.sha256(self.policy.canonical_bytes).hexdigest(),
+        )
+
+    def publish(self):
+        return self.publisher.publish(
+            self.root,
+            self.envelope_reference,
+            self.policy_reference,
+        )
+
+
+class PublisherContractTests(unittest.TestCase):
+    def test_run_manager_and_publisher_share_slug_and_branch_contract(self) -> None:
+        for invalid_slug in ("a--b", "a" * 49):
+            with self.subTest(invalid_slug=invalid_slug):
+                with self.assertRaisesRegex(StateContractError, "candidate slug"):
+                    WorktreeManager.branch_name(
+                        "2026-08-21",
+                        invalid_slug,
+                        BASE_SHA,
+                    )
+
+                with tempfile.TemporaryDirectory() as temporary:
+                    fixture = Fixture(
+                        Path(temporary),
+                        envelope=Envelope(candidate_slug=invalid_slug),
+                    )
+                    with self.assertRaisesRegex(
+                        PublicationPreflightError,
+                        "candidate slug",
+                    ):
+                        fixture.publish()
+
+        valid_branch = WorktreeManager.branch_name(
+            "2026-08-21",
+            "a" * 48,
+            BASE_SHA,
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(
+                Path(temporary),
+                envelope=Envelope(candidate_slug="a" * 48),
+            )
+            result = fixture.publish()
+        self.assertEqual(result.branch, valid_branch)
+
+    def test_cli_happy_path_is_draft_and_attributed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            result = fixture.publish()
+
+        self.assertEqual(
+            result.branch,
+            "codex/daily/2026-08-21-docs-contract-aaaaaaaa",
+        )
+        self.assertEqual(result.commit_author, IVES_AUTHOR)
+        self.assertEqual(result.commit_committer, IVES_AUTHOR)
+        self.assertEqual(result.pr_actor, "IvesLiu1026")
+        self.assertTrue(result.draft)
+        self.assertEqual(fixture.git.commit_calls, 1)
+        self.assertEqual(fixture.git.push_calls, 1)
+        self.assertEqual(fixture.github.open_calls, 1)
+        commit = fixture.github.commits[result.head_sha]
+        self.assertEqual(commit.message.count(AUTOMATION_TRAILER), 1)
+        self.assertIn(
+            f"Backlog-SHA256: {fixture.envelope.backlog_sha256}", commit.message
+        )
+        self.assertIn(
+            f"Candidate-SHA256: {fixture.envelope.candidate_sha256}",
+            commit.message,
+        )
+        self.assertIn(
+            (
+                "Backlog-Authorization-SHA256: "
+                f"{fixture.envelope.backlog_authorization_sha256}"
+            ),
+            commit.message,
+        )
+        self.assertIn(
+            f"Run-State-SHA256: {fixture.envelope.run_state_sha256}",
+            commit.message,
+        )
+        self.assertEqual(result.backlog_sha256, fixture.envelope.backlog_sha256)
+        self.assertEqual(
+            result.backlog_authorization_sha256,
+            fixture.envelope.backlog_authorization_sha256,
+        )
+        self.assertEqual(result.candidate_sha256, fixture.envelope.candidate_sha256)
+        self.assertEqual(result.run_state_sha256, fixture.envelope.run_state_sha256)
+        self.assertEqual(
+            result.verification_subject_sha256,
+            fixture.envelope.verification_subject_sha256,
+        )
+
+    def test_unattended_app_is_exact_non_admin_repo_scoped_principal(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary), policy=Policy(app=True))
+            result = fixture.publish()
+        self.assertEqual(result.commit_author, IVES_AUTHOR)
+        self.assertEqual(result.commit_committer, APP_COMMITTER)
+        self.assertEqual(result.pr_actor, APP_ACTOR)
+
+    def test_completed_publication_reconciles_without_duplicate_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            first = fixture.publish()
+            second = fixture.publish()
+        self.assertFalse(first.reconciled)
+        self.assertTrue(second.reconciled)
+        self.assertEqual(fixture.git.commit_calls, 1)
+        self.assertEqual(fixture.git.push_calls, 1)
+        self.assertEqual(fixture.github.open_calls, 1)
+
+    def test_duplicate_pull_request_state_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.publish()
+            fixture.github.pull_requests.append(fixture.github.pull_requests[0])
+            with self.assertRaisesRegex(PublicationConflictError, "one branch"):
+                fixture.publish()
+        self.assertEqual(fixture.github.open_calls, 1)
+
+    def test_remote_commit_without_pr_resumes_at_pr_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            initial = fixture.publish()
+            fixture.github.pull_requests.clear()
+            fixture.github.open_calls = 0
+            fixture.git.branches.clear()
+            result = fixture.publish()
+        self.assertEqual(result.head_sha, initial.head_sha)
+        self.assertTrue(result.reconciled)
+        self.assertEqual(fixture.git.commit_calls, 1)
+        self.assertEqual(fixture.git.push_calls, 1)
+        self.assertEqual(fixture.github.open_calls, 1)
+
+    def test_existing_pr_commit_readback_is_bound_to_queried_sha(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.publish()
+            fixture.github.commit_read_head_override = OTHER_HEAD_SHA
+            with self.assertRaisesRegex(
+                PublicationPreflightError, "returned another commit"
+            ):
+                fixture.publish()
+        self.assertEqual(fixture.github.open_calls, 1)
+
+    def test_local_and_push_commit_readbacks_are_bound_to_queried_sha(self) -> None:
+        for stage in ("local", "push"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as tmp:
+                fixture = Fixture(Path(tmp))
+                if stage == "local":
+                    fixture.git.commit_read_head_override = OTHER_HEAD_SHA
+                else:
+                    fixture.github.commit_read_head_override = OTHER_HEAD_SHA
+                with self.assertRaisesRegex(
+                    PublicationPreflightError, "returned another commit"
+                ):
+                    fixture.publish()
+                self.assertEqual(fixture.github.open_calls, 0)
+
+    def test_canonical_envelope_bytes_bind_every_field(self) -> None:
+        envelope = Envelope()
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary), envelope=envelope)
+            envelope.candidate_title = "tampered after finalization"
+            with self.assertRaisesRegex(
+                PublicationPreflightError,
+                "canonical bytes|authority digest",
+            ):
+                fixture.publish()
+        self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_canonical_policy_bytes_bind_every_field(self) -> None:
+        policy = Policy()
+        policy.runtime_attestor = "tampered-attestor"
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary), policy=policy)
+            with self.assertRaisesRegex(PublicationPreflightError, "canonical bytes"):
+                fixture.publish()
+        self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_authority_digests_and_worktree_cross_bindings_fail_closed(self) -> None:
+        for field in ("backlog_sha256", "candidate_sha256", "run_state_sha256"):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                fixture = Fixture(Path(temporary))
+                setattr(fixture.envelope, field, "9" * 64)
+                fixture.envelope.canonical_bytes = fixture.envelope._canonical_bytes()
+                with self.assertRaises(PublicationPreflightError):
+                    fixture.publish()
+                self.assertEqual(fixture.git.create_calls, 0)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixture = Fixture(root)
+            other = root / "other-worktree"
+            other.mkdir()
+            fixture.envelope.bind_worktree(other)
+            with self.assertRaisesRegex(PublicationPreflightError, "worktree"):
+                fixture.publish()
+            self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_synchronized_unapproved_backlog_replacement_is_policy_rejected(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(
+                Path(temporary),
+                envelope=Envelope(backlog_sha256="9" * 64),
+                policy=Policy(),
+            )
+            with self.assertRaisesRegex(
+                PublicationPreflightError,
+                "not pinned by protected policy",
+            ):
+                fixture.publish()
+        self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_forged_membership_with_pinned_raw_digest_is_policy_rejected(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(
+                Path(temporary),
+                envelope=Envelope(
+                    candidate_title="Different in-memory backlog membership"
+                ),
+                policy=Policy(),
+            )
+            self.assertEqual(
+                fixture.envelope.backlog_sha256,
+                fixture.policy.approved_backlog_sha256,
+            )
+            self.assertNotEqual(
+                fixture.envelope.backlog_authorization_sha256,
+                fixture.policy.approved_backlog_authorization_sha256,
+            )
+            with self.assertRaisesRegex(
+                PublicationPreflightError,
+                "membership is not pinned by protected policy",
+            ):
+                fixture.publish()
+        self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_check_and_isolation_subject_swaps_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.envelope.checks = (
+                replace(fixture.envelope.checks[0], subject_sha256="9" * 64),
+                fixture.envelope.checks[1],
+            )
+            fixture.envelope.canonical_bytes = fixture.envelope._canonical_bytes()
+            with self.assertRaisesRegex(
+                PublicationPreflightError,
+                "another run subject",
+            ):
+                fixture.publish()
+            self.assertEqual(fixture.git.create_calls, 0)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.envelope.isolation_subject_sha256 = "9" * 64
+            fixture.envelope.isolation_evidence_sha256 = isolation_evidence_digest(
+                subject_sha256="9" * 64,
+                patch_sha256=fixture.envelope.isolation_patch_sha256,
+                network_isolated=True,
+                credentials_absent=True,
+                observed_by=fixture.envelope.isolation_verified_by,
+            )
+            fixture.envelope.canonical_bytes = fixture.envelope._canonical_bytes()
+            with self.assertRaisesRegex(
+                PublicationPreflightError,
+                "another verification subject",
+            ):
+                fixture.publish()
+            self.assertEqual(fixture.git.create_calls, 0)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.envelope.isolation_patch_sha256 = "8" * 64
+            fixture.envelope.isolation_evidence_sha256 = isolation_evidence_digest(
+                subject_sha256=fixture.envelope.isolation_subject_sha256,
+                patch_sha256="8" * 64,
+                network_isolated=True,
+                credentials_absent=True,
+                observed_by=fixture.envelope.isolation_verified_by,
+            )
+            fixture.envelope.canonical_bytes = fixture.envelope._canonical_bytes()
+            with self.assertRaisesRegex(
+                PublicationPreflightError,
+                "another verified patch",
+            ):
+                fixture.publish()
+            self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_v1_authority_rejects_scope_profile_and_path_bypasses(self) -> None:
+        cases = (
+            Envelope(allowed_paths=("src/**",), changed_paths=("src/app.py",)),
+            Envelope(
+                validation_profile_ids=("unreal-content-contract",),
+                checks=(
+                    Check("git-diff-check", "2" * 64),
+                    Check("unreal-content-contract", "3" * 64),
+                ),
+            ),
+            Envelope(allowed_paths=("docs/foo**",), changed_paths=("docs/foo.md",)),
+            Envelope(
+                allowed_paths=("docs/guide.md",), changed_paths=("docs/other.md",)
+            ),
+            Envelope(source_approved_by="attacker"),
+            Envelope(risk_tier=2),
+        )
+        for envelope in cases:
+            with self.subTest(envelope=envelope), tempfile.TemporaryDirectory() as tmp:
+                fixture = Fixture(Path(tmp), envelope=envelope)
+                with self.assertRaises(PublicationPreflightError):
+                    fixture.publish()
+                self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_changed_paths_cannot_glob_through_protected_components(self) -> None:
+        cases = (
+            ("docs/a?th/**", "docs/auth/config.md"),
+            ("docs/credentia?s/**", "docs/credentials/sample.md"),
+            ("docs/in?ra/**", "docs/infra/config.md"),
+            ("docs/net*ork/**", "docs/network/notes.md"),
+            ("docs/secr?t/**", "docs/secret/example.md"),
+        )
+        for allowed_path, changed_path in cases:
+            with (
+                self.subTest(changed_path=changed_path),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                fixture = Fixture(
+                    Path(tmp),
+                    envelope=Envelope(
+                        allowed_paths=(allowed_path,),
+                        changed_paths=(changed_path,),
+                    ),
+                )
+                with self.assertRaisesRegex(
+                    PublicationPreflightError, "protected in V1"
+                ):
+                    fixture.publish()
+                self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_authority_filename_tokens_and_patterns_fail_closed(self) -> None:
+        changed_paths = (
+            "packages/auth-client.py",
+            "packages/auth.py",
+            "packages/auth_config.py",
+            "packages/credentials.py",
+            "packages/network-client.ts",
+            "packages/network.py",
+            "packages/secret-store.py",
+        )
+        for changed_path in changed_paths:
+            with (
+                self.subTest(changed_path=changed_path),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                fixture = Fixture(
+                    Path(tmp),
+                    envelope=Envelope(
+                        risk_tier=1,
+                        allowed_paths=("packages/**",),
+                        changed_paths=(changed_path,),
+                    ),
+                )
+                with self.assertRaisesRegex(
+                    PublicationPreflightError, "protected in V1"
+                ):
+                    fixture.publish()
+                self.assertEqual(fixture.git.create_calls, 0)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(
+                Path(temporary),
+                envelope=Envelope(
+                    risk_tier=1,
+                    allowed_paths=("packages/auth*.py",),
+                    changed_paths=("packages/auth.py",),
+                ),
+            )
+            with self.assertRaisesRegex(PublicationPreflightError, "protected in V1"):
+                fixture.publish()
+            self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_authority_filename_near_misses_remain_allowed(self) -> None:
+        cases = (
+            (1, "packages/authorization.py"),
+            (0, "docs/networking.md"),
+            (0, "tests/test_auth.py"),
+        )
+        for risk_tier, changed_path in cases:
+            with (
+                self.subTest(changed_path=changed_path),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                fixture = Fixture(
+                    Path(tmp),
+                    envelope=Envelope(
+                        risk_tier=risk_tier,
+                        allowed_paths=(changed_path,),
+                        changed_paths=(changed_path,),
+                    ),
+                )
+                result = fixture.publish()
+                self.assertEqual(result.head_sha, HEAD_SHA)
+
+    def test_publisher_uses_shared_v1_test_scope_suffixes(self) -> None:
+        for suffix in (".test.cjs", ".test.cts", ".test.mts", ".spec.cjs"):
+            path = f"packages/widget{suffix}"
+            with (
+                self.subTest(suffix=suffix),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                fixture = Fixture(
+                    Path(tmp),
+                    envelope=Envelope(
+                        allowed_paths=(path,),
+                        changed_paths=(path,),
+                    ),
+                )
+                result = fixture.publish()
+                self.assertEqual(result.head_sha, HEAD_SHA)
+
+    def test_app_identity_installation_permissions_and_bypass_are_exact(self) -> None:
+        policy = Policy(app=True)
+        cases = (
+            replace(make_principal(policy), actor="other[bot]"),
+            replace(make_principal(policy), app_id=9999),
+            replace(make_principal(policy), installation_id=9999),
+            replace(make_principal(policy), permissions=("contents:write",)),
+            replace(make_principal(policy), repository_scoped=False),
+            replace(make_principal(policy), is_admin=True),
+            replace(make_principal(policy), can_bypass_branch_protection=True),
+        )
+        for principal in cases:
+            with (
+                self.subTest(principal=principal),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                fixture = Fixture(Path(tmp), policy=policy)
+                fixture.github.principal = principal
+                with self.assertRaises(PublicationPreflightError):
+                    fixture.publish()
+                self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_cli_policy_cannot_claim_unattended_mode(self) -> None:
+        policy = Policy(unattended=True)
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary), policy=policy)
+            with self.assertRaisesRegex(PublicationPreflightError, "CLI bootstrap"):
+                fixture.publish()
+
+    def test_runtime_must_be_dedicated_and_model_credential_free(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.runtime.value = RuntimeAttestation.attest(
+                uid=fixture.policy.publisher_uid,
+                home=fixture.policy.publisher_home,
+                environment_keys=fixture.policy.environment_keys,
+                dedicated_uid=False,
+                home_model_credentials_absent=True,
+                environment_model_credentials_absent=True,
+                model_credential_keys=(),
+                attested_by=fixture.policy.runtime_attestor,
+            )
+            with self.assertRaisesRegex(PublicationPreflightError, "not dedicated"):
+                fixture.publish()
+        self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_remote_main_movement_stops_before_local_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.github.repository = replace(
+                fixture.github.repository, main_sha=MOVED_SHA
+            )
+            with self.assertRaisesRegex(
+                PublicationPreflightError, "current remote main"
+            ):
+                fixture.publish()
+        self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_patch_commit_and_remote_readbacks_are_independently_bound(self) -> None:
+        cases = (
+            ("patch", {"patch_sha256": "9" * 64}),
+            ("commit", {"author": GitIdentity("Wrong", "wrong@example.invalid")}),
+        )
+        for stage, changes in cases:
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as tmp:
+                fixture = Fixture(Path(tmp))
+                if stage == "patch":
+                    fixture.git.patch = replace(fixture.git.patch, **changes)
+                else:
+                    fixture.git.bad_commit = changes
+                with self.assertRaises(PublicationPreflightError):
+                    fixture.publish()
+                self.assertEqual(fixture.git.push_calls, 0)
+                self.assertEqual(fixture.github.open_calls, 0)
+
+    def test_missing_remote_branch_readback_stops_before_pr(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.git.skip_remote_branch_write = True
+            with self.assertRaisesRegex(PublicationPreflightError, "branch read-back"):
+                fixture.publish()
+        self.assertEqual(fixture.github.open_calls, 0)
+
+    def test_wrong_pr_actor_or_non_draft_readback_is_rejected(self) -> None:
+        for actor, draft in (("someone-else", True), ("IvesLiu1026", False)):
+            with (
+                self.subTest(actor=actor, draft=draft),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                fixture = Fixture(Path(tmp))
+                fixture.github.open_actor = actor
+                fixture.github.open_draft = draft
+                with self.assertRaises(PublicationPreflightError):
+                    fixture.publish()
+                self.assertEqual(fixture.github.open_calls, 1)
+
+    def test_final_pr_readback_after_barrier_must_be_unique(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.github.final_pr_read_mode = "duplicate"
+            with self.assertRaisesRegex(
+                PublicationPreflightError, "final draft PR read-back is not unique"
+            ):
+                fixture.publish()
+        self.assertEqual(fixture.github.open_calls, 1)
+
+    def test_final_pr_snapshot_must_match_pre_barrier_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.github.final_pr_read_mode = "replacement"
+            with self.assertRaisesRegex(
+                PublicationPreflightError, "changed after final barrier"
+            ):
+                fixture.publish()
+        self.assertEqual(fixture.github.open_calls, 1)
+
+    def test_control_secret_and_markdown_injection_fail_or_escape(self) -> None:
+        invalid = (
+            Envelope(acceptance=("line one\nline two",)),
+            Envelope(acceptance=("Use OPENAI_API_KEY with sk-" + "A" * 30,)),
+            Envelope(changed_paths=("docs/bad\npath.md",)),
+        )
+        for envelope in invalid:
+            with self.subTest(envelope=envelope), tempfile.TemporaryDirectory() as tmp:
+                fixture = Fixture(Path(tmp), envelope=envelope)
+                with self.assertRaises(
+                    (PublicationPreflightError, PublicationContractError)
+                ):
+                    fixture.publish()
+
+        safe = Envelope(
+            acceptance=("Fix [link](https://example.invalid) @team <script>.",)
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary), envelope=safe)
+            fixture.publish()
+            body_hash = fixture.github.pull_requests[0].body_sha256
+        self.assertEqual(len(body_hash), 64)
+
+    def test_acceptance_and_pr_body_reject_extended_secret_families(self) -> None:
+        secret_values = (
+            "AWS access key " + "AK" + "IA" + "A" * 16,
+            "npm credential " + "npm" + "_" + "n" * 36,
+            "Slack credential " + "xox" + "b-" + "1234567890-abcdefghij",
+            "pass" + "word = " + "correct-horse-battery-staple",
+            "to" + "ken: " + "abcdefghijklmnop123456",
+        )
+        for secret in secret_values:
+            with self.subTest(secret_family=secret[:8]):
+                with tempfile.TemporaryDirectory() as tmp:
+                    fixture = Fixture(
+                        Path(tmp), envelope=Envelope(acceptance=(secret,))
+                    )
+                    with self.assertRaises(PublicationContractError):
+                        fixture.publish()
+                    self.assertEqual(fixture.git.create_calls, 0)
+
+                with self.assertRaises(PublicationContractError):
+                    DraftPullRequestSpec(
+                        repository=CANONICAL_REPOSITORY,
+                        base_branch=DEFAULT_BRANCH,
+                        head_branch=("codex/daily/2026-08-21-docs-contract-aaaaaaaa"),
+                        title="Daily maintenance",
+                        body="Acceptance: " + secret,
+                        draft=True,
+                    )
+
+    def test_port_errors_are_redacted_and_no_write_follows(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = Fixture(Path(temporary))
+            fixture.github.fail_stage = "repository"
+            with self.assertRaises(PublicationOperationError) as captured:
+                fixture.publish()
+        self.assertNotIn("github_pat_", str(captured.exception))
+        self.assertEqual(fixture.git.create_calls, 0)
+
+    def test_publisher_has_no_promotion_or_merge_surface(self) -> None:
+        pr_fields = {item.name for item in dataclasses.fields(DraftPullRequestSpec)}
+        for forbidden in ("auto_merge", "merge", "promote", "ready_for_review"):
+            self.assertNotIn(forbidden, pr_fields)
+        self.assertTrue(DraftPullRequestSpec.__dataclass_fields__["draft"].default)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -3,8 +3,11 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import selectors
+import signal
 import stat
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Protocol
@@ -13,6 +16,8 @@ from .candidate import (
     Candidate,
     enforce_v1_candidate_policy,
     has_v1_forbidden_authority,
+    is_v1_protected_authority_basename,
+    is_v1_test_scope,
     path_matches_pattern,
 )
 from .profiles import TrustedExecutables
@@ -112,52 +117,6 @@ _BINARY_SUFFIXES = frozenset(
         ".zip",
     }
 )
-_DEPENDENCY_FILES = frozenset(
-    {
-        "cargo.lock",
-        "cargo.toml",
-        "composer.json",
-        "composer.lock",
-        "gemfile",
-        "gemfile.lock",
-        "go.mod",
-        "go.sum",
-        "package-lock.json",
-        "package.json",
-        "pnpm-lock.yaml",
-        "poetry.lock",
-        "pyproject.toml",
-        "requirements.txt",
-        "uv.lock",
-        "yarn.lock",
-    }
-)
-_VALIDATION_CONFIG_FILES = frozenset(
-    {
-        ".coveragerc",
-        ".nycrc",
-        "codecov.yml",
-        "codecov.yaml",
-        "conftest.py",
-        "jest.config.js",
-        "jest.config.mjs",
-        "noxfile.py",
-        "pytest.ini",
-        "tox.ini",
-        "vitest.config.js",
-        "vitest.config.mjs",
-    }
-)
-_VALIDATION_CONFIG_PREFIXES = (
-    ".coveragerc.",
-    ".nycrc.",
-    "coverage.",
-    "cypress.config.",
-    "jest.config.",
-    "karma.conf.",
-    "playwright.config.",
-    "vitest.config.",
-)
 _PROTECTED_TOP_LEVEL = frozenset(
     {
         ".agent",
@@ -181,6 +140,14 @@ _PROTECTED_TOP_LEVEL = frozenset(
         "world_packs",
     }
 )
+_MAX_IGNORED_STATE_BYTES = 256 * 1024
+_MAX_IGNORED_STATE_PATHS = 128
+_MAX_IGNORED_FILE_HASH_BYTES = 1024 * 1024
+_MAX_GIT_STDOUT_BYTES = 16 * 1024 * 1024
+_MAX_GIT_STDERR_BYTES = 64 * 1024
+_MAX_REPLACEMENT_REF_BYTES = 64 * 1024
+_GIT_READ_CHUNK_BYTES = 64 * 1024
+_GIT_TIMEOUT_SECONDS = 30.0
 
 
 class _Digest(Protocol):
@@ -234,6 +201,21 @@ class GuardReport:
         return not self.violations
 
 
+@dataclass(frozen=True)
+class _IgnoredState:
+    present: bool
+    paths: tuple[str, ...]
+    identity_sha256: bytes
+    overflow: bool
+
+
+@dataclass(frozen=True)
+class _GitProcessResult:
+    returncode: int
+    stdout: bytes
+    stderr: bytes
+
+
 class DiffGuard:
     """Deterministically reject a patch before any candidate test executes."""
 
@@ -256,15 +238,42 @@ class DiffGuard:
         enforce_v1_candidate_policy(candidate)
         limits = limits or GuardLimits()
         repo = self._validated_repo(repo_root)
+        self._reject_replacement_refs(repo)
         self._validate_base(repo, base_sha)
 
         statuses = self._changed_statuses(repo, base_sha)
         untracked = self._untracked_paths(repo)
         for path in untracked:
             statuses.setdefault(path, "?")
+        ignored = self._ignored_state(repo)
         numstat = self._numstat(repo, base_sha)
         changed: list[ChangedFile] = []
         violations: list[GuardViolation] = []
+
+        for path in ignored.paths:
+            violations.append(
+                GuardViolation(
+                    "ignored_content",
+                    path,
+                    "ignored worktree content is forbidden during validation",
+                )
+            )
+        if ignored.present and not ignored.paths:
+            violations.append(
+                GuardViolation(
+                    "ignored_content",
+                    None,
+                    "ignored worktree content is forbidden during validation",
+                )
+            )
+        if ignored.overflow:
+            violations.append(
+                GuardViolation(
+                    "ignored_content_overflow",
+                    None,
+                    "ignored worktree enumeration exceeded its reporting bound",
+                )
+            )
 
         for path in sorted(statuses):
             status_code = statuses[path]
@@ -375,7 +384,7 @@ class DiffGuard:
 
         return GuardReport(
             base_sha=base_sha,
-            patch_sha256=self._patch_digest(repo, base_sha, untracked),
+            patch_sha256=self._patch_digest(repo, base_sha, untracked, ignored),
             changed_files=tuple(changed),
             violations=tuple(self._deduplicate_violations(violations)),
             production_files=len(production),
@@ -384,25 +393,125 @@ class DiffGuard:
             test_lines=test_lines,
         )
 
-    def _git(self, repo: Path, *args: str, check: bool = True) -> bytes:
+    @staticmethod
+    def _git_environment() -> dict[str, str]:
+        return {
+            "PATH": "/nonexistent/vista-daily-maintainer",
+            "HOME": "/nonexistent/vista-daily-maintainer",
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_CONFIG_SYSTEM": "/dev/null",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "GIT_PAGER": "",
+            "GIT_TERMINAL_PROMPT": "0",
+        }
+
+    def _run_git(
+        self,
+        repo: Path,
+        *args: str,
+        stdout_limit: int | None = None,
+    ) -> _GitProcessResult:
+        if stdout_limit is None:
+            stdout_limit = _MAX_GIT_STDOUT_BYTES
+        if stdout_limit < 1:
+            raise ValueError("git stdout limit must be positive")
         git_executable = self._executables.resolve("git")
-        result = subprocess.run(
-            (str(git_executable), "-c", "core.quotepath=false", *args),
-            cwd=repo,
-            env={
-                "PATH": "/nonexistent/vista-daily-maintainer",
-                "HOME": "/nonexistent/vista-daily-maintainer",
-                "LANG": "C.UTF-8",
-                "LC_ALL": "C.UTF-8",
-                "GIT_CONFIG_GLOBAL": "/dev/null",
-                "GIT_CONFIG_SYSTEM": "/dev/null",
-                "GIT_CONFIG_NOSYSTEM": "1",
-                "GIT_PAGER": "",
-                "GIT_TERMINAL_PROMPT": "0",
-            },
-            check=False,
-            capture_output=True,
-        )
+        try:
+            process = subprocess.Popen(
+                (str(git_executable), "-c", "core.quotepath=false", *args),
+                cwd=repo,
+                env=self._git_environment(),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            raise ValueError(f"git inspection could not start: {exc.errno}") from exc
+        if process.stdout is None or process.stderr is None:
+            self._kill_git_process_group(process)
+            raise ValueError("git inspection pipes are unavailable")
+
+        stdout = bytearray()
+        stderr = bytearray()
+        stream_limits = {
+            process.stdout.fileno(): ("stdout", stdout, stdout_limit),
+            process.stderr.fileno(): ("stderr", stderr, _MAX_GIT_STDERR_BYTES),
+        }
+        selector = selectors.DefaultSelector()
+        selector.register(process.stdout, selectors.EVENT_READ)
+        selector.register(process.stderr, selectors.EVENT_READ)
+        deadline = time.monotonic() + _GIT_TIMEOUT_SECONDS
+        failure: str | None = None
+        try:
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    failure = "git inspection timed out"
+                    break
+                events = selector.select(remaining)
+                if not events:
+                    failure = "git inspection timed out"
+                    break
+                for key, _mask in events:
+                    chunk = os.read(key.fd, _GIT_READ_CHUNK_BYTES)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        continue
+                    label, buffer, limit = stream_limits[key.fd]
+                    available = limit - len(buffer)
+                    if len(chunk) > available:
+                        if available > 0:
+                            buffer.extend(chunk[:available])
+                        failure = f"git inspection {label} exceeded output limit"
+                        break
+                    buffer.extend(chunk)
+                if failure:
+                    break
+            if failure is None:
+                remaining = max(0.001, deadline - time.monotonic())
+                try:
+                    returncode = process.wait(timeout=remaining)
+                except subprocess.TimeoutExpired:
+                    failure = "git inspection timed out"
+            if failure is not None:
+                self._kill_git_process_group(process)
+                raise ValueError(failure)
+            return _GitProcessResult(
+                returncode=returncode,
+                stdout=bytes(stdout),
+                stderr=bytes(stderr),
+            )
+        finally:
+            selector.close()
+            process.stdout.close()
+            process.stderr.close()
+            if process.poll() is None:
+                self._kill_git_process_group(process)
+
+    @staticmethod
+    def _kill_git_process_group(process: subprocess.Popen[bytes]) -> None:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+    def _git(
+        self,
+        repo: Path,
+        *args: str,
+        check: bool = True,
+        stdout_limit: int | None = None,
+    ) -> bytes:
+        result = self._run_git(repo, *args, stdout_limit=stdout_limit)
         if check and result.returncode:
             stderr = result.stderr.decode("utf-8", "replace").strip()
             raise ValueError(f"git inspection failed: {stderr or result.returncode}")
@@ -417,30 +526,21 @@ class DiffGuard:
             raise ValueError("repository root must be the Git worktree root")
         return repo
 
+    def _reject_replacement_refs(self, repo: Path) -> None:
+        payload = self._git(
+            repo,
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/replace/",
+            stdout_limit=_MAX_REPLACEMENT_REF_BYTES,
+        )
+        if payload:
+            raise ValueError("repository replacement refs are forbidden")
+
     def _validate_base(self, repo: Path, base_sha: str) -> None:
         if not isinstance(base_sha, str) or not _OBJECT_ID.fullmatch(base_sha):
             raise ValueError("base SHA must be an exact 40- or 64-character object ID")
-        git_executable = self._executables.resolve("git")
-        result = subprocess.run(
-            (
-                str(git_executable),
-                "cat-file",
-                "-e",
-                f"{base_sha}^{{commit}}",
-            ),
-            cwd=repo,
-            env={
-                "PATH": "/nonexistent/vista-daily-maintainer",
-                "HOME": "/nonexistent/vista-daily-maintainer",
-                "GIT_CONFIG_GLOBAL": "/dev/null",
-                "GIT_CONFIG_SYSTEM": "/dev/null",
-                "GIT_CONFIG_NOSYSTEM": "1",
-                "GIT_PAGER": "",
-                "GIT_TERMINAL_PROMPT": "0",
-            },
-            check=False,
-            capture_output=True,
-        )
+        result = self._run_git(repo, "cat-file", "-e", f"{base_sha}^{{commit}}")
         if result.returncode:
             raise ValueError("base SHA is not a reachable commit object")
 
@@ -475,6 +575,97 @@ class DiffGuard:
         return tuple(
             item.decode("utf-8", "strict") for item in payload.split(b"\0") if item
         )
+
+    def _ignored_state(self, repo: Path) -> _IgnoredState:
+        # ``--directory`` collapses wholly ignored trees such as ``.venv/`` so
+        # a dependency environment cannot explode the report. The byte and
+        # path caps bound retained evidence; overflow is itself a violation.
+        payload = self._git(
+            repo,
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+            "--no-empty-directory",
+            "-z",
+            "--",
+            stdout_limit=_MAX_IGNORED_STATE_BYTES,
+        )
+        overflow = len(payload) > _MAX_IGNORED_STATE_BYTES
+        paths: list[str] = []
+        cursor = 0
+        retained_bytes = min(len(payload), _MAX_IGNORED_STATE_BYTES)
+        while cursor < retained_bytes and len(paths) < _MAX_IGNORED_STATE_PATHS:
+            end = payload.find(b"\0", cursor, retained_bytes)
+            if end < 0:
+                overflow = True
+                break
+            raw_path = payload[cursor:end]
+            cursor = end + 1
+            if not raw_path:
+                continue
+            try:
+                path = raw_path.decode("utf-8", "strict")
+            except UnicodeDecodeError as exc:
+                raise ValueError("ignored path is not valid UTF-8") from exc
+            normalized = path.rstrip("/")
+            if not normalized:
+                raise ValueError("ignored path is not a safe relative path")
+            shape_violations: list[GuardViolation] = []
+            self._check_path_shape(normalized, shape_violations)
+            if shape_violations:
+                raise ValueError("ignored path is not a safe relative POSIX path")
+            paths.append(path)
+        if cursor < len(payload):
+            overflow = True
+        retained = tuple(sorted(set(paths)))
+        identity = hashlib.sha256()
+        self._digest_frame(
+            identity,
+            b"domain",
+            b"vista-world-daily-maintainer-ignored-state-v1",
+        )
+        self._digest_frame(
+            identity,
+            b"listing-sha256",
+            hashlib.sha256(payload).digest(),
+        )
+        self._digest_frame(identity, b"overflow", b"1" if overflow else b"0")
+        for path in retained:
+            self._digest_ignored_path(identity, repo, path)
+        return _IgnoredState(
+            present=bool(payload),
+            paths=retained,
+            identity_sha256=identity.digest(),
+            overflow=overflow,
+        )
+
+    def _digest_ignored_path(self, digest: _Digest, repo: Path, path: str) -> None:
+        self._digest_frame(digest, b"path", path.encode("utf-8"))
+        current = repo / path.rstrip("/")
+        try:
+            metadata = current.lstat()
+        except OSError:
+            self._digest_frame(digest, b"type", b"missing")
+            return
+        normalized_mode = stat.S_IFMT(metadata.st_mode) | (metadata.st_mode & 0o7777)
+        self._digest_frame(digest, b"mode", normalized_mode.to_bytes(4, "big"))
+        if stat.S_ISLNK(metadata.st_mode):
+            target = os.readlink(current).encode("utf-8", "surrogateescape")
+            self._digest_frame(digest, b"type", b"symlink")
+            self._digest_frame(digest, b"target", target)
+        elif stat.S_ISREG(metadata.st_mode):
+            self._digest_frame(digest, b"type", b"file")
+            self._digest_frame(digest, b"size", metadata.st_size.to_bytes(8, "big"))
+            if metadata.st_size <= _MAX_IGNORED_FILE_HASH_BYTES:
+                self._digest_frame(digest, b"content", self._file_sha256(current))
+            else:
+                self._digest_frame(digest, b"content", b"oversized")
+        elif stat.S_ISDIR(metadata.st_mode):
+            self._digest_frame(digest, b"type", b"directory")
+        else:
+            self._digest_frame(digest, b"type", b"other")
 
     def _numstat(self, repo: Path, base_sha: str) -> dict[str, tuple[int, int, bool]]:
         payload = self._git(
@@ -551,12 +742,7 @@ class DiffGuard:
             return True
         if path.startswith("ops/systemd/") or path == "ops/systemd":
             return True
-        if (
-            basename in _DEPENDENCY_FILES
-            or DiffGuard._is_validation_config(basename)
-            or basename.startswith("requirements")
-            and basename.endswith(".txt")
-        ):
+        if is_v1_protected_authority_basename(basename):
             return True
         if basename in {
             "backlog.yaml",
@@ -608,43 +794,8 @@ class DiffGuard:
         return pure.suffix.lower() in _BINARY_SUFFIXES
 
     @staticmethod
-    def _is_validation_config(basename: str) -> bool:
-        return basename in _VALIDATION_CONFIG_FILES or basename.startswith(
-            _VALIDATION_CONFIG_PREFIXES
-        )
-
-    @staticmethod
     def _is_test_path(path: str) -> bool:
-        pure = PurePosixPath(path)
-        lowered = tuple(part.lower() for part in pure.parts)
-        return (
-            any(
-                part in {"test", "tests", "fixtures", "__snapshots__"}
-                for part in lowered[:-1]
-            )
-            or pure.name.lower().startswith(("test_", "test-"))
-            or pure.name.lower().endswith("_test.py")
-            or pure.name.lower().endswith(
-                (
-                    ".test.cjs",
-                    ".test.cts",
-                    ".test.js",
-                    ".test.jsx",
-                    ".test.mjs",
-                    ".test.mts",
-                    ".test.ts",
-                    ".test.tsx",
-                    ".spec.cjs",
-                    ".spec.cts",
-                    ".spec.js",
-                    ".spec.jsx",
-                    ".spec.mjs",
-                    ".spec.mts",
-                    ".spec.ts",
-                    ".spec.tsx",
-                )
-            )
-        )
+        return is_v1_test_scope(path)
 
     def _check_current_file(
         self,
@@ -888,15 +1039,20 @@ class DiffGuard:
             )
 
     def _patch_digest(
-        self, repo: Path, base_sha: str, untracked: tuple[str, ...]
+        self,
+        repo: Path,
+        base_sha: str,
+        untracked: tuple[str, ...],
+        ignored: _IgnoredState,
     ) -> str:
         digest = hashlib.sha256()
         self._digest_frame(
             digest,
             b"domain",
-            b"vista-world-daily-maintainer-patch-v2",
+            b"vista-world-daily-maintainer-patch-v3",
         )
         self._digest_frame(digest, b"base-sha", base_sha.encode("ascii"))
+        self._digest_frame(digest, b"ignored-state", ignored.identity_sha256)
         self._digest_frame(
             digest,
             b"tracked-diff",

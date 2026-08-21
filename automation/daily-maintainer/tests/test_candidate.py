@@ -231,6 +231,40 @@ class CandidateContractTests(unittest.TestCase):
                 ):
                     load_trusted_backlog(trust)
 
+    def test_candidate_paths_and_profiles_must_be_canonically_sorted(self) -> None:
+        payloads = (
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b"allowed_paths: [tests/**, src/**]",
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"validation_profiles: [daily-maintainer-core-tests]",
+                b"validation_profiles: [tools-python-offline, daily-maintainer-core-tests]",
+                1,
+            ),
+        )
+        for payload in payloads:
+            with self.subTest(payload=payload), tempfile.TemporaryDirectory() as tmp:
+                trust = self._write(Path(tmp), payload)
+                with self.assertRaisesRegex(
+                    CandidateContractError,
+                    "sorted and unique",
+                ):
+                    load_trusted_backlog(trust)
+
+    def test_v1_test_scope_suffixes_share_one_policy(self) -> None:
+        suffixes = (".test.cjs", ".test.cts", ".test.mts", ".spec.cjs")
+        for suffix in suffixes:
+            payload = VALID_BACKLOG.replace(
+                b"allowed_paths: [docs/**]",
+                f"allowed_paths: [packages/widget{suffix}]".encode("ascii"),
+                1,
+            )
+            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as tmp:
+                backlog = load_trusted_backlog(self._write(Path(tmp), payload))
+                self.assertEqual(backlog.candidates[1].risk_tier, 0)
+
     def test_v1_policy_rejects_globs_disguising_forbidden_authority(self) -> None:
         payloads = (
             VALID_BACKLOG.replace(
@@ -256,6 +290,41 @@ class CandidateContractTests(unittest.TestCase):
             VALID_BACKLOG.replace(
                 b"allowed_paths: [src/**, tests/**]",
                 b"allowed_paths: [packages/secret-store.py, tests/**]",
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b'allowed_paths: ["packages/se?up.py", tests/**]',
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b'allowed_paths: ["packages/npm-*hrinkwrap.json", tests/**]',
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b'allowed_paths: ["packages/*.toml", tests/**]',
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b'allowed_paths: ["packages/.python-versio?", tests/**]',
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b'allowed_paths: ["packages/*-commit-config.yaml", tests/**]',
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b'allowed_paths: ["packages/MANIFEST.?n", tests/**]',
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b'allowed_paths: ["packages/p?xi.lock", tests/**]',
                 1,
             ),
         )
@@ -285,11 +354,117 @@ class CandidateContractTests(unittest.TestCase):
                 b"allowed_paths: [tests/test_auth.py]",
                 1,
             ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b"allowed_paths: [packages/setup_helper.py, tests/**]",
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b"allowed_paths: [tests/test_setup.py]",
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b"allowed_paths: [tests/test_sitecustomize.py]",
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b"allowed_paths: [packages/manifest_input.py, tests/**]",
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b"allowed_paths: [packages/uv_helpers.py, tests/**]",
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b"allowed_paths: [docs/environment-notes.md, tests/**]",
+                1,
+            ),
+            VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                b"allowed_paths: [tests/test_pixi.py]",
+                1,
+            ),
         )
         for payload in payloads:
             with self.subTest(payload=payload), tempfile.TemporaryDirectory() as tmp:
                 backlog = load_trusted_backlog(self._write(Path(tmp), payload))
                 self.assertEqual(len(backlog.candidates), 2)
+
+    def test_v1_policy_rejects_dependency_build_and_validation_authority(self) -> None:
+        basenames = (
+            ".flake8",
+            ".node-version",
+            ".nvmrc",
+            ".pre-commit-config.yaml",
+            ".pre-commit-config.yml",
+            ".pre-commit-hooks.yaml",
+            ".python-version",
+            ".ruff.toml",
+            ".ruby-version",
+            ".tool-versions",
+            "MANIFEST.in",
+            "Pipfile",
+            "Pipfile.lock",
+            "conda-lock.yml",
+            "constraints.txt",
+            "environment.yml",
+            "hatch.toml",
+            "mise.toml",
+            "npm-shrinkwrap.json",
+            "pdm.toml",
+            "pixi.lock",
+            "pixi.toml",
+            "poetry.toml",
+            "ruff.toml",
+            "setup.cfg",
+            "setup.py",
+            "sitecustomize.py",
+            "uv.toml",
+            "usercustomize.py",
+        )
+        for basename in basenames:
+            payload = VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                f"allowed_paths: [packages/widget/{basename}]".encode("ascii"),
+                1,
+            )
+            with self.subTest(basename=basename), tempfile.TemporaryDirectory() as tmp:
+                trust = self._write(Path(tmp), payload)
+                with self.assertRaisesRegex(
+                    CandidateContractError,
+                    "V1 candidate policy",
+                ):
+                    load_trusted_backlog(trust)
+
+    def test_v1_policy_rejects_protected_roots_even_when_test_scoped(self) -> None:
+        protected_patterns = (
+            "automation/daily-maintainer/tests/test_x.py",
+            "runs/test_x.py",
+            "scenes/test_x.py",
+            "world-packs/test_x.py",
+            "world_packs/tests/test_contract.py",
+            "docs/maintenance/backlog.yaml",
+            "packages/widget/pyproject.toml",
+        )
+        for pattern in protected_patterns:
+            allowed = ", ".join(sorted((pattern, "tests/**")))
+            payload = VALID_BACKLOG.replace(
+                b"allowed_paths: [src/**, tests/**]",
+                f"allowed_paths: [{allowed}]".encode("ascii"),
+                1,
+            )
+            with self.subTest(pattern=pattern), tempfile.TemporaryDirectory() as tmp:
+                trust = self._write(Path(tmp), payload)
+                with self.assertRaisesRegex(
+                    CandidateContractError,
+                    "V1 candidate policy",
+                ):
+                    load_trusted_backlog(trust)
 
     def test_single_star_does_not_authorize_nested_directories(self) -> None:
         self.assertTrue(path_matches_pattern("src/app.py", "src/*.py"))

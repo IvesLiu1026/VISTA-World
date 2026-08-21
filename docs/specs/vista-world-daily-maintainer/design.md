@@ -60,7 +60,9 @@ update one incident issue but never fabricates a code commit when the server pro
 2. **Patcher** runs as a dedicated Unix UID or rootless container. It gets only a clean worktree,
    normalized candidate, allowlisted files and its scoped Codex credential. The sandbox does not
    mount the operator home, `~/.ssh`, gh config, `SSH_AUTH_SOCK`, publisher token/state, sudo,
-   production runtime ownership or paid keys. A worktree alone is not a credential boundary.
+   production runtime ownership or paid keys. A worktree alone is not a credential boundary. The
+   operator's personal ChatGPT-managed `auth.json` is never copied into this public-repository
+   unattended boundary; it is limited to attended canary work.
 3. **Guard/verifier** is deterministic, runs in a fresh process, and rejects protected paths,
    large/binary files, secret-like content, excessive diffs and test weakening.
 4. **Publisher** runs under a separate principal and receives only an immutable patch digest plus
@@ -77,15 +79,15 @@ update one incident issue but never fabricates a code commit when the server pro
 
 ```yaml
 id: VW-DM-0001
-title: Reject non-finite coordinates in room schema
-risk_tier: 1
+title: Cover strict loader rejection of non-object JSON values
+risk_tier: 0
 allowed_paths:
-  - contracts/python/vista_world/**
-  - tests/contracts/**
+  - tools/tests/test_vista_playable_home_contracts.py
 acceptance:
-  - malformed NaN/Infinity input fails closed
+  - arrays, strings, numbers, booleans and null fail with the stable top-level JSON error
 validation_profiles:
-  - contracts-python-focused
+  - tools-python-offline
+expected_external_side_effects: none
 source:
   kind: curated_backlog
   manifest_revision: 7
@@ -102,15 +104,40 @@ are resolved by the verifier without a shell; candidate YAML cannot provide comm
 ```json
 {
   "schema_version": "vista.world.daily-maintainer.receipt.v1",
-  "run_id": "2026-08-21/IvesLiu1026/VISTA-World",
+  "run_id": "2026-08-21/IvesLiu1026/VISTA-World@1111111111111111111111111111111111111111",
+  "run_date": "2026-08-21",
+  "repository": "IvesLiu1026/VISTA-World",
   "status": "merged",
-  "base_sha": "...",
-  "head_sha": "...",
+  "base_sha": "1111111111111111111111111111111111111111",
+  "head_sha": "2222222222222222222222222222222222222222",
   "candidate_id": "VW-DM-0001",
-  "validation": [{"command_id": "focused-test", "exit_code": 0, "output_sha256": "..."}],
+  "validation": [{
+    "command_id": "tools-python-offline",
+    "exit_code": 0,
+    "output_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "duration_ms": 1234,
+    "timed_out": false
+  }],
+  "diff_summary": {
+    "files_changed": 1,
+    "production_lines": 0,
+    "test_lines": 12,
+    "patch_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
   "protected_paths_touched": [],
-  "pr_url": "...",
-  "merge_sha": "...",
+  "pr_url": "https://github.com/IvesLiu1026/VISTA-World/pull/42",
+  "merge_sha": "3333333333333333333333333333333333333333",
+  "duration_ms": 5000,
+  "failure_category": null,
+  "actors": {
+    "commit_author": {"name": "Ives Liu", "email": "zhiy0517xiang@gmail.com"},
+    "git_committer": {
+      "name": "VISTA World Publisher",
+      "email": "publisher@users.noreply.github.com"
+    },
+    "pr_actor": "vista-world-publisher[bot]",
+    "promotion_actor": "vista-world-publisher[bot]"
+  },
   "automated": true
 }
 ```
@@ -172,13 +199,14 @@ world package receipts, datasets, scenes, reports, generated artifacts and NAS p
 - Publisher opens draft. A separate promotion controller marks it ready only after required checks
   and receipt digest pass. Draft PRs are never directly auto-merged.
 
-Attribution is a product decision, not a hidden implementation detail. Default design uses a bot
-author. If the user explicitly selects personal attribution, the exact author/committer/trailer
-contract must be recorded before rollout.
+Attribution is a product decision, not a hidden implementation detail. The approved v1 contract
+uses the mapped Ives author identity and the mandatory automation trailer. The publisher App remains
+the separately recorded committer/PR actor; this does not represent an unattended commit as manual
+human work.
 
 | Role | Recommended principal | Recorded evidence |
 |---|---|---|
-| Commit author | `VISTA World Maintenance Bot` | author email + automation trailer |
+| Commit author | `Ives Liu <zhiy0517xiang@gmail.com>` | exact author email + `Automated-by: Codex Daily Maintainer` |
 | Git committer | publisher GitHub App/bot | committer identity + signed/verified state |
 | PR actor | repo-scoped publisher App | PR author/login |
 | Promotion actor | separate workflow/App | check/promotion event actor |
@@ -194,8 +222,9 @@ entries correspond to these offline, isolated commands:
 git diff --check
 
 cd tools
-uv lock --check
-uv run --group dev python -m unittest discover -s tests -p 'test_*.py'
+python3 -m unittest \
+  tests/test_vista_playable_home_contracts.py \
+  tests/test_vista_playable_home_compiler.py
 
 cd simworld_studio_workspace/web
 npm run test:server:unit
@@ -209,6 +238,10 @@ sh -n Scripts/build-plugin.sh
 
 Frontend changes also require the established build. Browser tests that reuse shared ports,
 integration/pipeline suites, commandlets and real runtime checks remain manual until isolated.
+The `python3` entry is resolved through the verifier's pinned executable registry. Production T13
+must inject a root-owned, immutable interpreter outside the patcher-writable worktree with the
+locked dependencies preinstalled offline; a repository `.venv` and inherited package cache are
+never validation authority.
 
 ## Data Model and Migration
 
@@ -260,6 +293,8 @@ systemd files after activation.
   mismatch blocks CLI bootstrap; a GitHub App run validates its installation instead.
 - No eligible candidate: emit `no_change`; do not commit.
 - Model timeout/budget exhaustion: discard incomplete worktree; no fallback commit.
+- No dedicated automation credential: run selector/report-only and emit a truthful blocker; never
+  fall back to the operator's personal ChatGPT-managed login.
 - Guard or tests fail: retain sanitized digest/summary, remove credentials, do not push.
 - Remote main moves: recreate from latest base and rerun; never force-push reviewed work.
 - Existing bot PR: finish/reconcile it or skip; do not open a queue of stale PRs.
