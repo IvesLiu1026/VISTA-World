@@ -1,10 +1,11 @@
 # VISTA World Daily Maintainer Safety Core
 
 This package implements the deterministic trust boundaries used before a daily
-maintenance patch can be published. It includes contracts for isolated run
-management, patcher invocation and draft-only publication, but it does not yet
-schedule runs, invoke a model, provide concrete GitHub adapters, or manage
-production runtime.
+maintenance patch can be published. It includes isolated run-management,
+patcher, verifier, immutable-spool, Git and draft-only GitHub adapter contracts,
+but it does not yet schedule runs, invoke a model, wire the spool into the
+publisher, provide production credentials/transports, or manage production
+runtime.
 
 The core provides:
 
@@ -17,6 +18,13 @@ The core provides:
 - a credential-free verifier that never enables a subprocess shell;
 - a typed finalizer that joins exact candidate, run, patch, isolation, and
   check evidence into immutable canonical publisher bytes;
+- a control-owned append-only spool with a publisher-read-only projection,
+  separate publisher-owned replay state, full envelope reconstruction and
+  publisher-owned checkout rematerialization contracts;
+- a pinned, shell-free Git adapter that rechecks the verifier's canonical patch
+  digest and exact local/remote commit trees in offline local-bare tests;
+- a draft-only GitHub REST adapter bound to independent short-lived App
+  authority evidence, bounded transport postconditions and exact read-back;
 - fail-closed patcher and publisher protocols with no promotion or merge surface;
 - canonical receipt serialization, SHA-256 binding, and journal markers.
 
@@ -45,11 +53,31 @@ authorization. `finalizer.py` accepts only an exact `PatcherRequest`,
 slug, branch, base, patch, changed-path, check, or isolation evidence. The
 publisher reconstructs the complete backlog membership, candidate, run state,
 verification subject, check subject, and isolation evidence; it recomputes all
-digests, requires the finalized worktree path to match its local target, and
-requires both the backlog file digest and full canonical membership authority
-digest to match the operator-owned protected policy. T13 must still add an
-immutable one-way spool and outer sandbox before unattended publication is
-enabled.
+digests and requires both the backlog file digest and full canonical membership
+authority digest to match the operator-owned protected policy. The separately
+implemented spool reconstructs the same exact finalized envelope on write and
+read, and requires control-, publisher- and state-root separation. Its deployment
+evidence is still only a dormant T13 contract: the publisher/rematerializer bridge
+is deliberately not wired after independent review found preflight ordering,
+attestation binding, filesystem-alias and mutation-time inode gaps. T13 must close
+those gates and provide the outer UID, mount and capability boundary before
+unattended publication is enabled.
+
+## Dormant publication adapters
+
+The concrete adapters are intentionally usable only in bounded tests today:
+
+- Git publication supports a local bare remote for integration tests. Production
+  HTTPS push fails closed until a root-owned short-lived credential port exists.
+- GitHub REST orchestration requires an independently attested, repository-scoped,
+  non-admin App authority plus token issuer and streaming HTTPS transport. Those
+  production providers are not implemented by this package.
+- Spool rematerialization has no direct GitHub or merge surface. The publisher
+  cannot consume it as an unattended path until the four T10/T13 bridge gates
+  above pass exact adversarial review.
+
+No scheduler, service, model invocation, promotion, merge or auto-merge path is
+activated by these modules.
 
 The verifier additionally uses an explicit executable allowlist, ignores
 inherited PATH and HOME, creates empty XDG/npm/uv configuration roots, disables
