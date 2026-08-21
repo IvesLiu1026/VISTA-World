@@ -1,8 +1,8 @@
 # VISTA World
 
 VISTA World is an agent-driven, interactive 3D simulation environment built around
-versioned world contracts, verified VISTA events, reproducible scene compilation, and
-replaceable runtime/control-plane adapters.
+versioned world contracts, VISTA-derived event projections, reproducible scene compilation,
+and replaceable runtime/control-plane adapters.
 
 This repository is standalone: the contract/compiler core does not require SimWorld
 Studio, Unreal Engine, Blender, Postgres, Qdrant, or a running GPU service. SimWorld
@@ -15,7 +15,7 @@ The first extraction contains:
 
 - a six-room indoor home contract;
 - 34 semantic entities with interaction affordances;
-- seven verified VISTA event overlays;
+- seven contract-validated event overlays derived from internally reviewed VISTA samples;
 - closed JSON schemas and deterministic content digests;
 - a pure-Python compiler that emits an Unreal-oriented build plan;
 - offline contract/compiler regression tests;
@@ -67,4 +67,7 @@ and [`docs/specs/vista-world-daily-maintainer`](docs/specs/vista-world-daily-mai
 
 The repository is licensed under Apache License 2.0. Selected history and authorship
 from the SimWorld Studio lineage are preserved. See [`NOTICE`](NOTICE) and the migration
-ledger under [`docs/migration`](docs/migration).
+ledger under [`docs/migration`](docs/migration). The repository does not redistribute the
+underlying VISTA dataset, private review evidence, or referenced external 3D assets. See the
+[event projection ledger](docs/provenance/event-projections.md) for the exact public verification
+boundary.
