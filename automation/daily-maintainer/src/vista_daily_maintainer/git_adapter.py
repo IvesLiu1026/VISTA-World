@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 from .finalizer import verified_head_digest
+from .guard import DiffGuard
 from .naming import is_v1_daily_branch_name
 from .publisher import (
     AUTOMATION_TRAILER,
@@ -380,6 +381,7 @@ class ShellFreeGitPublisherAdapter:
         self._checkout = resolved
         self._patch_bundle = patch_bundle
         self._git_evidence = git_executable
+        self._guard_digest = DiffGuard(git_executable=Path(git_executable.path))
         self._limits = limits or GitAdapterLimits()
         if len(patch_bundle.patch_bytes) > self._limits.patch_bytes:
             raise GitAdapterContractError(
@@ -877,11 +879,34 @@ class ShellFreeGitPublisherAdapter:
             operation="materialized patch whitespace check",
         )
         self._validate_materialized_paths(changed_paths)
+        try:
+            observed_patch_sha256 = self._guard_digest.canonical_patch_sha256(
+                self._checkout,
+                subject.base_sha,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise GitAdapterRepositoryError(
+                "materialized guard patch digest could not be recomputed"
+            ) from exc
+        observed = PatchSnapshot(
+            base_sha=subject.base_sha,
+            patch_sha256=observed_patch_sha256,
+            head_sha256=verified_head_digest(
+                subject.base_sha,
+                observed_patch_sha256,
+                changed_paths,
+            ),
+            changed_paths=changed_paths,
+        )
+        if observed != self._authenticated_patch_snapshot():
+            raise GitAdapterRepositoryError(
+                "materialized patch digest does not match verifier evidence"
+            )
         tree_sha = _parse_single_object_id(
             self._git("write-tree", operation="materialized tree read").stdout,
             "materialized tree",
         )
-        return self._authenticated_patch_snapshot(), tree_sha
+        return observed, tree_sha
 
     def _validate_materialized_paths(self, paths: tuple[str, ...]) -> None:
         for path in paths:

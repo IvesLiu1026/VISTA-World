@@ -21,6 +21,7 @@ from vista_daily_maintainer.git_adapter import (
     PatchMaterializationSubject,
     ShellFreeGitPublisherAdapter,
 )
+from vista_daily_maintainer.guard import DiffGuard
 from vista_daily_maintainer.naming import v1_daily_branch_name
 from vista_daily_maintainer.publisher import (
     AUTOMATION_TRAILER,
@@ -154,7 +155,9 @@ class RepositoryFixture:
             "git-adapter-contract",
             self.base_sha,
         )
-        self.patch_sha256 = hashlib.sha256(b"verified guard patch").hexdigest()
+        self.patch_sha256 = DiffGuard(
+            git_executable=Path(self.git_evidence.path)
+        ).canonical_patch_sha256(self.patcher, self.base_sha)
         self.bundle = self.make_bundle(
             patch_bytes=self.patch_bytes,
             changed_paths=self.changed_paths,
@@ -320,6 +323,57 @@ class GitPublisherAdapterTests(unittest.TestCase):
                     patch_bundle=rebound,
                     git_executable=self.git_evidence,
                 )
+
+    def test_materialized_bytes_must_match_verifier_guard_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = self.fixture(temporary)
+            attacker = Path(temporary) / "attacker-patcher"
+            run_git(
+                Path(temporary),
+                "clone",
+                "-q",
+                fixture.remote_url,
+                str(attacker),
+            )
+            (attacker / "src" / "app.py").write_text("VALUE = 404\n", encoding="utf-8")
+            (attacker / "tests").mkdir()
+            (attacker / "tests" / "test_app.py").write_text(
+                "def test_value():\n    assert 404 == 404\n",
+                encoding="utf-8",
+            )
+            run_git(attacker, "add", "--intent-to-add", "tests/test_app.py")
+            malicious_patch = run_git(
+                attacker,
+                "diff",
+                "--binary",
+                "--no-color",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--no-renames",
+                fixture.base_sha,
+                "--",
+            ).stdout
+            rebound = AuthenticatedPatchBundle.from_trusted_spool(
+                spool_id=fixture.bundle.spool_id,
+                issued_by=fixture.bundle.issued_by,
+                subject=fixture.bundle.subject,
+                patch_bytes=malicious_patch,
+            )
+            adapter = ShellFreeGitPublisherAdapter.for_local_bare_test(
+                checkout=fixture.checkout,
+                bare_remote=fixture.remote,
+                patch_bundle=rebound,
+                git_executable=self.git_evidence,
+            )
+            with self.assertRaisesRegex(
+                GitAdapterRepositoryError,
+                "patch digest does not match verifier evidence",
+            ):
+                adapter.inspect_patch(fixture.checkout, fixture.base_sha)
+            self.assertEqual(
+                (fixture.checkout / "src" / "app.py").read_text(encoding="utf-8"),
+                "VALUE = 404\n",
+            )
 
     def test_unsafe_patch_cannot_escape_checkout(self) -> None:
         malicious = (

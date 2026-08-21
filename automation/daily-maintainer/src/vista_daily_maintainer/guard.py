@@ -393,6 +393,22 @@ class DiffGuard:
             test_lines=test_lines,
         )
 
+    def canonical_patch_sha256(self, repo_root: Path, base_sha: str) -> str:
+        """Recompute the exact patch digest used by a verifier guard report.
+
+        Publisher adapters use this narrow entry point after rebuilding a clean
+        checkout from sealed patch bytes.  Keeping the digest implementation in
+        the guard prevents a second, subtly different definition of the bytes
+        that verification approved.
+        """
+
+        repo = self._validated_repo(repo_root)
+        self._reject_replacement_refs(repo)
+        self._validate_base(repo, base_sha)
+        untracked = self._untracked_paths(repo)
+        ignored = self._ignored_state(repo)
+        return self._patch_digest(repo, base_sha, untracked, ignored)
+
     @staticmethod
     def _git_environment() -> dict[str, str]:
         return {
