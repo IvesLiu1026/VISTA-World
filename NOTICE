@@ -10,3 +10,9 @@ automation specifications, and subsequent modifications are maintained in this
 standalone repository. Selected commit authorship is preserved in Git history.
 
 This NOTICE is informational and does not modify the Apache License, Version 2.0.
+
+The Apache-2.0 license applies to the repository code, schemas, documentation, and other
+materials actually distributed here. Labels such as `research-fixture-only` describe referenced
+external fixture or asset bundles that are not included in this repository; they do not grant a
+license to download, redistribute, or commercially use those external materials. The underlying
+VISTA dataset and private annotation/review evidence are likewise not redistributed here.

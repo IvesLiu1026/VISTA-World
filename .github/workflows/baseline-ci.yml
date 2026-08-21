@@ -75,9 +75,25 @@ jobs:
             exit 1
           fi
 
-          forbidden="$(git ls-files | grep -Ei '\.(blend|blend1|glb|gltf|uasset|umap|pak|pem|key)$' || true)"
+          forbidden="$(git ls-files | grep -Ei '\.(7z|a|avi|blend|blend1|bmp|db|dll|dylib|exe|gif|glb|gltf|gz|ico|iso|jar|jpeg|jpg|key|lib|mov|mp3|mp4|o|obj|onnx|otf|pak|pdf|pem|pickle|pkl|png|pyc|so|sqlite|sqlite3|tar|tga|tif|tiff|ttf|uasset|umap|wav|webm|woff|woff2|xz|zip)$' || true)"
           if [[ -n "$forbidden" ]]; then
             printf 'Tracked binary/credential extensions are forbidden:\n%s\n' "$forbidden" >&2
+            exit 1
+          fi
+
+          binary_mime=""
+          while IFS= read -r -d '' path; do
+            mime="$(file --brief --mime-type -- "$path")"
+            case "$mime" in
+              text/*|application/json|application/xml|application/yaml|inode/x-empty)
+                ;;
+              *)
+                binary_mime+="$path ($mime)"$'\n'
+                ;;
+            esac
+          done < <(git ls-files -z)
+          if [[ -n "$binary_mime" ]]; then
+            printf 'Tracked non-text payloads are forbidden:\n%s' "$binary_mime" >&2
             exit 1
           fi
 
