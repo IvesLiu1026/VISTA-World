@@ -54,6 +54,8 @@ jobs:
           uv run --project automation/daily-maintainer --locked \
             ruff check automation/daily-maintainer
           uv build --project automation/daily-maintainer \
+            --build-constraints automation/daily-maintainer/requirements-build.txt \
+            --require-hashes \
             --out-dir "$RUNNER_TEMP/daily-maintainer-dist"
 
       - name: Validate the public world pack
