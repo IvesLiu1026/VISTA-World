@@ -293,9 +293,12 @@ void AVistaHomeNpcController::StartCurrentAction()
         }
         ActiveNavigationGoal = ProjectedGoal.Location;
         ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
+        // Keep path following aligned with the semantic completion check below.
+        // Including the capsule radius can report success outside that radius.
+        constexpr bool bStopOnOverlap = false;
         const EPathFollowingRequestResult::Type Result = MoveToLocation(
             ActiveNavigationGoal.GetValue(), NavigationAcceptanceRadius,
-            true, true, false, false, nullptr, false);
+            bStopOnOverlap, true, false, false, nullptr, false);
         if (Result == EPathFollowingRequestResult::Failed)
         {
             CompleteCurrent(EVistaNpcActionStatus::Blocked, TEXT("NAVIGATION_REQUEST_FAILED"));
