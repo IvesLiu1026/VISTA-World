@@ -576,6 +576,12 @@ class VistaPlayableHomeRuntimeAcceptanceTests(unittest.TestCase):
                     "timeout_sec": 25.0,
                 },
                 {
+                    "action_id": "acceptance.navigate.office_desk_clearance",
+                    "type": "navigate_to",
+                    "target_semantic_id": acceptance.OFFICE_DESK_ANCHOR_ID,
+                    "timeout_sec": 20.0,
+                },
+                {
                     "action_id": "acceptance.place.office_desk",
                     "type": "place",
                     "target_semantic_id": acceptance.OFFICE_DESK_ANCHOR_ID,
