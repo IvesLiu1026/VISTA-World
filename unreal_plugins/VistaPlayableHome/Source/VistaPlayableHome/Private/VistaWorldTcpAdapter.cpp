@@ -210,7 +210,9 @@ TSharedRef<FJsonObject> RuntimeStateJson(const FVistaEntityRuntimeState& State)
     const TSharedRef<FJsonObject> Values = MakeShared<FJsonObject>();
     for (const TPair<FName, FString>& Pair : State.Values)
     {
-        Values->SetStringField(Pair.Key.ToString(), Pair.Value);
+        // FName preserves the casing of the first process-local registration,
+        // so Editor and packaged builds can otherwise emit different wire keys.
+        Values->SetStringField(Pair.Key.ToString().ToLower(), Pair.Value);
     }
     Output->SetObjectField(TEXT("values"), Values);
     return Output;
