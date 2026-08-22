@@ -2882,6 +2882,12 @@ def default_engine_ini(
         # Python.  Generate the base tiles from the saved bounds at runtime;
         # the typed acceptance test proves that the NPC can traverse them.
         "RuntimeGeneration=Dynamic",
+        # Match AVistaHomeNpcCharacter's 34 cm capsule and retain multiple
+        # voxels across the authored 100 cm interior doorways.
+        "AgentRadius=34.000000",
+        "AgentHeight=192.000000",
+        "CellSize=10.000000",
+        "CellHeight=5.000000",
         "",
         "[/Script/Engine.RendererSettings]",
         "r.AllowStaticLighting=False",
