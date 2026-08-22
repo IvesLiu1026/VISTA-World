@@ -541,7 +541,7 @@ class ReviewCaptureInputTests(unittest.TestCase):
                 (1920, 1080),
             )
             self.assertEqual(execution["engine"]["graphics_adapter"], 0)
-            self.assertEqual(execution["engine"]["display"], ":119")
+            self.assertEqual(execution["engine"]["display"], ":117")
             self.assertEqual(
                 execution["scratch"]["storage_class"],
                 "private_nas_retained_evidence",
@@ -619,7 +619,7 @@ class ReviewCaptureInputTests(unittest.TestCase):
             args.display = ":118"
             with self.assertRaisesRegex(
                 capture.ReviewCaptureError,
-                "pinned to DISPLAY :119",
+                "pinned to DISPLAY :117",
             ):
                 capture.validate_inputs(args)
 
