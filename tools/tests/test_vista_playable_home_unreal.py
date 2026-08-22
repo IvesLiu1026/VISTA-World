@@ -475,6 +475,11 @@ class PlayableHomeSourceContractTests(unittest.TestCase):
             "DoorwayLink->AddNavigationObstacle(",
             source,
         )
+        self.assertGreaterEqual(
+            source.count("DoorwayLink->AddNavigationObstacle("),
+            2,
+        )
+        self.assertIn("DoorwayLink->ClearNavigationObstacle();", source)
         self.assertIn("FVector(55.0f, 20.0f, 100.0f)", source)
         self.assertIn("DoorMesh->SetCanEverAffectNavigation(false)", source)
         self.assertNotIn("CreateDefaultSubobject<UNavModifierComponent>", source)

@@ -303,6 +303,20 @@ void AVistaDoorActor::ApplyDoorState(bool bInstant)
     DoorMesh->SetCollisionEnabled(
         bOpen ? ECollisionEnabled::NoCollision
               : ECollisionEnabled::QueryAndPhysics);
+    // A permanently eroded obstacle can meet nearby furniture erosion and
+    // disconnect an otherwise open doorway.  Keep the cut only while closed;
+    // the smart link remains available while dynamic navigation reconnects.
+    if (bOpen)
+    {
+        DoorwayLink->ClearNavigationObstacle();
+    }
+    else
+    {
+        DoorwayLink->AddNavigationObstacle(
+            UNavArea_Null::StaticClass(),
+            FVector(55.0f, 20.0f, 100.0f),
+            FVector(0.0f, 0.0f, 100.0f));
+    }
     DoorwayLink->SetEnabled(bOpen);
     UNavigationSystemV1::UpdateActorInNavOctree(*this);
 }
