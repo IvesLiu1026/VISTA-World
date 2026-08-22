@@ -47,3 +47,19 @@ def test_successful_room_anchor_navigation_updates_observable_room_identity() ->
     assert "Npc->CurrentRoomId = Action.TargetSemanticId.LeftChop" in controller
     assert 'SemanticId.Find(TEXT("/entity."))' in character
     assert "CurrentRoomId = SemanticId.Left(EntityMarker);" in character
+
+
+def test_navigation_completion_is_bound_to_the_active_move_request() -> None:
+    header = CONTROLLER_HEADER.read_text(encoding="utf-8")
+    source = CONTROLLER_SOURCE.read_text(encoding="utf-8")
+
+    assert (
+        "FAIRequestID ActiveNavigationRequestId = "
+        "FAIRequestID::InvalidRequest;"
+    ) in header
+    assert "ActiveNavigationRequestId = GetCurrentMoveRequestID();" in source
+    assert "if (RequestId != ActiveNavigationRequestId)" in source
+    assert "NAVIGATION_REQUEST_ID_INVALID" in source
+    assert source.count(
+        "ActiveNavigationRequestId = FAIRequestID::InvalidRequest;"
+    ) >= 5

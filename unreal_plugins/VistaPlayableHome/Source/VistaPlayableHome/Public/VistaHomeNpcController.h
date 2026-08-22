@@ -77,6 +77,7 @@ private:
     uint64 PatrolSequence = 0;
     float PatrolActionTimeoutSeconds = 20.0f;
     TOptional<FVector> ActiveNavigationGoal;
+    FAIRequestID ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
 
     bool ValidateAction(const FVistaNpcAction& Action, FName& OutCode) const;
     void StartNextAction();

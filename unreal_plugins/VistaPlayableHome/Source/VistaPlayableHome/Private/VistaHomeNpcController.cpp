@@ -105,6 +105,7 @@ bool AVistaHomeNpcController::ReplaceActionQueue(
     CurrentResult = FVistaNpcActionResult();
     bActionStarted = false;
     ActiveNavigationGoal.Reset();
+    ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
     StopMovement();
     OutCode = TEXT("QUEUE_REPLACED");
     return true;
@@ -140,6 +141,7 @@ void AVistaHomeNpcController::CancelActionQueue(FName Reason)
 {
     ActionQueue.Reset();
     ActiveNavigationGoal.Reset();
+    ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
     if (CurrentAction.IsSet())
     {
         const FName CompletionReason = Reason.IsNone()
@@ -184,6 +186,11 @@ void AVistaHomeNpcController::OnMoveCompleted(
     const FPathFollowingResult& Result)
 {
     Super::OnMoveCompleted(RequestId, Result);
+    if (RequestId != ActiveNavigationRequestId)
+    {
+        return;
+    }
+    ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
     if (!CurrentAction.IsSet() ||
         CurrentAction->Type != EVistaNpcActionType::NavigateTo)
     {
@@ -285,6 +292,7 @@ void AVistaHomeNpcController::StartCurrentAction()
             return;
         }
         ActiveNavigationGoal = ProjectedGoal.Location;
+        ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
         const EPathFollowingRequestResult::Type Result = MoveToLocation(
             ActiveNavigationGoal.GetValue(), NavigationAcceptanceRadius,
             true, true, false, false, nullptr, false);
@@ -296,6 +304,16 @@ void AVistaHomeNpcController::StartCurrentAction()
         {
             UpdateCurrentRoomFromNavigationTarget(Action);
             CompleteCurrent(EVistaNpcActionStatus::Succeeded, TEXT("ALREADY_AT_TARGET"));
+        }
+        else
+        {
+            ActiveNavigationRequestId = GetCurrentMoveRequestID();
+            if (ActiveNavigationRequestId == FAIRequestID::InvalidRequest)
+            {
+                CompleteCurrent(EVistaNpcActionStatus::Blocked,
+                                TEXT("NAVIGATION_REQUEST_ID_INVALID"));
+                StopMovement();
+            }
         }
         return;
     }
@@ -350,6 +368,7 @@ void AVistaHomeNpcController::CompleteCurrent(
     CurrentResult.Code = Code;
     OnActionFinished.Broadcast(CurrentResult);
     ActiveNavigationGoal.Reset();
+    ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
     CurrentAction.Reset();
     bActionStarted = false;
 }
