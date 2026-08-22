@@ -1157,6 +1157,10 @@ def test_project_uses_runtime_dynamic_navigation(fixture: Fixture) -> None:
     raw = build_home.default_engine_ini(fixture.plan).decode("utf-8")
     assert "[/Script/NavigationSystem.RecastNavMesh]" in raw
     assert "RuntimeGeneration=Dynamic\n" in raw
+    assert "AgentRadius=34.000000\n" in raw
+    assert "AgentHeight=192.000000\n" in raw
+    assert "CellSize=10.000000\n" in raw
+    assert "CellHeight=5.000000\n" in raw
     assert "DynamicModifiersOnly" not in raw
     assert "[/Script/Engine.RendererSettings]" in raw
     assert "r.AllowStaticLighting=False\n" in raw

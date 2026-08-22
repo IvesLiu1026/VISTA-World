@@ -112,6 +112,14 @@ void AVistaHomeNpcCharacter::BeginPlay()
     if (!SemanticId.IsEmpty())
     {
         Tags.AddUnique(FName(*SemanticId));
+        if (CurrentRoomId.IsEmpty())
+        {
+            const int32 EntityMarker = SemanticId.Find(TEXT("/entity."));
+            if (EntityMarker > 0)
+            {
+                CurrentRoomId = SemanticId.Left(EntityMarker);
+            }
+        }
     }
 }
 
