@@ -35,6 +35,11 @@ def test_semantic_navigation_uses_one_projected_goal_for_move_and_completion() -
     assert "NAVIGATION_TARGET_NOT_FOUND" in source
     assert "NAVIGATION_PROJECTION_FAILED" in source
     assert "Destination, NavigationAcceptanceRadius" not in source
+    assert "constexpr bool bStopOnOverlap = false;" in source
+    assert (
+        "ActiveNavigationGoal.GetValue(), NavigationAcceptanceRadius,\n"
+        "            bStopOnOverlap, true, false, false, nullptr, false);"
+    ) in source
 
 
 def test_successful_room_anchor_navigation_updates_observable_room_identity() -> None:
