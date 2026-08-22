@@ -59,6 +59,14 @@ class VistaPlayableHomeEventOutcomeTests(unittest.TestCase):
                 self.assertIn("RecordSuccessfulInteraction", source)
                 self.assertIn("Result.IsSuccess()", source)
 
+    def test_runtime_state_wire_keys_are_lowercase_canonical(self) -> None:
+        source = (PLUGIN / "Private/VistaWorldTcpAdapter.cpp").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Pair.Key.ToString().ToLower()", source)
+        self.assertNotIn("SetStringField(Pair.Key.ToString(),", source)
+
 
 if __name__ == "__main__":
     unittest.main()
