@@ -34,6 +34,10 @@ public:
               meta = (ClampMin = "10.0", ClampMax = "250.0"))
     float NavigationAcceptanceRadius = 75.0f;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|NPC",
+              meta = (ClampMin = "50.0", ClampMax = "500.0"))
+    float NavigationProjectionExtent = 200.0f;
+
     UFUNCTION(BlueprintCallable, Category = "VISTA|NPC")
     bool ReplaceActionQueue(const TArray<FVistaNpcAction>& Actions, FName& OutCode);
 
@@ -72,11 +76,13 @@ private:
     int32 PatrolTargetIndex = 0;
     uint64 PatrolSequence = 0;
     float PatrolActionTimeoutSeconds = 20.0f;
+    TOptional<FVector> ActiveNavigationGoal;
 
     bool ValidateAction(const FVistaNpcAction& Action, FName& OutCode) const;
     void StartNextAction();
     void StartCurrentAction();
     void CompleteCurrent(EVistaNpcActionStatus Status, FName Code);
+    void UpdateCurrentRoomFromNavigationTarget(const FVistaNpcAction& Action) const;
     AActor* ResolveSemanticActor(const FString& SemanticId) const;
     FVistaInteractionResult ExecuteInteraction(AActor* Target, EVistaAffordance Affordance,
                                                 USceneComponent* PlacementAnchor = nullptr) const;

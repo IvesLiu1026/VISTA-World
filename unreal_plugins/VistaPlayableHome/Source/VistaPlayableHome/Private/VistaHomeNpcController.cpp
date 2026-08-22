@@ -3,6 +3,7 @@
 // Modified in VISTA-World on 2026-08-22: report successful NPC interactions.
 
 #include "EngineUtils.h"
+#include "NavigationSystem.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "VistaEventSubsystem.h"
 #include "VistaHomeNpcCharacter.h"
@@ -103,6 +104,7 @@ bool AVistaHomeNpcController::ReplaceActionQueue(
     CurrentAction.Reset();
     CurrentResult = FVistaNpcActionResult();
     bActionStarted = false;
+    ActiveNavigationGoal.Reset();
     StopMovement();
     OutCode = TEXT("QUEUE_REPLACED");
     return true;
@@ -137,6 +139,7 @@ bool AVistaHomeNpcController::EnqueueAction(
 void AVistaHomeNpcController::CancelActionQueue(FName Reason)
 {
     ActionQueue.Reset();
+    ActiveNavigationGoal.Reset();
     if (CurrentAction.IsSet())
     {
         const FName CompletionReason = Reason.IsNone()
@@ -187,15 +190,12 @@ void AVistaHomeNpcController::OnMoveCompleted(
         return;
     }
     const FVistaNpcAction Action = CurrentAction.GetValue();
-    AActor* Target = Action.TargetSemanticId.IsEmpty()
-        ? nullptr : ResolveSemanticActor(Action.TargetSemanticId);
-    const FVector Destination = IsValid(Target)
-        ? Target->GetActorLocation() : Action.TargetLocation;
-    const bool bReachedGoal = IsValid(GetPawn()) &&
-        FVector::Dist2D(GetPawn()->GetActorLocation(), Destination) <=
+    const bool bReachedGoal = ActiveNavigationGoal.IsSet() && IsValid(GetPawn()) &&
+        FVector::Dist2D(GetPawn()->GetActorLocation(), ActiveNavigationGoal.GetValue()) <=
             NavigationAcceptanceRadius + 5.0f;
     if (Result.IsSuccess() && bReachedGoal)
     {
+        UpdateCurrentRoomFromNavigationTarget(Action);
         CompleteCurrent(EVistaNpcActionStatus::Succeeded, TEXT("NAVIGATION_COMPLETE"));
     }
     else
@@ -261,15 +261,40 @@ void AVistaHomeNpcController::StartCurrentAction()
     }
     if (Action.Type == EVistaNpcActionType::NavigateTo)
     {
-        const FVector Destination = IsValid(Target) ? Target->GetActorLocation() : Action.TargetLocation;
+        if (!Action.TargetSemanticId.IsEmpty() && !IsValid(Target))
+        {
+            CompleteCurrent(EVistaNpcActionStatus::Failed,
+                            TEXT("NAVIGATION_TARGET_NOT_FOUND"));
+            return;
+        }
+        const FVector RequestedDestination = IsValid(Target)
+            ? Target->GetActorLocation() : Action.TargetLocation;
+        UNavigationSystemV1* NavigationSystem =
+            FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+        FNavLocation ProjectedGoal;
+        const FVector ProjectionExtent(
+            NavigationProjectionExtent,
+            NavigationProjectionExtent,
+            NavigationProjectionExtent);
+        if (!IsValid(NavigationSystem) ||
+            !NavigationSystem->ProjectPointToNavigation(
+                RequestedDestination, ProjectedGoal, ProjectionExtent))
+        {
+            CompleteCurrent(EVistaNpcActionStatus::Blocked,
+                            TEXT("NAVIGATION_PROJECTION_FAILED"));
+            return;
+        }
+        ActiveNavigationGoal = ProjectedGoal.Location;
         const EPathFollowingRequestResult::Type Result = MoveToLocation(
-            Destination, NavigationAcceptanceRadius, true, true, true, false, nullptr, false);
+            ActiveNavigationGoal.GetValue(), NavigationAcceptanceRadius,
+            true, true, false, false, nullptr, false);
         if (Result == EPathFollowingRequestResult::Failed)
         {
             CompleteCurrent(EVistaNpcActionStatus::Blocked, TEXT("NAVIGATION_REQUEST_FAILED"));
         }
         else if (Result == EPathFollowingRequestResult::AlreadyAtGoal)
         {
+            UpdateCurrentRoomFromNavigationTarget(Action);
             CompleteCurrent(EVistaNpcActionStatus::Succeeded, TEXT("ALREADY_AT_TARGET"));
         }
         return;
@@ -324,8 +349,23 @@ void AVistaHomeNpcController::CompleteCurrent(
     CurrentResult.Status = Status;
     CurrentResult.Code = Code;
     OnActionFinished.Broadcast(CurrentResult);
+    ActiveNavigationGoal.Reset();
     CurrentAction.Reset();
     bActionStarted = false;
+}
+
+void AVistaHomeNpcController::UpdateCurrentRoomFromNavigationTarget(
+    const FVistaNpcAction& Action) const
+{
+    static const FString RoomAnchorSuffix(TEXT("/anchor.room_center"));
+    if (!Action.TargetSemanticId.EndsWith(RoomAnchorSuffix))
+    {
+        return;
+    }
+    if (AVistaHomeNpcCharacter* Npc = Cast<AVistaHomeNpcCharacter>(GetPawn()))
+    {
+        Npc->CurrentRoomId = Action.TargetSemanticId.LeftChop(RoomAnchorSuffix.Len());
+    }
 }
 
 AActor* AVistaHomeNpcController::ResolveSemanticActor(const FString& SemanticId) const
