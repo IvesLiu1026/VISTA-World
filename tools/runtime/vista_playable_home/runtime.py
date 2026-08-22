@@ -26,9 +26,9 @@ DEFAULT_VISTA_WORLD_PORT = 55620
 DEFAULT_WORLD_REVISION = "vista_playable_home_r1"
 R2_RUNTIME_PROFILE = "realistic_interior_r2"
 R2_CAMERA_PROFILE = "realistic_interior_r2"
-R2_DISPLAY = ":119"
+R2_DISPLAY = ":117"
 R2_GPU = 0
-R2_VISTA_WORLD_PORT = 55630
+R2_VISTA_WORLD_PORT = 55620
 R2_WIDTH = 1920
 R2_HEIGHT = 1080
 R2_FPS = 60
@@ -124,7 +124,7 @@ def validate_runtime_profile_binding(config: GameRuntimeConfig) -> RuntimeProfil
         spec.fps,
     ):
         raise RuntimeSafetyError(
-            "realistic_interior_r2 runtime must use :119, GPU 0, port 55630, "
+            "realistic_interior_r2 runtime must use :117, GPU 0, port 55620, "
             "1920x1080, and 60 fps"
         )
     return spec

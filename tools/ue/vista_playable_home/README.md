@@ -134,7 +134,7 @@ uv run --offline --project tools python \
   --visual-profile-sha256 <visual-profile-file-sha256> \
   --scratch-policy-root /abs/nas/approved-runs \
   --scratch-parent /abs/nas/approved-runs/run-id/review-scratch \
-  --display :119 --graphics-adapter 0 --apply
+  --display :117 --graphics-adapter 0 --apply
 ```
 
 Validation retains `O_DIRECTORY|O_NOFOLLOW` descriptors for the approved
