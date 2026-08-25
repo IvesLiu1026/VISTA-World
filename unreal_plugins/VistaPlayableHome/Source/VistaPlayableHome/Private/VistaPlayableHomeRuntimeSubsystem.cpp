@@ -9,6 +9,7 @@
 #include "RHI.h"
 #include "RHIShaderPlatform.h"
 #include "RHIStrings.h"
+#include "VistaAnimationComponent.h"
 #include "VistaEventSubsystem.h"
 #include "VistaHomeNpcCharacter.h"
 #include "VistaHomeNpcController.h"
@@ -60,6 +61,47 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::GetStatus(
     Output.bSucceeded = !Output.WorldRevision.IsNone();
     Output.Code = Output.bSucceeded ? FName(TEXT("READY"))
                                    : FName(TEXT("WORLD_NOT_INITIALIZED"));
+    return Output;
+}
+
+FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::GetNpcStatus(
+    FName CommandId,
+    const FString& NpcSemanticId) const
+{
+    FVistaLiveCommandResult Output = GetStatus(CommandId);
+    Output.TargetSemanticId = NpcSemanticId;
+    if (!Output.bSucceeded)
+    {
+        return Output;
+    }
+    AVistaHomeNpcCharacter* Npc =
+        Cast<AVistaHomeNpcCharacter>(ResolveSemanticActor(NpcSemanticId));
+    AVistaHomeNpcController* Controller = IsValid(Npc)
+        ? Cast<AVistaHomeNpcController>(Npc->GetController()) : nullptr;
+    if (!IsValid(Controller))
+    {
+        Output.bSucceeded = false;
+        Output.Code = TEXT("NPC_CONTROLLER_NOT_FOUND");
+        return Output;
+    }
+    Output.NpcActionResult = Controller->GetCurrentActionResult();
+    Output.bHasLastCompletedNpcActionResult =
+        Controller->HasLastCompletedActionResult();
+    if (Output.bHasLastCompletedNpcActionResult)
+    {
+        Output.LastCompletedNpcActionResult =
+            Controller->GetLastCompletedActionResult();
+        Output.LastCompletedNpcRoomId =
+            Controller->GetLastCompletedRoomId();
+    }
+    Output.NpcCurrentRoomId = Npc->CurrentRoomId;
+    Output.QueuedActionCount = Controller->GetQueuedActionCount();
+    if (UVistaAnimationComponent* Animation =
+            Npc->FindComponentByClass<UVistaAnimationComponent>())
+    {
+        Output.AnimationResult = Animation->GetPlaybackResult();
+    }
+    Output.Code = TEXT("NPC_STATUS_OBSERVED");
     return Output;
 }
 

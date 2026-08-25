@@ -12,6 +12,7 @@ class UInputAction;
 class UInputMappingContext;
 class USceneComponent;
 class USpringArmComponent;
+class UVistaAnimationComponent;
 class UVistaInteractionComponent;
 struct FInputActionValue;
 
@@ -82,6 +83,9 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Interaction")
     TObjectPtr<UVistaInteractionComponent> InteractionComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
+    TObjectPtr<UVistaAnimationComponent> AnimationComponent;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Carry")
     TObjectPtr<USceneComponent> CarryAnchor;

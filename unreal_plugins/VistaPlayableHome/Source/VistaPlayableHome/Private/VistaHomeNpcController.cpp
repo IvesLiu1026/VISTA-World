@@ -5,6 +5,7 @@
 #include "EngineUtils.h"
 #include "NavigationSystem.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "VistaAnimationComponent.h"
 #include "VistaEventSubsystem.h"
 #include "VistaHomeNpcCharacter.h"
 #include "VistaInteractable.h"
@@ -59,13 +60,49 @@ bool AVistaHomeNpcController::ValidateAction(
         OutCode = TEXT("ACTION_DURATION_INVALID");
         return false;
     }
+    if (!FMath::IsFinite(Action.DistanceCm) || Action.DistanceCm < 0.0f ||
+        Action.DistanceCm > 1000.0f || !FMath::IsFinite(Action.HeightCm) ||
+        Action.HeightCm < 0.0f || Action.HeightCm > 300.0f)
+    {
+        OutCode = TEXT("ACTION_ANIMATION_PARAMETER_INVALID");
+        return false;
+    }
     const bool bTargetRequired =
         Action.Type != EVistaNpcActionType::Wait &&
         Action.Type != EVistaNpcActionType::Speak &&
-        Action.Type != EVistaNpcActionType::NavigateTo;
+        Action.Type != EVistaNpcActionType::NavigateTo &&
+        Action.Type != EVistaNpcActionType::Pause &&
+        Action.Type != EVistaNpcActionType::Fall &&
+        Action.Type != EVistaNpcActionType::Recover;
     if (bTargetRequired && Action.TargetSemanticId.IsEmpty())
     {
         OutCode = TEXT("ACTION_TARGET_REQUIRED");
+        return false;
+    }
+    if (Action.Type == EVistaNpcActionType::Brace && Action.Hand != EVistaAnimationHand::Both)
+    {
+        OutCode = TEXT("BRACE_REQUIRES_BOTH_HANDS");
+        return false;
+    }
+    if (Action.Type == EVistaNpcActionType::Drag &&
+        (Action.DistanceCm <= 0.0f ||
+         (Action.Hand != EVistaAnimationHand::Left && Action.Hand != EVistaAnimationHand::Right)))
+    {
+        OutCode = TEXT("DRAG_PARAMETERS_REQUIRED");
+        return false;
+    }
+    if (Action.Type == EVistaNpcActionType::LiftFoot &&
+        (Action.HeightCm <= 0.0f ||
+         (Action.Foot != EVistaAnimationFoot::Left && Action.Foot != EVistaAnimationFoot::Right)))
+    {
+        OutCode = TEXT("LIFT_FOOT_PARAMETERS_REQUIRED");
+        return false;
+    }
+    if ((Action.Type == EVistaNpcActionType::Fall ||
+         Action.Type == EVistaNpcActionType::Recover) &&
+        Action.Direction != EVistaAnimationDirection::Forward)
+    {
+        OutCode = TEXT("DIRECTION_FORWARD_REQUIRED");
         return false;
     }
     if (Action.Type == EVistaNpcActionType::Speak && Action.Speech.Len() > 512)
@@ -106,6 +143,12 @@ bool AVistaHomeNpcController::ReplaceActionQueue(
     bActionStarted = false;
     ActiveNavigationGoal.Reset();
     ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
+    bAnimationInteractionCommitted = false;
+    if (UVistaAnimationComponent* Animation = IsValid(GetPawn())
+        ? GetPawn()->FindComponentByClass<UVistaAnimationComponent>() : nullptr)
+    {
+        Animation->StopActiveAction(TEXT("QUEUE_REPLACED"));
+    }
     StopMovement();
     OutCode = TEXT("QUEUE_REPLACED");
     return true;
@@ -142,12 +185,18 @@ void AVistaHomeNpcController::CancelActionQueue(FName Reason)
     ActionQueue.Reset();
     ActiveNavigationGoal.Reset();
     ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
+    if (UVistaAnimationComponent* Animation = IsValid(GetPawn())
+        ? GetPawn()->FindComponentByClass<UVistaAnimationComponent>() : nullptr)
+    {
+        Animation->StopActiveAction(Reason);
+    }
     if (CurrentAction.IsSet())
     {
         const FName CompletionReason = Reason.IsNone()
             ? FName(TEXT("QUEUE_CANCELED")) : Reason;
         CurrentResult.Status = EVistaNpcActionStatus::Failed;
         CurrentResult.Code = CompletionReason;
+        RememberCurrentExternalResult();
         CurrentAction.Reset();
         bActionStarted = false;
         StopMovement();
@@ -163,6 +212,11 @@ void AVistaHomeNpcController::Tick(float DeltaSeconds)
     if (!CurrentAction.IsSet())
     {
         StartNextAction();
+        return;
+    }
+
+    if (PollAnimationAction())
+    {
         return;
     }
 
@@ -239,6 +293,7 @@ void AVistaHomeNpcController::StartNextAction()
     CurrentResult.TargetSemanticId = CurrentAction->TargetSemanticId;
     ActionStartedAt = GetWorld()->GetTimeSeconds();
     bActionStarted = false;
+    bAnimationInteractionCommitted = false;
     StartCurrentAction();
 }
 
@@ -254,6 +309,26 @@ void AVistaHomeNpcController::StartCurrentAction()
         ? nullptr
         : ResolveSemanticActor(Action.TargetSemanticId);
     bActionStarted = true;
+
+    if (UVistaAnimationComponent::SupportsAction(Action.Type))
+    {
+        UVistaAnimationComponent* Animation =
+            GetPawn()->FindComponentByClass<UVistaAnimationComponent>();
+        FName AnimationCode;
+        if (IsValid(Animation) && Animation->StartNpcAction(Action, Target, AnimationCode))
+        {
+            bAnimationInteractionCommitted = false;
+            return;
+        }
+        if (!UVistaAnimationComponent::IsLegacyFallbackAction(Action.Type) ||
+            AnimationCode != FName(TEXT("ANIMATION_ASSET_UNAVAILABLE")))
+        {
+            CompleteCurrent(EVistaNpcActionStatus::Failed,
+                AnimationCode.IsNone() ? FName(TEXT("ANIMATION_COMPONENT_UNAVAILABLE"))
+                                       : AnimationCode);
+            return;
+        }
+    }
 
     if (Action.Type == EVistaNpcActionType::Wait)
     {
@@ -363,17 +438,128 @@ void AVistaHomeNpcController::StartCurrentAction()
                     Result.Code);
 }
 
+void AVistaHomeNpcController::RememberCurrentExternalResult()
+{
+    const FString ActionId = CurrentResult.ActionId.ToString();
+    if (ActionId.StartsWith(TEXT("patrol."), ESearchCase::CaseSensitive))
+    {
+        return;
+    }
+    LastCompletedResult = CurrentResult;
+    bHasLastCompletedResult = true;
+    const AVistaHomeNpcCharacter* Npc =
+        Cast<AVistaHomeNpcCharacter>(GetPawn());
+    LastCompletedRoomId = IsValid(Npc) ? Npc->CurrentRoomId : FString();
+}
+
 void AVistaHomeNpcController::CompleteCurrent(
     EVistaNpcActionStatus Status,
     FName Code)
 {
     CurrentResult.Status = Status;
     CurrentResult.Code = Code;
+    RememberCurrentExternalResult();
     OnActionFinished.Broadcast(CurrentResult);
     ActiveNavigationGoal.Reset();
     ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
     CurrentAction.Reset();
     bActionStarted = false;
+    bAnimationInteractionCommitted = false;
+}
+
+bool AVistaHomeNpcController::PollAnimationAction()
+{
+    if (!CurrentAction.IsSet() || !IsValid(GetPawn()))
+    {
+        return false;
+    }
+    UVistaAnimationComponent* Animation =
+        GetPawn()->FindComponentByClass<UVistaAnimationComponent>();
+    if (!IsValid(Animation))
+    {
+        return false;
+    }
+    const FVistaAnimationPlaybackResult Result = Animation->GetPlaybackResult();
+    if (Result.ActionId != CurrentAction->ActionId ||
+        Result.Status == EVistaAnimationPlaybackStatus::Idle)
+    {
+        return false;
+    }
+
+    if (!bAnimationInteractionCommitted && Animation->ConsumeContactSignal())
+    {
+        AActor* Target = CurrentAction->TargetSemanticId.IsEmpty()
+            ? nullptr : ResolveSemanticActor(CurrentAction->TargetSemanticId);
+        const FVistaInteractionResult Interaction =
+            ExecuteAnimatedInteraction(CurrentAction.GetValue(), Target);
+        if (!Interaction.IsSuccess())
+        {
+            Animation->StopActiveAction(Interaction.Code);
+            CompleteCurrent(EVistaNpcActionStatus::Failed, Interaction.Code);
+            return true;
+        }
+        bAnimationInteractionCommitted = true;
+    }
+
+    switch (Result.Status)
+    {
+    case EVistaAnimationPlaybackStatus::Running:
+        return true;
+    case EVistaAnimationPlaybackStatus::Succeeded:
+        if ((CurrentAction->Type == EVistaNpcActionType::PickUp ||
+             CurrentAction->Type == EVistaNpcActionType::Place ||
+             CurrentAction->Type == EVistaNpcActionType::OpenDoor ||
+             CurrentAction->Type == EVistaNpcActionType::CloseDoor) &&
+            !bAnimationInteractionCommitted)
+        {
+            CompleteCurrent(EVistaNpcActionStatus::Failed,
+                TEXT("ANIMATION_CONTACT_NOTIFY_MISSING"));
+        }
+        else
+        {
+            CompleteCurrent(EVistaNpcActionStatus::Succeeded, Result.Code);
+        }
+        return true;
+    case EVistaAnimationPlaybackStatus::TimedOut:
+        CompleteCurrent(EVistaNpcActionStatus::TimedOut, Result.Code);
+        return true;
+    case EVistaAnimationPlaybackStatus::Failed:
+    case EVistaAnimationPlaybackStatus::Stopped:
+        CompleteCurrent(EVistaNpcActionStatus::Failed, Result.Code);
+        return true;
+    default:
+        return false;
+    }
+}
+
+FVistaInteractionResult AVistaHomeNpcController::ExecuteAnimatedInteraction(
+    const FVistaNpcAction& Action,
+    AActor* Target) const
+{
+    switch (Action.Type)
+    {
+    case EVistaNpcActionType::PickUp:
+        return ExecuteInteraction(Target, EVistaAffordance::PickUp);
+    case EVistaNpcActionType::OpenDoor:
+        return ExecuteInteraction(Target, EVistaAffordance::Open);
+    case EVistaNpcActionType::CloseDoor:
+        return ExecuteInteraction(Target, EVistaAffordance::Close);
+    case EVistaNpcActionType::Place:
+    {
+        AActor* HeldItem = IVistaItemCarrier::Execute_VistaGetHeldItem(GetPawn());
+        if (!IsValid(HeldItem) || !IsValid(Target) ||
+            !HeldItem->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()))
+        {
+            return FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::InvalidState, TEXT("NO_HELD_ITEM"));
+        }
+        return ExecuteInteraction(
+            HeldItem, EVistaAffordance::Place, Target->GetRootComponent());
+    }
+    default:
+        return FVistaInteractionResult::Success(
+            FString(), FVistaEntityRuntimeState(), TEXT("ANIMATION_CONTACT_NOT_REQUIRED"));
+    }
 }
 
 void AVistaHomeNpcController::UpdateCurrentRoomFromNavigationTarget(

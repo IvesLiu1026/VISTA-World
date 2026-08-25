@@ -8,6 +8,7 @@
 
 class AVistaPickupActor;
 class USceneComponent;
+class UVistaAnimationComponent;
 
 UCLASS(Blueprintable)
 class VISTAPLAYABLEHOME_API AVistaHomeNpcCharacter final
@@ -44,6 +45,9 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Carry")
     TObjectPtr<USceneComponent> CarryAnchor;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
+    TObjectPtr<UVistaAnimationComponent> AnimationComponent;
 
     virtual FString VistaGetSemanticId_Implementation() const override;
     virtual TArray<EVistaAffordance> VistaGetAffordances_Implementation() const override;

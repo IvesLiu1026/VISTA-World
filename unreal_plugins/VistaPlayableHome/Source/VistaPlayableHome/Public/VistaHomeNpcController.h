@@ -56,6 +56,18 @@ public:
     FVistaNpcActionResult GetCurrentActionResult() const { return CurrentResult; }
 
     UFUNCTION(BlueprintPure, Category = "VISTA|NPC")
+    bool HasLastCompletedActionResult() const { return bHasLastCompletedResult; }
+
+    UFUNCTION(BlueprintPure, Category = "VISTA|NPC")
+    FVistaNpcActionResult GetLastCompletedActionResult() const
+    {
+        return LastCompletedResult;
+    }
+
+    UFUNCTION(BlueprintPure, Category = "VISTA|NPC")
+    FString GetLastCompletedRoomId() const { return LastCompletedRoomId; }
+
+    UFUNCTION(BlueprintPure, Category = "VISTA|NPC")
     int32 GetQueuedActionCount() const { return ActionQueue.Num(); }
 
     virtual void Tick(float DeltaSeconds) override;
@@ -69,6 +81,9 @@ private:
     TArray<FVistaNpcAction> ActionQueue;
     TOptional<FVistaNpcAction> CurrentAction;
     FVistaNpcActionResult CurrentResult;
+    FVistaNpcActionResult LastCompletedResult;
+    FString LastCompletedRoomId;
+    bool bHasLastCompletedResult = false;
     double ActionStartedAt = 0.0;
     bool bActionStarted = false;
     bool bAutoPatrol = false;
@@ -78,13 +93,19 @@ private:
     float PatrolActionTimeoutSeconds = 20.0f;
     TOptional<FVector> ActiveNavigationGoal;
     FAIRequestID ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
+    bool bAnimationInteractionCommitted = false;
 
     bool ValidateAction(const FVistaNpcAction& Action, FName& OutCode) const;
     void StartNextAction();
     void StartCurrentAction();
+    void RememberCurrentExternalResult();
     void CompleteCurrent(EVistaNpcActionStatus Status, FName Code);
     void UpdateCurrentRoomFromNavigationTarget(const FVistaNpcAction& Action) const;
     AActor* ResolveSemanticActor(const FString& SemanticId) const;
     FVistaInteractionResult ExecuteInteraction(AActor* Target, EVistaAffordance Affordance,
                                                 USceneComponent* PlacementAnchor = nullptr) const;
+    bool PollAnimationAction();
+    FVistaInteractionResult ExecuteAnimatedInteraction(
+        const FVistaNpcAction& Action,
+        AActor* Target) const;
 };
