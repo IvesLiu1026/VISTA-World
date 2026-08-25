@@ -100,7 +100,7 @@ jobs:
           while IFS= read -r -d '' path; do
             mime="$(file --brief --mime-type -- "$path")"
             case "$mime" in
-              text/*|application/json|application/xml|application/yaml|inode/x-empty)
+              text/*|application/javascript|application/json|application/xml|application/yaml|inode/x-empty)
                 ;;
               *)
                 binary_mime+="$path ($mime)"$'\n'
