@@ -16,6 +16,7 @@ public class VistaPlayableHomeEditor : ModuleRules
 
         PrivateDependencyModuleNames.AddRange(new[]
         {
+            "AssetRegistry",
             "AssetTools",
             "Json",
             "MaterialEditor"

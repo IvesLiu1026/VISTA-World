@@ -258,6 +258,80 @@ FString ResultResponse(const FVistaLiveCommandResult& Result,
     {
         Response->SetObjectField(TEXT("state"), RuntimeStateJson(Result.State));
     }
+    if (Result.QueuedActionCount >= 0)
+    {
+        const TSharedRef<FJsonObject> Npc = MakeShared<FJsonObject>();
+        Npc->SetStringField(TEXT("action_id"), Result.NpcActionResult.ActionId.ToString());
+        Npc->SetStringField(TEXT("code"), Result.NpcActionResult.Code.ToString());
+        const TCHAR* ActionStatus = TEXT("idle");
+        switch (Result.NpcActionResult.Status)
+        {
+        case EVistaNpcActionStatus::Queued: ActionStatus = TEXT("queued"); break;
+        case EVistaNpcActionStatus::Running: ActionStatus = TEXT("running"); break;
+        case EVistaNpcActionStatus::Succeeded: ActionStatus = TEXT("succeeded"); break;
+        case EVistaNpcActionStatus::Failed: ActionStatus = TEXT("failed"); break;
+        case EVistaNpcActionStatus::TimedOut: ActionStatus = TEXT("timed_out"); break;
+        case EVistaNpcActionStatus::Blocked: ActionStatus = TEXT("blocked"); break;
+        default: break;
+        }
+        Npc->SetStringField(TEXT("status"), ActionStatus);
+        Npc->SetStringField(
+            TEXT("target_semantic_id"), Result.NpcActionResult.TargetSemanticId);
+        Npc->SetNumberField(TEXT("queued_action_count"), Result.QueuedActionCount);
+        Npc->SetStringField(TEXT("current_room_id"), Result.NpcCurrentRoomId);
+
+        if (Result.bHasLastCompletedNpcActionResult)
+        {
+            const FVistaNpcActionResult& Last = Result.LastCompletedNpcActionResult;
+            const TSharedRef<FJsonObject> LastJson = MakeShared<FJsonObject>();
+            LastJson->SetStringField(TEXT("action_id"), Last.ActionId.ToString());
+            LastJson->SetStringField(TEXT("code"), Last.Code.ToString());
+            const TCHAR* LastStatus = TEXT("idle");
+            switch (Last.Status)
+            {
+            case EVistaNpcActionStatus::Queued: LastStatus = TEXT("queued"); break;
+            case EVistaNpcActionStatus::Running: LastStatus = TEXT("running"); break;
+            case EVistaNpcActionStatus::Succeeded: LastStatus = TEXT("succeeded"); break;
+            case EVistaNpcActionStatus::Failed: LastStatus = TEXT("failed"); break;
+            case EVistaNpcActionStatus::TimedOut: LastStatus = TEXT("timed_out"); break;
+            case EVistaNpcActionStatus::Blocked: LastStatus = TEXT("blocked"); break;
+            default: break;
+            }
+            LastJson->SetStringField(TEXT("status"), LastStatus);
+            LastJson->SetStringField(
+                TEXT("target_semantic_id"), Last.TargetSemanticId);
+            LastJson->SetStringField(
+                TEXT("completed_room_id"), Result.LastCompletedNpcRoomId);
+            Npc->SetObjectField(TEXT("last_completed_action"), LastJson);
+        }
+        else
+        {
+            Npc->SetField(
+                TEXT("last_completed_action"), MakeShared<FJsonValueNull>());
+        }
+
+        const TSharedRef<FJsonObject> Animation = MakeShared<FJsonObject>();
+        Animation->SetStringField(TEXT("action_id"), Result.AnimationResult.ActionId.ToString());
+        Animation->SetStringField(TEXT("code"), Result.AnimationResult.Code.ToString());
+        Animation->SetStringField(
+            TEXT("completion_signal"), Result.AnimationResult.CompletionSignal.ToString());
+        Animation->SetBoolField(
+            TEXT("contact_observed"), Result.AnimationResult.bContactObserved);
+        Animation->SetNumberField(TEXT("elapsed_sec"), Result.AnimationResult.ElapsedSeconds);
+        const TCHAR* AnimationStatus = TEXT("idle");
+        switch (Result.AnimationResult.Status)
+        {
+        case EVistaAnimationPlaybackStatus::Running: AnimationStatus = TEXT("running"); break;
+        case EVistaAnimationPlaybackStatus::Succeeded: AnimationStatus = TEXT("succeeded"); break;
+        case EVistaAnimationPlaybackStatus::Failed: AnimationStatus = TEXT("failed"); break;
+        case EVistaAnimationPlaybackStatus::TimedOut: AnimationStatus = TEXT("timed_out"); break;
+        case EVistaAnimationPlaybackStatus::Stopped: AnimationStatus = TEXT("stopped"); break;
+        default: break;
+        }
+        Animation->SetStringField(TEXT("status"), AnimationStatus);
+        Npc->SetObjectField(TEXT("animation"), Animation);
+        Response->SetObjectField(TEXT("npc"), Npc);
+    }
     return SerializeObject(Response);
 }
 
@@ -354,6 +428,12 @@ TOptional<EVistaNpcActionType> ParseNpcAction(const FString& Value)
     if (Value == TEXT("sit")) return EVistaNpcActionType::Sit;
     if (Value == TEXT("wait")) return EVistaNpcActionType::Wait;
     if (Value == TEXT("speak")) return EVistaNpcActionType::Speak;
+    if (Value == TEXT("brace")) return EVistaNpcActionType::Brace;
+    if (Value == TEXT("drag")) return EVistaNpcActionType::Drag;
+    if (Value == TEXT("lift_foot")) return EVistaNpcActionType::LiftFoot;
+    if (Value == TEXT("pause")) return EVistaNpcActionType::Pause;
+    if (Value == TEXT("fall")) return EVistaNpcActionType::Fall;
+    if (Value == TEXT("recover")) return EVistaNpcActionType::Recover;
     return {};
 }
 
@@ -398,6 +478,26 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
         }
         return RendererStatusResponse(
             Runtime->GetRendererStatus(FName(*CommandId)));
+    }
+
+    if (Operation == TEXT("npc_status"))
+    {
+        if (!ExactKeys(
+                Params,
+                KeySet({TEXT("operation"), TEXT("command_id"), TEXT("npc_semantic_id")}),
+                TSet<FString>()))
+        {
+            return ErrorResponse(TEXT(""), TEXT("NPC_STATUS_SHAPE_INVALID"));
+        }
+        FString NpcSemanticId;
+        if (!ReadString(Params, TEXT("command_id"), CommandId) || !IsCommandId(CommandId) ||
+            !ReadString(Params, TEXT("npc_semantic_id"), NpcSemanticId) ||
+            !IsSemanticId(NpcSemanticId))
+        {
+            return ErrorResponse(CommandId, TEXT("NPC_STATUS_VALUE_INVALID"));
+        }
+        return ResultResponse(
+            Runtime->GetNpcStatus(FName(*CommandId), NpcSemanticId), true);
     }
 
     if (Operation == TEXT("interaction"))
@@ -470,7 +570,9 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
                 !ExactKeys(*ActionObject,
                     KeySet({TEXT("action_id"), TEXT("type")}),
                     KeySet({TEXT("target_semantic_id"), TEXT("target_location_cm"),
-                            TEXT("duration_sec"), TEXT("timeout_sec"), TEXT("speech")})))
+                            TEXT("duration_sec"), TEXT("timeout_sec"), TEXT("speech"),
+                            TEXT("distance_cm"), TEXT("height_cm"), TEXT("hand"),
+                            TEXT("foot"), TEXT("direction")})))
             {
                 return ErrorResponse(CommandId, TEXT("NPC_ACTION_SHAPE_INVALID"));
             }
@@ -534,6 +636,55 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
                     return ErrorResponse(CommandId, TEXT("NPC_TIMEOUT_INVALID"));
                 }
                 Action.TimeoutSeconds = Number;
+            }
+            if ((*ActionObject)->HasField(TEXT("distance_cm")))
+            {
+                if (!(*ActionObject)->TryGetNumberField(TEXT("distance_cm"), Number) ||
+                    !FMath::IsFinite(Number) || Number < 0.0 || Number > 1000.0)
+                {
+                    return ErrorResponse(CommandId, TEXT("NPC_DISTANCE_INVALID"));
+                }
+                Action.DistanceCm = Number;
+            }
+            if ((*ActionObject)->HasField(TEXT("height_cm")))
+            {
+                if (!(*ActionObject)->TryGetNumberField(TEXT("height_cm"), Number) ||
+                    !FMath::IsFinite(Number) || Number < 0.0 || Number > 300.0)
+                {
+                    return ErrorResponse(CommandId, TEXT("NPC_HEIGHT_INVALID"));
+                }
+                Action.HeightCm = Number;
+            }
+            FString EnumValue;
+            if ((*ActionObject)->HasField(TEXT("hand")))
+            {
+                if (!ReadString(*ActionObject, TEXT("hand"), EnumValue))
+                {
+                    return ErrorResponse(CommandId, TEXT("NPC_HAND_INVALID"));
+                }
+                if (EnumValue == TEXT("left")) Action.Hand = EVistaAnimationHand::Left;
+                else if (EnumValue == TEXT("right")) Action.Hand = EVistaAnimationHand::Right;
+                else if (EnumValue == TEXT("both")) Action.Hand = EVistaAnimationHand::Both;
+                else return ErrorResponse(CommandId, TEXT("NPC_HAND_INVALID"));
+            }
+            if ((*ActionObject)->HasField(TEXT("foot")))
+            {
+                if (!ReadString(*ActionObject, TEXT("foot"), EnumValue))
+                {
+                    return ErrorResponse(CommandId, TEXT("NPC_FOOT_INVALID"));
+                }
+                if (EnumValue == TEXT("left")) Action.Foot = EVistaAnimationFoot::Left;
+                else if (EnumValue == TEXT("right")) Action.Foot = EVistaAnimationFoot::Right;
+                else return ErrorResponse(CommandId, TEXT("NPC_FOOT_INVALID"));
+            }
+            if ((*ActionObject)->HasField(TEXT("direction")))
+            {
+                if (!ReadString(*ActionObject, TEXT("direction"), EnumValue) ||
+                    EnumValue != TEXT("forward"))
+                {
+                    return ErrorResponse(CommandId, TEXT("NPC_DIRECTION_INVALID"));
+                }
+                Action.Direction = EVistaAnimationDirection::Forward;
             }
             if ((*ActionObject)->HasField(TEXT("speech")) &&
                 (!ReadString(*ActionObject, TEXT("speech"), Action.Speech) || Action.Speech.Len() > 500))

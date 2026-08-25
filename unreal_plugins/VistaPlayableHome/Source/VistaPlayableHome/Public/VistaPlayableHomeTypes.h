@@ -117,7 +117,37 @@ enum class EVistaNpcActionType : uint8
     CloseDoor,
     Sit,
     Wait,
-    Speak
+    Speak,
+    Brace,
+    Drag,
+    LiftFoot,
+    Pause,
+    Fall,
+    Recover
+};
+
+UENUM(BlueprintType)
+enum class EVistaAnimationHand : uint8
+{
+    Unspecified,
+    Left,
+    Right,
+    Both
+};
+
+UENUM(BlueprintType)
+enum class EVistaAnimationFoot : uint8
+{
+    Unspecified,
+    Left,
+    Right
+};
+
+UENUM(BlueprintType)
+enum class EVistaAnimationDirection : uint8
+{
+    Unspecified,
+    Forward
 };
 
 UENUM(BlueprintType)
@@ -152,6 +182,21 @@ struct VISTAPLAYABLEHOME_API FVistaNpcAction
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA", meta = (ClampMin = "0.0", ClampMax = "300.0"))
     float DurationSeconds = 0.0f;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA", meta = (ClampMin = "0.0", ClampMax = "1000.0"))
+    float DistanceCm = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA", meta = (ClampMin = "0.0", ClampMax = "300.0"))
+    float HeightCm = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
+    EVistaAnimationHand Hand = EVistaAnimationHand::Unspecified;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
+    EVistaAnimationFoot Foot = EVistaAnimationFoot::Unspecified;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
+    EVistaAnimationDirection Direction = EVistaAnimationDirection::Unspecified;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA", meta = (ClampMin = "0.0", ClampMax = "300.0"))
     float TimeoutSeconds = 10.0f;
 
@@ -175,6 +220,41 @@ struct VISTAPLAYABLEHOME_API FVistaNpcActionResult
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA")
     FString TargetSemanticId;
+};
+
+UENUM(BlueprintType)
+enum class EVistaAnimationPlaybackStatus : uint8
+{
+    Idle,
+    Running,
+    Succeeded,
+    Failed,
+    TimedOut,
+    Stopped
+};
+
+USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaAnimationPlaybackResult
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
+    FName ActionId = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
+    EVistaAnimationPlaybackStatus Status = EVistaAnimationPlaybackStatus::Idle;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
+    FName Code = TEXT("ANIMATION_IDLE");
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
+    FName CompletionSignal = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
+    bool bContactObserved = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
+    float ElapsedSeconds = 0.0f;
 };
 
 UENUM(BlueprintType)

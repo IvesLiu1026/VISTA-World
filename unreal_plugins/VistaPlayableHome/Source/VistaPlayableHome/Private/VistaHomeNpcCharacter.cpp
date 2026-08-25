@@ -8,6 +8,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
+#include "VistaAnimationComponent.h"
 #include "VistaHomeNpcController.h"
 #include "VistaPickupActor.h"
 
@@ -39,6 +40,9 @@ AVistaHomeNpcCharacter::AVistaHomeNpcCharacter()
     }
 
     AllowedAffordances = {EVistaAffordance::Inspect};
+
+    AnimationComponent =
+        CreateDefaultSubobject<UVistaAnimationComponent>(TEXT("VistaAnimationComponent"));
 
     CarryAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("VistaCarryAnchor"));
     CarryAnchor->SetupAttachment(GetMesh());

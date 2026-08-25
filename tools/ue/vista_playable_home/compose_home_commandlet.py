@@ -389,6 +389,12 @@ def event_definitions(plan, assets, room_anchor_ids):
         "sit": unreal.VistaNpcActionType.SIT,
         "wait": unreal.VistaNpcActionType.WAIT,
         "speak": unreal.VistaNpcActionType.SPEAK,
+        "brace": unreal.VistaNpcActionType.BRACE,
+        "drag": unreal.VistaNpcActionType.DRAG,
+        "lift_foot": unreal.VistaNpcActionType.LIFT_FOOT,
+        "pause": unreal.VistaNpcActionType.PAUSE,
+        "fall": unreal.VistaNpcActionType.FALL,
+        "recover": unreal.VistaNpcActionType.RECOVER,
     }
     condition_types = {
         "entity_state": unreal.VistaEventConditionType.ENTITY_STATE,
@@ -496,6 +502,8 @@ def event_definitions(plan, assets, room_anchor_ids):
                         target = room_anchor_ids[source_action["room_id"]]
                     action.set_editor_property("target_semantic_id", target)
                     action.set_editor_property("duration_seconds", float(source_action.get("duration_s", 0.0)))
+                    action.set_editor_property("distance_cm", float(source_action.get("distance_cm", 0.0)))
+                    action.set_editor_property("height_cm", float(source_action.get("height_cm", 0.0)))
                     action.set_editor_property("timeout_seconds", min(float(event_plan["timeout_s"]), 60.0))
                     action.set_editor_property("speech", source_action.get("utterance", ""))
                     npc_actions.append(action)

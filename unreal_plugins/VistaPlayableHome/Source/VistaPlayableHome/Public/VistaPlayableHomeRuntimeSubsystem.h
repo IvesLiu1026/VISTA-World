@@ -112,6 +112,27 @@ struct VISTAPLAYABLEHOME_API FVistaLiveCommandResult
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
     FName ActiveEventId = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    FVistaNpcActionResult NpcActionResult;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    FVistaNpcActionResult LastCompletedNpcActionResult;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    bool bHasLastCompletedNpcActionResult = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    FString LastCompletedNpcRoomId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    FString NpcCurrentRoomId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    FVistaAnimationPlaybackResult AnimationResult;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    int32 QueuedActionCount = -1;
 };
 
 /**
@@ -174,6 +195,12 @@ public:
 
     /** Read the active RHI and a closed allowlist of effective renderer CVars. */
     FVistaRendererStatusResult GetRendererStatus(FName CommandId) const;
+
+    /** Read-only observation of one allowlisted NPC queue and animation state. */
+    UFUNCTION(BlueprintPure, Category = "VISTA|Runtime")
+    FVistaLiveCommandResult GetNpcStatus(
+        FName CommandId,
+        const FString& NpcSemanticId) const;
 
     UFUNCTION(BlueprintCallable, Category = "VISTA|Runtime")
     FVistaLiveCommandResult ExecuteInteraction(

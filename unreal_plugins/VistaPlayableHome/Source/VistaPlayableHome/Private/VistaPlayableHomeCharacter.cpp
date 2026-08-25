@@ -21,6 +21,7 @@
 #include "Misc/Parse.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
+#include "VistaAnimationComponent.h"
 #include "VistaEventSubsystem.h"
 #include "VistaIndoorSpringArmComponent.h"
 #include "VistaInteractable.h"
@@ -161,6 +162,8 @@ AVistaPlayableHomeCharacter::AVistaPlayableHomeCharacter()
     CarryAnchor->ComponentTags.Add(TEXT("VistaCarryAnchor"));
 
     InteractionComponent = CreateDefaultSubobject<UVistaInteractionComponent>(TEXT("InteractionComponent"));
+    AnimationComponent =
+        CreateDefaultSubobject<UVistaAnimationComponent>(TEXT("VistaAnimationComponent"));
 }
 
 void AVistaPlayableHomeCharacter::BeginPlay()
