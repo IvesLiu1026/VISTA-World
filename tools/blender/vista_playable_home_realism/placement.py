@@ -12,6 +12,7 @@ from typing import Any, Mapping, Sequence
 from .config import ForgeInputError, canonical_json_bytes, content_digest, normalized, vector3
 from .external_assets import (
     AUTHORED_RECIPE_MATERIAL_IDS,
+    AUTHORED_RECIPE_SUPPORT_SURFACE_Z_FACTORS,
     AcquiredAsset,
     ExternalAssetSet,
     asset_digest_record,
@@ -179,6 +180,15 @@ def _inside_room(aabb: PlacementAabb, room: Any, tolerance: float = 0.005) -> bo
 
 def _intersects_exclusion(aabb: PlacementAabb, volume: Any) -> bool:
     return aabbs_overlap(aabb, PlacementAabb(tuple(volume.min_m), tuple(volume.max_m)))
+
+
+def _support_surface_z(support: ExternalPlacementSpec) -> float:
+    factor = AUTHORED_RECIPE_SUPPORT_SURFACE_Z_FACTORS.get(
+        support.geometry_recipe or ""
+    )
+    if factor is None:
+        return support.room_local_aabb.max_m[2]
+    return support.room_local_aabb.min_m[2] + support.source_dimensions_m[2] * factor
 
 
 def _source_dimensions(asset: AcquiredAsset, uniform_scale: float) -> tuple[float, float, float]:
@@ -376,7 +386,7 @@ def build_external_placement_plan(
             support = by_id.get(item.support_placement_id)
             if support is None or support.room_id != item.room_id or support.placement_id == item.placement_id:
                 raise ForgeInputError(f"external placement has an invalid support: {item.placement_id}")
-            if abs(item.room_local_aabb.min_m[2] - support.room_local_aabb.max_m[2]) > 0.10:
+            if abs(item.room_local_aabb.min_m[2] - _support_surface_z(support)) > 0.10:
                 raise ForgeInputError(f"external placement is not on its declared support: {item.placement_id}")
             center_xy = tuple(
                 (item.room_local_aabb.min_m[index] + item.room_local_aabb.max_m[index]) / 2

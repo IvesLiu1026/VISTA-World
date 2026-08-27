@@ -1716,12 +1716,11 @@ def test_no_external_v1_path_is_byte_stable_and_runtime_source_is_fail_closed() 
     profile = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
     plan = build_forge_plan(house, profile)
     manifest_bytes = canonical_json_bytes(normalized_manifest(plan, texture_size_px=512))
-    # The byte lock advances with the deterministic entry-millwork geometry;
-    # the v1 schema and checked-in profile bytes remain unchanged.
-    assert plan.content_digest == "e357358eaff879f4de578fa14412f0fe715e9c89e80117b5b946b81eecfd3d13"
-    assert hashlib.sha256(canonical_json_bytes(plan)).hexdigest() == "2bcef9c03707d6c42772748e7db21cf20de4cbc180d82cfe4f07cc000b633fac"
-    assert hashlib.sha256(manifest_bytes).hexdigest() == "848ed9134b11f0731c7fd704bb6d6fddfe8b5a38a3c6cf705d477cdecb79535f"
-    assert len(manifest_bytes) == 130171
+    # The byte lock advances with explicit support/ceiling surface anchors.
+    assert plan.content_digest == "cc46689379ce7dc937a0e7dcf2162157b3437af0874ea6f3a73c6aa3f95ee16e"
+    assert hashlib.sha256(canonical_json_bytes(plan)).hexdigest() == "dc12b4b071759a4e59991f91bd60c387c7ec3654689c5c73f6a4f52a0c59bb35"
+    assert hashlib.sha256(manifest_bytes).hexdigest() == "5838c785ca0516c97e79b1461a3d9e2f7a509ec3d4ef48b73c46f3b508b59cb7"
+    assert len(manifest_bytes) == 131644
 
     import tools.blender.vista_playable_home_realism.external_assets as runtime
 
@@ -1741,11 +1740,15 @@ def test_checked_in_manifest_uses_acquired_assets_without_baking_movable_targets
     payload = json.loads(PLACEMENT_PATH.read_text(encoding="utf-8"))
     body = {key: payload[key] for key in payload if key != "content_digest"}
     assert payload["content_digest"] == content_digest(body)
-    assert len(payload["placements"]) == 22
+    assert len(payload["placements"]) == 30
     assert sum(item["placement_kind"] == "semantic_fixed" for item in payload["placements"]) == 5
+    assert sum(item["room_kind"] == "living_room" for item in payload["placements"]) == 15
     assert {
+        "visual.dressing.kitchen.apple",
         "visual.dressing.kitchen.wooden_plate",
         "visual.dressing.kitchen.wooden_spoon",
+        "visual.dressing.living.ceiling_lamp",
+        "visual.dressing.living.throw_pillows",
     }.issubset({item["source_logical_asset_id"] for item in payload["placements"]})
     serialized = json.dumps(payload)
     for forbidden in ("entity.keys", "entity.coffee_cup", "entity.resident", "entity.exit_door"):

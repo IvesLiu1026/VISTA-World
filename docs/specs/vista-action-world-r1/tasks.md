@@ -41,6 +41,9 @@ Depends on: requirements.md, design.md
   - Requirements: R2, R3, R9
   - Validation: closed schema, real VISTA aliases, transport/EventSpec parity,
     placeholder clips marked rejected rather than ready
+  - Progress: the closed 34-action catalog, exact aliases, readiness states and
+    fail-closed validator exist. EventSpec/TCP integration and package-bound
+    acceptance evidence remain open, so this task is intentionally not checked.
 
 - [ ] T5. Implement shared transactional pickup/place
   - Files: shared executor/receipt component, controller/player adapters and tests
@@ -62,6 +65,10 @@ Depends on: requirements.md, design.md
   - Requirements: R6, R7, R9
   - Validation: enable retained ceiling lamp and throw pillows, reach 30-45
     purposeful living-room instances, preserve navigation/interaction clearance
+  - Progress: all retained 20 CC0 models plus two retained 4K material sources
+    now participate in a 30-placement whole-home build (15 living-room
+    placements). A fresh Blender 4.5.8 smoke build closes staticization and alpha
+    gates, but the close-up review and 30-45 living-room target remain open.
 
 - [ ] T8. Correct architecture material resolution and metric UV
   - Files: Blender config/build/materials/architecture modules and tests
@@ -120,8 +127,14 @@ Depends on: requirements.md, design.md
   status, exactly-once/reentrant-safe terminalization, atomic callback handling
   and a post-cancel Idle snapshot. Focused contracts pass; packaged behavioral
   evidence remains part of T14.
-- Active next slices: T4 ActionCatalog and T7/T8 Golden Living Room
-  material/placement foundation.
+- Active next slices: bind T4 to EventSpec/runtime evidence; expand T7 from 15
+  to 30-45 purposeful living-room groups; then complete T8 metric UV and 2K
+  production material generation.
+- Golden Room smoke evidence: append-only run
+  `golden-room-smoke-20260827T203406Z` contains 30 placements, 25 external
+  dressing instances, 211 components and seven GLBs. Both retained-output tests
+  pass. Its receipt remains `smoke_only`, `accepted_as_r2_visual_evidence=false`;
+  the overview is useful but not yet a GTA-quality acceptance image.
 - Runtime/GPU ownership: none; current live package remains untouched.
 
 ## Notes
