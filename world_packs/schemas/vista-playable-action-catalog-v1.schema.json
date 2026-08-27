@@ -1,0 +1,279 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simworld.org/schemas/vista-playable-action-catalog-v1.schema.json",
+  "title": "VISTA Playable Indoor Action Catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalog_id",
+    "catalog_revision",
+    "animation_profile_binding",
+    "acceptance_thresholds",
+    "control_intents",
+    "actions",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "vista.playable-action-catalog/v1"},
+    "catalog_id": {"type": "string", "const": "vista_indoor_actions"},
+    "catalog_revision": {"type": "string", "const": "vista_indoor_actions_r1"},
+    "animation_profile_binding": {"$ref": "#/$defs/animationProfileBinding"},
+    "acceptance_thresholds": {"$ref": "#/$defs/thresholds"},
+    "control_intents": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/controlIntent"}
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 34,
+      "maxItems": 34,
+      "items": {"$ref": "#/$defs/actionDefinition"}
+    },
+    "content_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+      "maxLength": 96
+    },
+    "parameterName": {
+      "enum": [
+        "room_id",
+        "target_id",
+        "secondary_target_id",
+        "placement_anchor_id",
+        "duration_s",
+        "distance_cm",
+        "height_cm",
+        "hand",
+        "foot",
+        "direction",
+        "pose"
+      ]
+    },
+    "animationProfileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "profile_revision", "content_digest", "acceptance_state"],
+      "properties": {
+        "profile_id": {"const": "ue_5_7_3_animation_v1"},
+        "profile_revision": {"const": "t12_source_inventory_r1"},
+        "content_digest": {"$ref": "#/$defs/digest"},
+        "acceptance_state": {"const": "source_inventory_only"}
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "motion_warp_position_cm",
+        "motion_warp_yaw_deg",
+        "hand_contact_cm",
+        "two_hand_contact_cm",
+        "foot_penetration_cm",
+        "attachment_pop_cm",
+        "attachment_pop_deg",
+        "seat_pelvis_cm",
+        "seat_pelvis_yaw_deg",
+        "recover_root_cm"
+      ],
+      "properties": {
+        "motion_warp_position_cm": {"type": "number", "exclusiveMinimum": 0, "maximum": 25},
+        "motion_warp_yaw_deg": {"type": "number", "exclusiveMinimum": 0, "maximum": 30},
+        "hand_contact_cm": {"type": "number", "exclusiveMinimum": 0, "maximum": 20},
+        "two_hand_contact_cm": {"type": "number", "exclusiveMinimum": 0, "maximum": 20},
+        "foot_penetration_cm": {"type": "number", "minimum": 0, "maximum": 5},
+        "attachment_pop_cm": {"type": "number", "minimum": 0, "maximum": 10},
+        "attachment_pop_deg": {"type": "number", "minimum": 0, "maximum": 15},
+        "seat_pelvis_cm": {"type": "number", "minimum": 0, "maximum": 10},
+        "seat_pelvis_yaw_deg": {"type": "number", "minimum": 0, "maximum": 15},
+        "recover_root_cm": {"type": "number", "minimum": 0, "maximum": 10}
+      }
+    },
+    "controlIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intent_id", "wire_action", "backend_action", "required_parameters", "optional_parameters"],
+      "properties": {
+        "intent_id": {"$ref": "#/$defs/identifier"},
+        "wire_action": {"$ref": "#/$defs/identifier"},
+        "backend_action": {"enum": ["Speak"]},
+        "required_parameters": {
+          "type": "array", "uniqueItems": true,
+          "items": {"enum": ["utterance"]}
+        },
+        "optional_parameters": {
+          "type": "array", "uniqueItems": true,
+          "items": {"enum": ["timeout_s"]}
+        }
+      }
+    },
+    "parameterPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "optional"],
+      "properties": {
+        "required": {
+          "type": "array", "uniqueItems": true,
+          "items": {"$ref": "#/$defs/parameterName"}
+        },
+        "optional": {
+          "type": "array", "uniqueItems": true,
+          "items": {"$ref": "#/$defs/parameterName"}
+        }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effect_id", "commit_phase"],
+      "properties": {
+        "effect_id": {
+          "enum": [
+            "none",
+            "actor_pose",
+            "actor_motion",
+            "held_state_claim",
+            "held_state_release",
+            "target_state",
+            "target_transform",
+            "multi_entity_state"
+          ]
+        },
+        "commit_phase": {"enum": ["none", "contact", "release", "completion"]}
+      }
+    },
+    "legacyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wire_action", "backend_action", "variant_id"],
+      "properties": {
+        "wire_action": {"$ref": "#/$defs/identifier"},
+        "backend_action": {
+          "enum": [
+            "NavigateTo",
+            "LookAt",
+            "PickUp",
+            "Place",
+            "OpenDoor",
+            "CloseDoor",
+            "Sit",
+            "Wait",
+            "Brace",
+            "Drag",
+            "LiftFoot",
+            "Pause",
+            "Fall",
+            "Recover"
+          ]
+        },
+        "variant_id": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "variantSelectors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hand": {"enum": ["left", "right", "both"]},
+        "foot": {"enum": ["left", "right"]},
+        "height_band": {"enum": ["floor", "low", "waist", "counter", "shoulder", "overhead"]},
+        "weight_band": {"enum": ["light", "medium", "heavy"]},
+        "direction": {"enum": ["forward", "backward", "left", "right"]},
+        "pose": {"enum": ["standing", "crouched", "seated", "prone", "supine"]}
+      }
+    },
+    "variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "variant_id",
+        "selectors",
+        "readiness",
+        "animation_profile_action_id",
+        "rejection_reason"
+      ],
+      "properties": {
+        "variant_id": {"$ref": "#/$defs/identifier"},
+        "selectors": {"$ref": "#/$defs/variantSelectors"},
+        "readiness": {
+          "enum": [
+            "verified",
+            "candidate",
+            "blocked_on_source",
+            "blocked_on_license",
+            "rejected_placeholder"
+          ]
+        },
+        "animation_profile_action_id": {
+          "oneOf": [
+            {"$ref": "#/$defs/identifier"},
+            {"type": "null"}
+          ]
+        },
+        "rejection_reason": {
+          "oneOf": [
+            {"type": "string", "minLength": 1, "maxLength": 240},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "actionDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_id",
+        "family",
+        "aliases",
+        "target_policy",
+        "approach_policy",
+        "parameters",
+        "effect",
+        "rollback_policy",
+        "default_variant_id",
+        "legacy_bindings",
+        "variants"
+      ],
+      "properties": {
+        "action_id": {"$ref": "#/$defs/identifier"},
+        "family": {
+          "enum": [
+            "locomotion",
+            "attention",
+            "manipulation",
+            "articulation",
+            "appliance",
+            "contact",
+            "posture",
+            "incident"
+          ]
+        },
+        "aliases": {
+          "type": "array", "maxItems": 16, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "target_policy": {"enum": ["forbidden", "optional", "required"]},
+        "approach_policy": {"enum": ["none", "navigate", "align_target", "align_support"]},
+        "parameters": {"$ref": "#/$defs/parameterPolicy"},
+        "effect": {"$ref": "#/$defs/effect"},
+        "rollback_policy": {
+          "enum": ["not_applicable", "restore_pre_contact", "restore_actor_and_target"]
+        },
+        "default_variant_id": {"$ref": "#/$defs/identifier"},
+        "legacy_bindings": {
+          "type": "array", "maxItems": 4,
+          "items": {"$ref": "#/$defs/legacyBinding"}
+        },
+        "variants": {
+          "type": "array", "minItems": 1, "maxItems": 32,
+          "items": {"$ref": "#/$defs/variant"}
+        }
+      }
+    }
+  }
+}
