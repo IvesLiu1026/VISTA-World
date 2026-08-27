@@ -89,7 +89,7 @@ def test_navigation_completion_is_bound_to_the_active_move_request() -> None:
     ) >= 5
 
 
-def test_terminal_action_result_survives_immediate_patrol_restart() -> None:
+def test_empty_queue_enters_clean_commanded_idle_and_preserves_terminal_result() -> None:
     header = CONTROLLER_HEADER.read_text(encoding="utf-8")
     source = CONTROLLER_SOURCE.read_text(encoding="utf-8")
     runtime_header = RUNTIME_HEADER.read_text(encoding="utf-8")
@@ -102,7 +102,14 @@ def test_terminal_action_result_survives_immediate_patrol_restart() -> None:
     assert source.count("RememberCurrentExternalResult();") == 2
     assert source.count("LastCompletedResult = CurrentResult;") == 1
     assert source.count("bHasLastCompletedResult = true;") == 1
-    assert 'ActionId.StartsWith(TEXT("patrol.")' in source
+    assert "void AVistaHomeNpcController::EnterCommandedIdle()" in source
+    assert "CurrentResult = FVistaNpcActionResult();" in source
+    assert "CurrentResult.Status = EVistaNpcActionStatus::Idle;" in source
+    assert "Movement->StopMovementImmediately();" in source
+    assert "FVistaNpcAction PatrolAction" not in source
+    assert 'TEXT("patrol.%llu")' not in source
+    assert 'ActionId.StartsWith(TEXT("patrol.")' not in source
+    assert "ConfigurePatrol" not in header
     assert "LastCompletedRoomId = IsValid(Npc) ? Npc->CurrentRoomId" in source
     complete = source.index("void AVistaHomeNpcController::CompleteCurrent")
     stored = source.index("RememberCurrentExternalResult();", complete)

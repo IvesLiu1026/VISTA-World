@@ -40,8 +40,12 @@ public:
               meta = (ClampMin = "0.0", ClampMax = "300.0"))
     float PatrolActionTimeoutSeconds = 20.0f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Patrol")
-    bool bAutoStartPatrol = true;
+    // Retained for serialized-map compatibility. Controllers no longer synthesize
+    // patrol actions; movement must arrive through an explicit VISTA action queue.
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Legacy",
+              meta = (DeprecatedProperty,
+                      DeprecationMessage = "Implicit patrol is disabled; enqueue explicit actions."))
+    bool bAutoStartPatrol = false;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Carry")
     TObjectPtr<USceneComponent> CarryAnchor;

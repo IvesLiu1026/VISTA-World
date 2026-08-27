@@ -491,8 +491,9 @@ class PlayableHomeSourceContractTests(unittest.TestCase):
         self.assertIn("UpdateActorInNavOctree", source)
         self.assertIn("OverlapMultiByObjectType", source)
         self.assertIn("SweepSteps = 24", source)
-        self.assertIn("ConfigurePatrol", source)
+        self.assertNotIn("ConfigurePatrol", source)
         self.assertIn("PatrolTargetSemanticIds", source)
+        self.assertIn("bool bAutoStartPatrol = false;", source)
         self.assertIn("OnMoveCompleted", source)
         self.assertIn("NAVIGATION_GOAL_NOT_REACHED", source)
         self.assertIn("BASELINE_CARRIER_NOT_FOUND", source)
@@ -508,6 +509,8 @@ class PlayableHomeSourceContractTests(unittest.TestCase):
         self.assertIn('"dynamic_lighting_verified"', commandlet)
         self.assertIn('"deterministic_exposure_verified"', commandlet)
         self.assertIn('"input_mappings_verified"', commandlet)
+        self.assertIn('set_if_present(actor, "auto_start_patrol", False)', commandlet)
+        self.assertNotIn('set_if_present(actor, "auto_start_patrol", True)', commandlet)
 
     def test_loopback_transport_is_fixed_and_bounded(self) -> None:
         source = (ROOT / "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaWorldTcpAdapter.cpp").read_text()
