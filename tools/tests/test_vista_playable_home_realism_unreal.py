@@ -222,6 +222,10 @@ def test_r2_composition_is_additive_and_r1_default_is_byte_stable() -> None:
             "",
             "[/Script/NavigationSystem.RecastNavMesh]",
             "RuntimeGeneration=Dynamic",
+            "AgentRadius=34.000000",
+            "AgentHeight=192.000000",
+            "CellSize=10.000000",
+            "CellHeight=5.000000",
             "",
             "[/Script/Engine.RendererSettings]",
             "r.AllowStaticLighting=False",
@@ -484,7 +488,7 @@ def test_r1_build_path_remains_byte_stable_without_visual_profile(
         "342d8262470fedbce4ce9be8125bf1d181b5291c0d18e50787d68015c394e72e"
     )
     assert build_home.sha256_bytes(planned.engine_ini_raw) == (
-        "0933e82b84dc3dfec5928f961e1bc3ffb704476163d0689c24defdabbf388811"
+        "8d417e9e9a75f8b4904979a86da0a1d1d57b4451d632848a2fc44dbc857c68fc"
     )
     assert planned.visual_profile is None
     assert planned.renderer_request is None
