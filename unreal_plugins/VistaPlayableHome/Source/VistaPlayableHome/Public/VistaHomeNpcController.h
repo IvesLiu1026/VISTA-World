@@ -47,11 +47,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VISTA|NPC")
     void CancelActionQueue(FName Reason = TEXT("QUEUE_CANCELED"));
 
-    UFUNCTION(BlueprintCallable, Category = "VISTA|NPC")
-    void ConfigurePatrol(const TArray<FString>& TargetSemanticIds,
-                         float ActionTimeoutSeconds,
-                         bool bEnabled = true);
-
     UFUNCTION(BlueprintPure, Category = "VISTA|NPC")
     FVistaNpcActionResult GetCurrentActionResult() const { return CurrentResult; }
 
@@ -73,7 +68,6 @@ public:
     virtual void Tick(float DeltaSeconds) override;
 
 protected:
-    virtual void OnPossess(APawn* InPawn) override;
     virtual void OnMoveCompleted(FAIRequestID RequestId,
                                  const FPathFollowingResult& Result) override;
 
@@ -86,16 +80,12 @@ private:
     bool bHasLastCompletedResult = false;
     double ActionStartedAt = 0.0;
     bool bActionStarted = false;
-    bool bAutoPatrol = false;
-    TArray<FString> PatrolTargetSemanticIds;
-    int32 PatrolTargetIndex = 0;
-    uint64 PatrolSequence = 0;
-    float PatrolActionTimeoutSeconds = 20.0f;
     TOptional<FVector> ActiveNavigationGoal;
     FAIRequestID ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
     bool bAnimationInteractionCommitted = false;
 
     bool ValidateAction(const FVistaNpcAction& Action, FName& OutCode) const;
+    void EnterCommandedIdle();
     void StartNextAction();
     void StartCurrentAction();
     void RememberCurrentExternalResult();

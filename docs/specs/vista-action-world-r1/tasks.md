@@ -21,7 +21,7 @@ Depends on: requirements.md, design.md
   - Validation: source inspection, live read-only `npc_status`, provider/license
     inventory and official documentation review
 
-- [ ] T2. Make every agent commanded-idle by default
+- [x] T2. Make every agent commanded-idle by default
   - Files: NPC character/controller, composition commandlet, focused tests/docs
   - Depends on: T1
   - Requirements: R1, R2, R12
@@ -114,9 +114,10 @@ Depends on: requirements.md, design.md
 
 ## Current Iteration
 
-- Active: T2 commanded-idle baseline.
-- Next parallel slices after T2 commit: T4 ActionCatalog and T7/T8 Golden Living
-  Room material/placement foundation.
+- Completed: T2 commanded-idle baseline; focused contracts and the full 219-test
+  Python suite pass without touching the live package.
+- Active next slices: T3 explicit cancellation/receipts, T4 ActionCatalog and
+  T7/T8 Golden Living Room material/placement foundation.
 - Runtime/GPU ownership: none; current live package remains untouched.
 
 ## Notes
