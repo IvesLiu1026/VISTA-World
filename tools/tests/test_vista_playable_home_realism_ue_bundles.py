@@ -85,10 +85,17 @@ def _bundle_glb_bytes(contract: dict) -> bytes:
         "meshes": [
             {
                 "primitives": [
-                    {"attributes": {}, "material": index}
+                    {
+                        "attributes": {"POSITION": 0, "TEXCOORD_0": 1},
+                        "material": index,
+                    }
                     for index in range(material_count)
                 ]
             }
+        ],
+        "accessors": [
+            {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
+            {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC2"},
         ],
         "materials": materials,
         "textures": [{"source": index} for index in range(material_count * 3)],
