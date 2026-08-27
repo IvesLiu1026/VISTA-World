@@ -121,6 +121,9 @@ EXTERNAL_STATICIZATION_LEDGER_SCHEMA = (
 EXTERNAL_STATICIZATION_SELECTION_SCHEMA = (
     "simworld.vista.playable-home-external-staticization-selection/v1"
 )
+EXTERNAL_STATICIZATION_SELECTION_NORMALIZED_SCHEMA = (
+    "simworld.vista.playable-home-external-staticization-selection/v2"
+)
 EXTERNAL_STATICIZATION_POLICY = (
     "blender-4.5.8-frame-1-depsgraph-viewport-render-equivalent-evaluated-mesh/v1"
 )
@@ -207,6 +210,11 @@ AUTHORED_RECIPE_MATERIAL_IDS: Mapping[str, tuple[str, ...]] = {
     ),
     "contemporary_dining_table_v1": ("visual.material.white_oak_veneer",),
 }
+# Contact surfaces are part of the authored geometry recipe, not inferred from
+# the full furniture AABB. The sofa's cushion top is z * (0.49 + 0.18 / 2).
+AUTHORED_RECIPE_SUPPORT_SURFACE_Z_FACTORS: Mapping[str, float] = {
+    "contemporary_sofa_v1": 0.58,
+}
 
 
 @dataclass(frozen=True)
@@ -273,6 +281,31 @@ class ExternalAssetSet:
 
 
 @dataclass(frozen=True)
+class ExternalModifierVisibilityOverride:
+    """Receipt-pinned normalization of one source modifier's evaluation flags."""
+
+    object_name: str
+    modifier_name: str
+    source_show_viewport: bool
+    source_show_render: bool
+    applied_show_viewport: bool
+    applied_show_render: bool
+    reason: str
+
+
+@dataclass(frozen=True)
+class ExternalMaterialBaseColorOverride:
+    """Exact normalization of one non-exportable neutral base-colour mix."""
+
+    material_name: str
+    mix_node_name: str
+    source_factor: float
+    source_color: tuple[float, float, float, float]
+    applied_mode: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class ExternalSourceSelectionPolicy:
     """Exact receipt-pinned render selection for one retained model source."""
 
@@ -280,6 +313,8 @@ class ExternalSourceSelectionPolicy:
     selected_object_names: tuple[str, ...]
     excluded_renderable_objects: tuple[tuple[str, str], ...] = ()
     selected_dimensions_m: tuple[float, float, float] | None = None
+    modifier_visibility_overrides: tuple[ExternalModifierVisibilityOverride, ...] = ()
+    material_base_color_overrides: tuple[ExternalMaterialBaseColorOverride, ...] = ()
 
 
 _POSTCARD_OBJECT_NAMES = tuple(f"postcard_{index:02d}" for index in range(1, 21))
@@ -342,6 +377,15 @@ EXTERNAL_SOURCE_SELECTION_POLICIES: Mapping[str, ExternalSourceSelectionPolicy] 
         "ded40d48a23ad5e2a01604be031dbc6d4ff17bc7ceb3668840473931c34dcadd",
         ("cardboard_box_01",),
     ),
+    "visual.dressing.kitchen.apple": ExternalSourceSelectionPolicy(
+        "b029e7c703b9c11977ae48174df3fb1fda6fd95dbe4cd6bc154c3dd43a38436d",
+        ("food_apple_01",),
+        selected_dimensions_m=(
+            0.09756118059158325,
+            0.09590170904994011,
+            0.08538994396477938,
+        ),
+    ),
     "visual.dressing.kitchen.cutting_board": ExternalSourceSelectionPolicy(
         "2ade9177a149033cd46f0c8afab3612d719489caf95705376250d6d93bced414",
         ("wooden_cutting_board",),
@@ -365,6 +409,39 @@ EXTERNAL_SOURCE_SELECTION_POLICIES: Mapping[str, ExternalSourceSelectionPolicy] 
     "visual.dressing.living.armchair": ExternalSourceSelectionPolicy(
         "79118e13383af850d801f14b9ace7a65f91d520ce54b3a5bc8b4cf5e2089a7b1",
         ("modern_arm_chair_01",),
+    ),
+    "visual.dressing.living.ceiling_lamp": ExternalSourceSelectionPolicy(
+        "d78debf5a509e5df348a96aaea051ef95efab322ea02a096c6c78b756142ec79",
+        ("modern_ceiling_lamp_01",),
+        selected_dimensions_m=(
+            0.4316493272781372,
+            0.4316607564687729,
+            0.9515514969825745,
+        ),
+        modifier_visibility_overrides=(
+            ExternalModifierVisibilityOverride(
+                object_name="modern_ceiling_lamp_01",
+                modifier_name="Subdivision",
+                source_show_viewport=False,
+                source_show_render=True,
+                applied_show_viewport=True,
+                applied_show_render=True,
+                reason="evaluate_the_receipt_pinned_render_subdivision_in_viewport_depsgraph",
+            ),
+        ),
+        material_base_color_overrides=(
+            ExternalMaterialBaseColorOverride(
+                material_name="modern_ceiling_lamp_01_glass",
+                mix_node_name="Mix",
+                source_factor=0.115,
+                source_color=(0.8, 0.8, 0.8, 1.0),
+                applied_mode="direct_receipt_bound_base_color_image",
+                reason=(
+                    "replace_non_exportable_11_5_percent_neutral_tint_mix_with_"
+                    "its_receipt_bound_base_color_image"
+                ),
+            ),
+        ),
     ),
     "visual.dressing.living.books": ExternalSourceSelectionPolicy(
         "d2f5d87cc2c90c4f23c25de10b0e6642835d82dcb0106c480c4ab146909cae27",
@@ -390,6 +467,15 @@ EXTERNAL_SOURCE_SELECTION_POLICIES: Mapping[str, ExternalSourceSelectionPolicy] 
     "visual.dressing.living.side_table": ExternalSourceSelectionPolicy(
         "c4d1d727051e9b443a0a1496b7ef2e3b018d83d45b55b2bd2c737becccf1f1e4",
         ("side_table_01",),
+    ),
+    "visual.dressing.living.throw_pillows": ExternalSourceSelectionPolicy(
+        "4b34ec2f0b2f9691a54b79c6de2175bec6c7474152222fb5742085a23aa39c9d",
+        ("throw_pillows_01_pillow01", "throw_pillows_01_pillow02"),
+        selected_dimensions_m=(
+            0.9400650262832642,
+            0.4518609642982483,
+            0.4501592523884028,
+        ),
     ),
     "visual.dressing.shared.ceramic_vase": ExternalSourceSelectionPolicy(
         "a00fa716f81ea8536163618a4d34a4753e4fc0b6872783660258a29f33486597",
@@ -856,6 +942,29 @@ def _external_source_selection_policy_for_identity(
         {"object_name": name, "reason": reason}
         for name, reason in policy.excluded_renderable_objects
     ]
+    modifier_overrides = [
+        {
+            "object_name": item.object_name,
+            "modifier_name": item.modifier_name,
+            "source_show_viewport": item.source_show_viewport,
+            "source_show_render": item.source_show_render,
+            "applied_show_viewport": item.applied_show_viewport,
+            "applied_show_render": item.applied_show_render,
+            "reason": item.reason,
+        }
+        for item in policy.modifier_visibility_overrides
+    ]
+    material_overrides = [
+        {
+            "material_name": item.material_name,
+            "mix_node_name": item.mix_node_name,
+            "source_factor": item.source_factor,
+            "source_color": list(item.source_color),
+            "applied_mode": item.applied_mode,
+            "reason": item.reason,
+        }
+        for item in policy.material_base_color_overrides
+    ]
     if (
         not selected
         or selected != sorted(set(selected))
@@ -863,15 +972,56 @@ def _external_source_selection_policy_for_identity(
         != sorted({item["object_name"] for item in excluded})
         or set(selected) & {item["object_name"] for item in excluded}
         or any(not item["reason"] for item in excluded)
+        or modifier_overrides != sorted(
+            modifier_overrides,
+            key=lambda item: (item["object_name"], item["modifier_name"]),
+        )
+        or len(
+            {
+                (item["object_name"], item["modifier_name"])
+                for item in modifier_overrides
+            }
+        ) != len(modifier_overrides)
+        or any(
+            not item["reason"]
+            or item["applied_show_viewport"] != item["applied_show_render"]
+            for item in modifier_overrides
+        )
+        or material_overrides != sorted(
+            material_overrides,
+            key=lambda item: (item["material_name"], item["mix_node_name"]),
+        )
+        or len(
+            {
+                (item["material_name"], item["mix_node_name"])
+                for item in material_overrides
+            }
+        ) != len(material_overrides)
+        or any(
+            item["applied_mode"] != "direct_receipt_bound_base_color_image"
+            or not item["reason"]
+            or not 0.0 <= item["source_factor"] <= 1.0
+            or len(item["source_color"]) != 4
+            or any(not math.isfinite(float(channel)) for channel in item["source_color"])
+            for item in material_overrides
+        )
     ):
         raise RuntimeError("external staticization selection policy is not closed")
     body = {
-        "schema_version": EXTERNAL_STATICIZATION_SELECTION_SCHEMA,
+        "schema_version": (
+            EXTERNAL_STATICIZATION_SELECTION_NORMALIZED_SCHEMA
+            if modifier_overrides or material_overrides
+            else EXTERNAL_STATICIZATION_SELECTION_SCHEMA
+        ),
         "source_logical_asset_id": logical_asset_id,
         "source_tree_sha256": source_tree_sha256,
         "selected_object_names": selected,
         "excluded_renderable_objects": excluded,
     }
+    if modifier_overrides:
+        body["modifier_visibility_overrides"] = modifier_overrides
+    if material_overrides:
+        body["material_base_color_overrides"] = material_overrides
     return {**body, "content_digest": _runtime_json_sha256(body)}
 
 
@@ -2850,6 +3000,87 @@ def _load_fresh_receipt_image(
         raise
 
 
+def _apply_material_base_color_overrides(
+    materials: Sequence[Any],
+    selection_policy: Mapping[str, Any],
+) -> None:
+    """Normalize only exact, receipt-pinned neutral Mix nodes to direct PBR input."""
+
+    rows = selection_policy.get("material_base_color_overrides", [])
+    if not isinstance(rows, list):
+        raise RuntimeError("external material base-color override contract is invalid")
+    material_by_name = {str(material.name): material for material in materials}
+    if len(material_by_name) != len(materials):
+        raise RuntimeError("external material names are duplicated before normalization")
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise RuntimeError("external material base-color override row is invalid")
+        material = material_by_name.get(str(row.get("material_name", "")))
+        if material is None or not material.use_nodes or material.node_tree is None:
+            raise RuntimeError("external material base-color override target is absent")
+        tree = material.node_tree
+        mix = tree.nodes.get(str(row.get("mix_node_name", "")))
+        if (
+            mix is None
+            or getattr(mix, "type", None) != "MIX"
+            or getattr(mix, "blend_type", None) != "MIX"
+            or getattr(mix, "data_type", None) != "RGBA"
+        ):
+            raise RuntimeError("external material base-color override Mix node differs")
+        factor_socket = next(
+            (socket for socket in mix.inputs if socket.identifier == "Factor_Float"),
+            None,
+        )
+        a_socket = next(
+            (socket for socket in mix.inputs if socket.identifier == "A_Color"),
+            None,
+        )
+        b_socket = next(
+            (socket for socket in mix.inputs if socket.identifier == "B_Color"),
+            None,
+        )
+        if factor_socket is None or a_socket is None or b_socket is None:
+            raise RuntimeError("external material base-color override sockets differ")
+        expected_color = tuple(float(value) for value in row.get("source_color", ()))
+        observed_color = tuple(float(value) for value in b_socket.default_value)
+        if (
+            _socket_links(factor_socket)
+            or _socket_links(b_socket)
+            or abs(float(factor_socket.default_value) - float(row.get("source_factor", -1)))
+            > 1e-6
+            or len(expected_color) != 4
+            or any(
+                abs(observed_color[index] - expected_color[index]) > 1e-6
+                for index in range(4)
+            )
+        ):
+            raise RuntimeError("external material base-color override source values differ")
+        a_links = _socket_links(a_socket)
+        if len(a_links) != 1:
+            raise RuntimeError("external material base-color override image link differs")
+        image_link = a_links[0]
+        image_node = image_link.from_node
+        if getattr(image_node, "type", None) != "TEX_IMAGE" or image_node.image is None:
+            raise RuntimeError("external material base-color override image is absent")
+        _require_exclusive_output_link(
+            image_node,
+            image_link,
+            a_socket,
+            output_names=frozenset({"Color"}),
+            label="normalized base-color image",
+        )
+        output_links = _all_output_links(mix)
+        if (
+            len(output_links) != 1
+            or getattr(output_links[0].from_socket, "name", None) != "Result"
+            or getattr(output_links[0].to_socket, "name", None) != "Base Color"
+        ):
+            raise RuntimeError("external material base-color override output link differs")
+        target = output_links[0].to_socket
+        tree.nodes.remove(mix)
+        tree.links.new(image_node.outputs["Color"], target)
+
+
 def _validate_runtime_material_images(
     bpy: Any,
     meshes: Sequence[Any],
@@ -2862,6 +3093,18 @@ def _validate_runtime_material_images(
         for slot in obj.material_slots:
             if slot.material not in materials:
                 materials.append(slot.material)
+    retained_policy = EXTERNAL_SOURCE_SELECTION_POLICIES.get(asset.logical_asset_id)
+    selection_policy = (
+        external_source_selection_policy(asset)
+        if retained_policy is not None
+        and retained_policy.source_tree_sha256 == asset.source_tree_sha256
+        else {}
+    )
+    # The staticization entry point already requires an exact retained-source
+    # policy.  Keeping this direct validation helper neutral for synthetic
+    # material fixtures lets its unit tests exercise receipt validation without
+    # inventing production selection contracts or weakening that outer gate.
+    _apply_material_base_color_overrides(materials, selection_policy)
     used_semantics: set[str] = set()
     material_semantics: list[tuple[Any, dict[str, Any], list[dict[str, Any]]]] = []
     available_semantics = {semantic for receipt_file in expected.values() for semantic in receipt_file.semantic}
@@ -3617,6 +3860,40 @@ def _compact_evaluated_material_slots(
     return names
 
 
+def _apply_modifier_visibility_overrides(
+    loaded_by_name: Mapping[str, Any],
+    selection_policy: Mapping[str, Any],
+) -> None:
+    """Apply only exact source-pinned modifier visibility normalizations."""
+
+    rows = selection_policy.get("modifier_visibility_overrides", [])
+    if not isinstance(rows, list):
+        raise RuntimeError("external modifier visibility override contract is invalid")
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise RuntimeError("external modifier visibility override row is invalid")
+        obj = loaded_by_name.get(str(row.get("object_name", "")))
+        if obj is None:
+            raise RuntimeError("external modifier visibility override object is absent")
+        matches = [
+            modifier
+            for modifier in getattr(obj, "modifiers", ())
+            if modifier.name == row.get("modifier_name")
+        ]
+        if len(matches) != 1:
+            raise RuntimeError("external modifier visibility override modifier is absent or duplicated")
+        modifier = matches[0]
+        if (
+            bool(modifier.show_viewport) != row.get("source_show_viewport")
+            or bool(modifier.show_render) != row.get("source_show_render")
+        ):
+            raise RuntimeError("external modifier source visibility differs from its pinned policy")
+        modifier.show_viewport = bool(row.get("applied_show_viewport"))
+        modifier.show_render = bool(row.get("applied_show_render"))
+        if bool(modifier.show_viewport) != bool(modifier.show_render):
+            raise RuntimeError("external modifier visibility normalization is not equivalent")
+
+
 def _staticize_external_source(
     bpy: Any,
     asset: AcquiredAsset,
@@ -3655,6 +3932,7 @@ def _staticize_external_source(
     try:
         for obj in loaded:
             _relink(obj, source_collection)
+        _apply_modifier_visibility_overrides(loaded_by_name, selection_policy)
         bpy.context.view_layer.update()
         input_inventory = _staticization_input_inventory(loaded)
         action_inventory = _staticization_action_inventory(new_actions)

@@ -119,19 +119,38 @@ def _entry_corridor(room: Any) -> ExclusionVolumeSpec:
     )
 
 
-def _authored_anchor_rows(kind_to_room: Mapping[str, Any]) -> list[tuple[Any, str, str, tuple[float, float, float], float, tuple[str, ...]]]:
+def _authored_anchor_rows(
+    kind_to_room: Mapping[str, Any],
+) -> list[
+    tuple[
+        Any,
+        str,
+        str,
+        tuple[float, float, float],
+        tuple[float, float, float],
+        float,
+        tuple[str, ...],
+    ]
+]:
+    up = (0.0, 0.0, 1.0)
+    down = (0.0, 0.0, -1.0)
     return [
-        (kind_to_room["entry_hall"], "shoe_drop", "shoe and bag landing", (1.15, -3.30, 0.56), 0.28, ("shoe", "bag", "basket")),
-        (kind_to_room["entry_hall"], "coat_wall", "coat and umbrella story", (1.22, 0.10, 1.48), 0.30, ("coat", "umbrella", "wall_hook")),
-        (kind_to_room["entry_hall"], "console_top", "entry correspondence", (-1.15, 0.00, 0.84), 0.25, ("mail", "ceramic_bowl", "small_lamp")),
-        (kind_to_room["living_room"], "window_sill", "daylight edge detail", (-2.32, -0.35, 0.88), 0.24, ("plant", "book")),
-        (kind_to_room["living_room"], "reading_corner", "reading activity", (1.62, 1.34, 0.04), 0.38, ("floor_lamp", "book_stack", "basket")),
-        (kind_to_room["living_room"], "media_console", "media wall detail", (0.92, -1.52, 0.62), 0.32, ("speaker", "book", "decorative_object")),
-        (kind_to_room["living_room"], "coffee_table_style", "coffee table cluster", (0.80, -0.42, 0.52), 0.22, ("book", "tray", "ceramic_bowl")),
-        (kind_to_room["kitchen_dining"], "prep_counter", "food preparation", (-1.52, 1.34, 0.96), 0.24, ("cutting_board", "bowl", "utensil")),
-        (kind_to_room["kitchen_dining"], "coffee_station", "morning routine", (0.42, 1.34, 0.96), 0.22, ("mug", "coffee_maker", "jar")),
-        (kind_to_room["kitchen_dining"], "dining_center", "shared meal", (-0.82, -0.20, 0.80), 0.28, ("plate", "bowl", "napkin")),
-        (kind_to_room["kitchen_dining"], "pantry_corner", "pantry overflow", (1.66, -1.55, 0.06), 0.32, ("basket", "cardboard_box", "recycling")),
+        (kind_to_room["entry_hall"], "shoe_drop", "shoe and bag landing", (1.15, -3.30, 0.56), up, 0.28, ("shoe", "bag", "basket")),
+        (kind_to_room["entry_hall"], "coat_wall", "coat and umbrella story", (1.22, 0.10, 1.48), up, 0.30, ("coat", "umbrella", "wall_hook")),
+        (kind_to_room["entry_hall"], "console_top", "entry correspondence", (-1.15, 0.00, 0.84), up, 0.25, ("mail", "ceramic_bowl", "small_lamp")),
+        (kind_to_room["living_room"], "window_sill", "daylight edge detail", (-2.32, -0.35, 0.88), up, 0.24, ("plant", "book")),
+        (kind_to_room["living_room"], "reading_corner", "reading activity", (1.62, 1.34, 0.04), up, 0.38, ("floor_lamp", "book_stack", "basket")),
+        (kind_to_room["living_room"], "media_console", "media wall detail", (0.92, -1.52, 0.62), up, 0.32, ("speaker", "book", "decorative_object")),
+        (kind_to_room["living_room"], "coffee_table_style", "coffee table cluster", (0.45, 0.30, 0.39), up, 0.15, ("book", "tray", "ceramic_bowl")),
+        (kind_to_room["living_room"], "sofa_soft", "sofa cushion styling", (-1.60, 1.15, 0.4524), up, 0.18, ("throw_pillows",)),
+        (kind_to_room["living_room"], "sofa_side", "sofa side-table cluster", (-1.60, 0.05, 0.0), up, 0.20, ("side_table", "decorative_object")),
+        (kind_to_room["living_room"], "reading_storage", "reading storage", (0.45, 1.65, 0.0), up, 0.12, ("basket",)),
+        (kind_to_room["living_room"], "conversation_south", "conversation seating", (1.0, -0.85, 0.0), up, 0.18, ("armchair",)),
+        (kind_to_room["living_room"], "ceiling_fixture", "primary ceiling fixture", (0.85, 0.25, 2.0484485), down, 0.25, ("ceiling_lamp",)),
+        (kind_to_room["kitchen_dining"], "prep_counter", "food preparation", (-1.52, 1.34, 0.96), up, 0.24, ("cutting_board", "bowl", "utensil")),
+        (kind_to_room["kitchen_dining"], "coffee_station", "morning routine", (0.42, 1.34, 0.96), up, 0.22, ("mug", "coffee_maker", "jar")),
+        (kind_to_room["kitchen_dining"], "dining_center", "shared meal", (-0.82, -0.20, 0.80), up, 0.28, ("plate", "bowl", "napkin", "fruit")),
+        (kind_to_room["kitchen_dining"], "pantry_corner", "pantry overflow", (1.66, -1.55, 0.06), up, 0.32, ("basket", "cardboard_box", "recycling")),
     ]
 
 
@@ -193,14 +212,22 @@ def build_dressing_plan(
     exclusions.sort(key=lambda item: item.exclusion_id)
 
     anchors: list[DressingAnchorSpec] = []
-    for room, short_id, purpose, location, radius, categories in _authored_anchor_rows(kind_to_room):
+    for (
+        room,
+        short_id,
+        purpose,
+        location,
+        surface_normal,
+        radius,
+        categories,
+    ) in _authored_anchor_rows(kind_to_room):
         anchor_id = f"{room.room_id}/dressing_anchor.{short_id}"
         anchor = DressingAnchorSpec(
             anchor_id=anchor_id,
             room_id=room.room_id,
             purpose=purpose,
             location_m=location,
-            surface_normal=(0.0, 0.0, 1.0),
+            surface_normal=surface_normal,
             clearance_radius_m=radius,
             allowed_categories=categories,
             deterministic_yaw_deg=_stable_yaw(seed, anchor_id),
@@ -213,14 +240,14 @@ def build_dressing_plan(
     instances = _profile_instances(profile, set(room_by_id))
     payload = {
         "seed": seed,
-        "placement_policy": "authored_anchor_plus_closed_profile_instances_v1",
+        "placement_policy": "authored_surface_anchor_plus_closed_profile_instances_v2",
         "anchors": anchors,
         "exclusions": exclusions,
         "profile_instances": instances,
     }
     return DressingPlan(
         seed=seed,
-        placement_policy="authored_anchor_plus_closed_profile_instances_v1",
+        placement_policy="authored_surface_anchor_plus_closed_profile_instances_v2",
         anchors=tuple(anchors),
         exclusions=tuple(exclusions),
         profile_instances=instances,
