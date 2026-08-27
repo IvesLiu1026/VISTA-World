@@ -296,6 +296,47 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteNpcQueue(
     return Output;
 }
 
+FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteNpcCancel(
+    const FVistaLiveNpcCancelCommand& Command)
+{
+    FVistaLiveCommandResult Output;
+    Output.TargetSemanticId = Command.NpcSemanticId;
+    if (!ValidateEnvelope(Command.Envelope, Output))
+    {
+        return Output;
+    }
+    AVistaHomeNpcCharacter* Npc =
+        Cast<AVistaHomeNpcCharacter>(ResolveSemanticActor(Command.NpcSemanticId));
+    AVistaHomeNpcController* Controller = IsValid(Npc)
+        ? Cast<AVistaHomeNpcController>(Npc->GetController())
+        : nullptr;
+    if (!IsValid(Controller))
+    {
+        Output.Code = TEXT("NPC_CONTROLLER_NOT_FOUND");
+        return Output;
+    }
+
+    const FVistaNpcActionResult BeforeCancel =
+        Controller->GetCurrentActionResult();
+    const bool bHadPendingWork = Controller->GetQueuedActionCount() > 0 ||
+        BeforeCancel.Status == EVistaNpcActionStatus::Queued ||
+        BeforeCancel.Status == EVistaNpcActionStatus::Running;
+    Controller->CancelActionQueue(TEXT("NPC_QUEUE_CANCELED"));
+    UVistaEventSubsystem* Events = GetWorld()->GetSubsystem<UVistaEventSubsystem>();
+    if (!Events->CommitCommandGeneration(
+            Command.Envelope.SessionGeneration, Output.SessionGeneration))
+    {
+        Output.Code = TEXT("SESSION_GENERATION_COMMIT_FAILED");
+        return Output;
+    }
+
+    Output = GetNpcStatus(Command.Envelope.CommandId, Command.NpcSemanticId);
+    Output.Code = bHadPendingWork
+        ? FName(TEXT("NPC_QUEUE_CANCELED"))
+        : FName(TEXT("NPC_ALREADY_IDLE"));
+    return Output;
+}
+
 FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteEvent(
     const FVistaLiveEventCommand& Command)
 {

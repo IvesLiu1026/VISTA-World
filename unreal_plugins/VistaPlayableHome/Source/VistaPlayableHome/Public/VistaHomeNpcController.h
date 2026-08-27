@@ -85,7 +85,8 @@ private:
     bool bAnimationInteractionCommitted = false;
 
     bool ValidateAction(const FVistaNpcAction& Action, FName& OutCode) const;
-    void EnterCommandedIdle();
+    void StopControlledMotion();
+    void EnterCommandedIdle(bool bMotionAlreadyStopped = false);
     void StartNextAction();
     void StartCurrentAction();
     void RememberCurrentExternalResult();

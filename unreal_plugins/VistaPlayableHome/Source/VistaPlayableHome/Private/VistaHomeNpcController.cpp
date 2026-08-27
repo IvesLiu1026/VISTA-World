@@ -115,19 +115,8 @@ bool AVistaHomeNpcController::ReplaceActionQueue(
         ActionIds.Add(Action.ActionId);
     }
 
+    CancelActionQueue(TEXT("QUEUE_REPLACED"));
     ActionQueue = Actions;
-    CurrentAction.Reset();
-    CurrentResult = FVistaNpcActionResult();
-    bActionStarted = false;
-    ActiveNavigationGoal.Reset();
-    ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
-    bAnimationInteractionCommitted = false;
-    if (UVistaAnimationComponent* Animation = IsValid(GetPawn())
-        ? GetPawn()->FindComponentByClass<UVistaAnimationComponent>() : nullptr)
-    {
-        Animation->StopActiveAction(TEXT("QUEUE_REPLACED"));
-    }
-    StopMovement();
     OutCode = TEXT("QUEUE_REPLACED");
     return true;
 }
@@ -160,28 +149,25 @@ bool AVistaHomeNpcController::EnqueueAction(
 
 void AVistaHomeNpcController::CancelActionQueue(FName Reason)
 {
+    const FName CompletionReason = Reason.IsNone()
+        ? FName(TEXT("QUEUE_CANCELED")) : Reason;
     ActionQueue.Reset();
     ActiveNavigationGoal.Reset();
     ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
     if (UVistaAnimationComponent* Animation = IsValid(GetPawn())
         ? GetPawn()->FindComponentByClass<UVistaAnimationComponent>() : nullptr)
     {
-        Animation->StopActiveAction(Reason);
+        Animation->StopActiveAction(CompletionReason);
     }
+    StopControlledMotion();
     if (CurrentAction.IsSet())
     {
-        const FName CompletionReason = Reason.IsNone()
-            ? FName(TEXT("QUEUE_CANCELED")) : Reason;
-        CurrentResult.Status = EVistaNpcActionStatus::Failed;
-        CurrentResult.Code = CompletionReason;
-        RememberCurrentExternalResult();
-        CurrentAction.Reset();
-        bActionStarted = false;
-        StopMovement();
-        OnActionFinished.Broadcast(CurrentResult);
-        return;
+        CompleteCurrent(EVistaNpcActionStatus::Canceled, CompletionReason);
     }
-    StopMovement();
+    // A synchronous completion listener may enqueue or replace work. A cancel
+    // command remains authoritative over callbacks raised by that cancellation.
+    ActionQueue.Reset();
+    EnterCommandedIdle(true);
 }
 
 void AVistaHomeNpcController::Tick(float DeltaSeconds)
@@ -245,7 +231,19 @@ void AVistaHomeNpcController::OnMoveCompleted(
     }
 }
 
-void AVistaHomeNpcController::EnterCommandedIdle()
+void AVistaHomeNpcController::StopControlledMotion()
+{
+    StopMovement();
+    if (APawn* ControlledPawn = GetPawn())
+    {
+        if (UPawnMovementComponent* Movement = ControlledPawn->GetMovementComponent())
+        {
+            Movement->StopMovementImmediately();
+        }
+    }
+}
+
+void AVistaHomeNpcController::EnterCommandedIdle(bool bMotionAlreadyStopped)
 {
     const bool bAlreadyIdle =
         CurrentResult.Status == EVistaNpcActionStatus::Idle &&
@@ -259,16 +257,9 @@ void AVistaHomeNpcController::EnterCommandedIdle()
     bActionStarted = false;
     bAnimationInteractionCommitted = false;
 
-    if (!bAlreadyIdle)
+    if (!bMotionAlreadyStopped && !bAlreadyIdle)
     {
-        StopMovement();
-        if (APawn* ControlledPawn = GetPawn())
-        {
-            if (UPawnMovementComponent* Movement = ControlledPawn->GetMovementComponent())
-            {
-                Movement->StopMovementImmediately();
-            }
-        }
+        StopControlledMotion();
     }
 }
 
@@ -445,15 +436,20 @@ void AVistaHomeNpcController::CompleteCurrent(
     EVistaNpcActionStatus Status,
     FName Code)
 {
+    if (!CurrentAction.IsSet())
+    {
+        return;
+    }
     CurrentResult.Status = Status;
     CurrentResult.Code = Code;
     RememberCurrentExternalResult();
-    OnActionFinished.Broadcast(CurrentResult);
+    const FVistaNpcActionResult TerminalResult = CurrentResult;
     ActiveNavigationGoal.Reset();
     ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
     CurrentAction.Reset();
     bActionStarted = false;
     bAnimationInteractionCommitted = false;
+    OnActionFinished.Broadcast(TerminalResult);
 }
 
 bool AVistaHomeNpcController::PollAnimationAction()
