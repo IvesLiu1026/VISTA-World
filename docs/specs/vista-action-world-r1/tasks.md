@@ -66,9 +66,11 @@ Depends on: requirements.md, design.md
   - Validation: enable retained ceiling lamp and throw pillows, reach 30-45
     purposeful living-room instances, preserve navigation/interaction clearance
   - Progress: all retained 20 CC0 models plus two retained 4K material sources
-    now participate in a 30-placement whole-home build (15 living-room
-    placements). A fresh Blender 4.5.8 smoke build closes staticization and alpha
-    gates, but the close-up review and 30-45 living-room target remain open.
+    now participate in a 45-placement whole-home build with 30 living-room
+    placements. A fresh Blender 4.5.8 smoke build closes placement, protected
+    clearance, staticization, alpha and retained-output gates. Eye-level close-up
+    review and visible-vs-semantic support/seat reconciliation remain open, so
+    this presentation milestone is intentionally not checked.
 
 - [ ] T8. Correct architecture material resolution and metric UV
   - Files: Blender config/build/materials/architecture modules and tests
@@ -76,6 +78,11 @@ Depends on: requirements.md, design.md
   - Requirements: R7, R9
   - Validation: 2K default, 1024 texels/metre metric UV proof, 4K retained hero
     materials, nonblank headless renders and UE texture/material inspection
+  - Progress: the forge now defaults to 2K, generates production textures through
+    a bounded NumPy path, preserves the historical 64 px smoke, applies one-metre
+    metric box UVs to all 211 project components and fail-closed validates every
+    component receipt and every GLB primitive UV0. A complete 2K scene forge and
+    Unreal texture/material observation remain open.
 
 - [ ] T9. Introduce AssetDescriptor/Placement/Articulation contracts
   - Files: new V2 schemas, adapters, manifests and contract tests
@@ -104,6 +111,10 @@ Depends on: requirements.md, design.md
   - Requirements: R3, R4, R8-R11
   - Validation: entitlement, assembled assets, skeleton/LOD/material digests,
     action coverage, packaged render and performance tier
+  - Progress: the local UE 5.7.3 MetaHuman Character plugin, 29 presets, native
+    retarget rigs, UEFN locomotion set and Manny/Quinn fallback are inventoried.
+    Provider contract, entitlement receipt, assembled character and packaged
+    render remain open. SimWorld Human_Avatar motion reuse is license-blocked.
 
 - [ ] T13. Replace placeholder motions with semantic variants
   - Files: action catalog, animation authoring sources/recipes and UE content receipts
@@ -121,20 +132,28 @@ Depends on: requirements.md, design.md
 
 ## Current Iteration
 
-- Completed: T2 commanded-idle baseline; focused contracts and the full 219-test
-  Python suite pass without touching the live package.
+- Completed: T2 commanded-idle baseline; the current 698-test tool suite plus
+  120 subtests pass without touching the live package.
 - Completed: T3 adds an exact-key `npc_cancel` operation, appended canceled
   status, exactly-once/reentrant-safe terminalization, atomic callback handling
   and a post-cancel Idle snapshot. Focused contracts pass; packaged behavioral
   evidence remains part of T14.
-- Active next slices: bind T4 to EventSpec/runtime evidence; expand T7 from 15
-  to 30-45 purposeful living-room groups; then complete T8 metric UV and 2K
-  production material generation.
-- Golden Room smoke evidence: append-only run
-  `golden-room-smoke-20260827T203406Z` contains 30 placements, 25 external
-  dressing instances, 211 components and seven GLBs. Both retained-output tests
-  pass. Its receipt remains `smoke_only`, `accepted_as_r2_visual_evidence=false`;
-  the overview is useful but not yet a GTA-quality acceptance image.
+- Completed in source: T7 now plans 45 purposeful placements, 30 in the living
+  room, while retaining exactly 20 CC0 models plus two retained 4K materials.
+- Completed in source: T8 now has a 2K production default, honest effective vs
+  design-minimum texel-density receipts, metric UV generation and GLB-level UV
+  evidence gates. Full-scene 2K and UE observation remain acceptance work.
+- Active next slices: reconcile visible support/seat surfaces with HouseSpec,
+  add eye-level review cameras, bind T4 to EventSpec/runtime evidence, then
+  create the T12 MetaHuman provider before T5/T6 contact actions.
+- Golden Room R2 smoke evidence: append-only accepted forge
+  `golden-room-r2-smoke-20260827T212250Z` contains 45 placements, 40 external
+  dressing instances, 211 components and seven GLBs. All 424 vertical-slice
+  primitives and 63 joined-UE-bundle primitives retain valid UV0; the three
+  room review GLBs do as well, and all 211 project component UV receipts bind
+  back to the manifest. The retained-output gate passes. Its receipt remains
+  `smoke_only`, `accepted_as_r2_visual_evidence=false`; the
+  overview is diagnostic evidence, not a GTA-quality acceptance image.
 - Runtime/GPU ownership: none; current live package remains untouched.
 
 ## Notes
