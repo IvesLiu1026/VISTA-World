@@ -3,6 +3,7 @@
 // Modified in VISTA-World on 2026-08-22: report successful NPC interactions.
 
 #include "EngineUtils.h"
+#include "GameFramework/PawnMovementComponent.h"
 #include "NavigationSystem.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "VistaAnimationComponent.h"
@@ -14,29 +15,6 @@
 AVistaHomeNpcController::AVistaHomeNpcController()
 {
     PrimaryActorTick.bCanEverTick = true;
-}
-
-void AVistaHomeNpcController::OnPossess(APawn* InPawn)
-{
-    Super::OnPossess(InPawn);
-    if (const AVistaHomeNpcCharacter* Npc = Cast<AVistaHomeNpcCharacter>(InPawn))
-    {
-        ConfigurePatrol(Npc->PatrolTargetSemanticIds,
-                        Npc->PatrolActionTimeoutSeconds,
-                        Npc->bAutoStartPatrol);
-    }
-}
-
-void AVistaHomeNpcController::ConfigurePatrol(
-    const TArray<FString>& TargetSemanticIds,
-    float ActionTimeoutSeconds,
-    bool bEnabled)
-{
-    PatrolTargetSemanticIds = TargetSemanticIds;
-    PatrolTargetIndex = 0;
-    PatrolSequence = 0;
-    PatrolActionTimeoutSeconds = FMath::Clamp(ActionTimeoutSeconds, 0.0f, 300.0f);
-    bAutoPatrol = bEnabled && !PatrolTargetSemanticIds.IsEmpty();
 }
 
 bool AVistaHomeNpcController::ValidateAction(
@@ -267,23 +245,39 @@ void AVistaHomeNpcController::OnMoveCompleted(
     }
 }
 
+void AVistaHomeNpcController::EnterCommandedIdle()
+{
+    const bool bAlreadyIdle =
+        CurrentResult.Status == EVistaNpcActionStatus::Idle &&
+        !ActiveNavigationGoal.IsSet() &&
+        ActiveNavigationRequestId == FAIRequestID::InvalidRequest;
+
+    CurrentResult = FVistaNpcActionResult();
+    CurrentResult.Status = EVistaNpcActionStatus::Idle;
+    ActiveNavigationGoal.Reset();
+    ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
+    bActionStarted = false;
+    bAnimationInteractionCommitted = false;
+
+    if (!bAlreadyIdle)
+    {
+        StopMovement();
+        if (APawn* ControlledPawn = GetPawn())
+        {
+            if (UPawnMovementComponent* Movement = ControlledPawn->GetMovementComponent())
+            {
+                Movement->StopMovementImmediately();
+            }
+        }
+    }
+}
+
 void AVistaHomeNpcController::StartNextAction()
 {
     if (ActionQueue.IsEmpty())
     {
-        if (!bAutoPatrol || PatrolTargetSemanticIds.IsEmpty())
-        {
-            CurrentResult.Status = EVistaNpcActionStatus::Idle;
-            return;
-        }
-        FVistaNpcAction PatrolAction;
-        PatrolAction.ActionId = FName(*FString::Printf(
-            TEXT("patrol.%llu"), static_cast<unsigned long long>(++PatrolSequence)));
-        PatrolAction.Type = EVistaNpcActionType::NavigateTo;
-        PatrolAction.TargetSemanticId = PatrolTargetSemanticIds[PatrolTargetIndex];
-        PatrolAction.TimeoutSeconds = PatrolActionTimeoutSeconds;
-        PatrolTargetIndex = (PatrolTargetIndex + 1) % PatrolTargetSemanticIds.Num();
-        ActionQueue.Add(MoveTemp(PatrolAction));
+        EnterCommandedIdle();
+        return;
     }
     CurrentAction = ActionQueue[0];
     ActionQueue.RemoveAt(0);
@@ -440,11 +434,6 @@ void AVistaHomeNpcController::StartCurrentAction()
 
 void AVistaHomeNpcController::RememberCurrentExternalResult()
 {
-    const FString ActionId = CurrentResult.ActionId.ToString();
-    if (ActionId.StartsWith(TEXT("patrol."), ESearchCase::CaseSensitive))
-    {
-        return;
-    }
     LastCompletedResult = CurrentResult;
     bHasLastCompletedResult = true;
     const AVistaHomeNpcCharacter* Npc =

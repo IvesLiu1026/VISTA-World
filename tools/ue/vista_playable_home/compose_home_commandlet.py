@@ -324,7 +324,7 @@ def apply_entity_properties(actor, operation, asset_entry):
         require(set_if_present(actor, "patrol_action_timeout_seconds",
                                float(profile["action_timeout_s"])),
                 "NPC patrol timeout property is unavailable")
-        require(set_if_present(actor, "auto_start_patrol", True),
+        require(set_if_present(actor, "auto_start_patrol", False),
                 "NPC auto-patrol property is unavailable")
     try:
         enum_values = [getattr(unreal.VistaAffordance, name.upper())
