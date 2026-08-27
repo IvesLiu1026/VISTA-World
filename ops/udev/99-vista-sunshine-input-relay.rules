@@ -1,0 +1,7 @@
+# Grant the dedicated relay access only to Sunshine/Inputtino virtual event
+# devices. Physical keyboards, mice, IPMI devices, and other event nodes keep
+# their existing root:input ownership. beef:dead is Inputtino's virtual-device
+# identity; the virtual DEVPATH and exact names are additional safeguards.
+ACTION=="add|change", KERNEL=="event*", SUBSYSTEM=="input", DEVPATH=="/devices/virtual/input/input*/event*", ATTRS{id/vendor}=="beef", ATTRS{id/product}=="dead", ATTRS{name}=="Keyboard passthrough", GROUP="virtinput", MODE="0660", SYMLINK+="input/vista-sunshine-keyboard"
+ACTION=="add|change", KERNEL=="event*", SUBSYSTEM=="input", DEVPATH=="/devices/virtual/input/input*/event*", ATTRS{id/vendor}=="beef", ATTRS{id/product}=="dead", ATTRS{name}=="Mouse passthrough", GROUP="virtinput", MODE="0660", SYMLINK+="input/vista-sunshine-mouse"
+ACTION=="add|change", KERNEL=="event*", SUBSYSTEM=="input", DEVPATH=="/devices/virtual/input/input*/event*", ATTRS{id/vendor}=="beef", ATTRS{id/product}=="dead", ATTRS{name}=="Mouse passthrough (absolute)", GROUP="virtinput", MODE="0660", SYMLINK+="input/vista-sunshine-mouse-absolute"

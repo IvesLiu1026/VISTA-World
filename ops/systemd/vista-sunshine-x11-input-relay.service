@@ -1,0 +1,27 @@
+[Unit]
+Description=VISTA Sunshine virtual-input to X11 XTEST relay
+Documentation=https://github.com/IvesLiu1026/VISTA-World
+After=vista-sunshine.service
+Wants=vista-sunshine.service
+ConditionPathExists=/tmp/.X11-unix/X117
+
+[Service]
+Type=simple
+Environment=DISPLAY=:117
+ExecStart=%h/.local/libexec/vista-sunshine-x11-input-relay --display :117
+Restart=on-failure
+RestartSec=2
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=default.target
