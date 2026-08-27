@@ -159,7 +159,8 @@ enum class EVistaNpcActionStatus : uint8
     Succeeded,
     Failed,
     TimedOut,
-    Blocked
+    Blocked,
+    Canceled
 };
 
 USTRUCT(BlueprintType)
