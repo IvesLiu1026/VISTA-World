@@ -272,6 +272,7 @@ FString ResultResponse(const FVistaLiveCommandResult& Result,
         case EVistaNpcActionStatus::Failed: ActionStatus = TEXT("failed"); break;
         case EVistaNpcActionStatus::TimedOut: ActionStatus = TEXT("timed_out"); break;
         case EVistaNpcActionStatus::Blocked: ActionStatus = TEXT("blocked"); break;
+        case EVistaNpcActionStatus::Canceled: ActionStatus = TEXT("canceled"); break;
         default: break;
         }
         Npc->SetStringField(TEXT("status"), ActionStatus);
@@ -295,6 +296,7 @@ FString ResultResponse(const FVistaLiveCommandResult& Result,
             case EVistaNpcActionStatus::Failed: LastStatus = TEXT("failed"); break;
             case EVistaNpcActionStatus::TimedOut: LastStatus = TEXT("timed_out"); break;
             case EVistaNpcActionStatus::Blocked: LastStatus = TEXT("blocked"); break;
+            case EVistaNpcActionStatus::Canceled: LastStatus = TEXT("canceled"); break;
             default: break;
             }
             LastJson->SetStringField(TEXT("status"), LastStatus);
@@ -536,6 +538,25 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
             return ErrorResponse(CommandId, TEXT("PLACEMENT_ANCHOR_INVALID"));
         }
         return ResultResponse(Runtime->ExecuteInteraction(Command));
+    }
+
+    if (Operation == TEXT("npc_cancel"))
+    {
+        const TSet<FString> Required = KeySet({
+            TEXT("operation"), TEXT("command_id"), TEXT("expected_revision"),
+            TEXT("session_generation"), TEXT("npc_semantic_id")});
+        if (!ExactKeys(Params, Required, TSet<FString>()))
+        {
+            return ErrorResponse(TEXT(""), TEXT("NPC_CANCEL_SHAPE_INVALID"));
+        }
+        FVistaLiveNpcCancelCommand Command;
+        if (!ReadEnvelope(Params, Command.Envelope, CommandId) ||
+            !ReadString(Params, TEXT("npc_semantic_id"), Command.NpcSemanticId) ||
+            !IsSemanticId(Command.NpcSemanticId))
+        {
+            return ErrorResponse(CommandId, TEXT("NPC_CANCEL_VALUE_INVALID"));
+        }
+        return ResultResponse(Runtime->ExecuteNpcCancel(Command));
     }
 
     if (Operation == TEXT("npc_queue"))

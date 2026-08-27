@@ -67,6 +67,18 @@ struct VISTAPLAYABLEHOME_API FVistaLiveNpcQueueCommand
 };
 
 USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaLiveNpcCancelCommand
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    FVistaLiveCommandEnvelope Envelope;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    FString NpcSemanticId;
+};
+
+USTRUCT(BlueprintType)
 struct VISTAPLAYABLEHOME_API FVistaLiveEventCommand
 {
     GENERATED_BODY()
@@ -209,6 +221,10 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VISTA|Runtime")
     FVistaLiveCommandResult ExecuteNpcQueue(
         const FVistaLiveNpcQueueCommand& Command);
+
+    UFUNCTION(BlueprintCallable, Category = "VISTA|Runtime")
+    FVistaLiveCommandResult ExecuteNpcCancel(
+        const FVistaLiveNpcCancelCommand& Command);
 
     UFUNCTION(BlueprintCallable, Category = "VISTA|Runtime")
     FVistaLiveCommandResult ExecuteEvent(

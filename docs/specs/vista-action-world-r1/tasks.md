@@ -28,7 +28,7 @@ Depends on: requirements.md, design.md
   - Validation: empty queue has clean Idle/zero velocity, no synthesized patrol,
     composer serializes false, full Python suite
 
-- [ ] T3. Add explicit cancel and terminal idle receipts
+- [x] T3. Add explicit cancel and terminal idle receipts
   - Files: runtime subsystem, TCP adapter, controller/types and tests
   - Depends on: T2
   - Requirements: R1, R2, R11
@@ -116,8 +116,12 @@ Depends on: requirements.md, design.md
 
 - Completed: T2 commanded-idle baseline; focused contracts and the full 219-test
   Python suite pass without touching the live package.
-- Active next slices: T3 explicit cancellation/receipts, T4 ActionCatalog and
-  T7/T8 Golden Living Room material/placement foundation.
+- Completed: T3 adds an exact-key `npc_cancel` operation, appended canceled
+  status, exactly-once/reentrant-safe terminalization, atomic callback handling
+  and a post-cancel Idle snapshot. Focused contracts pass; packaged behavioral
+  evidence remains part of T14.
+- Active next slices: T4 ActionCatalog and T7/T8 Golden Living Room
+  material/placement foundation.
 - Runtime/GPU ownership: none; current live package remains untouched.
 
 ## Notes
