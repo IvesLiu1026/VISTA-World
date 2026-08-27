@@ -142,11 +142,23 @@ def _authored_anchor_rows(
         (kind_to_room["living_room"], "reading_corner", "reading activity", (1.62, 1.34, 0.04), up, 0.38, ("floor_lamp", "book_stack", "basket")),
         (kind_to_room["living_room"], "media_console", "media wall detail", (0.92, -1.52, 0.62), up, 0.32, ("speaker", "book", "decorative_object")),
         (kind_to_room["living_room"], "coffee_table_style", "coffee table cluster", (0.45, 0.30, 0.39), up, 0.15, ("book", "tray", "ceramic_bowl")),
-        (kind_to_room["living_room"], "sofa_soft", "sofa cushion styling", (-1.60, 1.15, 0.4524), up, 0.18, ("throw_pillows",)),
+        (kind_to_room["living_room"], "sofa_soft", "sofa cushion styling", (-1.60, 1.05, 0.4524), up, 0.18, ("throw_pillows",)),
         (kind_to_room["living_room"], "sofa_side", "sofa side-table cluster", (-1.60, 0.05, 0.0), up, 0.20, ("side_table", "decorative_object")),
         (kind_to_room["living_room"], "reading_storage", "reading storage", (0.45, 1.65, 0.0), up, 0.12, ("basket",)),
         (kind_to_room["living_room"], "conversation_south", "conversation seating", (1.0, -0.85, 0.0), up, 0.18, ("armchair",)),
         (kind_to_room["living_room"], "ceiling_fixture", "primary ceiling fixture", (0.85, 0.25, 2.0484485), down, 0.25, ("ceiling_lamp",)),
+        (kind_to_room["living_room"], "rug_main", "conversation-zone floor textile", (-0.10, 0.10, 0.0), up, 0.20, ("rug",)),
+        (kind_to_room["living_room"], "window_drapes", "softened daylight edge", (-2.38, -0.35, 0.18), (1.0, 0.0, 0.0), 0.18, ("curtain",)),
+        (kind_to_room["living_room"], "media_tv", "media wall display", (0.92, -1.89, 1.05), (0.0, 1.0, 0.0), 0.16, ("television",)),
+        (kind_to_room["living_room"], "media_audio", "media wall audio", (0.92, -1.82, 0.62), up, 0.16, ("speaker",)),
+        (kind_to_room["living_room"], "media_surface", "media console daily objects", (0.48, -1.52, 0.374078), up, 0.12, ("media_control", "decorative_object")),
+        (kind_to_room["living_room"], "coffee_table_center", "coffee table shared tray", (0.42, 0.08, 0.39), up, 0.08, ("tray", "bowl", "fruit")),
+        (kind_to_room["living_room"], "coffee_mug", "coffee table active drink", (0.55, 0.48, 0.39), up, 0.03, ("mug",)),
+        (kind_to_room["living_room"], "sofa_throw", "casual sofa textile", (-1.20, 1.40, 0.4524), up, 0.10, ("textile",)),
+        (kind_to_room["living_room"], "reading_floor_lamp", "reading practical light", (2.24, 1.66, 0.0), up, 0.14, ("floor_lamp",)),
+        (kind_to_room["living_room"], "sofa_art", "framed living-room art", (-2.39, 1.22, 1.35), (1.0, 0.0, 0.0), 0.10, ("wall_art",)),
+        (kind_to_room["living_room"], "sofa_picture_light", "art picture light", (-2.36, 1.22, 2.18), (1.0, 0.0, 0.0), 0.08, ("picture_light",)),
+        (kind_to_room["living_room"], "reading_wall_shelf", "reading wall vignette", (0.0, 1.82, 1.27), (0.0, -1.0, 0.0), 0.12, ("shelf",)),
         (kind_to_room["kitchen_dining"], "prep_counter", "food preparation", (-1.52, 1.34, 0.96), up, 0.24, ("cutting_board", "bowl", "utensil")),
         (kind_to_room["kitchen_dining"], "coffee_station", "morning routine", (0.42, 1.34, 0.96), up, 0.22, ("mug", "coffee_maker", "jar")),
         (kind_to_room["kitchen_dining"], "dining_center", "shared meal", (-0.82, -0.20, 0.80), up, 0.28, ("plate", "bowl", "napkin", "fruit")),
@@ -193,6 +205,26 @@ def _profile_instances(profile: Mapping[str, Any], room_ids: set[str]) -> tuple[
     return tuple(result)
 
 
+def _is_nonblocking_floor_anchor(anchor: DressingAnchorSpec) -> bool:
+    return (
+        anchor.allowed_categories == ("rug",)
+        and abs(float(anchor.location_m[2])) <= 0.005
+        and anchor.surface_normal == (0.0, 0.0, 1.0)
+    )
+
+
+def _floor_anchor_may_overlap_exclusion(
+    anchor: DressingAnchorSpec,
+    volume: ExclusionVolumeSpec,
+) -> bool:
+    """Allow rugs below event footprints, never through doors or nav spines."""
+
+    return (
+        _is_nonblocking_floor_anchor(anchor)
+        and volume.exclusion_kind == "event_interaction_clearance"
+    )
+
+
 def build_dressing_plan(
     house: Mapping[str, Any],
     profile: Mapping[str, Any],
@@ -230,9 +262,21 @@ def build_dressing_plan(
             surface_normal=surface_normal,
             clearance_radius_m=radius,
             allowed_categories=categories,
-            deterministic_yaw_deg=_stable_yaw(seed, anchor_id),
+            deterministic_yaw_deg=(
+                0.0
+                if abs(float(surface_normal[2])) < 0.5
+                else _stable_yaw(seed, anchor_id)
+            ),
         )
-        blockers = [volume.exclusion_id for volume in exclusions if volume.room_id == room.room_id and _inside(location, volume, radius)]
+        blockers = [
+            volume.exclusion_id
+            for volume in exclusions
+            if (
+                volume.room_id == room.room_id
+                and _inside(location, volume, radius)
+                and not _floor_anchor_may_overlap_exclusion(anchor, volume)
+            )
+        ]
         if blockers:
             raise ForgeInputError(f"authored dressing anchor {anchor_id} intersects exclusions: {blockers}")
         anchors.append(anchor)
@@ -257,7 +301,8 @@ def build_dressing_plan(
 
 def anchors_clear_exclusions(plan: DressingPlan) -> bool:
     return all(
-        not _inside(anchor.location_m, volume, anchor.clearance_radius_m)
+        _floor_anchor_may_overlap_exclusion(anchor, volume)
+        or not _inside(anchor.location_m, volume, anchor.clearance_radius_m)
         for anchor in plan.anchors
         for volume in plan.exclusions
         if anchor.room_id == volume.room_id

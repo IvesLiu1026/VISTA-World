@@ -264,7 +264,7 @@ def test_dressing_anchors_are_stable_purposeful_and_clear(house: dict, profile: 
     second = build_forge_plan(house, profile).dressing
     assert first == second
     assert anchors_clear_exclusions(first)
-    assert len(first.anchors) == 16
+    assert len(first.anchors) == 28
     assert len(first.exclusions) >= 10
     assert {item.exclusion_kind for item in first.exclusions} >= {
         "portal_clearance",
@@ -275,10 +275,17 @@ def test_dressing_anchors_are_stable_purposeful_and_clear(house: dict, profile: 
     assert all(-7.5 <= item.deterministic_yaw_deg <= 7.5 for item in first.anchors)
     ceiling = next(item for item in first.anchors if item.anchor_id.endswith(".ceiling_fixture"))
     sofa = next(item for item in first.anchors if item.anchor_id.endswith(".sofa_soft"))
+    television = next(item for item in first.anchors if item.anchor_id.endswith(".media_tv"))
+    rug = next(item for item in first.anchors if item.anchor_id.endswith(".rug_main"))
     assert ceiling.surface_normal == (0.0, 0.0, -1.0)
     assert ceiling.location_m == (0.85, 0.25, 2.0484485)
     assert sofa.surface_normal == (0.0, 0.0, 1.0)
+    assert sofa.location_m[1] == pytest.approx(1.05)
     assert sofa.location_m[2] == pytest.approx(0.4524)
+    assert television.surface_normal == (0.0, 1.0, 0.0)
+    assert television.deterministic_yaw_deg == 0.0
+    assert rug.allowed_categories == ("rug",)
+    assert rug.location_m[2] == 0.0
 
 
 def test_profile_mismatch_and_nonempty_outputs_fail_closed(house: dict, profile: dict, tmp_path: Path) -> None:

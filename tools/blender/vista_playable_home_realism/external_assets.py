@@ -200,6 +200,9 @@ EXTERNAL_STATICIZATION_EXCLUSION_KEYS = frozenset(
 )
 AUTHORED_UV_METERS_PER_TILE = 1.0
 AUTHORED_RECIPE_MATERIAL_IDS: Mapping[str, tuple[str, ...]] = {
+    "area_rug_v1": ("visual.material.poly_wool_herringbone",),
+    "coffee_mug_v1": ("visual.material.white_oak_veneer",),
+    "coffee_tray_v1": ("visual.material.white_oak_veneer",),
     "contemporary_shoe_bench_v1": (
         "visual.material.white_oak_veneer",
         "visual.material.poly_wool_herringbone",
@@ -209,6 +212,33 @@ AUTHORED_RECIPE_MATERIAL_IDS: Mapping[str, tuple[str, ...]] = {
         "visual.material.poly_wool_herringbone",
     ),
     "contemporary_dining_table_v1": ("visual.material.white_oak_veneer",),
+    "draped_throw_v1": ("visual.material.poly_wool_herringbone",),
+    "floating_shelf_v1": ("visual.material.white_oak_veneer",),
+    "floor_lamp_v1": (
+        "visual.material.white_oak_veneer",
+        "visual.material.poly_wool_herringbone",
+    ),
+    "media_audio_v1": (
+        "visual.material.white_oak_veneer",
+        "visual.material.poly_wool_herringbone",
+    ),
+    "media_controls_v1": (
+        "visual.material.white_oak_veneer",
+        "visual.material.poly_wool_herringbone",
+    ),
+    "media_tv_v1": (
+        "visual.material.white_oak_veneer",
+        "visual.material.poly_wool_herringbone",
+    ),
+    "picture_light_v1": ("visual.material.white_oak_veneer",),
+    "wall_art_v1": (
+        "visual.material.white_oak_veneer",
+        "visual.material.poly_wool_herringbone",
+    ),
+    "window_drapes_v1": (
+        "visual.material.white_oak_veneer",
+        "visual.material.poly_wool_herringbone",
+    ),
 }
 # Contact surfaces are part of the authored geometry recipe, not inferred from
 # the full furniture AABB. The sofa's cushion top is z * (0.49 + 0.18 / 2).
@@ -1875,6 +1905,43 @@ def _cube_part(
     return obj
 
 
+def _cylinder_part(
+    bpy: Any,
+    collection: Any,
+    name: str,
+    center: Sequence[float],
+    dimensions: Sequence[float],
+    material: Any,
+    *,
+    vertices: int = 32,
+) -> Any:
+    """Create one deterministic, bevel-softened cylindrical recipe part."""
+
+    bpy.ops.mesh.primitive_cylinder_add(
+        vertices=vertices,
+        radius=0.5,
+        depth=1.0,
+        end_fill_type="NGON",
+        location=tuple(center),
+    )
+    obj = bpy.context.active_object
+    obj.name = name[:63]
+    _relink(obj, collection)
+    obj.dimensions = tuple(dimensions)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.transform_apply(location=True, rotation=False, scale=True)
+    bevel = obj.modifiers.new(name="VISTA_AuthoredEdge", type="BEVEL")
+    bevel.width = min(0.012, min(float(value) for value in dimensions) * 0.10)
+    bevel.segments = 3
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.modifier_apply(modifier=bevel.name)
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
+    _apply_metric_box_uv(obj)
+    obj.data.materials.append(material)
+    return obj
+
+
 def _authored_recipe(
     bpy: Any,
     collection: Any,
@@ -1888,7 +1955,7 @@ def _authored_recipe(
     missing = [logical_id for logical_id in expected_materials if logical_id not in materials_by_logical_id]
     if missing:
         raise RuntimeError(f"project-authored recipe material is unavailable: {recipe}: {missing}")
-    oak = materials_by_logical_id["visual.material.white_oak_veneer"]
+    oak = materials_by_logical_id.get("visual.material.white_oak_veneer")
     wool = materials_by_logical_id.get("visual.material.poly_wool_herringbone")
     x, y, z = (float(value) for value in dimensions)
     parts: list[Any] = []
@@ -1905,7 +1972,34 @@ def _authored_recipe(
             )
         )
 
-    if recipe == "contemporary_shoe_bench_v1":
+    def add_cylinder(
+        suffix: str,
+        center: Sequence[float],
+        dims: Sequence[float],
+        material: Any,
+    ) -> None:
+        parts.append(
+            _cylinder_part(
+                bpy,
+                collection,
+                f"VISTA_External_{recipe}_{suffix}",
+                center,
+                dims,
+                material,
+            )
+        )
+
+    if recipe == "area_rug_v1":
+        add("rug", (0, 0, z / 2), (x, y, z), wool)
+    elif recipe == "coffee_mug_v1":
+        add("saucer", (0, 0, z * 0.01), (x, y, z * 0.02), oak)
+        add_cylinder("cup", (-x * 0.08, 0, z * 0.52), (x * 0.70, y * 0.70, z * 0.96), oak)
+        add("handle", (x * 0.34, 0, z * 0.58), (x * 0.32, y * 0.16, z * 0.38), oak)
+    elif recipe == "coffee_tray_v1":
+        add("base", (0, 0, z * 0.34), (x, y, z * 0.68), oak)
+        add("rim_north", (0, y * 0.46, z * 0.68), (x, y * 0.08, z * 0.64), oak)
+        add("rim_south", (0, -y * 0.46, z * 0.68), (x, y * 0.08, z * 0.64), oak)
+    elif recipe == "contemporary_shoe_bench_v1":
         add("seat", (0, 0, z - 0.055), (x, y, 0.11), wool)
         add("shelf", (0, 0, 0.16), (x * 0.88, y * 0.82, 0.055), oak)
         for sx in (-1, 1):
@@ -1953,6 +2047,59 @@ def _authored_recipe(
                     (0.075, 0.075, z - 0.11),
                     oak,
                 )
+    elif recipe == "draped_throw_v1":
+        add("cloth", (0, 0, z / 2), (x, y, z), wool)
+        for index, offset in enumerate((-0.24, 0.0, 0.24)):
+            add(
+                f"fold_{index + 1}",
+                (offset * x, 0, z * 0.82),
+                (x * 0.10, y * 0.94, z * 0.34),
+                wool,
+            )
+    elif recipe == "floating_shelf_v1":
+        add("shelf", (0, 0, z / 2), (x, y, z), oak)
+    elif recipe == "floor_lamp_v1":
+        add_cylinder("base", (0, 0, z * 0.025), (x, y, z * 0.05), oak)
+        add_cylinder("stem", (0, 0, z * 0.48), (x * 0.08, y * 0.08, z * 0.90), oak)
+        add_cylinder("shade", (0, 0, z * 0.875), (x * 0.90, y * 0.90, z * 0.25), wool)
+    elif recipe == "media_audio_v1":
+        speaker_x = x * 0.14
+        for side in (-1, 1):
+            add(
+                f"speaker_{side}",
+                (side * (x / 2 - speaker_x / 2), 0, z / 2),
+                (speaker_x, y, z),
+                oak,
+            )
+            add(
+                f"speaker_cloth_{side}",
+                (side * (x / 2 - speaker_x / 2), y * 0.46, z / 2),
+                (speaker_x * 0.82, y * 0.08, z * 0.82),
+                wool,
+            )
+        add("soundbar", (0, 0, z * 0.16), (x * 0.52, y * 0.72, z * 0.24), wool)
+    elif recipe == "media_controls_v1":
+        add("receiver", (0, 0, z / 2), (x, y, z), oak)
+        add("control_face", (0, y * 0.47, z * 0.52), (x * 0.88, y * 0.06, z * 0.58), wool)
+    elif recipe == "media_tv_v1":
+        add("frame", (0, 0, z / 2), (x, y, z), oak)
+        add("screen", (0, y * 0.46, z * 0.52), (x * 0.92, y * 0.08, z * 0.84), wool)
+    elif recipe == "picture_light_v1":
+        add("wall_plate", (-x * 0.28, 0, z / 2), (x * 0.44, y * 0.24, z), oak)
+        add("shade", (x * 0.20, 0, z / 2), (x * 0.60, y, z * 0.54), oak)
+    elif recipe == "wall_art_v1":
+        add("frame", (0, 0, z / 2), (x, y, z), oak)
+        add("art_panel", (x * 0.46, 0, z / 2), (x * 0.08, y * 0.88, z * 0.86), wool)
+    elif recipe == "window_drapes_v1":
+        add("rail", (0, 0, z - z * 0.025), (x, y, z * 0.05), oak)
+        panel_y = y * 0.24
+        for side in (-1, 1):
+            add(
+                f"panel_{side}",
+                (0, side * (y / 2 - panel_y / 2), z * 0.475),
+                (x * 0.90, panel_y, z * 0.95),
+                wool,
+            )
     else:
         raise RuntimeError(f"unsupported project-authored furniture recipe: {recipe}")
     return parts
