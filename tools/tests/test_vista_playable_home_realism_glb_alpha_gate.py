@@ -45,7 +45,10 @@ from tools.blender.vista_playable_home_realism.external_assets import (
     external_source_material_registry_sha256,
     validate_external_staticization_ledger,
 )
-from tools.blender.vista_playable_home_realism.export import normalized_manifest
+from tools.blender.vista_playable_home_realism.export import (
+    normalized_manifest,
+    project_architecture_uv_contract,
+)
 from tools.blender.vista_playable_home_realism.inspect import (
     GLB_JSON_CHUNK,
     GLB_MAGIC,
@@ -567,7 +570,7 @@ def test_repeated_source_registry_reuses_only_the_exact_pinned_inventory() -> No
         registry.get(changed_digest_asset)
 
 
-def test_v2_manifest_persists_policy_without_changing_v1_export_contract() -> None:
+def test_v1_and_v2_manifests_share_metric_uv_and_v2_adds_alpha_policy() -> None:
     common = {
         "forge_id": "forge.test",
         "house_revision": "r1",
@@ -597,6 +600,13 @@ def test_v2_manifest_persists_policy_without_changing_v1_export_contract() -> No
         texture_size_px=512,
     )
     assert "external_material_alpha_policy" not in v1["export_contract"]
+    assert v1["export_contract"]["project_architecture_uv"] == (
+        project_architecture_uv_contract()
+    )
+    assert v2["export_contract"] == {
+        **v1["export_contract"],
+        "external_material_alpha_policy": external_material_alpha_policy(),
+    }
     assert v2["export_contract"]["external_material_alpha_policy"] == (
         external_material_alpha_policy()
     )
@@ -1175,6 +1185,7 @@ def _write_empty_v2_output(root: Path) -> tuple[dict, dict]:
             "cameras_exported": False,
             "lights_exported": False,
             "custom_properties_exported_as_extras": True,
+            "project_architecture_uv": project_architecture_uv_contract(),
             "external_material_alpha_policy": external_material_alpha_policy(),
         },
         "ue_import_bundles": [],
@@ -1240,6 +1251,38 @@ def test_v2_output_never_backfills_missing_alpha_policy(tmp_path: Path) -> None:
     root = tmp_path / "missing-alpha-policy"
     manifest, _ = _write_empty_v2_output(root)
     manifest["export_contract"].pop("external_material_alpha_policy")
+    (root / "normalized-manifest.json").write_bytes(canonical_json_bytes(manifest))
+    with pytest.raises(ForgeInputError, match="v2 export contract is absent or changed"):
+        inspect_output(root)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "case_id"),
+    [
+        (lambda contract: contract.pop("project_architecture_uv"), "missing"),
+        (
+            lambda contract: contract["project_architecture_uv"].__setitem__(
+                "meters_per_tile", 2.0
+            ),
+            "changed-scale",
+        ),
+        (
+            lambda contract: contract["project_architecture_uv"].__setitem__(
+                "unexpected", True
+            ),
+            "open-nested-fields",
+        ),
+    ],
+    ids=lambda value: value if isinstance(value, str) else None,
+)
+def test_v2_output_rejects_missing_or_changed_metric_uv_contract(
+    tmp_path: Path,
+    mutation,
+    case_id: str,
+) -> None:
+    root = tmp_path / f"metric-uv-{case_id}"
+    manifest, _ = _write_empty_v2_output(root)
+    mutation(manifest["export_contract"])
     (root / "normalized-manifest.json").write_bytes(canonical_json_bytes(manifest))
     with pytest.raises(ForgeInputError, match="v2 export contract is absent or changed"):
         inspect_output(root)

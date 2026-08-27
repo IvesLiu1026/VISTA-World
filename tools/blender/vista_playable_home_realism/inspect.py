@@ -10,7 +10,13 @@ import re
 import struct
 from typing import Any, Mapping, Sequence
 
-from .config import ForgeInputError, canonical_json_bytes, load_json_object, sha256_file
+from .config import (
+    ForgeInputError,
+    canonical_json_bytes,
+    content_digest,
+    load_json_object,
+    sha256_file,
+)
 from .external_assets import (
     EXTERNAL_MATERIAL_ALPHA_CUTOFF,
     EXTERNAL_MATERIAL_ALPHA_CUTOFF_PROPERTY,
@@ -59,6 +65,44 @@ UE_BUNDLE_ROOT_TRANSFORM_POLICY = "room_local_geometry_identity_root"
 UE_BUNDLE_SEMANTIC_POLICY = "presentation_only_preserve_r1_authority"
 UE_BUNDLE_COLLISION_POLICY = "presentation_no_collision_use_hidden_r1_proxies"
 UE_BUNDLE_UNREAL_COLLISION_PROFILE = "NoCollision"
+PROJECT_METRIC_UV_RECEIPT_KEYS = frozenset(
+    {
+        "schema_version",
+        "component_id",
+        "mapping",
+        "uv_layer",
+        "meters_per_tile",
+        "coordinate_space",
+    }
+)
+PROJECT_METRIC_UV_RECORD_KEYS = frozenset(
+    {
+        "component_id",
+        "receipt_sha256",
+        "receipt_valid",
+        "primitive_count",
+        "texcoord0_primitive_count",
+    }
+)
+
+
+def _project_metric_uv_contract() -> dict[str, Any]:
+    """Independent inspector copy of the exact producer-side UV contract."""
+
+    return {
+        "schema_version": "simworld.vista.project-architecture-metric-uv/v1",
+        "mapping": "metric_box_v1",
+        "uv_layer": "VISTA_MetricUV",
+        "meters_per_tile": 1.0,
+        "coordinate_space": "object_local_metres_after_scale_apply",
+        "exported_custom_properties": [
+            "vista_uv_layer",
+            "vista_uv_mapping",
+            "vista_uv_meters_per_tile",
+            "vista_uv_receipt_json",
+            "vista_uv_receipt_sha256",
+        ],
+    }
 UE_BUNDLE_REQUIRED_KEYS = {
     "artifact_id",
     "artifact_kind",
@@ -211,6 +255,107 @@ def _external_material_alpha_record(material: Any, material_index: int) -> dict[
     }
 
 
+def _metric_texcoord0_is_valid(
+    primitive: Any,
+    accessors: Sequence[Any],
+) -> bool:
+    if not isinstance(primitive, Mapping):
+        return False
+    attributes = primitive.get("attributes")
+    if not isinstance(attributes, Mapping):
+        return False
+    position_index = attributes.get("POSITION")
+    texcoord_index = attributes.get("TEXCOORD_0")
+    if (
+        type(position_index) is not int
+        or type(texcoord_index) is not int
+        or position_index < 0
+        or texcoord_index < 0
+        or position_index >= len(accessors)
+        or texcoord_index >= len(accessors)
+    ):
+        return False
+    position = accessors[position_index]
+    texcoord = accessors[texcoord_index]
+    return bool(
+        isinstance(position, Mapping)
+        and isinstance(texcoord, Mapping)
+        and position.get("componentType") == 5126
+        and position.get("type") == "VEC3"
+        and type(position.get("count")) is int
+        and position["count"] > 0
+        and texcoord.get("componentType") == 5126
+        and texcoord.get("type") == "VEC2"
+        and texcoord.get("count") == position["count"]
+        and texcoord.get("normalized", False) is False
+        and type(texcoord.get("bufferView")) is int
+    )
+
+
+def _metric_uv_component_record(
+    node: Mapping[str, Any],
+    meshes: Sequence[Any],
+    accessors: Sequence[Any],
+) -> dict[str, Any]:
+    extras = node.get("extras")
+    if not isinstance(extras, Mapping):
+        extras = {}
+    component_id = extras.get("vista_component_id")
+    raw_receipt = extras.get("vista_uv_receipt_json")
+    receipt: Any = None
+    if isinstance(raw_receipt, str):
+        try:
+            receipt = json.loads(raw_receipt, object_pairs_hook=_reject_duplicate_pairs)
+        except json.JSONDecodeError:
+            receipt = None
+    uv_contract = _project_metric_uv_contract()
+    expected_receipt = {
+        "schema_version": uv_contract["schema_version"],
+        "component_id": component_id,
+        "mapping": uv_contract["mapping"],
+        "uv_layer": uv_contract["uv_layer"],
+        "meters_per_tile": uv_contract["meters_per_tile"],
+        "coordinate_space": uv_contract["coordinate_space"],
+    }
+    receipt_sha256 = extras.get("vista_uv_receipt_sha256")
+    receipt_valid = bool(
+        isinstance(component_id, str)
+        and component_id
+        and isinstance(receipt, Mapping)
+        and frozenset(receipt) == PROJECT_METRIC_UV_RECEIPT_KEYS
+        and receipt == expected_receipt
+        and raw_receipt
+        == json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        and isinstance(receipt_sha256, str)
+        and SHA256.fullmatch(receipt_sha256) is not None
+        and receipt_sha256 == content_digest(receipt)
+        and extras.get("vista_uv_mapping") == uv_contract["mapping"]
+        and extras.get("vista_uv_layer") == uv_contract["uv_layer"]
+        and extras.get("vista_uv_meters_per_tile") == uv_contract["meters_per_tile"]
+    )
+    mesh_index = node.get("mesh")
+    mesh = (
+        meshes[mesh_index]
+        if type(mesh_index) is int and 0 <= mesh_index < len(meshes)
+        else None
+    )
+    primitives = (
+        mesh.get("primitives", [])
+        if isinstance(mesh, Mapping) and isinstance(mesh.get("primitives", []), list)
+        else []
+    )
+    return {
+        "component_id": component_id,
+        "receipt_sha256": receipt_sha256,
+        "receipt_valid": receipt_valid,
+        "primitive_count": len(primitives),
+        "texcoord0_primitive_count": sum(
+            _metric_texcoord0_is_valid(primitive, accessors)
+            for primitive in primitives
+        ),
+    }
+
+
 def inspect_glb(
     path: pathlib.Path,
     *,
@@ -264,6 +409,25 @@ def inspect_glb(
     meshes = document.get("meshes", [])
     if not isinstance(meshes, list):
         meshes = []
+    accessors = document.get("accessors", [])
+    if not isinstance(accessors, list):
+        accessors = []
+    primitives = [
+        primitive
+        for mesh in meshes
+        if isinstance(mesh, Mapping) and isinstance(mesh.get("primitives", []), list)
+        for primitive in mesh["primitives"]
+    ]
+    metric_uv_components = sorted(
+        (
+            _metric_uv_component_record(node, meshes, accessors)
+            for node in nodes
+            if isinstance(node, Mapping)
+            and isinstance(node.get("extras"), Mapping)
+            and node["extras"].get("vista_component_id")
+        ),
+        key=lambda item: str(item["component_id"]),
+    )
     result = {
         "relative_or_absolute_path": str(path),
         "sha256": sha256_file(path),
@@ -273,10 +437,10 @@ def inspect_glb(
         "node_count": len(nodes),
         "mesh_count": len(meshes),
         "mesh_node_count": len(mesh_nodes),
-        "mesh_primitive_count": sum(
-            len(mesh.get("primitives", []))
-            for mesh in meshes
-            if isinstance(mesh, Mapping) and isinstance(mesh.get("primitives", []), list)
+        "mesh_primitive_count": len(primitives),
+        "texcoord0_primitive_count": sum(
+            _metric_texcoord0_is_valid(primitive, accessors)
+            for primitive in primitives
         ),
         "material_count": len(materials),
         "material_names": [item["name"] for item in material_records],
@@ -290,6 +454,7 @@ def inspect_glb(
         "light_count": len(lights),
         "component_extra_count": len(component_extras),
         "component_roles": sorted({str(item.get("vista_export_role")) for item in component_extras}),
+        "metric_uv_components": metric_uv_components,
         "bundle_node_count": len(bundle_nodes),
         "bundle_root_is_identity": (
             _identity_node_transform(bundle_nodes[0]) if len(bundle_nodes) == 1 else None
@@ -722,6 +887,7 @@ _V2_EXPORT_CONTRACT_KEYS = frozenset(
         "cameras_exported",
         "lights_exported",
         "custom_properties_exported_as_extras",
+        "project_architecture_uv",
         "external_material_alpha_policy",
     }
 )
@@ -791,6 +957,7 @@ def _validated_v2_evidence_envelope(
         "cameras_exported": False,
         "lights_exported": False,
         "custom_properties_exported_as_extras": True,
+        "project_architecture_uv": _project_metric_uv_contract(),
         "external_material_alpha_policy": expected_policy,
     }
     if (
@@ -1497,6 +1664,89 @@ def _validate_external_material_alpha_contract(
         raise ForgeInputError("external texture material GLB inventory differs from manifest contract")
 
 
+def _validated_manifest_metric_uv_contract(
+    manifest: Mapping[str, Any],
+) -> Mapping[str, Any] | None:
+    export_contract = manifest.get("export_contract")
+    if not isinstance(export_contract, Mapping):
+        return None
+    observed = export_contract.get("project_architecture_uv")
+    if observed is None:
+        return None
+    expected = _project_metric_uv_contract()
+    if not isinstance(observed, Mapping) or observed != expected:
+        raise ForgeInputError("normalized project metric UV contract is absent or changed")
+    return observed
+
+
+def _validate_metric_uv_glb_evidence(
+    manifest: Mapping[str, Any],
+    artifact: Mapping[str, Any],
+    inspection: Mapping[str, Any],
+) -> None:
+    """Bind declared metric UVs to review nodes and every exported primitive."""
+
+    primitive_count = inspection.get("mesh_primitive_count")
+    if (
+        type(primitive_count) is not int
+        or primitive_count <= 0
+        or inspection.get("texcoord0_primitive_count") != primitive_count
+    ):
+        raise ForgeInputError("production GLB lacks complete TEXCOORD_0 evidence")
+    if artifact.get("artifact_kind") == UE_BUNDLE_ARTIFACT_KIND:
+        # Joined UE bundles intentionally discard per-component node extras,
+        # but their single presentation mesh must retain UV0 on every primitive.
+        return
+
+    artifact_id = artifact.get("artifact_id")
+    components = manifest.get("components")
+    if not isinstance(components, list) or not all(
+        isinstance(component, Mapping) for component in components
+    ):
+        raise ForgeInputError("normalized components cannot bind metric UV evidence")
+    if artifact_id == "glb.vertical_slice":
+        raw_expected_ids = [component.get("component_id") for component in components]
+    elif isinstance(artifact_id, str) and artifact_id.startswith("glb.room."):
+        room_kind = artifact_id.removeprefix("glb.room.")
+        room_id = f"home.r1/room.{room_kind}"
+        raw_expected_ids = [
+            component.get("component_id")
+            for component in components
+            if component.get("room_id") == room_id
+        ]
+    else:
+        raise ForgeInputError("metric UV review GLB artifact identity is invalid")
+    if (
+        not raw_expected_ids
+        or any(not isinstance(item, str) or not item for item in raw_expected_ids)
+        or len(set(raw_expected_ids)) != len(raw_expected_ids)
+    ):
+        raise ForgeInputError("normalized component identities cannot bind metric UV evidence")
+    expected_ids = sorted(raw_expected_ids)
+    records = inspection.get("metric_uv_components")
+    if not isinstance(records, list) or any(
+        not isinstance(record, Mapping)
+        or frozenset(record) != PROJECT_METRIC_UV_RECORD_KEYS
+        for record in records
+    ):
+        raise ForgeInputError("review GLB metric UV component records are not closed")
+    observed_ids = [record.get("component_id") for record in records]
+    if (
+        observed_ids != expected_ids
+        or inspection.get("component_extra_count") != len(expected_ids)
+        or any(
+            record.get("receipt_valid") is not True
+            or not isinstance(record.get("receipt_sha256"), str)
+            or SHA256.fullmatch(record["receipt_sha256"]) is None
+            or type(record.get("primitive_count")) is not int
+            or record["primitive_count"] <= 0
+            or record.get("texcoord0_primitive_count") != record["primitive_count"]
+            for record in records
+        )
+    ):
+        raise ForgeInputError("review GLB metric UV evidence differs from normalized components")
+
+
 def inspect_output(output_root: pathlib.Path) -> dict[str, Any]:
     output_root = output_root.resolve(strict=True)
     manifest_path = output_root / "normalized-manifest.json"
@@ -1511,6 +1761,7 @@ def inspect_output(output_root: pathlib.Path) -> dict[str, Any]:
     external_policy_evidence: Mapping[str, Any] | None = None
     if is_external_manifest:
         external_policy_evidence = _validated_v2_evidence_envelope(manifest, receipt)
+    metric_uv_contract = _validated_manifest_metric_uv_contract(manifest)
     components = manifest.get("components", [])
     if not isinstance(components, list) or len(components) < 60:
         raise ForgeInputError("normalized manifest has insufficient architectural components")
@@ -1623,6 +1874,8 @@ def inspect_output(output_root: pathlib.Path) -> dict[str, Any]:
                 _validate_external_material_alpha_contract(manifest, artifact, inspection)
         elif inspection["component_extra_count"] == 0:
             raise ForgeInputError(f"production GLB lacks presentation role metadata: {path}")
+        if metric_uv_contract is not None:
+            _validate_metric_uv_glb_evidence(manifest, artifact, inspection)
         # ``inspect_glb`` remains useful as a standalone diagnostic and may
         # identify the caller-provided path.  Persistent build receipts must
         # never bind a host-private attempt root, so normalize at this boundary.
@@ -1638,6 +1891,8 @@ def inspect_output(output_root: pathlib.Path) -> dict[str, Any]:
     }
     if external_policy_evidence is not None:
         result["external_material_alpha_policy"] = dict(external_policy_evidence)
+    if metric_uv_contract is not None:
+        result["project_architecture_uv"] = dict(metric_uv_contract)
     if staticization_evidence is not None:
         result["external_staticization_content_digest"] = staticization_evidence[
             "content_digest"

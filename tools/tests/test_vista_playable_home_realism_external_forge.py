@@ -1799,11 +1799,12 @@ def test_no_external_v1_path_is_byte_stable_and_runtime_source_is_fail_closed() 
     profile = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
     plan = build_forge_plan(house, profile)
     manifest_bytes = canonical_json_bytes(normalized_manifest(plan, texture_size_px=512))
-    # The byte lock advances with the closed living-detail anchors.
-    assert plan.content_digest == "14ed99976a877cc2dcfded95aaac0462aebbc10e5198cfbfdb97edafecb1f2be"
-    assert hashlib.sha256(canonical_json_bytes(plan)).hexdigest() == "395b28669a5598ceffaf83f09c4248fdb6144bc63f99aafe79def5ac32e99293"
-    assert hashlib.sha256(manifest_bytes).hexdigest() == "415a763bbf6cfbb561564c58b0fafc1bb51e6149d019a73a1cea06bd60cb5f87"
-    assert len(manifest_bytes) == 135109
+    # The byte lock advances with closed living-detail anchors and the metric
+    # architecture UV receipt contract.
+    assert plan.content_digest == "dfb8f40aace3a18b383da17a9d979555839cb46543dd1f3322aca87fe4c1260b"
+    assert hashlib.sha256(canonical_json_bytes(plan)).hexdigest() == "60e91aefb51a428c7c4a0cb4ad16e9dd97a6b433b72813f5e9bf9e97c2909998"
+    assert hashlib.sha256(manifest_bytes).hexdigest() == "1f36a7182cc2f4a73ca73aeabccc71aa0fe5f51b79d33b2bc4c945caab94603a"
+    assert len(manifest_bytes) == 136141
 
     import tools.blender.vista_playable_home_realism.external_assets as runtime
 
