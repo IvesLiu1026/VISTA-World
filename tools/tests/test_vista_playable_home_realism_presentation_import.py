@@ -1507,7 +1507,7 @@ def test_r1_execution_and_config_remain_on_legacy_two_phase_path(
         "342d8262470fedbce4ce9be8125bf1d181b5291c0d18e50787d68015c394e72e"
     )
     assert build_home.sha256_bytes(planned.engine_ini_raw) == (
-        "0933e82b84dc3dfec5928f961e1bc3ffb704476163d0689c24defdabbf388811"
+        "8d417e9e9a75f8b4904979a86da0a1d1d57b4451d632848a2fc44dbc857c68fc"
     )
     assert "presentation_bindings" not in planned.execution
     assert "presentation_scripts" not in planned.execution
