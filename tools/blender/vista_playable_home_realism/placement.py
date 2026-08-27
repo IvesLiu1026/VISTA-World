@@ -182,6 +182,29 @@ def _intersects_exclusion(aabb: PlacementAabb, volume: Any) -> bool:
     return aabbs_overlap(aabb, PlacementAabb(tuple(volume.min_m), tuple(volume.max_m)))
 
 
+def _is_nonblocking_floor_layer(item: ExternalPlacementSpec) -> bool:
+    """Return whether an authored floor finish may sit below actors/furniture."""
+
+    return (
+        item.placement_kind == "dressing"
+        and item.category == "rug"
+        and item.semantic_target_id is None
+        and item.support_placement_id is None
+        and item.geometry_recipe == "area_rug_v1"
+        and item.room_local_aabb.min_m[2] >= -0.005
+        and item.room_local_aabb.max_m[2] <= 0.03
+    )
+
+
+def _floor_layer_may_overlap_exclusion(item: ExternalPlacementSpec, volume: Any) -> bool:
+    """Allow a rug below event footprints but never through navigation space."""
+
+    return (
+        _is_nonblocking_floor_layer(item)
+        and volume.exclusion_kind == "event_interaction_clearance"
+    )
+
+
 def _support_surface_z(support: ExternalPlacementSpec) -> float:
     factor = AUTHORED_RECIPE_SUPPORT_SURFACE_Z_FACTORS.get(
         support.geometry_recipe or ""
@@ -402,7 +425,11 @@ def build_external_placement_plan(
             blockers = [
                 volume.exclusion_id
                 for volume in dressing_plan.exclusions
-                if volume.room_id == item.room_id and _intersects_exclusion(item.room_local_aabb, volume)
+                if (
+                    volume.room_id == item.room_id
+                    and _intersects_exclusion(item.room_local_aabb, volume)
+                    and not _floor_layer_may_overlap_exclusion(item, volume)
+                )
             ]
             if blockers:
                 raise ForgeInputError(f"external dressing intersects protected exclusions: {item.placement_id}: {blockers}")
@@ -419,6 +446,10 @@ def build_external_placement_plan(
             if left.room_id != right.room_id or not aabbs_overlap(left.room_local_aabb, right.room_local_aabb):
                 continue
             if left.support_placement_id == right.placement_id or right.support_placement_id == left.placement_id:
+                continue
+            left_is_floor_layer = _is_nonblocking_floor_layer(left)
+            right_is_floor_layer = _is_nonblocking_floor_layer(right)
+            if left_is_floor_layer != right_is_floor_layer:
                 continue
             raise ForgeInputError(f"external placement AABBs overlap: {left.placement_id}, {right.placement_id}")
     semantic_ids = tuple(sorted(item.semantic_target_id for item in placements if item.semantic_target_id))

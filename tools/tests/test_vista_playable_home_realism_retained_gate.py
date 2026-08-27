@@ -56,7 +56,7 @@ def _retained_output_root() -> Path | None:
     not RETAINED_ACQUISITION_ROOT.is_dir(),
     reason="retained exact-22 Poly Haven source evidence is not mounted",
 )
-def test_retained_sources_close_the_golden_30_placement_plan() -> None:
+def test_retained_sources_close_the_golden_45_placement_plan() -> None:
     house = json.loads(
         (REPO_ROOT / "world_packs/vista_playable_home_r1/house.json").read_text()
     )
@@ -75,8 +75,8 @@ def test_retained_sources_close_the_golden_30_placement_plan() -> None:
         load_placement_manifest(PLACEMENT_MANIFEST.resolve()),
     )
     placements = plan.external_placement.placements
-    assert len(placements) == 30
-    assert sum(item.room_kind == "living_room" for item in placements) == 15
+    assert len(placements) == 45
+    assert sum(item.room_kind == "living_room" for item in placements) == 30
     assert len(plan.external_placement.asset_sources) == 22
     assert {
         item.source_logical_asset_id
@@ -150,7 +150,7 @@ def test_retained_golden_room_output_closes_staticization_and_alpha_gate() -> No
 
     placement = json.loads(PLACEMENT_MANIFEST.read_text(encoding="utf-8"))
     placements = placement["placements"]
-    assert len(placements) == 30
+    assert len(placements) == 45
     assert {
         row["source_logical_asset_id"]
         for row in placements

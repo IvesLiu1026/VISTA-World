@@ -59,6 +59,8 @@ from tools.blender.vista_playable_home_realism.inspect import (
 from tools.blender.vista_playable_home_realism.placement import (
     NORMALIZATION_POLICY,
     PLACEMENT_SCHEMA_VERSION,
+    _floor_layer_may_overlap_exclusion,
+    _is_nonblocking_floor_layer,
     placement_manifest_document,
 )
 
@@ -475,6 +477,57 @@ def test_external_plan_rejects_overlap_room_escape_and_movable_target(tmp_path: 
         _plan(tmp_path, _redigest(movable))
 
 
+def _rug_row(placement_id: str = "dress.living.rug.main") -> dict:
+    return _row(
+        placement_id,
+        "dressing",
+        "living_room",
+        "rug",
+        "project_authored",
+        anchor="home.r1/room.living_room/dressing_anchor.rug_main",
+        recipe="area_rug_v1",
+        materials=("visual.material.poly_wool_herringbone",),
+        rotation=(0, 0, -2),
+        dimensions=(2.75, 2.6, 0.018),
+    )
+
+
+def test_only_exact_dressing_rug_contract_is_a_nonblocking_floor_layer(
+    tmp_path: Path,
+) -> None:
+    assets = _asset_set(tmp_path)
+    payload = _placement_payload(assets)
+    payload["placements"].append(_rug_row())
+    plan = _plan(tmp_path, _redigest(payload))
+    rug = next(
+        item
+        for item in plan.external_placement.placements
+        if item.placement_id == "dress.living.rug.main"
+    )
+    assert _is_nonblocking_floor_layer(rug) is True
+    assert _is_nonblocking_floor_layer(replace(rug, placement_kind="semantic_fixed")) is False
+    assert _is_nonblocking_floor_layer(replace(rug, category="floor_lamp")) is False
+    assert _is_nonblocking_floor_layer(replace(rug, semantic_target_id="spoof")) is False
+    assert _is_nonblocking_floor_layer(replace(rug, support_placement_id="spoof")) is False
+    event_volume = SimpleNamespace(exclusion_kind="event_interaction_clearance")
+    assert _floor_layer_may_overlap_exclusion(rug, event_volume) is True
+    for protected_kind in ("portal_clearance", "pawn_and_npc_corridor"):
+        assert _floor_layer_may_overlap_exclusion(
+            rug,
+            SimpleNamespace(exclusion_kind=protected_kind),
+        ) is False
+
+
+def test_two_nonblocking_rugs_may_not_overlap_each_other(tmp_path: Path) -> None:
+    assets = _asset_set(tmp_path)
+    payload = _placement_payload(assets)
+    payload["placements"].extend(
+        (_rug_row(), _rug_row("dress.living.rug.duplicate"))
+    )
+    with pytest.raises(ForgeInputError, match="AABBs overlap"):
+        _plan(tmp_path, _redigest(payload))
+
+
 @pytest.mark.parametrize(
     "recipe,materials",
     (
@@ -513,6 +566,9 @@ def test_project_authored_recipe_rejects_non_string_recipe_without_type_leak(tmp
 
 def test_authored_recipe_contract_is_explicit_and_complete() -> None:
     assert AUTHORED_RECIPE_MATERIAL_IDS == {
+        "area_rug_v1": ("visual.material.poly_wool_herringbone",),
+        "coffee_mug_v1": ("visual.material.white_oak_veneer",),
+        "coffee_tray_v1": ("visual.material.white_oak_veneer",),
         "contemporary_shoe_bench_v1": (
             "visual.material.white_oak_veneer",
             "visual.material.poly_wool_herringbone",
@@ -522,6 +578,33 @@ def test_authored_recipe_contract_is_explicit_and_complete() -> None:
             "visual.material.poly_wool_herringbone",
         ),
         "contemporary_dining_table_v1": ("visual.material.white_oak_veneer",),
+        "draped_throw_v1": ("visual.material.poly_wool_herringbone",),
+        "floating_shelf_v1": ("visual.material.white_oak_veneer",),
+        "floor_lamp_v1": (
+            "visual.material.white_oak_veneer",
+            "visual.material.poly_wool_herringbone",
+        ),
+        "media_audio_v1": (
+            "visual.material.white_oak_veneer",
+            "visual.material.poly_wool_herringbone",
+        ),
+        "media_controls_v1": (
+            "visual.material.white_oak_veneer",
+            "visual.material.poly_wool_herringbone",
+        ),
+        "media_tv_v1": (
+            "visual.material.white_oak_veneer",
+            "visual.material.poly_wool_herringbone",
+        ),
+        "picture_light_v1": ("visual.material.white_oak_veneer",),
+        "wall_art_v1": (
+            "visual.material.white_oak_veneer",
+            "visual.material.poly_wool_herringbone",
+        ),
+        "window_drapes_v1": (
+            "visual.material.white_oak_veneer",
+            "visual.material.poly_wool_herringbone",
+        ),
     }
 
 
@@ -1716,11 +1799,11 @@ def test_no_external_v1_path_is_byte_stable_and_runtime_source_is_fail_closed() 
     profile = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
     plan = build_forge_plan(house, profile)
     manifest_bytes = canonical_json_bytes(normalized_manifest(plan, texture_size_px=512))
-    # The byte lock advances with explicit support/ceiling surface anchors.
-    assert plan.content_digest == "cc46689379ce7dc937a0e7dcf2162157b3437af0874ea6f3a73c6aa3f95ee16e"
-    assert hashlib.sha256(canonical_json_bytes(plan)).hexdigest() == "dc12b4b071759a4e59991f91bd60c387c7ec3654689c5c73f6a4f52a0c59bb35"
-    assert hashlib.sha256(manifest_bytes).hexdigest() == "5838c785ca0516c97e79b1461a3d9e2f7a509ec3d4ef48b73c46f3b508b59cb7"
-    assert len(manifest_bytes) == 131644
+    # The byte lock advances with the closed living-detail anchors.
+    assert plan.content_digest == "14ed99976a877cc2dcfded95aaac0462aebbc10e5198cfbfdb97edafecb1f2be"
+    assert hashlib.sha256(canonical_json_bytes(plan)).hexdigest() == "395b28669a5598ceffaf83f09c4248fdb6144bc63f99aafe79def5ac32e99293"
+    assert hashlib.sha256(manifest_bytes).hexdigest() == "415a763bbf6cfbb561564c58b0fafc1bb51e6149d019a73a1cea06bd60cb5f87"
+    assert len(manifest_bytes) == 135109
 
     import tools.blender.vista_playable_home_realism.external_assets as runtime
 
@@ -1740,9 +1823,9 @@ def test_checked_in_manifest_uses_acquired_assets_without_baking_movable_targets
     payload = json.loads(PLACEMENT_PATH.read_text(encoding="utf-8"))
     body = {key: payload[key] for key in payload if key != "content_digest"}
     assert payload["content_digest"] == content_digest(body)
-    assert len(payload["placements"]) == 30
+    assert len(payload["placements"]) == 45
     assert sum(item["placement_kind"] == "semantic_fixed" for item in payload["placements"]) == 5
-    assert sum(item["room_kind"] == "living_room" for item in payload["placements"]) == 15
+    assert sum(item["room_kind"] == "living_room" for item in payload["placements"]) == 30
     assert {
         "visual.dressing.kitchen.apple",
         "visual.dressing.kitchen.wooden_plate",
