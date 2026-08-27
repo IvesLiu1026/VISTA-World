@@ -8,7 +8,7 @@ Run with the pinned Blender binary::
       --visual-profile /absolute/realistic_interior_r2.json \
       --output-root /absolute/fresh-output
 
-Production manifests default to 512 px procedural PBR textures.  That output
+Production manifests default to 2048 px procedural PBR textures.  That output
 is only an architecture-source candidate: this forge cannot accept final r2
 visual evidence without downstream assets, Unreal observation, and human
 review.  Fast smoke tests must explicitly pass ``--texture-size-px 64`` and
@@ -38,6 +38,10 @@ if __package__ in {None, ""}:
         DEFAULT_TEXTURE_SIZE_PX,
         EXPECTED_BLENDER_VERSION,
         ForgeInputError,
+        PROJECT_METRIC_UV_LAYER,
+        PROJECT_METRIC_UV_MAPPING,
+        PROJECT_METRIC_UV_METERS_PER_TILE,
+        PROJECT_METRIC_UV_SCHEMA,
         canonical_json_bytes,
         content_digest,
         load_json_object,
@@ -69,6 +73,10 @@ else:
         DEFAULT_TEXTURE_SIZE_PX,
         EXPECTED_BLENDER_VERSION,
         ForgeInputError,
+        PROJECT_METRIC_UV_LAYER,
+        PROJECT_METRIC_UV_MAPPING,
+        PROJECT_METRIC_UV_METERS_PER_TILE,
+        PROJECT_METRIC_UV_SCHEMA,
         canonical_json_bytes,
         content_digest,
         load_json_object,
@@ -339,6 +347,72 @@ def _safe_name(value: str, prefix: str = "VISTA") -> str:
     return f"{prefix}_{cleaned}"[:63]
 
 
+def _metric_box_uv(
+    coordinate_m: Sequence[float],
+    normal: Sequence[float],
+    *,
+    meters_per_tile: float = PROJECT_METRIC_UV_METERS_PER_TILE,
+) -> tuple[float, float]:
+    """Project one local-metre point onto a stable one-metre box tile."""
+
+    if len(coordinate_m) != 3 or len(normal) != 3:
+        raise RuntimeError("metric box UV input must contain three coordinates")
+    try:
+        point = tuple(float(value) for value in coordinate_m)
+        direction = tuple(float(value) for value in normal)
+        tile_size = float(meters_per_tile)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise RuntimeError("metric box UV input is invalid") from error
+    if (
+        not math.isfinite(tile_size)
+        or tile_size <= 0
+        or not all(math.isfinite(value) for value in (*point, *direction))
+        or max(abs(value) for value in direction) <= 1e-12
+    ):
+        raise RuntimeError("metric box UV input is invalid")
+    # Axis ties deliberately prefer X, then Y, then Z.  Bevel normals can
+    # contain ties, and collection or polygon order must not affect projection.
+    axis = max(range(3), key=lambda index: (abs(direction[index]), -index))
+    sign = 1.0 if direction[axis] >= 0 else -1.0
+    scale = 1.0 / tile_size
+    if axis == 0:
+        return -sign * point[1] * scale, point[2] * scale
+    if axis == 1:
+        return sign * point[0] * scale, point[2] * scale
+    return sign * point[0] * scale, point[1] * scale
+
+
+def _apply_project_metric_box_uv(obj: Any, *, component_id: str) -> None:
+    """Replace primitive UVs and bind the mapping to exported custom props."""
+
+    mesh = obj.data
+    while len(mesh.uv_layers):
+        mesh.uv_layers.remove(mesh.uv_layers[0])
+    layer = mesh.uv_layers.new(name=PROJECT_METRIC_UV_LAYER)
+    for polygon in mesh.polygons:
+        normal = tuple(float(value) for value in polygon.normal)
+        for loop_index in polygon.loop_indices:
+            loop = mesh.loops[loop_index]
+            coordinate = tuple(float(value) for value in mesh.vertices[loop.vertex_index].co)
+            layer.data[loop_index].uv = _metric_box_uv(coordinate, normal)
+    mesh.uv_layers.active = layer
+    layer.active_render = True
+    mesh.update()
+    receipt = {
+        "schema_version": PROJECT_METRIC_UV_SCHEMA,
+        "component_id": component_id,
+        "mapping": PROJECT_METRIC_UV_MAPPING,
+        "uv_layer": PROJECT_METRIC_UV_LAYER,
+        "meters_per_tile": PROJECT_METRIC_UV_METERS_PER_TILE,
+        "coordinate_space": "object_local_metres_after_scale_apply",
+    }
+    obj["vista_uv_mapping"] = PROJECT_METRIC_UV_MAPPING
+    obj["vista_uv_layer"] = PROJECT_METRIC_UV_LAYER
+    obj["vista_uv_meters_per_tile"] = PROJECT_METRIC_UV_METERS_PER_TILE
+    obj["vista_uv_receipt_json"] = json.dumps(receipt, sort_keys=True, separators=(",", ":"))
+    obj["vista_uv_receipt_sha256"] = content_digest(receipt)
+
+
 def _apply_edge_softening(bpy: Any, obj: Any, dimensions: Sequence[float], role: str) -> None:
     if role in {"wall_opaque", "floor_finish", "ceiling_finish", "window_glass", "exterior_treatment"}:
         return
@@ -368,6 +442,7 @@ def _component_object(bpy: Any, component: Any, material: Any, room_root: Any, c
     bpy.context.view_layer.objects.active = obj
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     _apply_edge_softening(bpy, obj, component.dimensions_m, component.role)
+    _apply_project_metric_box_uv(obj, component_id=component.component_id)
     obj.data.materials.append(material)
     obj["vista_component_id"] = component.component_id
     obj["vista_room_id"] = component.room_id

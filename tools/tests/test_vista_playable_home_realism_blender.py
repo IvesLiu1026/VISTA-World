@@ -5,6 +5,7 @@ import json
 import struct
 import sys
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,7 @@ from tools.blender.vista_playable_home_realism.export import build_quality_claim
 from tools.blender.vista_playable_home_realism.inspect import (
     GLB_JSON_CHUNK,
     GLB_MAGIC,
+    _validate_metric_uv_glb_evidence,
     inspect_glb,
     inspect_output,
 )
@@ -208,42 +210,53 @@ def test_portal_topology_and_exterior_openings_are_preserved(house: dict, profil
 
 
 def test_material_plan_defaults_to_production_resolution_and_full_pbr_semantics() -> None:
-    assert DEFAULT_TEXTURE_SIZE_PX == 512
+    assert DEFAULT_TEXTURE_SIZE_PX == 2048
     materials = material_plan_manifest()
     assert len(materials) >= 12
     for material in materials:
         assert material["shader_class"] == "PrincipledBSDF"
-        assert material["texel_density_px_per_m"] >= 768
+        assert material["texel_density_px_per_m"] == 2048
+        assert material["design_minimum_texel_density_px_per_m"] == 1024
         assert set(material["channels"]) == {"base_color", "normal", "roughness"}
         assert material["channels"]["base_color"]["color_space"] == "sRGB"
         assert material["channels"]["normal"]["color_space"] == "Non-Color"
         assert material["channels"]["roughness"]["color_space"] == "Non-Color"
-        assert material["channels"]["base_color"]["dimensions_px"] == [512, 512]
+        assert material["channels"]["base_color"]["dimensions_px"] == [2048, 2048]
 
 
 def test_smoke_texture_override_cannot_be_mislabeled(house: dict, profile: dict) -> None:
     plan = build_forge_plan(house, profile)
-    production = normalized_manifest(plan, texture_size_px=512)
+    production = normalized_manifest(plan, texture_size_px=2048)
     smoke = normalized_manifest(plan, texture_size_px=64)
+    assert {item["texel_density_px_per_m"] for item in production["materials"]} == {2048}
+    assert {item["texel_density_px_per_m"] for item in smoke["materials"]} == {64}
+    assert {
+        tuple(item["channels"]["base_color"]["dimensions_px"])
+        for item in smoke["materials"]
+    } == {(64, 64)}
     assert production["build_quality"] == {
         "accepted_as_r2_visual_evidence": False,
         "eligible_as_architecture_source_evidence": True,
-        "production_minimum_texture_size_px": 512,
+        "production_minimum_texture_size_px": 2048,
         "quality_class": "production_candidate",
         "r2_visual_acceptance_authority": "downstream_seal_and_human_review",
         "requires_downstream_asset_and_ue_review": True,
-        "texture_size_px": 512,
+        "texture_size_px": 2048,
     }
     assert smoke["build_quality"]["quality_class"] == "smoke_only"
     assert smoke["build_quality"]["accepted_as_r2_visual_evidence"] is False
     assert smoke["build_quality"]["eligible_as_architecture_source_evidence"] is False
     assert smoke["build_quality"]["requires_downstream_asset_and_ue_review"] is True
-    for texture_size_px in (512, 1024, 2048):
+    for texture_size_px in (2048,):
         claims = build_quality_claims(texture_size_px)
         assert claims["quality_class"] == "production_candidate"
         assert claims["eligible_as_architecture_source_evidence"] is True
         assert claims["accepted_as_r2_visual_evidence"] is False
         assert claims["r2_visual_acceptance_authority"] == "downstream_seal_and_human_review"
+    for texture_size_px in (64, 512, 1024):
+        claims = build_quality_claims(texture_size_px)
+        assert claims["quality_class"] == "smoke_only"
+        assert claims["eligible_as_architecture_source_evidence"] is False
     args = blender_build.parse_blender_args(
         [
             "--house",
@@ -257,6 +270,20 @@ def test_smoke_texture_override_cannot_be_mislabeled(house: dict, profile: dict)
         ]
     )
     assert args.texture_size_px == 64
+
+
+def test_normalized_manifest_rejects_a_tampered_material_blueprint(
+    house: dict,
+    profile: dict,
+) -> None:
+    plan = build_forge_plan(house, profile)
+    tampered = copy.deepcopy(list(plan.material_plan))
+    tampered[0]["design_minimum_texel_density_px_per_m"] = 1
+    with pytest.raises(ForgeInputError, match="material blueprint differs"):
+        normalized_manifest(
+            replace(plan, material_plan=tuple(tampered)),
+            texture_size_px=2048,
+        )
 
 
 def test_dressing_anchors_are_stable_purposeful_and_clear(house: dict, profile: dict) -> None:
@@ -307,6 +334,14 @@ def test_profile_mismatch_and_nonempty_outputs_fail_closed(house: dict, profile:
 
 
 def _tiny_role_glb_bytes() -> bytes:
+    uv_receipt = {
+        "schema_version": "simworld.vista.project-architecture-metric-uv/v1",
+        "component_id": "component.01",
+        "mapping": "metric_box_v1",
+        "uv_layer": "VISTA_MetricUV",
+        "meters_per_tile": 1.0,
+        "coordinate_space": "object_local_metres_after_scale_apply",
+    }
     document = {
         "asset": {"version": "2.0"},
         "scene": 0,
@@ -318,10 +353,29 @@ def _tiny_role_glb_bytes() -> bytes:
                 "extras": {
                     "vista_component_id": "component.01",
                     "vista_export_role": "architecture_shell",
+                    "vista_uv_mapping": "metric_box_v1",
+                    "vista_uv_layer": "VISTA_MetricUV",
+                    "vista_uv_meters_per_tile": 1.0,
+                    "vista_uv_receipt_json": json.dumps(
+                        uv_receipt,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                    "vista_uv_receipt_sha256": content_digest(uv_receipt),
                 },
             }
         ],
-        "meshes": [{"primitives": []}],
+        "meshes": [
+            {
+                "primitives": [
+                    {"attributes": {"POSITION": 0, "TEXCOORD_0": 1}}
+                ]
+            }
+        ],
+        "accessors": [
+            {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3"},
+            {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC2"},
+        ],
         "materials": [],
     }
     json_chunk = json.dumps(document, separators=(",", ":")).encode("utf-8")
@@ -343,6 +397,47 @@ def test_independent_glb_inspector_reads_roles_and_rejects_cameras(tmp_path: Pat
     assert result["camera_count"] == 0
     assert result["component_extra_count"] == 1
     assert result["component_roles"] == ["architecture_shell"]
+    assert result["mesh_primitive_count"] == 1
+    assert result["texcoord0_primitive_count"] == 1
+    assert result["metric_uv_components"] == [
+        {
+            "component_id": "component.01",
+            "receipt_sha256": content_digest(
+                {
+                    "schema_version": "simworld.vista.project-architecture-metric-uv/v1",
+                    "component_id": "component.01",
+                    "mapping": "metric_box_v1",
+                    "uv_layer": "VISTA_MetricUV",
+                    "meters_per_tile": 1.0,
+                    "coordinate_space": "object_local_metres_after_scale_apply",
+                }
+            ),
+            "receipt_valid": True,
+            "primitive_count": 1,
+            "texcoord0_primitive_count": 1,
+        }
+    ]
+
+
+def test_metric_uv_glb_gate_rejects_stripped_receipt_or_texcoord(tmp_path: Path) -> None:
+    path = tmp_path / "metric.glb"
+    path.write_bytes(_tiny_role_glb_bytes())
+    inspection = inspect_glb(path)
+    manifest = {
+        "components": [{"component_id": "component.01", "room_id": "room.fixture"}]
+    }
+    artifact = {"artifact_id": "glb.vertical_slice"}
+    _validate_metric_uv_glb_evidence(manifest, artifact, inspection)
+
+    stripped_receipt = copy.deepcopy(inspection)
+    stripped_receipt["metric_uv_components"][0]["receipt_valid"] = False
+    with pytest.raises(ForgeInputError, match="metric UV evidence differs"):
+        _validate_metric_uv_glb_evidence(manifest, artifact, stripped_receipt)
+
+    stripped_texcoord = copy.deepcopy(inspection)
+    stripped_texcoord["texcoord0_primitive_count"] = 0
+    with pytest.raises(ForgeInputError, match="TEXCOORD_0 evidence"):
+        _validate_metric_uv_glb_evidence(manifest, artifact, stripped_texcoord)
 
 
 def test_output_inspection_is_root_independent_and_does_not_leak_absolute_paths(tmp_path: Path) -> None:

@@ -16,11 +16,22 @@ from dataclasses import asdict
 from typing import Any, Mapping, Sequence
 
 from .architecture import ForgePlan
-from .config import canonical_json_bytes, normalized, sha256_file
+from .config import (
+    PROJECT_METRIC_UV_LAYER,
+    PROJECT_METRIC_UV_MAPPING,
+    PROJECT_METRIC_UV_METERS_PER_TILE,
+    PROJECT_METRIC_UV_SCHEMA,
+    PRODUCTION_MINIMUM_TEXTURE_SIZE_PX,
+    ForgeInputError,
+    canonical_json_bytes,
+    normalized,
+    sha256_file,
+)
 from .external_assets import (
     external_material_alpha_policy,
     validate_external_staticization_ledger,
 )
+from .materials import material_plan_manifest
 from .placement import bundle_external_content
 
 
@@ -29,6 +40,25 @@ UE_BUNDLE_ROOT_TRANSFORM_POLICY = "room_local_geometry_identity_root"
 UE_BUNDLE_SEMANTIC_POLICY = "presentation_only_preserve_r1_authority"
 UE_BUNDLE_COLLISION_POLICY = "presentation_no_collision_use_hidden_r1_proxies"
 UE_BUNDLE_UNREAL_COLLISION_PROFILE = "NoCollision"
+
+
+def project_architecture_uv_contract() -> dict[str, Any]:
+    """Return the receipt contract embedded in each normalized manifest."""
+
+    return {
+        "schema_version": PROJECT_METRIC_UV_SCHEMA,
+        "mapping": PROJECT_METRIC_UV_MAPPING,
+        "uv_layer": PROJECT_METRIC_UV_LAYER,
+        "meters_per_tile": PROJECT_METRIC_UV_METERS_PER_TILE,
+        "coordinate_space": "object_local_metres_after_scale_apply",
+        "exported_custom_properties": [
+            "vista_uv_layer",
+            "vista_uv_mapping",
+            "vista_uv_meters_per_tile",
+            "vista_uv_receipt_json",
+            "vista_uv_receipt_sha256",
+        ],
+    }
 
 
 def safe_slug(value: str) -> str:
@@ -44,11 +74,11 @@ def build_quality_claims(texture_size_px: int) -> dict[str, Any]:
     function intentionally has no code path that accepts final r2 visuals.
     """
 
-    production_candidate = texture_size_px >= 512
+    production_candidate = texture_size_px >= PRODUCTION_MINIMUM_TEXTURE_SIZE_PX
     return {
         "quality_class": "production_candidate" if production_candidate else "smoke_only",
         "texture_size_px": texture_size_px,
-        "production_minimum_texture_size_px": 512,
+        "production_minimum_texture_size_px": PRODUCTION_MINIMUM_TEXTURE_SIZE_PX,
         "eligible_as_architecture_source_evidence": production_candidate,
         "requires_downstream_asset_and_ue_review": True,
         "accepted_as_r2_visual_evidence": False,
@@ -64,6 +94,11 @@ def normalized_manifest(
     ue_import_bundles: Sequence[Mapping[str, Any]] | None = None,
     external_staticization: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    canonical_material_plan = material_plan_manifest()
+    if plan.material_plan and list(plan.material_plan) != canonical_material_plan:
+        raise ForgeInputError(
+            "forge plan project material blueprint differs from the canonical plan"
+        )
     role_counts: dict[str, int] = {}
     room_counts: dict[str, int] = {}
     for component in plan.components:
@@ -76,6 +111,7 @@ def normalized_manifest(
         "cameras_exported": False,
         "lights_exported": False,
         "custom_properties_exported_as_extras": True,
+        "project_architecture_uv": project_architecture_uv_contract(),
     }
     external = getattr(plan, "external_placement", None)
     if external is not None:
@@ -94,7 +130,15 @@ def normalized_manifest(
         "openings": [asdict(item) for item in plan.openings],
         "components": [asdict(item) for item in plan.components],
         "dressing": asdict(plan.dressing),
-        "materials": list(material_receipts) if material_receipts is not None else list(plan.material_plan),
+        "materials": (
+            list(material_receipts)
+            if material_receipts is not None
+            else (
+                material_plan_manifest(texture_size_px)
+                if plan.material_plan
+                else []
+            )
+        ),
         "role_counts": role_counts,
         "room_component_counts": room_counts,
         "export_contract": export_contract,

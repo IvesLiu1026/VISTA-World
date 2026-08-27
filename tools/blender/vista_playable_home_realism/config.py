@@ -18,9 +18,14 @@ DEFAULT_WALL_THICKNESS_M = 0.18
 DEFAULT_BASEBOARD_HEIGHT_M = 0.12
 DEFAULT_BASEBOARD_DEPTH_M = 0.025
 DEFAULT_TRIM_WIDTH_M = 0.075
-# Production manifests default to 512 px.  Headless smoke tests may explicitly
-# request 64 px, and receipts label that output ``smoke_only``.
-DEFAULT_TEXTURE_SIZE_PX = 512
+# Production manifests use one 2K tile per metric metre.  Headless smoke tests
+# may explicitly request 64 px, and receipts label that output ``smoke_only``.
+DEFAULT_TEXTURE_SIZE_PX = 2048
+PRODUCTION_MINIMUM_TEXTURE_SIZE_PX = 2048
+PROJECT_METRIC_UV_SCHEMA = "simworld.vista.project-architecture-metric-uv/v1"
+PROJECT_METRIC_UV_MAPPING = "metric_box_v1"
+PROJECT_METRIC_UV_LAYER = "VISTA_MetricUV"
+PROJECT_METRIC_UV_METERS_PER_TILE = 1.0
 GRID_M = 0.005
 
 
