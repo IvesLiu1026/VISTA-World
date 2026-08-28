@@ -48,6 +48,9 @@ AVistaHomeNpcCharacter::AVistaHomeNpcCharacter()
     CharacterProviderComponent =
         CreateDefaultSubobject<UVistaCharacterProviderComponent>(
             TEXT("VistaCharacterProviderComponent"));
+    CharacterProviderComponent->RequestedProviderId =
+        UVistaCharacterProviderComponent::GetMannyProviderId();
+    CharacterProviderComponent->bAllowCommandLineProviderOverride = false;
 
     CarryAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("VistaCarryAnchor"));
     CarryAnchor->SetupAttachment(GetMesh());

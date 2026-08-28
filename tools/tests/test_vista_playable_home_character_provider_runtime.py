@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 
@@ -9,6 +10,10 @@ PROVIDER_HEADER = PLUGIN / "Public" / "VistaCharacterProviderComponent.h"
 PROVIDER_SOURCE = PLUGIN / "Private" / "VistaCharacterProviderComponent.cpp"
 NPC_HEADER = PLUGIN / "Public" / "VistaHomeNpcCharacter.h"
 NPC_SOURCE = PLUGIN / "Private" / "VistaHomeNpcCharacter.cpp"
+PLAYER_HEADER = PLUGIN / "Public" / "VistaPlayableHomeCharacter.h"
+PLAYER_SOURCE = PLUGIN / "Private" / "VistaPlayableHomeCharacter.cpp"
+BUILD_RULES = PLUGIN / "VistaPlayableHome.Build.cs"
+PLUGIN_DESCRIPTOR = ROOT / "unreal_plugins" / "VistaPlayableHome" / "VistaPlayableHome.uplugin"
 
 
 def test_provider_selection_is_default_manny_and_closed_to_one_reviewed_class() -> None:
@@ -16,6 +21,7 @@ def test_provider_selection_is_default_manny_and_closed_to_one_reviewed_class() 
     source = PROVIDER_SOURCE.read_text(encoding="utf-8")
 
     assert 'RequestedProviderId = TEXT("manny")' in header
+    assert "bool bAllowCommandLineProviderOverride = false;" in header
     assert 'TEXT("VistaCharacterProvider=")' in source
     assert 'TEXT("metahuman_vivian_ue57_v1")' in source
     assert (
@@ -28,6 +34,13 @@ def test_provider_selection_is_default_manny_and_closed_to_one_reviewed_class() 
     assert "LoadClass" not in source
     assert "TCP" not in source
     assert "NLP" not in source
+    assert "ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());" in source
+    resolver = source.split(
+        "FName UVistaCharacterProviderComponent::ResolveRequestedProviderId", 1
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::ActivateAllowlistedMetaHuman", 1
+    )[0]
+    assert "if (bAllowCommandLineProviderOverride)" in resolver
 
 
 def test_photoreal_child_hides_manny_only_after_validation() -> None:
@@ -64,6 +77,12 @@ def test_provider_requires_body_face_groom_and_animation_readiness() -> None:
         "character_provider_face_not_ready",
         "character_provider_groom_not_ready",
         "character_provider_animation_not_ready",
+        "character_provider_source_animation_not_ready",
+        "character_provider_retarget_asset_unavailable",
+        "character_provider_retarget_component_unavailable",
+        "character_provider_retarget_binding_failed",
+        "character_provider_retarget_tick_order_invalid",
+        "character_provider_retarget_not_ready",
     ):
         assert failure_code in source
     assert "GetSkeletalMeshAsset()" in source
@@ -72,6 +91,101 @@ def test_provider_requires_body_face_groom_and_animation_readiness() -> None:
     assert "GetAnimClass()" in source
     assert 'Contains(TEXT("Groom"), ESearchCase::IgnoreCase)' in source
     assert 'Contains(TEXT("Hair"), ESearchCase::IgnoreCase)' in source
+
+
+def test_epic_retarget_component_drives_vivian_from_hidden_manny() -> None:
+    source = PROVIDER_SOURCE.read_text(encoding="utf-8")
+
+    assert (
+        'TEXT("/Game/Characters/Mannequins/Rigs/"\n'
+        '         "RTG_Mannequin.RTG_Mannequin")'
+    ) in source
+    assert source.count("RTG_Mannequin.RTG_Mannequin") == 1
+    assert "TSoftObjectPtr<UIKRetargeter>" in source
+    configure = source.split(
+        "bool UVistaCharacterProviderComponent::ConfigureMetaHumanRetarget", 1
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::ValidateMetaHumanVisual", 1
+    )[0]
+    for token in (
+        "NewObject<URetargetComponent>",
+        "&VisualActor",
+        "VisualActor.AddInstanceComponent(ProviderRetargetComponent)",
+        "ProviderRetargetComponent->RegisterComponent()",
+        "ProviderRetargetComponent->SetForceOtherMeshesToFollowControlledMesh(false)",
+        "ProviderRetargetComponent->SetSourcePerformerMesh(SourceManny)",
+        "ProviderRetargetComponent->SetControlledMesh(Body)",
+        "ProviderRetargetComponent->SetRetargetAsset(&RetargetAsset)",
+        "SourceSkeletalMeshComponent.OverrideComponent.Get()",
+        "ControlledSkeletalMeshComponent.OverrideComponent.Get()",
+        "ProviderRetargetComponent->InitiateAnimation()",
+        "Body->PrimaryComponentTick.GetPrerequisites().ContainsByPredicate",
+        "Prerequisite.Get() == &SourceManny->PrimaryComponentTick",
+        "SourceManny->SetCollisionEnabled(ECollisionEnabled::NoCollision)",
+        "SourceManny->SetGenerateOverlapEvents(false)",
+        "SourceManny->SetComponentTickEnabled(true)",
+        "EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones",
+    ):
+        assert token in configure
+
+    # Epic clears SourceSkeletalMeshComponent.OverrideComponent in OnRegister,
+    # so the external Manny source must be wired only after registration.
+    assert configure.index("RegisterComponent()") < configure.index(
+        "SetSourcePerformerMesh(SourceManny)"
+    )
+    # Setting this after both meshes are bound would clear Face/clothing anim state.
+    assert configure.index(
+        "SetForceOtherMeshesToFollowControlledMesh(false)"
+    ) < configure.index("SetSourcePerformerMesh(SourceManny)")
+
+    validate = source.split(
+        "bool UVistaCharacterProviderComponent::ValidateMetaHumanVisual(", 1
+    )[1].split(
+        "USkeletalMeshComponent* UVistaCharacterProviderComponent::FindNamedSkeletalMesh", 1
+    )[0]
+    assert "Cast<URetargetAnimInstance>(Body->GetAnimInstance())" in validate
+    assert "ProviderRetargetComponent->bForceOtherMeshesToFollowControlledMesh" in validate
+    assert "ProviderRetargetComponent->RetargetAsset" in validate
+
+
+def test_hidden_manny_keeps_animation_authority_without_hiding_children() -> None:
+    source = PROVIDER_SOURCE.read_text(encoding="utf-8")
+    visibility = source.split(
+        "void UVistaCharacterProviderComponent::SetMannyFallbackVisible", 1
+    )[1].split(
+        "void UVistaCharacterProviderComponent::DestroyProviderRetargetComponent", 1
+    )[0]
+
+    assert "MannyMesh->SetVisibility(bVisible, false);" in visibility
+    assert "MannyMesh->SetHiddenInGame(!bVisible, false);" in visibility
+    assert "SetVisibility(bVisible, true)" not in visibility
+    assert "SetHiddenInGame(!bVisible, true)" not in visibility
+
+    teardown = source.split(
+        "void UVistaCharacterProviderComponent::DestroyProviderRetargetComponent", 1
+    )[1].split(
+        "void UVistaCharacterProviderComponent::SetPhotorealUnavailable", 1
+    )[0]
+    assert "UActorComponent* RetargetComponentToDestroy" in teardown
+    assert "RetargetComponentToDestroy->DestroyComponent();" in teardown
+
+    failed_activation = source.split(
+        "bool UVistaCharacterProviderComponent::ActivateAllowlistedMetaHuman", 1
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::ValidateMetaHumanVisualShell", 1
+    )[0]
+    assert failed_activation.index("DestroyProviderRetargetComponent();") < (
+        failed_activation.index("DestroyProviderChildActorComponent();")
+    )
+
+    child_teardown = source.split(
+        "void UVistaCharacterProviderComponent::DestroyProviderChildActorComponent", 1
+    )[1].split(
+        "void UVistaCharacterProviderComponent::SetPhotorealUnavailable", 1
+    )[0]
+    assert "ProviderChildActorComponent->DestroyChildActor();" in child_teardown
+    assert "ProviderChildActorComponent->DestroyComponent();" in child_teardown
+    assert "ProviderChildActorComponent = nullptr;" in child_teardown
 
 
 def test_every_photoreal_failure_keeps_manny_and_reports_stable_status() -> None:
@@ -107,6 +221,50 @@ def test_npc_owns_provider_without_changing_semantic_or_animation_components() -
         == 1
     )
     assert "AIControllerClass = AVistaHomeNpcController::StaticClass();" in source
+    assert (
+        "CharacterProviderComponent->RequestedProviderId =\n"
+        "        UVistaCharacterProviderComponent::GetMannyProviderId();"
+    ) in source
+    assert "bAllowCommandLineProviderOverride = false;" in source
+
+
+def test_only_player_defaults_to_vivian_and_accepts_process_override() -> None:
+    player_header = PLAYER_HEADER.read_text(encoding="utf-8")
+    player_source = PLAYER_SOURCE.read_text(encoding="utf-8")
+    npc_source = NPC_SOURCE.read_text(encoding="utf-8")
+
+    assert (
+        "TObjectPtr<UVistaCharacterProviderComponent> CharacterProviderComponent;"
+        in player_header
+    )
+    assert (
+        "CreateDefaultSubobject<UVistaCharacterProviderComponent>(\n"
+        '            TEXT("VistaCharacterProviderComponent"))'
+    ) in player_source
+    assert (
+        "CharacterProviderComponent->RequestedProviderId =\n"
+        "        UVistaCharacterProviderComponent::GetMetaHumanVivianProviderId();"
+    ) in player_source
+    assert "bAllowCommandLineProviderOverride = true;" in player_source
+    assert "GetMetaHumanVivianProviderId" not in npc_source
+
+
+def test_runtime_module_declares_exact_retarget_dependencies() -> None:
+    build = BUILD_RULES.read_text(encoding="utf-8")
+    descriptor = json.loads(PLUGIN_DESCRIPTOR.read_text(encoding="utf-8"))
+    private_dependencies = build.split("PrivateDependencyModuleNames.AddRange", 1)[1]
+
+    for dependency in ("IKRig", "PerformanceCaptureCore"):
+        assert f'"{dependency}"' in private_dependencies
+    enabled_plugins = {
+        item["Name"] for item in descriptor["Plugins"] if item.get("Enabled") is True
+    }
+    assert {
+        "EnhancedInput",
+        "IKRig",
+        "PerformanceCaptureCore",
+        "MetaHumanCharacter",
+    }.issubset(enabled_plugins)
 
 
 def test_runtime_state_reports_provider_without_accepting_mutation() -> None:

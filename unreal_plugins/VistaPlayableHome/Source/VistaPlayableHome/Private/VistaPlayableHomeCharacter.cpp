@@ -22,6 +22,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
 #include "VistaAnimationComponent.h"
+#include "VistaCharacterProviderComponent.h"
 #include "VistaEventSubsystem.h"
 #include "VistaIndoorSpringArmComponent.h"
 #include "VistaInteractable.h"
@@ -164,6 +165,12 @@ AVistaPlayableHomeCharacter::AVistaPlayableHomeCharacter()
     InteractionComponent = CreateDefaultSubobject<UVistaInteractionComponent>(TEXT("InteractionComponent"));
     AnimationComponent =
         CreateDefaultSubobject<UVistaAnimationComponent>(TEXT("VistaAnimationComponent"));
+    CharacterProviderComponent =
+        CreateDefaultSubobject<UVistaCharacterProviderComponent>(
+            TEXT("VistaCharacterProviderComponent"));
+    CharacterProviderComponent->RequestedProviderId =
+        UVistaCharacterProviderComponent::GetMetaHumanVivianProviderId();
+    CharacterProviderComponent->bAllowCommandLineProviderOverride = true;
 }
 
 void AVistaPlayableHomeCharacter::BeginPlay()
