@@ -108,6 +108,78 @@ def _component_collision_enabled(component):
     return component.get_collision_enabled() != unreal.CollisionEnabled.NO_COLLISION
 
 
+def _component_collision_mode(component):
+    value = component.get_collision_enabled()
+    known_modes = (
+        ("NoCollision", "NO_COLLISION"),
+        ("QueryOnly", "QUERY_ONLY"),
+        ("PhysicsOnly", "PHYSICS_ONLY"),
+        ("QueryAndPhysics", "QUERY_AND_PHYSICS"),
+        ("ProbeOnly", "PROBE_ONLY"),
+        ("QueryAndProbe", "QUERY_AND_PROBE"),
+    )
+    for label, attribute in known_modes:
+        expected = getattr(unreal.CollisionEnabled, attribute, None)
+        if expected is not None and value == expected:
+            return label
+    normalized = str(value).upper().replace(" ", "_")
+    for label, attribute in known_modes:
+        if attribute in normalized or label.upper() in normalized:
+            return label
+    require(False, "component collision mode is unavailable or unsupported")
+
+
+def _collision_channel(label):
+    enum_type = getattr(unreal, "CollisionChannel", None)
+    require(enum_type is not None, "Unreal collision channel enum is unavailable")
+    candidates = {
+        "Pawn": ("PAWN", "ECC_PAWN"),
+        "Visibility": ("VISIBILITY", "ECC_VISIBILITY"),
+    }
+    require(label in candidates, "unsupported collision response channel: " + label)
+    for attribute in candidates[label]:
+        value = getattr(enum_type, attribute, None)
+        if value is not None:
+            return value
+    require(False, "required collision response channel is unavailable: " + label)
+
+
+def _collision_response_value(label):
+    for enum_name in ("CollisionResponseType", "CollisionResponse"):
+        enum_type = getattr(unreal, enum_name, None)
+        if enum_type is None:
+            continue
+        for attribute in (label.upper(), "ECR_" + label.upper()):
+            value = getattr(enum_type, attribute, None)
+            if value is not None:
+                return value
+    require(False, "required Unreal collision response is unavailable: " + label)
+
+
+def _collision_response_label(value):
+    for label in ("Ignore", "Overlap", "Block"):
+        for enum_name in ("CollisionResponseType", "CollisionResponse"):
+            enum_type = getattr(unreal, enum_name, None)
+            if enum_type is None:
+                continue
+            for attribute in (label.upper(), "ECR_" + label.upper()):
+                expected = getattr(enum_type, attribute, None)
+                if expected is not None and value == expected:
+                    return label
+        if label.upper() in str(value).upper():
+            return label
+    require(False, "component collision response is unavailable or unsupported")
+
+
+def _component_collision_responses(component):
+    return {
+        label: _collision_response_label(
+            component.get_collision_response_to_channel(_collision_channel(label))
+        )
+        for label in sorted(phase2.SEMANTIC_PROXY_COLLISION_RESPONSES)
+    }
+
+
 def _component_simulates_physics(component):
     try:
         return bool(component.is_simulating_physics())
@@ -146,6 +218,8 @@ def component_observation(component):
         "component_path": path,
         "mesh_path": str(mesh.get_path_name()) if mesh is not None else None,
         "collision_profile": profile,
+        "collision_mode": _component_collision_mode(component),
+        "collision_responses": _component_collision_responses(component),
         "collision_enabled": _component_collision_enabled(component),
         "simulate_physics": _component_simulates_physics(component),
         "generate_overlap_events": overlap,
@@ -153,6 +227,40 @@ def component_observation(component):
         "mobility": _component_mobility(component),
         "visible": visible,
     }
+
+
+def _semantic_value(value):
+    if isinstance(value, (str, bool, int, float)) or value is None:
+        return value
+    if hasattr(value, "items"):
+        return {
+            str(key): _semantic_value(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+        }
+    if isinstance(value, (list, tuple)) or (
+        hasattr(value, "__iter__") and not isinstance(value, (bytes, bytearray))
+    ):
+        return [_semantic_value(item) for item in value]
+    return str(value)
+
+
+def semantic_state_observation(actor, semantic_target_id):
+    observed = {}
+    for name in phase2.SEMANTIC_STATE_PROPERTY_NAMES:
+        try:
+            value = actor.get_editor_property(name)
+        except Exception:
+            require(
+                name not in phase2.REQUIRED_SEMANTIC_STATE_PROPERTIES,
+                "required semantic proxy state is unavailable: " + name,
+            )
+            continue
+        observed[name] = _semantic_value(value)
+    require(
+        observed.get("semantic_id") == semantic_target_id,
+        "semantic proxy property identity differs from its exact tag",
+    )
+    return observed
 
 
 def semantic_proxy_observation(actor, semantic_target_id):
@@ -176,16 +284,37 @@ def semantic_proxy_observation(actor, semantic_target_id):
         "actor_collision_enabled": actor_collision_enabled(actor),
         "world_transform_cm": observed_transform(actor),
         "tags": tags,
+        "semantic_state": semantic_state_observation(actor, semantic_target_id),
         "components": observations,
     }
 
 
-def hide_semantic_proxy_visuals(actor):
-    actor.set_actor_hidden_in_game(True)
+def repair_semantic_proxy_query_authority_and_hide(actor):
     components = actor.get_components_by_class(unreal.StaticMeshComponent)
     require(components, "semantic proxy has no StaticMeshComponent")
     for component in components:
+        component.set_simulate_physics(False)
+        component.set_collision_profile_name(
+            unreal.Name(phase2.SEMANTIC_PROXY_COLLISION_SEED_PROFILE)
+        )
+        try:
+            component.set_collision_enabled(unreal.CollisionEnabled.QUERY_ONLY)
+        except Exception as exc:
+            require(
+                False,
+                "failed to enable semantic proxy query collision: " + str(exc),
+            )
+        try:
+            component.set_collision_response_to_all_channels(
+                _collision_response_value("Block")
+            )
+        except Exception as exc:
+            require(
+                False,
+                "failed to set semantic proxy collision responses: " + str(exc),
+            )
         component.set_visibility(False, True)
+    actor.set_actor_hidden_in_game(True)
 
 
 def configure_visual_shell(actor, mesh, placement):
@@ -271,28 +400,21 @@ def visual_shell_observation(actor, placement):
     }
 
 
-def _proxy_preserved(baseline, observed):
+def _proxy_immutable_state_preserved(baseline, observed):
     return (
         observed["semantic_target_id"] == baseline["semantic_target_id"]
         and observed["actor_path"] == baseline["actor_path"]
         and observed["actor_class_path"] == baseline["actor_class_path"]
         and observed["actor_label"] == baseline["actor_label"]
-        and observed["actor_collision_enabled"]
-        == baseline["actor_collision_enabled"]
-        is True
         and transform_matches(
             observed["world_transform_cm"], baseline["world_transform_cm"]
         )
         and observed["tags"] == baseline["tags"]
-        and observed["actor_hidden_in_game"] is True
+        and observed["semantic_state"] == baseline["semantic_state"]
         and [item["component_path"] for item in observed["components"]]
         == [item["component_path"] for item in baseline["components"]]
         and all(
-            current["visible"] is False
-            and current["mesh_path"] == original["mesh_path"] is not None
-            and current["collision_profile"] == original["collision_profile"]
-            and current["collision_enabled"] == original["collision_enabled"] is True
-            and current["simulate_physics"] == original["simulate_physics"]
+            current["mesh_path"] == original["mesh_path"] is not None
             and current["generate_overlap_events"]
             == original["generate_overlap_events"]
             and current["can_ever_affect_navigation"]
@@ -300,6 +422,49 @@ def _proxy_preserved(baseline, observed):
             and current["mobility"] == original["mobility"]
             for current, original in zip(observed["components"], baseline["components"])
         )
+    )
+
+
+def _proxy_query_authority_exact(observed):
+    return (
+        observed["actor_hidden_in_game"] is True
+        and observed["actor_collision_enabled"] is True
+        and len(observed["components"]) == 1
+        and all(
+            component["mesh_path"] is not None
+            and component["collision_profile"]
+            == phase2.SEMANTIC_PROXY_COLLISION_PROFILE
+            and component["collision_mode"] == phase2.SEMANTIC_PROXY_COLLISION_MODE
+            and component["collision_responses"]
+            == phase2.SEMANTIC_PROXY_COLLISION_RESPONSES
+            and component["collision_enabled"] is True
+            and component["simulate_physics"] is False
+            and component["visible"] is False
+            for component in observed["components"]
+        )
+    )
+
+
+def _proxy_authority_repaired_and_hidden(baseline, observed):
+    return (
+        baseline["actor_hidden_in_game"] is False
+        and baseline["actor_collision_enabled"] is True
+        and len(baseline["components"]) == 1
+        and all(
+            component["mesh_path"] is not None and component["visible"] is True
+            for component in baseline["components"]
+        )
+        and _proxy_immutable_state_preserved(baseline, observed)
+        and _proxy_query_authority_exact(observed)
+    )
+
+
+def _proxy_repair_persisted(repaired, reloaded):
+    return (
+        _proxy_immutable_state_preserved(repaired, reloaded)
+        and _proxy_query_authority_exact(repaired)
+        and _proxy_query_authority_exact(reloaded)
+        and repaired["components"] == reloaded["components"]
     )
 
 
@@ -350,7 +515,7 @@ def run():
     map_reloaded = False
     actors_observed = []
     proxy_baselines = {}
-    proxy_after_hide = {}
+    proxy_after_authority_repair_and_hide = {}
     proxy_observations = []
     try:
         require(
@@ -390,24 +555,28 @@ def run():
             baseline = semantic_proxy_observation(proxy, semantic_target_id)
             require(
                 baseline["actor_collision_enabled"] is True
+                and baseline["actor_hidden_in_game"] is False
+                and len(baseline["components"]) == 1
                 and all(
-                    component["mesh_path"] is not None
-                    and component["collision_enabled"] is True
-                    and component["visible"] is True
+                    component["mesh_path"] is not None and component["visible"] is True
                     for component in baseline["components"]
                 ),
-                "semantic proxy lacks visible mesh or authoritative collision: "
+                "semantic proxy baseline identity, mesh, or visibility differs: "
                 + semantic_target_id,
             )
             proxy_baselines[semantic_target_id] = baseline
-            hide_semantic_proxy_visuals(proxy)
-            after_hide = semantic_proxy_observation(proxy, semantic_target_id)
+            stage = {
+                "phase": "repair_semantic_proxy_query_authority_and_hide",
+                "instance_id": semantic_target_id,
+            }
+            repair_semantic_proxy_query_authority_and_hide(proxy)
+            repaired = semantic_proxy_observation(proxy, semantic_target_id)
             require(
-                _proxy_preserved(baseline, after_hide),
-                "semantic proxy changed beyond visual hiding before save: "
+                _proxy_authority_repaired_and_hidden(baseline, repaired),
+                "semantic proxy query authority repair or immutable state failed: "
                 + semantic_target_id,
             )
-            proxy_after_hide[semantic_target_id] = after_hide
+            proxy_after_authority_repair_and_hide[semantic_target_id] = repaired
 
         for placement in execution["placements"]:
             stage = {
@@ -461,7 +630,7 @@ def run():
             "reloaded HSSD visual shell count differs",
         )
         for semantic_target_id, baseline in proxy_baselines.items():
-            after_hide = proxy_after_hide[semantic_target_id]
+            repaired = proxy_after_authority_repair_and_hide[semantic_target_id]
             tag = "VistaSemanticId=" + semantic_target_id
             matches = [actor for actor in reloaded if tag in sorted_tags(actor)]
             require(
@@ -470,24 +639,31 @@ def run():
             )
             observed = semantic_proxy_observation(matches[0], semantic_target_id)
             require(
-                _proxy_preserved(after_hide, observed)
-                and _proxy_preserved(baseline, observed),
-                "reloaded semantic proxy lost hidden visual or authority state: "
+                _proxy_authority_repaired_and_hidden(baseline, observed)
+                and _proxy_repair_persisted(repaired, observed),
+                "reloaded semantic proxy lost repaired query authority or immutable state: "
                 + semantic_target_id,
             )
             proxy_observations.append(
                 {
                     "semantic_target_id": semantic_target_id,
                     "baseline": baseline,
-                    "after_hide": after_hide,
+                    "after_authority_repair_and_hide": repaired,
                     "reloaded": observed,
-                    "authority": "hidden_r1_proxy",
+                    "authority": phase2.SEMANTIC_PROXY_AUTHORITY,
                     "authority_evidence": {
-                        "actor_identity_preserved": True,
+                        "actor_path_preserved": True,
+                        "actor_class_preserved": True,
                         "actor_label_preserved": True,
                         "actor_transform_preserved": True,
-                        "actor_collision_preserved": True,
-                        "component_collision_preserved": True,
+                        "actor_collision_enabled_throughout": True,
+                        "semantic_state_preserved": True,
+                        "component_paths_preserved": True,
+                        "component_query_authority_repaired": True,
+                        "component_collision_profile_exact": True,
+                        "component_collision_mode_exact": True,
+                        "component_collision_responses_exact": True,
+                        "component_physics_disabled": True,
                         "component_mesh_binding_preserved": True,
                         "component_mobility_preserved": True,
                         "semantic_proxy_visuals_hidden": True,
@@ -498,6 +674,11 @@ def run():
         require(
             len(proxy_observations) == phase2.SEMANTIC_PROXY_COUNT,
             "reloaded semantic proxy evidence count differs",
+        )
+        require(
+            sum(len(proxy["reloaded"]["components"]) for proxy in proxy_observations)
+            == phase2.SEMANTIC_PROXY_COMPONENT_COUNT,
+            "reloaded semantic proxy component count differs",
         )
         status = phase2.SUCCESS_STATUS
     except Exception as exc:
@@ -518,7 +699,17 @@ def run():
         "static_mesh_paths_derived_from_phase1_namespace": succeeded,
         "visual_shell_collision_disabled": succeeded,
         "visual_shell_navigation_disabled": succeeded,
-        "semantic_proxies_remain_authoritative": (
+        "semantic_proxy_query_authority_repaired_and_reloaded": (
+            succeeded and len(proxy_observations) == phase2.SEMANTIC_PROXY_COUNT
+        ),
+        "semantic_proxy_component_count_exact": (
+            succeeded
+            and sum(
+                len(proxy["reloaded"]["components"]) for proxy in proxy_observations
+            )
+            == phase2.SEMANTIC_PROXY_COMPONENT_COUNT
+        ),
+        "semantic_proxy_physics_disabled": (
             succeeded and len(proxy_observations) == phase2.SEMANTIC_PROXY_COUNT
         ),
         "semantic_proxy_visuals_hidden": (
