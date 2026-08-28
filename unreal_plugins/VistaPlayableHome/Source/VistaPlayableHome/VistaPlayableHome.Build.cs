@@ -23,5 +23,11 @@ public class VistaPlayableHome : ModuleRules
             "Networking",
             "Json"
         });
+
+        PrivateDependencyModuleNames.AddRange(new[]
+        {
+            "IKRig",
+            "PerformanceCaptureCore"
+        });
     }
 }

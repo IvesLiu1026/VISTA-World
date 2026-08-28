@@ -5,15 +5,17 @@
 #include "VistaCharacterProviderComponent.generated.h"
 
 class AActor;
-class AVistaHomeNpcCharacter;
+class ACharacter;
 class UChildActorComponent;
+class UIKRetargeter;
+class URetargetComponent;
 class USkeletalMeshComponent;
 
 /**
- * Fail-closed visual-provider bridge for a VISTA semantic NPC.
+ * Fail-closed visual-provider bridge for a VISTA character.
  *
  * The semantic actor, controller, collision capsule, action queue and Manny mesh
- * remain owned by AVistaHomeNpcCharacter. This component may attach one reviewed
+ * remain owned by ACharacter. This component may attach one reviewed
  * visual-only assembled character from a compiled allowlist. It never accepts an
  * Unreal object path from TCP, NLP, Blueprint or runtime state.
  */
@@ -30,12 +32,24 @@ class VISTAPLAYABLEHOME_API UVistaCharacterProviderComponent final
 public:
     UVistaCharacterProviderComponent();
 
+    /** Closed identifiers shared by the player and NPC constructors. */
+    static FName GetMannyProviderId();
+    static FName GetMetaHumanVivianProviderId();
+
     /**
      * Closed provider identifier. Supported values are "manny" and the one
      * compiled MetaHuman provider ID. Unknown values never become asset paths.
      */
     UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "VISTA|Character Provider")
     FName RequestedProviderId = TEXT("manny");
+
+    /**
+     * Command-line provider selection is opt-in per character. The playable
+     * character opts in; NPCs explicitly stay on Manny so a process-wide flag
+     * cannot accidentally instantiate one MetaHuman per NPC.
+     */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "VISTA|Character Provider")
+    bool bAllowCommandLineProviderOverride = false;
 
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "VISTA|Character Provider")
     FName ActiveProviderId = TEXT("manny");
@@ -62,8 +76,19 @@ private:
     UPROPERTY(Transient)
     TObjectPtr<UChildActorComponent> ProviderChildActorComponent = nullptr;
 
+    UPROPERTY(Transient)
+    TObjectPtr<URetargetComponent> ProviderRetargetComponent = nullptr;
+
     FName ResolveRequestedProviderId() const;
-    bool ActivateAllowlistedMetaHuman(AVistaHomeNpcCharacter& OwnerCharacter);
+    bool ActivateAllowlistedMetaHuman(ACharacter& OwnerCharacter);
+    bool ValidateMetaHumanVisualShell(
+        AActor& VisualActor,
+        FName& OutFailureCode) const;
+    bool ConfigureMetaHumanRetarget(
+        ACharacter& OwnerCharacter,
+        AActor& VisualActor,
+        UIKRetargeter& RetargetAsset,
+        FName& OutFailureCode);
     bool ValidateMetaHumanVisual(
         AActor& VisualActor,
         FName& OutFailureCode) const;
@@ -73,9 +98,11 @@ private:
     static bool HasReadyGroomOrHairComponent(AActor& VisualActor);
     static void DisableVisualCollision(AActor& VisualActor);
     static void SetMannyFallbackVisible(
-        AVistaHomeNpcCharacter& OwnerCharacter,
+        ACharacter& OwnerCharacter,
         bool bVisible);
+    void DestroyProviderRetargetComponent();
+    void DestroyProviderChildActorComponent();
     void SetPhotorealUnavailable(
-        AVistaHomeNpcCharacter& OwnerCharacter,
+        ACharacter& OwnerCharacter,
         FName FailureCode);
 };
