@@ -749,6 +749,25 @@ def _validate_engine_native_authority(request, engine_directory):
     }
 
 
+def _validate_authorization(request):
+    authorization = request.get("authorization")
+    require(type(authorization) is dict, "REQUEST_INVALID", "authorization is missing")
+    required_authorization = {
+        "epic_ue_only_content_entitlement_acknowledged": True,
+        "large_full_content_copy_acknowledged": True,
+        "metahuman_visual_demo_only_not_ai_training_testing_acknowledged": True,
+        "no_redistribution_acknowledged": True,
+        "private_noncommercial_research_acknowledged": True,
+        "source_uassets_outside_git_acknowledged": True,
+    }
+    require(
+        authorization == required_authorization,
+        "REQUEST_INVALID",
+        "authorization differs",
+    )
+    return authorization
+
+
 def _validate_request(
     request, request_raw, request_path, request_sha, result_path, result_sha_path
 ):
@@ -878,20 +897,7 @@ def _validate_request(
         "PROJECT_PIN_MISMATCH",
         "runtime project differs",
     )
-    authorization = request.get("authorization")
-    require(type(authorization) is dict, "REQUEST_INVALID", "authorization is missing")
-    required_authorization = {
-        "epic_ue_only_content_entitlement_acknowledged": True,
-        "large_full_content_copy_acknowledged": True,
-        "no_redistribution_acknowledged": True,
-        "private_noncommercial_research_acknowledged": True,
-        "source_uassets_outside_git_acknowledged": True,
-    }
-    require(
-        authorization == required_authorization,
-        "REQUEST_INVALID",
-        "authorization differs",
-    )
+    _validate_authorization(request)
     require(
         request.get("source_content_projection")
         == {
