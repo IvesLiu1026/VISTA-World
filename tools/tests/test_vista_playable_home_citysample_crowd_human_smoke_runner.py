@@ -322,6 +322,7 @@ def _acknowledgements() -> dict[str, bool]:
         "acknowledge_no_redistribution": True,
         "acknowledge_source_uassets_outside_git": True,
         "acknowledge_large_full_content_copy": True,
+        "acknowledge_metahuman_visual_demo_only_not_ai_training_testing": True,
     }
 
 
@@ -531,6 +532,7 @@ def test_plan_pins_project_target_receipt_engine_runner_and_commandlet(
     assert plan.request["authorization"] == {
         "epic_ue_only_content_entitlement_acknowledged": False,
         "large_full_content_copy_acknowledged": False,
+        "metahuman_visual_demo_only_not_ai_training_testing_acknowledged": False,
         "no_redistribution_acknowledged": False,
         "private_noncommercial_research_acknowledged": False,
         "source_uassets_outside_git_acknowledged": False,
@@ -636,7 +638,7 @@ def test_apply_requires_every_explicit_private_content_acknowledgement(
     assert not config.attempt_root.exists()
 
 
-def test_execution_request_binds_all_five_acknowledgements_only_after_apply_gate(
+def test_execution_request_binds_all_six_acknowledgements_only_after_apply_gate(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture = Fixture(tmp_path, monkeypatch)
@@ -686,6 +688,19 @@ def test_apply_copies_full_projection_invokes_isolated_nullrhi_and_seals_receipt
     assert receipt["claims"] == ["ue57_forward_load_and_dependency_smoke_validated"]
     assert receipt["runtime_visual_acceptance"] is False
     assert receipt["character_provider_published"] is False
+    assert receipt["metahuman_usage_scope"] == {
+        "human_operated_visual_demo_only": True,
+        "vista_dataset_inclusion": False,
+        "ai_training": False,
+        "ai_testing": False,
+        "ai_evaluation": False,
+        "ai_review": False,
+        "vlm_training": False,
+        "vlm_testing": False,
+        "vlm_evaluation": False,
+        "vlm_review": False,
+        "database_creation_or_population": False,
+    }
     assert receipt["acknowledgements"] == _bound_acknowledgements()
     assert receipt["execution_evidence"] == observed["execution_evidence"]
     assert receipt[
@@ -736,6 +751,7 @@ def test_apply_copies_full_projection_invokes_isolated_nullrhi_and_seals_receipt
     assert observed["request"]["authorization"] == {
         "epic_ue_only_content_entitlement_acknowledged": True,
         "large_full_content_copy_acknowledged": True,
+        "metahuman_visual_demo_only_not_ai_training_testing_acknowledged": True,
         "no_redistribution_acknowledged": True,
         "private_noncommercial_research_acknowledged": True,
         "source_uassets_outside_git_acknowledged": True,
@@ -854,6 +870,7 @@ def test_cli_exposes_no_source_asset_command_environment_or_gpu_override() -> No
         "ack_no_redistribution",
         "ack_source_uassets_outside_git",
         "ack_large_full_content_copy",
+        "ack_metahuman_visual_demo_only_not_ai_training_testing",
     }
     for forbidden in (
         "source",
@@ -867,6 +884,33 @@ def test_cli_exposes_no_source_asset_command_environment_or_gpu_override() -> No
         "port",
     ):
         assert forbidden not in destinations
+
+
+def test_cli_apply_with_original_five_flags_rejects_before_attempt_creation(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fixture = Fixture(tmp_path, monkeypatch)
+    config = fixture.config()
+    monkeypatch.setattr(runner, "_fixed_config", lambda _attempt_name: config)
+
+    return_code = runner.main(
+        [
+            "--attempt-name",
+            config.attempt_name,
+            "--apply",
+            "--ack-private-noncommercial-research",
+            "--ack-epic-ue-only-content-entitlement",
+            "--ack-no-redistribution",
+            "--ack-source-uassets-outside-git",
+            "--ack-large-full-content-copy",
+        ]
+    )
+
+    assert return_code == 1
+    assert "ACKNOWLEDGEMENT_REQUIRED" in capsys.readouterr().err
+    assert not config.attempt_root.exists()
 
 
 def test_execution_contract_rejects_network_enable_argument(
