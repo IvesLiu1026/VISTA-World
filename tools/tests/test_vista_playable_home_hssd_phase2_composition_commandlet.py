@@ -316,6 +316,34 @@ def test_semantic_proxy_no_collision_is_repaired_to_query_authority_before_hide(
     assert commandlet._proxy_authority_repaired_and_hidden(baseline, observed) is True
 
 
+def test_already_hidden_presentation_proxy_is_repaired_without_visibility_gate(
+    commandlet,
+) -> None:
+    target = "home.r1/room.entry_hall/entity.shoe_bench.01"
+    component = FakeComponent(
+        "/Game/Map.HiddenProxy.Component",
+        mesh=FakeMesh("/Game/Map/ShoeBench.ShoeBench"),
+        collision_enabled="QueryAndPhysics",
+        collision_profile="BlockAll",
+        visible=False,
+    )
+    actor = FakeActor("/Game/Map.HiddenProxy", component, semantic_target_id=target)
+    actor.properties["hidden"] = True
+    baseline = commandlet.semantic_proxy_observation(actor, target)
+
+    commandlet.repair_semantic_proxy_query_authority_and_hide(actor)
+    repaired = commandlet.semantic_proxy_observation(actor, target)
+
+    assert baseline["actor_hidden_in_game"] is True
+    assert baseline["components"][0]["visible"] is False
+    assert commandlet._proxy_authority_repaired_and_hidden(baseline, repaired) is True
+    assert repaired["actor_hidden_in_game"] is True
+    assert repaired["components"][0]["visible"] is False
+    assert repaired["components"][0]["collision_profile"] == "Custom"
+    assert repaired["components"][0]["collision_mode"] == "QueryOnly"
+    assert repaired["components"][0]["collision_responses"]["Visibility"] == "Block"
+
+
 @pytest.mark.parametrize(
     "mutation",
     [

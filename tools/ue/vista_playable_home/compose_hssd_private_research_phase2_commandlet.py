@@ -447,11 +447,12 @@ def _proxy_query_authority_exact(observed):
 
 def _proxy_authority_repaired_and_hidden(baseline, observed):
     return (
-        baseline["actor_hidden_in_game"] is False
+        isinstance(baseline["actor_hidden_in_game"], bool)
         and baseline["actor_collision_enabled"] is True
         and len(baseline["components"]) == 1
         and all(
-            component["mesh_path"] is not None and component["visible"] is True
+            component["mesh_path"] is not None
+            and isinstance(component["visible"], bool)
             for component in baseline["components"]
         )
         and _proxy_immutable_state_preserved(baseline, observed)
@@ -555,10 +556,9 @@ def run():
             baseline = semantic_proxy_observation(proxy, semantic_target_id)
             require(
                 baseline["actor_collision_enabled"] is True
-                and baseline["actor_hidden_in_game"] is False
                 and len(baseline["components"]) == 1
                 and all(
-                    component["mesh_path"] is not None and component["visible"] is True
+                    component["mesh_path"] is not None
                     for component in baseline["components"]
                 ),
                 "semantic proxy baseline identity, mesh, or visibility differs: "
@@ -652,6 +652,12 @@ def run():
                     "reloaded": observed,
                     "authority": phase2.SEMANTIC_PROXY_AUTHORITY,
                     "authority_evidence": {
+                        "baseline_actor_hidden_in_game": baseline[
+                            "actor_hidden_in_game"
+                        ],
+                        "baseline_component_visible_states": [
+                            component["visible"] for component in baseline["components"]
+                        ],
                         "actor_path_preserved": True,
                         "actor_class_preserved": True,
                         "actor_label_preserved": True,
