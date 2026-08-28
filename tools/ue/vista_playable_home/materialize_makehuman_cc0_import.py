@@ -39,6 +39,7 @@ SUCCESS_STATUS = "cc0_skeletal_import_saved_reloaded"
 HOST_SUCCESS_STATUS = "cc0_skeletal_import_post_exit_project_sealed"
 HOST_FAILURE_STATUS = "cc0_skeletal_import_failed_quarantined"
 MARKER = "VISTA_MAKEHUMAN_CC0_IMPORT_RESULT="
+TRANSFORM_SCHEMA = "vista.makehuman-cc0-ue57-unique-morph-glb/v1"
 
 RUN_PARENT = Path("/data/sysx/vista-world/runs/vista-action-world-r1")
 SOURCE_ROOT = RUN_PARENT / "makehuman-cc0-smoke-r6"
@@ -53,6 +54,16 @@ SOURCE_RECEIPT_CONTENT_DIGEST = (
 )
 SOURCE_GLB_SHA256 = "7cdda8277fdac906672fc8d86b598c89f212f2081cbdcce283ce7461ee392a97"
 SOURCE_GLB_SIZE = 30_350_176
+UE_COMPATIBLE_GLB_NAME = "vista_cc0_hero_ue57_unique_morphs.glb"
+UE_COMPATIBLE_GLB_SHA256 = (
+    "9a55b15a15ceeea1ca4ab6e21aae65640d8b5a575055dd0a45d5c0570ce8dcfe"
+)
+UE_COMPATIBLE_GLB_SIZE = 30_352_116
+BASE_FACE_MESH_NAME = "base.002"
+EXPECTED_MESH_COUNT = 9
+EXPECTED_TARGET_ENTRY_COUNT = 196
+EXPECTED_BASE_TARGET_COUNT = 94
+EXPECTED_AUXILIARY_TARGET_COUNT = 102
 SOURCE_OUTPUT_PINS: Mapping[str, tuple[str, int]] = {
     "vista_cc0_hero.blend": (
         "c502ae47ab07d4622bb716f01febfa8df76b2f714260c331dc4eed8e08f1d222",
@@ -324,6 +335,7 @@ class SourceEvidence:
     root: Path
     files: Mapping[str, FileSeal]
     receipt: Mapping[str, Any]
+    glb_raw: bytes
     glb_document: Mapping[str, Any]
     glb_summary: Mapping[str, Any]
 
@@ -333,6 +345,8 @@ class PreparedImport:
     report: Mapping[str, Any]
     source: SourceEvidence
     commandlet: FileSeal
+    ue_compatible_glb: bytes
+    ue_compatibility_transform: Mapping[str, Any]
 
 
 def canonical_json(value: Any) -> bytes:
@@ -731,6 +745,186 @@ def parse_glb(raw: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
     return document, summary
 
 
+def _unpack_glb_chunks(raw: bytes) -> tuple[dict[str, Any], bytes, bytes]:
+    """Return the JSON document plus exact padded JSON and BIN chunk payloads."""
+
+    if len(raw) < 28:
+        raise ImportPlanError("GLB is truncated")
+    magic, version, declared_size = struct.unpack_from("<4sII", raw, 0)
+    if magic != b"glTF" or version != 2 or declared_size != len(raw):
+        raise ImportPlanError("GLB header differs")
+    json_length, json_kind = struct.unpack_from("<II", raw, 12)
+    json_start = 20
+    json_end = json_start + json_length
+    if json_kind != 0x4E4F534A or json_end + 8 > len(raw):
+        raise ImportPlanError("GLB JSON chunk differs")
+    bin_length, bin_kind = struct.unpack_from("<II", raw, json_end)
+    bin_start = json_end + 8
+    bin_end = bin_start + bin_length
+    if bin_kind != 0x004E4942 or bin_end != len(raw):
+        raise ImportPlanError("GLB BIN chunk differs")
+    json_chunk = raw[json_start:json_end]
+    bin_chunk = raw[bin_start:bin_end]
+    try:
+        document = json.loads(json_chunk.rstrip(b" \x00"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ImportPlanError("GLB JSON chunk is invalid") from exc
+    if not isinstance(document, dict):
+        raise ImportPlanError("GLB JSON document must be one object")
+    return document, json_chunk, bin_chunk
+
+
+def transform_glb_for_ue_unique_morphs(
+    source_raw: bytes,
+) -> tuple[bytes, dict[str, Any]]:
+    """Rename only auxiliary morph labels so UE 5.7 sees global uniqueness."""
+
+    parse_glb(source_raw)
+    source_document, source_json_chunk, source_bin_chunk = _unpack_glb_chunks(
+        source_raw
+    )
+    transformed = json.loads(json.dumps(source_document))
+    meshes = transformed.get("meshes")
+    if not isinstance(meshes, list) or len(meshes) != EXPECTED_MESH_COUNT:
+        raise ImportPlanError("UE morph transform mesh inventory differs")
+    base_indices = [
+        index
+        for index, mesh in enumerate(meshes)
+        if isinstance(mesh, Mapping) and mesh.get("name") == BASE_FACE_MESH_NAME
+    ]
+    if len(base_indices) != 1:
+        raise ImportPlanError("UE morph transform base face mesh differs")
+    base_index = base_indices[0]
+    mapping = []
+    all_names: list[str] = []
+    for mesh_index, mesh in enumerate(meshes):
+        if not isinstance(mesh, dict):
+            raise ImportPlanError("UE morph transform mesh is invalid")
+        mesh_name = mesh.get("name")
+        extras = mesh.get("extras")
+        primitives = mesh.get("primitives")
+        weights = mesh.get("weights")
+        if extras is None and weights is None:
+            if (
+                not isinstance(mesh_name, str)
+                or not mesh_name
+                or not isinstance(primitives, list)
+                or any(
+                    not isinstance(primitive, Mapping)
+                    or primitive.get("targets", []) != []
+                    for primitive in primitives
+                )
+            ):
+                raise ImportPlanError(
+                    "UE morph transform zero-target mesh metadata differs"
+                )
+            continue
+        if (
+            not isinstance(mesh_name, str)
+            or not mesh_name
+            or not isinstance(extras, dict)
+            or not isinstance(extras.get("targetNames"), list)
+            or not isinstance(primitives, list)
+            or not isinstance(weights, list)
+        ):
+            raise ImportPlanError("UE morph transform mesh target metadata differs")
+        original_names = list(extras["targetNames"])
+        if (
+            len(original_names) != len(weights)
+            or any(not isinstance(name, str) or not name for name in original_names)
+            or any(
+                not isinstance(primitive, Mapping)
+                or not isinstance(primitive.get("targets"), list)
+                or len(primitive["targets"]) != len(original_names)
+                for primitive in primitives
+            )
+        ):
+            raise ImportPlanError("UE morph transform target order contract differs")
+        transformed_names = []
+        for target_index, original_name in enumerate(original_names):
+            if mesh_index == base_index:
+                transformed_name = original_name
+                preserved = True
+            else:
+                readable = re.sub(r"[^A-Za-z0-9]+", "_", original_name).strip("_")
+                if not readable:
+                    readable = "target"
+                transformed_name = (
+                    f"vista_aux_m{mesh_index:02d}_t{target_index:03d}_{readable}"
+                )
+                preserved = False
+            transformed_names.append(transformed_name)
+            all_names.append(transformed_name)
+            mapping.append(
+                {
+                    "mesh_index": mesh_index,
+                    "mesh_name": mesh_name,
+                    "target_index": target_index,
+                    "original_name": original_name,
+                    "transformed_name": transformed_name,
+                    "preserved": preserved,
+                }
+            )
+        extras["targetNames"] = transformed_names
+    if (
+        len(mapping) != EXPECTED_TARGET_ENTRY_COUNT
+        or len(all_names) != len(set(all_names))
+        or len({name.casefold() for name in all_names}) != len(all_names)
+        or sum(item["preserved"] is True for item in mapping)
+        != EXPECTED_BASE_TARGET_COUNT
+        or sum(item["preserved"] is False for item in mapping)
+        != EXPECTED_AUXILIARY_TARGET_COUNT
+    ):
+        raise ImportPlanError("UE morph transform global target-name closure differs")
+    base_names = meshes[base_index]["extras"]["targetNames"]
+    source_base_names = source_document["meshes"][base_index]["extras"]["targetNames"]
+    if base_names != source_base_names or len(base_names) != EXPECTED_BASE_TARGET_COUNT:
+        raise ImportPlanError("UE morph transform changed base face target names")
+
+    output_json = canonical_json(transformed)
+    output_json += b" " * ((-len(output_json)) % 4)
+    output_size = 12 + 8 + len(output_json) + 8 + len(source_bin_chunk)
+    output = (
+        struct.pack("<4sII", b"glTF", 2, output_size)
+        + struct.pack("<II", len(output_json), 0x4E4F534A)
+        + output_json
+        + struct.pack("<II", len(source_bin_chunk), 0x004E4942)
+        + source_bin_chunk
+    )
+    output_document, output_json_chunk, output_bin_chunk = _unpack_glb_chunks(output)
+    if (
+        output_document != transformed
+        or output_bin_chunk != source_bin_chunk
+        or hashlib.sha256(output).hexdigest() != UE_COMPATIBLE_GLB_SHA256
+        or len(output) != UE_COMPATIBLE_GLB_SIZE
+    ):
+        raise ImportPlanError("UE morph transform changed non-JSON payload bytes")
+    parse_glb(output)
+    transform = {
+        "schema_version": TRANSFORM_SCHEMA,
+        "algorithm": "preserve_base_002_prefix_every_auxiliary_target_by_mesh_and_index",
+        "source_glb_sha256": hashlib.sha256(source_raw).hexdigest(),
+        "source_glb_size_bytes": len(source_raw),
+        "source_json_chunk_sha256": hashlib.sha256(source_json_chunk).hexdigest(),
+        "source_bin_chunk_sha256": hashlib.sha256(source_bin_chunk).hexdigest(),
+        "source_bin_chunk_size_bytes": len(source_bin_chunk),
+        "output_glb_sha256": hashlib.sha256(output).hexdigest(),
+        "output_glb_size_bytes": len(output),
+        "output_json_chunk_sha256": hashlib.sha256(output_json_chunk).hexdigest(),
+        "output_bin_chunk_sha256": hashlib.sha256(output_bin_chunk).hexdigest(),
+        "output_bin_chunk_size_bytes": len(output_bin_chunk),
+        "base_mesh_index": base_index,
+        "base_mesh_name": BASE_FACE_MESH_NAME,
+        "target_entry_count": len(mapping),
+        "globally_unique_target_name_count": len(set(all_names)),
+        "preserved_base_target_count": EXPECTED_BASE_TARGET_COUNT,
+        "renamed_auxiliary_target_count": EXPECTED_AUXILIARY_TARGET_COUNT,
+        "mapping_sha256": hashlib.sha256(canonical_json(mapping)).hexdigest(),
+        "mapping": mapping,
+    }
+    return output, transform
+
+
 def validate_source_contract() -> SourceEvidence:
     if (
         not SOURCE_ROOT.is_absolute()
@@ -852,6 +1046,7 @@ def validate_source_contract() -> SourceEvidence:
         root=root,
         files=files,
         receipt=receipt,
+        glb_raw=raw_by_name[SOURCE_GLB.name],
         glb_document=document,
         glb_summary=summary,
     )
@@ -931,6 +1126,9 @@ def build_plan(
     if not apply and execution_acknowledgement is not None:
         raise ImportPlanError("dry-run does not accept an execution acknowledgement")
     source = validate_source_contract()
+    ue_compatible_glb, ue_compatibility_transform = transform_glb_for_ue_unique_morphs(
+        source.glb_raw
+    )
     toolchain = validate_toolchain()
     commandlet = commandlet_source()
     report = seal_mapping(
@@ -953,6 +1151,7 @@ def build_plan(
                 "character_id": source.receipt["character_id"],
                 "license": source.receipt["license"],
                 "glb_summary": source.glb_summary,
+                "ue_compatibility_transform": ue_compatibility_transform,
             },
             "toolchain": toolchain,
             "commandlet": commandlet.public(),
@@ -969,7 +1168,13 @@ def build_plan(
             "claims": dict(NEGATIVE_CLAIMS),
         }
     )
-    return PreparedImport(report=report, source=source, commandlet=commandlet)
+    return PreparedImport(
+        report=report,
+        source=source,
+        commandlet=commandlet,
+        ue_compatible_glb=ue_compatible_glb,
+        ue_compatibility_transform=ue_compatibility_transform,
+    )
 
 
 def _write_exclusive(path: Path, raw: bytes, *, mode: int = PRIVATE_FILE_MODE) -> None:
@@ -1111,7 +1316,7 @@ def revalidate_attempt_inputs(attempt: Path, execution: Mapping[str, Any]) -> No
     source = execution["source"]
     if Path(str(source["root"])).resolve(strict=True) != source_root:
         raise ImportPlanError("post-exit source root changed")
-    for label in ("glb", "receipt"):
+    for label in ("original_glb", "ue_compatible_glb", "receipt"):
         record = source[label]
         path = Path(str(record["path"]))
         if path.resolve(strict=True).parent != source_root:
@@ -1122,6 +1327,21 @@ def revalidate_attempt_inputs(attempt: Path, execution: Mapping[str, Any]) -> No
             record["size_bytes"],
         ):
             raise ImportPlanError("post-exit " + label + " changed")
+    original_raw, _ = read_regular(
+        Path(str(source["original_glb"]["path"])), "post-exit original GLB"
+    )
+    compatible_raw, _ = read_regular(
+        Path(str(source["ue_compatible_glb"]["path"])),
+        "post-exit UE-compatible GLB",
+    )
+    expected_compatible, expected_transform = transform_glb_for_ue_unique_morphs(
+        original_raw
+    )
+    if (
+        compatible_raw != expected_compatible
+        or source["ue_compatibility_transform"] != expected_transform
+    ):
+        raise ImportPlanError("post-exit UE morph transform binding changed")
     commandlet = execution["commandlet"]
     commandlet_path = Path(str(commandlet["path"]))
     expected_script = (attempt / "scripts" / commandlet_path.name).resolve(strict=True)
@@ -1245,8 +1465,10 @@ def _validate_terminal(
             "project",
             "execution_manifest",
             "execution_manifest_sha256",
-            "source_glb",
+            "source_original_glb",
+            "source_ue_compatible_glb",
             "source_receipt",
+            "ue_compatibility_transform",
         },
         "UE import bindings",
     )
@@ -1303,8 +1525,10 @@ def _validate_terminal(
         project_root, receipt["package_inventory"]
     )
     execution_path = attempt / EXECUTION_NAME
-    expected_source_glb = execution["source"]["glb"]
+    expected_source_original_glb = execution["source"]["original_glb"]
+    expected_source_ue_glb = execution["source"]["ue_compatible_glb"]
     expected_source_receipt = execution["source"]["receipt"]
+    expected_transform = execution["source"]["ue_compatibility_transform"]
     if (
         receipt["schema_version"] != IMPORT_RECEIPT_SCHEMA
         or receipt["status"] != SUCCESS_STATUS
@@ -1319,8 +1543,10 @@ def _validate_terminal(
         or bindings["execution_manifest"] != str(execution_path)
         or bindings["execution_manifest_sha256"]
         != hashlib.sha256(canonical_json(execution)).hexdigest()
-        or bindings["source_glb"] != expected_source_glb
+        or bindings["source_original_glb"] != expected_source_original_glb
+        or bindings["source_ue_compatible_glb"] != expected_source_ue_glb
         or bindings["source_receipt"] != expected_source_receipt
+        or bindings["ue_compatibility_transform"] != expected_transform
         or gates["quarantined"] is not False
         or any(
             value is not True for key, value in gates.items() if key != "quarantined"
@@ -1438,9 +1664,12 @@ def project_projection(root: Path) -> dict[str, Any]:
 
 def _revalidate_prepared(prepared: PreparedImport) -> None:
     rebound = validate_source_contract()
+    rebound_glb, rebound_transform = transform_glb_for_ue_unique_morphs(rebound.glb_raw)
     if (
         rebound.glb_summary != prepared.source.glb_summary
         or rebound.receipt != prepared.source.receipt
+        or rebound_glb != prepared.ue_compatible_glb
+        or rebound_transform != prepared.ue_compatibility_transform
         or {key: value.public() for key, value in rebound.files.items()}
         != {key: value.public() for key, value in prepared.source.files.items()}
     ):
@@ -1477,9 +1706,22 @@ def apply_plan(prepared: PreparedImport) -> dict[str, Any]:
         for path in (source_root, scripts_root, project_root):
             _mkdir(path)
         _mkdir(project_root / "Content")
-        copied_glb = _copy_sealed(
+        copied_original_glb = _copy_sealed(
             prepared.source.files[SOURCE_GLB.name], source_root / SOURCE_GLB.name
         )
+        ue_compatible_path = source_root / UE_COMPATIBLE_GLB_NAME
+        _write_exclusive(ue_compatible_path, prepared.ue_compatible_glb)
+        observed_compatible_raw, copied_compatible_glb = read_regular(
+            ue_compatible_path, "attempt-local UE-compatible GLB"
+        )
+        if (
+            observed_compatible_raw != prepared.ue_compatible_glb
+            or copied_compatible_glb.sha256
+            != prepared.ue_compatibility_transform["output_glb_sha256"]
+            or copied_compatible_glb.size_bytes
+            != prepared.ue_compatibility_transform["output_glb_size_bytes"]
+        ):
+            raise ImportPlanError("attempt-local UE-compatible GLB seal differs")
         copied_receipt = _copy_sealed(
             prepared.source.files[SOURCE_RECEIPT.name],
             source_root / SOURCE_RECEIPT.name,
@@ -1503,8 +1745,10 @@ def apply_plan(prepared: PreparedImport) -> dict[str, Any]:
                 "content_namespace": CONTENT_NAMESPACE,
                 "source": {
                     "root": str(source_root),
-                    "glb": copied_glb.public(),
+                    "original_glb": copied_original_glb.public(),
+                    "ue_compatible_glb": copied_compatible_glb.public(),
                     "receipt": copied_receipt.public(),
+                    "ue_compatibility_transform": prepared.ue_compatibility_transform,
                 },
                 "source_contract": {
                     "character_id": prepared.source.receipt["character_id"],
