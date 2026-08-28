@@ -826,6 +826,7 @@ def _fixed_command(plan: MaterializationPlan) -> list[str]:
         "-vulkan",
         "-RenderOffscreen",
         "-graphicsadapter=0",
+        "-notraceserver",
         "-stdout",
         "-FullStdOutLogOutput",
     ]
