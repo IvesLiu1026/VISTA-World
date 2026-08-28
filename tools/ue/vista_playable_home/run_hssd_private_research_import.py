@@ -743,8 +743,6 @@ def _validate_terminal(
 
 
 def _terminate_process_group(process: subprocess.Popen[Any]) -> None:
-    if process.poll() is not None:
-        return
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
@@ -765,12 +763,16 @@ def _terminate_process_group(process: subprocess.Popen[Any]) -> None:
 
 
 def _wait_contained(process: subprocess.Popen[Any], *, timeout: int) -> int:
-    previous_term = signal.getsignal(signal.SIGTERM)
+    managed_signals = [signal.SIGTERM]
+    if hasattr(signal, "SIGHUP"):
+        managed_signals.append(signal.SIGHUP)
+    previous_handlers = {signum: signal.getsignal(signum) for signum in managed_signals}
 
     def terminate_requested(_signum: int, _frame: Any) -> None:
         raise RunnerError("runner termination requested; Unreal quarantined")
 
-    signal.signal(signal.SIGTERM, terminate_requested)
+    for signum in managed_signals:
+        signal.signal(signum, terminate_requested)
     try:
         try:
             return process.wait(timeout=timeout)
@@ -783,7 +785,8 @@ def _wait_contained(process: subprocess.Popen[Any], *, timeout: int) -> int:
             _terminate_process_group(process)
             raise
     finally:
-        signal.signal(signal.SIGTERM, previous_term)
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
 
 
 def apply_plan(plan: Mapping[str, Any], snapshot: ProjectSnapshot) -> dict[str, Any]:
