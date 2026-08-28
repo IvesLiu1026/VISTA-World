@@ -3,9 +3,11 @@
 This commandlet is intentionally usable only through
 ``materialize_makehuman_cc0_import.py``.  It imports into one fresh namespace,
 requires a new Skeleton and PhysicsAsset, verifies the exact 53-bone source
-hierarchy and the 67 required face targets, saves and reloads every package,
-and publishes an append-only receipt.  It does not author a runtime character,
-retarget Manny animation, place an actor, or make a visual-quality claim.
+hierarchy and the 67-control source face contract (65 active canonical morphs,
+one exact-zero neutral baseline, and one auxiliary active tongue binding), saves
+and reloads every package, and publishes an append-only receipt.  It does not
+author a runtime character, retarget Manny animation, place an actor, or make a
+visual-quality claim.
 """
 
 from __future__ import annotations
@@ -85,6 +87,7 @@ EXPECTED_SOURCE_CONTRACT_KEYS = {
     "character_id",
     "bone_names",
     "required_face_targets",
+    "semantic_control_contract",
     "material_alpha_modes",
     "material_alpha_mode_counts",
 }
@@ -125,6 +128,60 @@ EXPECTED_CLASS_COUNTS = {
     "/Script/Engine.SkeletalMesh": 1,
     "/Script/Engine.Skeleton": 1,
     "/Script/Engine.Texture2D": 11,
+}
+ZERO_DELTA_CANONICAL_FACE_TARGETS = ("tongueOut", "viseme_sil")
+ACTIVE_AUXILIARY_TONGUE_TARGET = "vista_aux_m07_t012_tongueOut"
+EXPECTED_SEMANTIC_CONTROL_CONTRACT = {
+    "source_semantic_control_count": 67,
+    "active_canonical_face_target_count": 65,
+    "neutral_baseline": {
+        "mesh_index": 8,
+        "mesh_name": "base.002",
+        "target_index": 38,
+        "source_name": "viseme_sil",
+        "transformed_name": "viseme_sil",
+        "position_accessor_index": 335,
+        "vertex_count": 9247,
+        "sparse_count": 1,
+        "nonzero_vertex_count": 0,
+        "max_abs_component": 0.0,
+    },
+    "base_zero_tongue": {
+        "mesh_index": 8,
+        "mesh_name": "base.002",
+        "target_index": 93,
+        "source_name": "tongueOut",
+        "transformed_name": "tongueOut",
+        "position_accessor_index": 445,
+        "vertex_count": 9247,
+        "sparse_count": 1,
+        "nonzero_vertex_count": 0,
+        "max_abs_component": 0.0,
+    },
+    "auxiliary_active_tongue": {
+        "mesh_index": 7,
+        "mesh_name": "tongue01.001",
+        "target_index": 12,
+        "source_name": "tongueOut",
+        "transformed_name": ACTIVE_AUXILIARY_TONGUE_TARGET,
+        "position_accessor_index": 251,
+        "vertex_count": 253,
+        "sparse_count": 0,
+        "nonzero_vertex_count": 253,
+        "max_abs_component": 0.027199991047382355,
+    },
+    "active_positive_control": {
+        "mesh_index": 8,
+        "mesh_name": "base.002",
+        "target_index": 66,
+        "source_name": "jawOpen",
+        "transformed_name": "jawOpen",
+        "position_accessor_index": 391,
+        "vertex_count": 9247,
+        "sparse_count": 2329,
+        "nonzero_vertex_count": 2329,
+        "max_abs_component": 0.03429996967315674,
+    },
 }
 
 
@@ -477,6 +534,24 @@ def validate_execution(execution: Mapping[str, Any]) -> None:
         and set(contract) == EXPECTED_SOURCE_CONTRACT_KEYS,
         "source contract fields differ",
     )
+    required_targets = contract["required_face_targets"]
+    active_targets = [
+        name
+        for name in required_targets
+        if name not in ZERO_DELTA_CANONICAL_FACE_TARGETS
+    ]
+    expected_semantic_contract = {
+        **EXPECTED_SEMANTIC_CONTROL_CONTRACT,
+        "active_canonical_face_targets": active_targets,
+    }
+    require(
+        isinstance(required_targets, list)
+        and len(required_targets) == len(set(required_targets)) == 67
+        and set(ZERO_DELTA_CANONICAL_FACE_TARGETS).issubset(required_targets)
+        and len(active_targets) == 65
+        and contract["semantic_control_contract"] == expected_semantic_contract,
+        "67-control source face semantic contract differs",
+    )
     require(
         isinstance(commandlet, Mapping) and set(commandlet) == EXPECTED_COMMANDLET_KEYS,
         "commandlet fields differ",
@@ -747,10 +822,35 @@ def _inspect_character_contract(
     )
     morph_names = _morph_names(mesh)
     required_targets = execution["source_contract"]["required_face_targets"]
-    missing_targets = sorted(set(required_targets) - set(morph_names))
+    semantic_contract = execution["source_contract"]["semantic_control_contract"]
+    active_canonical_targets = semantic_contract["active_canonical_face_targets"]
+    missing_active_targets = sorted(set(active_canonical_targets) - set(morph_names))
+    unexpected_zero_delta_targets = sorted(
+        set(ZERO_DELTA_CANONICAL_FACE_TARGETS) & set(morph_names)
+    )
+    auxiliary_tongue = semantic_contract["auxiliary_active_tongue"]
     require(
-        len(required_targets) == 67 and not missing_targets,
-        "UE 5.7 import dropped required face targets",
+        len(required_targets) == 67
+        and len(active_canonical_targets) == 65
+        and not missing_active_targets,
+        "UE 5.7 import dropped an active canonical face morph",
+    )
+    require(
+        auxiliary_tongue["transformed_name"] == ACTIVE_AUXILIARY_TONGUE_TARGET
+        and auxiliary_tongue["nonzero_vertex_count"] == 253
+        and auxiliary_tongue["max_abs_component"] > 0.0
+        and ACTIVE_AUXILIARY_TONGUE_TARGET in morph_names,
+        "UE 5.7 import dropped the active auxiliary tongueOut binding",
+    )
+    require(
+        semantic_contract["neutral_baseline"]["source_name"] == "viseme_sil"
+        and semantic_contract["neutral_baseline"]["nonzero_vertex_count"] == 0
+        and semantic_contract["neutral_baseline"]["max_abs_component"] == 0.0
+        and semantic_contract["base_zero_tongue"]["source_name"] == "tongueOut"
+        and semantic_contract["base_zero_tongue"]["nonzero_vertex_count"] == 0
+        and semantic_contract["base_zero_tongue"]["max_abs_component"] == 0.0
+        and not unexpected_zero_delta_targets,
+        "zero-delta neutral/base tongue source contract differs",
     )
     blend_counts = _material_blend_counts(materials)
     require(
@@ -762,11 +862,21 @@ def _inspect_character_contract(
         "bone_count": len(bones),
         "bone_names": bones,
         "root_bone": bones[0],
-        "morph_target_count": len(morph_names),
-        "morph_target_names": morph_names,
-        "required_face_target_count": len(required_targets),
-        "required_face_targets_present": True,
-        "missing_required_face_targets": [],
+        "active_morph_target_count": len(morph_names),
+        "active_morph_target_names": morph_names,
+        "source_semantic_control_count": len(required_targets),
+        "active_canonical_face_target_count": len(active_canonical_targets),
+        "active_canonical_face_targets": active_canonical_targets,
+        "missing_active_canonical_face_targets": [],
+        "neutral_baseline_control": "viseme_sil",
+        "neutral_baseline_exact_zero_in_source": True,
+        "base_zero_tongue_control": "tongueOut",
+        "base_tongue_exact_zero_in_source": True,
+        "unexpected_zero_delta_canonical_morphs": [],
+        "auxiliary_active_tongue_target": ACTIVE_AUXILIARY_TONGUE_TARGET,
+        "auxiliary_active_tongue_present": True,
+        "auxiliary_tongue_nonzero_in_source": True,
+        "semantic_67_control_contract_verified": True,
         "material_alpha_mode_counts": blend_counts,
         "skeletal_mesh_object_path": str(mesh.get_path_name()),
         "skeleton_object_path": skeleton_path,
@@ -972,7 +1082,10 @@ def run() -> None:
             "own_skeleton_imported": complete,
             "exact_53_bones_verified": complete,
             "lowercase_root_verified": complete,
-            "required_67_face_targets_verified": complete,
+            "active_65_canonical_face_morphs_verified": complete,
+            "auxiliary_active_tongue_out_verified": complete,
+            "zero_delta_neutral_and_base_tongue_source_contract_verified": complete,
+            "semantic_67_control_contract_verified": complete,
             "source_6_opaque_3_mask_verified": complete,
             "physics_asset_imported": complete,
             "packages_saved_reloaded": complete,
@@ -982,7 +1095,7 @@ def run() -> None:
             "source_cc0_contract_verified": complete,
             "ue_skeletal_imported": complete,
             "own_skeleton_imported": complete,
-            "required_face_targets_present": complete,
+            "semantic_67_control_contract_verified": complete,
             "physics_asset_imported": complete,
             **EXPECTED_CLAIMS,
         },

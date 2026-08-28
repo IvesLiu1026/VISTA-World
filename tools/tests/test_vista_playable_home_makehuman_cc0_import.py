@@ -73,6 +73,40 @@ def test_real_r6_source_contract_is_exact() -> None:
     }
 
 
+def test_real_r6_semantic_controls_distinguish_zero_and_active_deltas() -> None:
+    semantic = materializer.validate_source_contract().glb_summary[
+        "semantic_control_contract"
+    ]
+
+    assert semantic == materializer.EXPECTED_SEMANTIC_CONTROL_CONTRACT
+    assert semantic["source_semantic_control_count"] == 67
+    assert semantic["active_canonical_face_target_count"] == 65
+    assert semantic["active_canonical_face_targets"] == list(
+        materializer.ACTIVE_CANONICAL_FACE_TARGETS
+    )
+    assert set(materializer.REQUIRED_FACE_TARGETS) - set(
+        semantic["active_canonical_face_targets"]
+    ) == {"viseme_sil", "tongueOut"}
+    assert semantic["neutral_baseline"]["nonzero_vertex_count"] == 0
+    assert semantic["neutral_baseline"]["max_abs_component"] == 0.0
+    assert semantic["base_zero_tongue"]["nonzero_vertex_count"] == 0
+    assert semantic["base_zero_tongue"]["max_abs_component"] == 0.0
+    assert semantic["auxiliary_active_tongue"] == {
+        "mesh_index": 7,
+        "mesh_name": "tongue01.001",
+        "target_index": 12,
+        "source_name": "tongueOut",
+        "transformed_name": materializer.ACTIVE_AUXILIARY_TONGUE_TARGET,
+        "position_accessor_index": 251,
+        "vertex_count": 253,
+        "sparse_count": 0,
+        "nonzero_vertex_count": 253,
+        "max_abs_component": 0.027199991047382355,
+    }
+    assert semantic["active_positive_control"]["source_name"] == "jawOpen"
+    assert semantic["active_positive_control"]["nonzero_vertex_count"] == 2329
+
+
 def test_real_dry_run_performs_zero_writes() -> None:
     attempt = materializer.RUN_PARENT / (
         "makehuman-cc0-import-unit-dryrun-" + uuid.uuid4().hex
@@ -209,6 +243,25 @@ def test_glb_rejects_reused_required_position_accessor(real_glb: bytes) -> None:
         materializer.parse_glb(_pack_glb(document, binary))
 
 
+def test_glb_rejects_nonzero_neutral_baseline_delta(real_glb: bytes) -> None:
+    document, binary = _unpack_glb(real_glb)
+    mesh = next(item for item in document["meshes"] if item["name"] == "base.002")
+    target_index = mesh["extras"]["targetNames"].index("viseme_sil")
+    accessor_index = mesh["primitives"][0]["targets"][target_index]["POSITION"]
+    accessor = document["accessors"][accessor_index]
+    values = accessor["sparse"]["values"]
+    view = document["bufferViews"][values["bufferView"]]
+    offset = view.get("byteOffset", 0) + values.get("byteOffset", 0)
+    changed = bytearray(binary)
+    struct.pack_into("<f", changed, offset, 0.001)
+
+    with pytest.raises(
+        materializer.ImportPlanError,
+        match="semantic-control activity contract differs",
+    ):
+        materializer.parse_glb(_pack_glb(document, bytes(changed)))
+
+
 def test_commandlet_is_fail_closed_and_non_runtime() -> None:
     source = (
         Path(materializer.__file__).resolve().parent
@@ -222,7 +275,13 @@ def test_commandlet_is_fail_closed_and_non_runtime() -> None:
         'mesh.set_editor_property("create_physics_asset", True)',
         'shared.set_editor_property("skeleton", None)',
         'len(bones) == 53 and bones[0] == "root"',
-        "len(required_targets) == 67 and not missing_targets",
+        "len(active_canonical_targets) == 65",
+        "not missing_active_targets",
+        "ACTIVE_AUXILIARY_TONGUE_TARGET in morph_names",
+        "not unexpected_zero_delta_targets",
+        '"active_65_canonical_face_morphs_verified": complete',
+        '"auxiliary_active_tongue_out_verified": complete',
+        '"semantic_67_control_contract_verified": complete',
         'blend_counts == {"OPAQUE": 6, "MASK": 3, "OTHER": 0}',
         "class_counts == EXPECTED_CLASS_COUNTS",
         'execution["execution_acknowledgement"] == EXECUTION_ACKNOWLEDGEMENT',
@@ -240,6 +299,8 @@ def test_commandlet_is_fail_closed_and_non_runtime() -> None:
         '"gta_level_quality": False',
     ):
         assert required in source
+    assert "required_67_face_targets_verified" not in source
+    assert "required_face_targets_present" not in source
 
 
 def _attempt_input_fixture(
