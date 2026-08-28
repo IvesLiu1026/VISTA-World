@@ -82,7 +82,7 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
     def test_core_room_sources_pin_exact_model_ids_and_relative_paths(self) -> None:
         sources = {item["semantic_category"]: item for item in self.profile["source_assets"]}
         expected = {
-            "sofa": "e94ede305ff3f873dd34f8e95274bb54679df6b4",
+            "sofa": "4a8cb0dd106792b60dc7ae879985930550e51ffc",
             "coffee_table": "f8a1e9ad71428615e74490c8fe10d309b527ee55",
             "fridge": "d1bb1e76ecd549767fd650aa211e3ce29be75ad6",
             "stove": "31e1f375aa66d6235fbce7b5f34f975bcbe15c90",
@@ -103,6 +103,20 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
             )
             self.assertTrue(all(value > 0 for value in source["normalized_dimensions_m"]))
 
+        sofa = sources["sofa"]
+        self.assertEqual(
+            sofa["render_asset_sha256"],
+            "b13911e9a094daa582f8da779d09ce2cccda41016b48e19f9c050c80cba19939",
+        )
+        self.assertEqual(
+            sofa["object_config_sha256"],
+            "27517a63b0968d67e5ba91badabd04cf2635291af5cbb8e845b40ce995547ccf",
+        )
+        self.assertEqual(
+            sofa["normalized_dimensions_m"],
+            [0.808865, 1.972667, 0.718913],
+        )
+
     def test_catalog_semantic_receipts_are_closed_and_pending_visual_review(self) -> None:
         sources = {item["source_asset_id"]: item for item in self.profile["source_assets"]}
         receipts = {
@@ -120,6 +134,13 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
                 receipt["review_status"],
                 "catalog_verified_identity_visual_review_pending",
             )
+
+        sofa_receipt = receipts["hssd.static.sofa"]
+        self.assertEqual(sofa_receipt["catalog_name"], "Anja Velvet Sofa , Green")
+        self.assertEqual(sofa_receipt["catalog_wnsynsetkey"], "sofa.n.01")
+        self.assertEqual(sofa_receipt["semantic_condensed_category"], "seat")
+        self.assertEqual(sofa_receipt["semantic_primary_category"], "sofa_chair")
+        self.assertFalse(sofa_receipt["catalog_has_multiple_objects"])
 
         mismatch = copy.deepcopy(self.profile)
         mismatch["catalog_semantic_receipts"][0]["model_id"] = "0" * 40
@@ -178,7 +199,7 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
         )
 
     def test_digest_is_canonical_and_repeatable(self) -> None:
-        expected = "2369beeab0c3ab6e0cd4863c7174c0fead9daa38acc5b737048accca7ce7217f"
+        expected = "4b76e178ab1a3043d6adda6fe5786a5111f58523f4f8a23eb9cc2c82d883e8d3"
         self.assertEqual(self.profile["content_digest"], expected)
         self.assertEqual(contract.content_digest(self.profile), expected)
         self.assertEqual(self.reseal(self.profile), self.profile)
