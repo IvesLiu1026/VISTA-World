@@ -159,6 +159,19 @@ Acceptance notes:
 - Wall, floor, trim and cabinetry UVs are metric and deterministic.
 - DefaultMaterial, missing textures, stretched unique hero UVs and unbound mesh
   primitives fail the build.
+- WHEN an optional glTF material extension changes UE 5.7's material-branch
+  selection despite being semantically inactive THEN the system SHALL create a
+  deterministic, receipt-bound compatibility derivative and SHALL leave the
+  licensed source bytes immutable.
+- A compatibility derivative may remove only a material-local
+  `KHR_materials_transmission` whose factor is absent or exactly zero, whose
+  texture is absent and whose object contains no unknown fields. Active
+  transmission, unknown fields and simultaneous active transmission/clear-coat
+  SHALL be retained and surfaced; a dual-active material blocks full-fidelity
+  promotion until a custom material bridge is verified.
+- Unreal import acceptance continues to require every returned Texture2D to be
+  referenced by a bound non-default material. Compatibility work may not weaken
+  that gate to hide a material-import precedence error.
 
 ### R8. A photoreal human is a provider, not a hidden dependency
 
@@ -226,6 +239,10 @@ mutated in place, and rollback SHALL mean launching the previous sealed package.
 - MetaHuman or HSSD content is locally missing despite a manifest reference.
 - A Poly Haven upstream `files_hash` changes after the request was pinned.
 - A packaged build has the correct montage name but the wrong skeleton or notify.
+- A GLB has active clear-coat plus a no-op transmission extension, causing UE to
+  choose a transmission material and leave the clear-coat texture unbound.
+- A GLB legitimately needs active transmission and active clear-coat on the same
+  material, which UE 5.7 Interchange cannot represent through its single branch.
 - An animation completes visually but the authoritative target state did not
   change, or state changed without a contact notify.
 

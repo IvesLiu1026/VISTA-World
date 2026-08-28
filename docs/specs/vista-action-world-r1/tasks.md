@@ -97,6 +97,16 @@ Depends on: requirements.md, design.md
   - Requirements: R6, R7, R9
   - Validation: >=8 purposeful items/room, >=60 total, exact local HSSD revision,
     no public payload, walkability and semantic hero coverage
+  - Progress: the exact 26-model/60-placement R5 source and a Blender player-eye
+    living-room render exist. The first isolated UE 5.7 import is permanently
+    quarantined after seven assets because a no-op transmission extension made
+    Interchange select Transmission over ClearCoat and left the coffee-table
+    clear-coat texture unbound. The strict texture gate worked as intended.
+    The active slice is an attempt-bound R5-to-UE compatibility derivative that
+    removes only receipt-proven no-op transmission objects; it may not weaken
+    the import gate. One washer material has real transmission plus real
+    clear-coat and remains an explicit full-fidelity blocker pending a custom
+    material bridge.
 
 - [ ] T11. Add a YCB interaction kit
   - Files: pinned acquisition/attribution manifests, pickup physics/socket profiles
@@ -151,9 +161,9 @@ Depends on: requirements.md, design.md
   design-minimum texel-density receipts, metric UV generation and GLB-level UV
   evidence gates. Full-scene 2K and UE observation remain acceptance work.
 - Active next slices: complete Epic device authorization and the first private
-  assembled Vivian candidate, assemble and visually audit the catalog-verified
-  HSSD living-room slice, then combine both in an eye-level UE candidate before
-  T5/T6 contact actions.
+  assembled Vivian candidate; complete the receipt-bound HSSD UE 5.7 material
+  compatibility/import slice; then combine both in an eye-level UE candidate
+  before T5/T6 contact actions.
 - Golden Room R2 smoke evidence: append-only accepted forge
   `golden-room-r2-smoke-20260827T212250Z` contains 45 placements, 40 external
   dressing instances, 211 components and seven GLBs. All 424 vertical-slice
@@ -172,7 +182,7 @@ Depends on: requirements.md, design.md
   Catalog name, WordNet/category metadata and multi-object state are sealed but
   visual review remains pending. A real Blender 4.5.8 execution produced and
   revalidated 26 normalized PBR GLBs plus 26 receipts under the private external
-  run `hssd-private-research-r4-20260828t122000z`; the result intentionally says
+  R5 run `hssd-private-research-r5-20260828t040000z`; the result intentionally says
   `scene_assembly_status=plan_only_not_assembled` and is not accepted scene
   evidence. Static visual use is allowed only under CC-BY-NC-4.0; fridge, desk,
   nightstand, wardrobe and stove articulation remain explicitly pending.
