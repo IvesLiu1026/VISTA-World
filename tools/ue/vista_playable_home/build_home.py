@@ -206,6 +206,42 @@ PRESENTATION_EXTERNAL_NANITE_POLICY = (
 PRESENTATION_EXTERNAL_ACQUISITION_SCHEMA = (
     "simworld.vista.playable-home-poly-haven-receipt/v1"
 )
+PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_PATH = (
+    REPO_ROOT
+    / "world_packs/vista_playable_home_r1/visual_profiles/realistic_interior_r2_external_placement.json"
+)
+PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_SHA256 = (
+    "918e5eb53ffba60e83e30a33163d033aba2262c57cdded45f810351e650dfc76"
+)
+PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_CONTENT_DIGEST = (
+    "f3ccee95f25e24201863974eb6078b8892dfdaf9b3049ef56464c8f819a16dbf"
+)
+PRESENTATION_EXTERNAL_PLACEMENT_COUNT = 45
+PRESENTATION_EXTERNAL_DRESSING_COUNT = 40
+PRESENTATION_EXTERNAL_DRESSING_MODE_COUNTS = {
+    "external_blend": 28,
+    "project_authored": 12,
+}
+PRESENTATION_EXTERNAL_ROOM_IDS = frozenset({
+    "home.r1/room.entry_hall",
+    "home.r1/room.kitchen_dining",
+    "home.r1/room.living_room",
+})
+PRESENTATION_EXTERNAL_SOURCE_MANIFEST_KEYS = frozenset({
+    "schema_version", "placement_id", "acquisition", "placements",
+    "content_digest",
+})
+PRESENTATION_EXTERNAL_SOURCE_ACQUISITION_KEYS = frozenset({
+    "provider", "receipt_filename", "receipt_schema_version",
+    "receipt_digest", "receipt_file_sha256", "acquisition_manifest_sha256",
+})
+PRESENTATION_EXTERNAL_SOURCE_PLACEMENT_KEYS = frozenset({
+    "placement_id", "placement_kind", "room_kind", "category",
+    "realization_mode", "semantic_target_id", "anchor_id",
+    "support_placement_id", "source_logical_asset_id", "geometry_recipe",
+    "material_logical_asset_ids", "location_offset_m",
+    "rotation_offset_deg", "uniform_scale", "authored_dimensions_m",
+})
 PRESENTATION_EXTERNAL_MANIFEST_KEYS = frozenset({
     "schema_version", "forge_id", "house_revision", "visual_profile_id",
     "seed", "source_house_digest", "source_profile_digest",
@@ -246,113 +282,6 @@ PRESENTATION_EXTERNAL_ASSET_FILE_KEYS = frozenset({
     "relative_path", "size_bytes", "sha256", "texture_semantics",
     "dimensions_px",
 })
-PRESENTATION_EXTERNAL_SEMANTIC_TARGETS_BY_ROOM = {
-    "home.r1/room.entry_hall": frozenset({
-        "home.r1/room.entry_hall/entity.shoe_bench.01",
-    }),
-    "home.r1/room.living_room": frozenset({
-        "home.r1/room.living_room/entity.coffee_table.01",
-        "home.r1/room.living_room/entity.sofa.01",
-    }),
-    "home.r1/room.kitchen_dining": frozenset({
-        "home.r1/room.kitchen_dining/entity.dining_table.01",
-        "home.r1/room.kitchen_dining/entity.stove.01",
-    }),
-}
-PRESENTATION_EXTERNAL_SEMANTIC_TARGET_CATEGORIES = {
-    "home.r1/room.entry_hall/entity.shoe_bench.01": "shoe_bench",
-    "home.r1/room.living_room/entity.coffee_table.01": "coffee_table",
-    "home.r1/room.living_room/entity.sofa.01": "sofa",
-    "home.r1/room.kitchen_dining/entity.dining_table.01": "dining_table",
-    "home.r1/room.kitchen_dining/entity.stove.01": "stove",
-}
-PRESENTATION_EXTERNAL_HERO_PLACEMENTS = {
-    "home.r1/room.entry_hall/entity.shoe_bench.01": {
-        "placement_id": "hero.entry.shoe_bench",
-        "realization_mode": "project_authored",
-        "source_logical_asset_id": None,
-        "geometry_recipe": "contemporary_shoe_bench_v1",
-        "material_logical_asset_ids": (
-            "visual.material.white_oak_veneer",
-            "visual.material.poly_wool_herringbone",
-        ),
-    },
-    "home.r1/room.living_room/entity.sofa.01": {
-        "placement_id": "hero.living.sofa",
-        "realization_mode": "project_authored",
-        "source_logical_asset_id": None,
-        "geometry_recipe": "contemporary_sofa_v1",
-        "material_logical_asset_ids": (
-            "visual.material.white_oak_veneer",
-            "visual.material.poly_wool_herringbone",
-        ),
-    },
-    "home.r1/room.living_room/entity.coffee_table.01": {
-        "placement_id": "hero.living.coffee_table",
-        "realization_mode": "external_blend",
-        "source_logical_asset_id": "visual.hero.living_coffee_table",
-        "geometry_recipe": None,
-        "material_logical_asset_ids": (),
-    },
-    "home.r1/room.kitchen_dining/entity.stove.01": {
-        "placement_id": "hero.kitchen.stove",
-        "realization_mode": "external_blend",
-        "source_logical_asset_id": "visual.hero.kitchen_stove",
-        "geometry_recipe": None,
-        "material_logical_asset_ids": (),
-    },
-    "home.r1/room.kitchen_dining/entity.dining_table.01": {
-        "placement_id": "hero.kitchen.dining_table",
-        "realization_mode": "project_authored",
-        "source_logical_asset_id": None,
-        "geometry_recipe": "contemporary_dining_table_v1",
-        "material_logical_asset_ids": ("visual.material.white_oak_veneer",),
-    },
-}
-PRESENTATION_EXTERNAL_DRESSING_IDS_BY_ROOM = {
-    "home.r1/room.entry_hall": frozenset({
-        "dress.entry.postcards",
-        "dress.entry.rubber_boots",
-        "dress.entry.wicker_basket",
-    }),
-    "home.r1/room.living_room": frozenset({
-        "dress.living.armchair",
-        "dress.living.books",
-        "dress.living.ceramic_vase",
-        "dress.living.media_cabinet",
-        "dress.living.potted_plant",
-        "dress.living.side_table",
-    }),
-    "home.r1/room.kitchen_dining": frozenset({
-        "dress.kitchen.cardboard_box",
-        "dress.kitchen.chair_east",
-        "dress.kitchen.chair_north",
-        "dress.kitchen.chair_south",
-        "dress.kitchen.cutting_board",
-        "dress.kitchen.wooden_bowl",
-        "dress.kitchen.wooden_plate",
-        "dress.kitchen.wooden_spoon",
-    }),
-}
-PRESENTATION_EXTERNAL_DRESSING_SOURCES = {
-    "dress.entry.postcards": "visual.dressing.entry.postcards",
-    "dress.entry.rubber_boots": "visual.dressing.entry.rubber_boots",
-    "dress.entry.wicker_basket": "visual.dressing.entry.wicker_basket",
-    "dress.living.armchair": "visual.dressing.living.armchair",
-    "dress.living.books": "visual.dressing.living.books",
-    "dress.living.ceramic_vase": "visual.dressing.shared.ceramic_vase",
-    "dress.living.media_cabinet": "visual.dressing.living.media_cabinet",
-    "dress.living.potted_plant": "visual.dressing.living.potted_plant",
-    "dress.living.side_table": "visual.dressing.living.side_table",
-    "dress.kitchen.cardboard_box": "visual.dressing.kitchen.cardboard_box",
-    "dress.kitchen.chair_east": "visual.dressing.kitchen.dining_chair",
-    "dress.kitchen.chair_north": "visual.dressing.kitchen.dining_chair",
-    "dress.kitchen.chair_south": "visual.dressing.kitchen.dining_chair",
-    "dress.kitchen.cutting_board": "visual.dressing.kitchen.cutting_board",
-    "dress.kitchen.wooden_bowl": "visual.dressing.kitchen.wooden_bowl",
-    "dress.kitchen.wooden_plate": "visual.dressing.kitchen.wooden_plate",
-    "dress.kitchen.wooden_spoon": "visual.dressing.kitchen.wooden_spoon",
-}
 SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
 PRESENTATION_EXTERNAL_ID_RE = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$"
@@ -866,6 +795,200 @@ def _external_vector(value: Any, label: str, *, positive: bool = False) -> list[
     return [float(item) for item in value]
 
 
+def _load_pinned_external_placement_contract(
+    plan: Mapping[str, Any],
+    expected_room_ids: set[str],
+) -> dict[str, Any]:
+    source, _raw = _load_json(
+        PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_PATH,
+        expected_sha256=PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_SHA256,
+        label="pinned realistic interior r2 placement manifest",
+    )
+    if (
+        set(source) != PRESENTATION_EXTERNAL_SOURCE_MANIFEST_KEYS
+        or source.get("schema_version") != PRESENTATION_EXTERNAL_PLACEMENT_SCHEMA
+        or source.get("placement_id")
+        != "vista_playable_home.realistic_interior_r2.external_v1"
+        or source.get("content_digest")
+        != PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_CONTENT_DIGEST
+    ):
+        _external_fail("pinned placement manifest identity or fields differ")
+
+    raw_acquisition = source.get("acquisition")
+    if (
+        not isinstance(raw_acquisition, Mapping)
+        or set(raw_acquisition) != PRESENTATION_EXTERNAL_SOURCE_ACQUISITION_KEYS
+        or raw_acquisition.get("receipt_filename") != "acquisition-receipt.json"
+    ):
+        _external_fail("pinned placement manifest acquisition fields differ")
+    acquisition = {
+        key: raw_acquisition[key]
+        for key in (
+            "provider",
+            "receipt_schema_version",
+            "receipt_digest",
+            "receipt_file_sha256",
+            "acquisition_manifest_sha256",
+        )
+    }
+    _validate_external_acquisition_reference(
+        acquisition,
+        "pinned placement manifest acquisition",
+    )
+
+    if expected_room_ids != set(PRESENTATION_EXTERNAL_ROOM_IDS):
+        _external_fail("presentation external room slice differs from the pinned contract")
+    rooms = [
+        room
+        for room in plan.get("rooms", [])
+        if isinstance(room, Mapping) and room.get("room_id") in expected_room_ids
+    ]
+    room_id_by_kind = {
+        room.get("kind"): room.get("room_id")
+        for room in rooms
+        if isinstance(room.get("kind"), str)
+        and isinstance(room.get("room_id"), str)
+    }
+    if len(rooms) != len(expected_room_ids) or set(room_id_by_kind.values()) != expected_room_ids:
+        _external_fail("presentation rooms do not map exactly to the pinned placement rooms")
+
+    rows = source.get("placements")
+    if not isinstance(rows, list) or len(rows) != PRESENTATION_EXTERNAL_PLACEMENT_COUNT:
+        _external_fail(
+            "pinned placement manifest must contain exactly "
+            f"{PRESENTATION_EXTERNAL_PLACEMENT_COUNT} records"
+        )
+    placements_by_id: dict[str, dict[str, Any]] = {}
+    semantic_by_room = {room_id: set() for room_id in expected_room_ids}
+    dressing_by_room = {room_id: set() for room_id in expected_room_ids}
+    dressing_mode_counts: Counter[str] = Counter()
+    for index, raw_row in enumerate(rows):
+        if (
+            not isinstance(raw_row, Mapping)
+            or set(raw_row) != PRESENTATION_EXTERNAL_SOURCE_PLACEMENT_KEYS
+        ):
+            _external_fail(f"pinned placement manifest record {index} fields differ")
+        row = copy.deepcopy(dict(raw_row))
+        placement_id = row.get("placement_id")
+        kind = row.get("placement_kind")
+        mode = row.get("realization_mode")
+        room_id = room_id_by_kind.get(row.get("room_kind"))
+        materials = row.get("material_logical_asset_ids")
+        if (
+            not isinstance(placement_id, str)
+            or PRESENTATION_EXTERNAL_ID_RE.fullmatch(placement_id) is None
+            or placement_id in placements_by_id
+            or room_id not in expected_room_ids
+            or not isinstance(row.get("category"), str)
+            or kind not in {"semantic_fixed", "dressing"}
+            or mode not in {"project_authored", "external_blend"}
+            or not isinstance(materials, list)
+            or any(
+                not isinstance(item, str)
+                or PRESENTATION_EXTERNAL_ID_RE.fullmatch(item) is None
+                for item in materials
+            )
+            or len(materials) != len(set(materials))
+        ):
+            _external_fail(f"pinned placement manifest record {index} identity differs")
+        _external_vector(
+            row.get("location_offset_m"),
+            f"pinned placement {placement_id}.location_offset_m",
+        )
+        _external_vector(
+            row.get("rotation_offset_deg"),
+            f"pinned placement {placement_id}.rotation_offset_deg",
+        )
+        scale = row.get("uniform_scale")
+        if (
+            isinstance(scale, bool)
+            or not isinstance(scale, (int, float))
+            or not math.isfinite(float(scale))
+            or float(scale) <= 0.0
+        ):
+            _external_fail(f"pinned placement {placement_id} scale differs")
+        semantic_target = row.get("semantic_target_id")
+        anchor_id = row.get("anchor_id")
+        support = row.get("support_placement_id")
+        if kind == "semantic_fixed":
+            if (
+                not isinstance(semantic_target, str)
+                or PRESENTATION_EXTERNAL_ID_RE.fullmatch(semantic_target) is None
+                or anchor_id is not None
+            ):
+                _external_fail(f"pinned semantic placement {placement_id} differs")
+            semantic_by_room[room_id].add(semantic_target)
+        else:
+            if (
+                semantic_target is not None
+                or not isinstance(anchor_id, str)
+                or PRESENTATION_EXTERNAL_ID_RE.fullmatch(anchor_id) is None
+            ):
+                _external_fail(f"pinned dressing placement {placement_id} differs")
+            dressing_by_room[room_id].add(placement_id)
+            dressing_mode_counts[mode] += 1
+        if support is not None and (
+            not isinstance(support, str)
+            or PRESENTATION_EXTERNAL_ID_RE.fullmatch(support) is None
+        ):
+            _external_fail(f"pinned placement {placement_id} support differs")
+        if mode == "external_blend":
+            if (
+                not isinstance(row.get("source_logical_asset_id"), str)
+                or PRESENTATION_EXTERNAL_ID_RE.fullmatch(
+                    row["source_logical_asset_id"]
+                )
+                is None
+                or row.get("geometry_recipe") is not None
+                or materials
+                or row.get("authored_dimensions_m") is not None
+            ):
+                _external_fail(f"pinned external placement {placement_id} differs")
+        else:
+            dimensions = row.get("authored_dimensions_m")
+            if (
+                row.get("source_logical_asset_id") is not None
+                or not isinstance(row.get("geometry_recipe"), str)
+                or PRESENTATION_EXTERNAL_ID_RE.fullmatch(row["geometry_recipe"])
+                is None
+                or not materials
+                or dimensions is None
+            ):
+                _external_fail(f"pinned project-authored placement {placement_id} differs")
+            _external_vector(
+                dimensions,
+                f"pinned placement {placement_id}.authored_dimensions_m",
+                positive=True,
+            )
+        row["room_id"] = room_id
+        placements_by_id[placement_id] = row
+
+    if (
+        sum(len(ids) for ids in semantic_by_room.values()) != 5
+        or sum(len(ids) for ids in dressing_by_room.values())
+        != PRESENTATION_EXTERNAL_DRESSING_COUNT
+        or dict(dressing_mode_counts) != PRESENTATION_EXTERNAL_DRESSING_MODE_COUNTS
+    ):
+        _external_fail("pinned placement manifest role or realization-mode counts differ")
+    if any(
+        placement["support_placement_id"] is not None
+        and (
+            placement["support_placement_id"] not in placements_by_id
+            or placements_by_id[placement["support_placement_id"]]["room_id"]
+            != placement["room_id"]
+            or placement["support_placement_id"] == placement["placement_id"]
+        )
+        for placement in placements_by_id.values()
+    ):
+        _external_fail("pinned placement manifest support inventory differs")
+    return {
+        "acquisition": acquisition,
+        "placements_by_id": placements_by_id,
+        "semantic_by_room": semantic_by_room,
+        "dressing_by_room": dressing_by_room,
+    }
+
+
 def _validate_external_asset_sources(
     value: Any,
     label: str,
@@ -990,6 +1113,8 @@ def _validate_external_placement_contract(
         != PRESENTATION_EXTERNAL_NORMALIZATION_POLICY
         or not isinstance(external.get("placement_manifest_sha256"), str)
         or SHA256_RE.fullmatch(external["placement_manifest_sha256"]) is None
+        or external["placement_manifest_sha256"]
+        != PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_SHA256
         or not isinstance(external.get("content_digest"), str)
         or SHA256_RE.fullmatch(external["content_digest"]) is None
         or external["content_digest"] != _content_digest(external)
@@ -999,14 +1124,12 @@ def _validate_external_placement_contract(
         external.get("acquisition_receipt"),
         "forge external acquisition receipt",
     )
-    expected_semantic_by_room = {
-        room_id: set(PRESENTATION_EXTERNAL_SEMANTIC_TARGETS_BY_ROOM[room_id])
-        for room_id in expected_room_ids
-    }
-    expected_dressing_by_room = {
-        room_id: set(PRESENTATION_EXTERNAL_DRESSING_IDS_BY_ROOM[room_id])
-        for room_id in expected_room_ids
-    }
+    pinned = _load_pinned_external_placement_contract(plan, expected_room_ids)
+    if acquisition != pinned["acquisition"]:
+        _external_fail("forge acquisition receipt differs from the pinned placement manifest")
+    expected_semantic_by_room = pinned["semantic_by_room"]
+    expected_dressing_by_room = pinned["dressing_by_room"]
+    expected_placements_by_id = pinned["placements_by_id"]
     expected_semantic = set().union(*expected_semantic_by_room.values())
     expected_dressing = set().union(*expected_dressing_by_room.values())
     semantic_ids = _external_string_inventory(
@@ -1031,7 +1154,11 @@ def _validate_external_placement_contract(
                 not isinstance(entity, Mapping)
                 or entity.get("room_id") != room_id
                 or entity.get("category")
-                != PRESENTATION_EXTERNAL_SEMANTIC_TARGET_CATEGORIES[entity_id]
+                != next(
+                    placement["category"]
+                    for placement in expected_placements_by_id.values()
+                    if placement["semantic_target_id"] == entity_id
+                )
             ):
                 _external_fail("fixed external semantic target differs from the build plan")
     source_by_id = _validate_external_asset_sources(
@@ -1039,8 +1166,14 @@ def _validate_external_placement_contract(
         "forge external asset sources",
     )
     placements = external.get("placements")
-    if not isinstance(placements, list) or len(placements) != 22:
-        _external_fail("forge external placement inventory must contain exactly 22 records")
+    if (
+        not isinstance(placements, list)
+        or len(placements) != PRESENTATION_EXTERNAL_PLACEMENT_COUNT
+    ):
+        _external_fail(
+            "forge external placement inventory must contain exactly "
+            f"{PRESENTATION_EXTERNAL_PLACEMENT_COUNT} records"
+        )
     room_kind_by_id = {
         room["room_id"]: room["kind"]
         for room in plan["rooms"]
@@ -1099,24 +1232,35 @@ def _validate_external_placement_contract(
             _external_fail(f"forge external placement {placement_id} bounds differ")
         semantic_target = placement.get("semantic_target_id")
         anchor_id = placement.get("anchor_id")
-        if kind == "semantic_fixed":
-            expected_hero = PRESENTATION_EXTERNAL_HERO_PLACEMENTS.get(
-                semantic_target
+        expected_placement = expected_placements_by_id.get(placement_id)
+        if (
+            expected_placement is None
+            or room_id != expected_placement["room_id"]
+            or placement.get("room_kind") != expected_placement["room_kind"]
+            or kind != expected_placement["placement_kind"]
+            or placement.get("category") != expected_placement["category"]
+            or mode != expected_placement["realization_mode"]
+            or semantic_target != expected_placement["semantic_target_id"]
+            or anchor_id != expected_placement["anchor_id"]
+            or placement.get("support_placement_id")
+            != expected_placement["support_placement_id"]
+            or placement.get("source_logical_asset_id")
+            != expected_placement["source_logical_asset_id"]
+            or placement.get("geometry_recipe")
+            != expected_placement["geometry_recipe"]
+            or placement.get("material_logical_asset_ids")
+            != expected_placement["material_logical_asset_ids"]
+            or float(scale) != float(expected_placement["uniform_scale"])
+        ):
+            _external_fail(
+                f"forge external placement {placement_id} differs from the pinned identity"
             )
+        if kind == "semantic_fixed":
             if (
                 semantic_target not in expected_semantic_by_room[room_id]
                 or semantic_target in seen_semantic
                 or anchor_id is not None
                 or placement_id in expected_dressing
-                or expected_hero is None
-                or placement_id != expected_hero["placement_id"]
-                or mode != expected_hero["realization_mode"]
-                or placement.get("source_logical_asset_id")
-                != expected_hero["source_logical_asset_id"]
-                or placement.get("geometry_recipe")
-                != expected_hero["geometry_recipe"]
-                or tuple(placement.get("material_logical_asset_ids", ()))
-                != expected_hero["material_logical_asset_ids"]
             ):
                 _external_fail(f"forge external semantic placement {placement_id} differs")
             seen_semantic.add(semantic_target)
@@ -1126,11 +1270,6 @@ def _validate_external_placement_contract(
             or semantic_target is not None
             or not isinstance(anchor_id, str)
             or PRESENTATION_EXTERNAL_ID_RE.fullmatch(anchor_id) is None
-            or mode != "external_blend"
-            or placement.get("source_logical_asset_id")
-            != PRESENTATION_EXTERNAL_DRESSING_SOURCES.get(placement_id)
-            or placement.get("geometry_recipe") is not None
-            or placement.get("material_logical_asset_ids") != []
         ):
             _external_fail(f"forge external dressing placement {placement_id} differs")
         else:
@@ -1190,6 +1329,7 @@ def _validate_external_placement_contract(
     if (
         seen_semantic != set(semantic_ids)
         or seen_dressing != set(dressing_ids)
+        or seen_placement_ids != set(expected_placements_by_id)
         or used_source_ids != set(source_by_id)
     ):
         _external_fail("forge external placements do not exactly cover IDs and sources")
@@ -1666,7 +1806,7 @@ def validate_presentation_inputs(
         _fail("VISTA_HOME_PRESENTATION_INVENTORY_MISMATCH", "visual profile finished rooms differ from the presentation contract")
     external_contract: dict[str, Any] | None = None
     if is_external:
-        if expected_room_ids != set(PRESENTATION_EXTERNAL_SEMANTIC_TARGETS_BY_ROOM):
+        if expected_room_ids != set(PRESENTATION_EXTERNAL_ROOM_IDS):
             _external_fail("presentation external room slice differs from the fixed contract")
         external_contract = _validate_external_placement_contract(
             manifest.get("external_placement"),

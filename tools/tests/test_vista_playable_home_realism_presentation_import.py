@@ -10,6 +10,7 @@ import json
 import py_compile
 import struct
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,13 @@ PROFILE_PATH = (
     / "vista_playable_home_r1"
     / "visual_profiles"
     / "realistic_interior_r2.json"
+)
+PLACEMENT_PATH = (
+    ROOT
+    / "world_packs"
+    / "vista_playable_home_r1"
+    / "visual_profiles"
+    / "realistic_interior_r2_external_placement.json"
 )
 
 
@@ -245,21 +253,29 @@ def _external_presentation_contracts(
     fixture: BuildFixture,
 ) -> tuple[Path, Path, dict, dict]:
     profile = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+    assert build_home.sha256_file(PLACEMENT_PATH) == (
+        build_home.PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_SHA256
+    )
+    source_manifest = json.loads(PLACEMENT_PATH.read_text(encoding="utf-8"))
     acquisition = {
-        "provider": "poly_haven",
-        "receipt_schema_version": build_home.PRESENTATION_EXTERNAL_ACQUISITION_SCHEMA,
-        "receipt_digest": "a" * 64,
-        "receipt_file_sha256": "b" * 64,
-        "acquisition_manifest_sha256": "c" * 64,
+        key: source_manifest["acquisition"][key]
+        for key in (
+            "provider",
+            "receipt_schema_version",
+            "receipt_digest",
+            "receipt_file_sha256",
+            "acquisition_manifest_sha256",
+        )
     }
     source_ids = {
-        source_id
-        for source_id in build_home.PRESENTATION_EXTERNAL_DRESSING_SOURCES.values()
+        logical_id
+        for placement in source_manifest["placements"]
+        for logical_id in (
+            ([placement["source_logical_asset_id"]]
+             if placement["source_logical_asset_id"] is not None else [])
+            + placement["material_logical_asset_ids"]
+        )
     }
-    for hero in build_home.PRESENTATION_EXTERNAL_HERO_PLACEMENTS.values():
-        if hero["source_logical_asset_id"] is not None:
-            source_ids.add(hero["source_logical_asset_id"])
-        source_ids.update(hero["material_logical_asset_ids"])
     sources = [
         _external_source_record(
             logical_id,
@@ -268,82 +284,67 @@ def _external_presentation_contracts(
         for logical_id in sorted(source_ids)
     ]
     source_by_id = {item["logical_asset_id"]: item for item in sources}
-    semantic_room = {
-        semantic_id: room_id
-        for room_id, semantic_ids in
-        build_home.PRESENTATION_EXTERNAL_SEMANTIC_TARGETS_BY_ROOM.items()
-        for semantic_id in semantic_ids
+    room_id_by_kind = {
+        room["kind"]: room["room_id"]
+        for room in fixture.plan["rooms"]
+        if room["kind"] in planning.PRESENTATION_ROOM_KINDS
     }
     placements = []
-    for index, semantic_id in enumerate(sorted(semantic_room)):
-        room_id = semantic_room[semantic_id]
-        hero = build_home.PRESENTATION_EXTERNAL_HERO_PLACEMENTS[semantic_id]
-        source_id = hero["source_logical_asset_id"]
+    for index, source_placement in enumerate(source_manifest["placements"]):
+        room_id = room_id_by_kind[source_placement["room_kind"]]
+        source_id = source_placement["source_logical_asset_id"]
+        dimensions = source_placement["authored_dimensions_m"] or [0.2, 0.2, 0.2]
         placements.append({
-            "placement_id": hero["placement_id"],
-            "placement_kind": "semantic_fixed",
+            "placement_id": source_placement["placement_id"],
+            "placement_kind": source_placement["placement_kind"],
             "room_id": room_id,
-            "room_kind": room_id.rsplit(".", 1)[-1],
-            "category": build_home.PRESENTATION_EXTERNAL_SEMANTIC_TARGET_CATEGORIES[semantic_id],
-            "realization_mode": hero["realization_mode"],
-            "semantic_target_id": semantic_id,
-            "anchor_id": None,
-            "support_placement_id": None,
+            "room_kind": source_placement["room_kind"],
+            "category": source_placement["category"],
+            "realization_mode": source_placement["realization_mode"],
+            "semantic_target_id": source_placement["semantic_target_id"],
+            "anchor_id": source_placement["anchor_id"],
+            "support_placement_id": source_placement["support_placement_id"],
             "source_logical_asset_id": source_id,
-            "geometry_recipe": hero["geometry_recipe"],
-            "material_logical_asset_ids": list(hero["material_logical_asset_ids"]),
+            "geometry_recipe": source_placement["geometry_recipe"],
+            "material_logical_asset_ids": copy.deepcopy(
+                source_placement["material_logical_asset_ids"]
+            ),
             "location_m": [index * 0.25, 0, 0],
-            "rotation_deg": [0, 0, 0],
-            "uniform_scale": 1,
-            "source_dimensions_m": [0.2, 0.2, 0.2],
+            "rotation_deg": copy.deepcopy(source_placement["rotation_offset_deg"]),
+            "uniform_scale": source_placement["uniform_scale"],
+            "source_dimensions_m": copy.deepcopy(dimensions),
             "room_local_aabb": {
                 "min_m": [index * 0.25, 0, 0],
-                "max_m": [index * 0.25 + 0.2, 0.2, 0.2],
+                "max_m": [
+                    index * 0.25 + dimensions[0],
+                    dimensions[1],
+                    dimensions[2],
+                ],
             },
             "source_tree_sha256": (
                 source_by_id[source_id]["source_tree_sha256"]
                 if source_id is not None else None
             ),
         })
-    dressing_room = {
-        dressing_id: room_id
-        for room_id, dressing_ids in
-        build_home.PRESENTATION_EXTERNAL_DRESSING_IDS_BY_ROOM.items()
-        for dressing_id in dressing_ids
-    }
-    for index, dressing_id in enumerate(sorted(dressing_room), start=5):
-        room_id = dressing_room[dressing_id]
-        source_id = build_home.PRESENTATION_EXTERNAL_DRESSING_SOURCES[dressing_id]
-        placements.append({
-            "placement_id": dressing_id,
-            "placement_kind": "dressing",
-            "room_id": room_id,
-            "room_kind": room_id.rsplit(".", 1)[-1],
-            "category": "decorative_object",
-            "realization_mode": "external_blend",
-            "semantic_target_id": None,
-            "anchor_id": room_id + "/dressing_anchor.synthetic",
-            "support_placement_id": None,
-            "source_logical_asset_id": source_id,
-            "geometry_recipe": None,
-            "material_logical_asset_ids": [],
-            "location_m": [index * 0.25, 0, 0],
-            "rotation_deg": [0, 0, 0],
-            "uniform_scale": 1,
-            "source_dimensions_m": [0.2, 0.2, 0.2],
-            "room_local_aabb": {
-                "min_m": [index * 0.25, 0, 0],
-                "max_m": [index * 0.25 + 0.2, 0.2, 0.2],
-            },
-            "source_tree_sha256": source_by_id[source_id]["source_tree_sha256"],
-        })
     placements.sort(key=lambda item: item["placement_id"])
+    semantic_room = {
+        placement["semantic_target_id"]: placement["room_id"]
+        for placement in placements
+        if placement["placement_kind"] == "semantic_fixed"
+    }
+    dressing_room = {
+        placement["placement_id"]: placement["room_id"]
+        for placement in placements
+        if placement["placement_kind"] == "dressing"
+    }
     external_placement = {
         "schema_version": build_home.PRESENTATION_EXTERNAL_PLACEMENT_SCHEMA,
         "placement_id": "vista_playable_home.realistic_interior_r2.external_v1",
         "normalization_policy": build_home.PRESENTATION_EXTERNAL_NORMALIZATION_POLICY,
         "acquisition_receipt": copy.deepcopy(acquisition),
-        "placement_manifest_sha256": "d" * 64,
+        "placement_manifest_sha256": (
+            build_home.PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_SHA256
+        ),
         "semantic_target_ids": sorted(semantic_room),
         "dressing_ids": sorted(dressing_room),
         "asset_sources": sources,
@@ -378,10 +379,14 @@ def _external_presentation_contracts(
             "placement_manifest_sha256": external_placement["placement_manifest_sha256"],
             "placement_plan_sha256": external_placement["content_digest"],
             "semantic_target_ids": sorted(
-                build_home.PRESENTATION_EXTERNAL_SEMANTIC_TARGETS_BY_ROOM[room_id]
+                semantic_id
+                for semantic_id, semantic_room_id in semantic_room.items()
+                if semantic_room_id == room_id
             ),
             "dressing_ids": sorted(
-                build_home.PRESENTATION_EXTERNAL_DRESSING_IDS_BY_ROOM[room_id]
+                dressing_id
+                for dressing_id, dressing_room_id in dressing_room.items()
+                if dressing_room_id == room_id
             ),
             "asset_sources": [
                 copy.deepcopy(source_by_id[logical_id])
@@ -854,6 +859,23 @@ def test_external_v2_contract_compiles_exact_content_and_nanite_policy(
         == manifest["external_placement"]["content_digest"]
         for binding in planned.execution["presentation_bindings"]
     )
+    external = manifest["external_placement"]
+    assert external["placement_manifest_sha256"] == (
+        build_home.PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_SHA256
+    )
+    assert build_home.sha256_file(PLACEMENT_PATH) == (
+        build_home.PRESENTATION_EXTERNAL_PLACEMENT_MANIFEST_SHA256
+    )
+    assert len(external["placements"]) == 45
+    dressing = [
+        placement
+        for placement in external["placements"]
+        if placement["placement_kind"] == "dressing"
+    ]
+    assert len(dressing) == 40
+    assert Counter(
+        placement["realization_mode"] for placement in dressing
+    ) == Counter({"external_blend": 28, "project_authored": 12})
     assert all(
         binding["texture_count"] == 3
         and binding["pbr_complete_material_count"] == binding["material_count"]
@@ -885,6 +907,88 @@ def test_external_v2_contract_compiles_exact_content_and_nanite_policy(
             ),
         )
     )
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "placement_manifest_pin",
+        "identity_inventory",
+        "per_id_realization_mode",
+        "external_source_id",
+        "project_authored_recipe",
+        "project_authored_material_ids",
+    ],
+)
+def test_external_v2_pinned_45_placement_identity_fails_closed(
+    tmp_path: Path,
+    case: str,
+) -> None:
+    fixture = BuildFixture(tmp_path)
+    _manifest_path, _receipt_path, manifest, _receipt = (
+        _external_presentation_contracts(
+            tmp_path / "inputs" / case,
+            fixture,
+        )
+    )
+    external = manifest["external_placement"]
+    placements_by_id = {
+        placement["placement_id"]: placement
+        for placement in external["placements"]
+    }
+    if case == "placement_manifest_pin":
+        external["placement_manifest_sha256"] = "0" * 64
+    elif case == "identity_inventory":
+        placements_by_id["dress.living.books.coffee_table"][
+            "placement_id"
+        ] = "dress.living.unapproved"
+    elif case == "per_id_realization_mode":
+        external_model = placements_by_id["dress.living.potted_plant"]
+        project_authored = placements_by_id["dress.living.rug.main"]
+        realization_keys = (
+            "realization_mode",
+            "source_logical_asset_id",
+            "geometry_recipe",
+            "material_logical_asset_ids",
+            "source_tree_sha256",
+        )
+        left = {key: copy.deepcopy(external_model[key]) for key in realization_keys}
+        right = {key: copy.deepcopy(project_authored[key]) for key in realization_keys}
+        external_model.update(right)
+        project_authored.update(left)
+    elif case == "external_source_id":
+        placement = placements_by_id["dress.living.potted_plant"]
+        replacement = next(
+            source
+            for source in external["asset_sources"]
+            if source["logical_asset_id"] == "visual.dressing.living.armchair"
+        )
+        placement["source_logical_asset_id"] = replacement["logical_asset_id"]
+        placement["source_tree_sha256"] = replacement["source_tree_sha256"]
+    elif case == "project_authored_recipe":
+        placements_by_id["dress.living.rug.main"][
+            "geometry_recipe"
+        ] = "coffee_mug_v1"
+    else:
+        placements_by_id["dress.living.rug.main"][
+            "material_logical_asset_ids"
+        ] = ["visual.material.white_oak_veneer"]
+    external["content_digest"] = build_home._content_digest(external)
+
+    expected_room_ids = {
+        room["room_id"]
+        for room in fixture.plan["rooms"]
+        if room["kind"] in planning.PRESENTATION_ROOM_KINDS
+    }
+    with pytest.raises(
+        build_home.BuildHomeError,
+        match="PRESENTATION_EXTERNAL_INVALID",
+    ):
+        build_home._validate_external_placement_contract(
+            external,
+            fixture.plan,
+            expected_room_ids,
+        )
 
 
 @pytest.mark.parametrize(
