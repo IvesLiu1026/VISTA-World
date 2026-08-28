@@ -29,21 +29,20 @@ if str(REPOSITORY_ROOT) not in sys.path:
 
 from tools.blender.vista_playable_home_hssd import glb_transport  # noqa: E402
 from tools.blender.vista_playable_home_hssd import planner as hssd  # noqa: E402
+
 PLAN_SCHEMA = "simworld.vista.hssd-private-research-forge-plan/v1"
 SCENE_PLAN_SCHEMA = "simworld.vista.hssd-private-research-scene-plan/v1"
 ASSET_RECEIPT_SCHEMA = "simworld.vista.hssd-private-research-asset-receipt/v1"
 RESULT_SCHEMA = "simworld.vista.hssd-private-research-forge-result/v1"
-PROFILE_SCHEMA_VERSION = (
-    "simworld.vista.playable-home-hssd-private-research-profile/v1"
-)
+PROFILE_SCHEMA_VERSION = "simworld.vista.playable-home-hssd-private-research-profile/v1"
 
 PINNED_PROFILE_CONTENT_DIGEST = (
-    "4b76e178ab1a3043d6adda6fe5786a5111f58523f4f8a23eb9cc2c82d883e8d3"
+    "f4d761968ba38582888e52ea208c6c38bb404cda749fd05e54cf90d5d32eda03"
 )
 PINNED_PROFILE_SHA256 = (
-    "45085a4c3153c204cde92045af84cc1cc4f5c679bc881057de5b8d0ffeaddd24"
+    "c619bdb0cfee1dadea6a24f73e7e04cd78b5bf8d6ed6d0d6554c26cb0e720ec1"
 )
-PINNED_HOUSE_SHA256 = "ccdf385b4ec8b88221ccd5c68eb5553fb7186e5aa5e87095176e1c3c62fec45f"
+PINNED_HOUSE_SHA256 = "3d73f84365a1adfbda408d8c49ac5f95370a221c6ed4fb880838d86b0c71b0c3"
 PINNED_DATASET_REVISION = "4369cb9876214c7fbebcf552eb532380e4d287e4"
 PINNED_DATASET_README_SHA256 = (
     "4509914d584031173390bf5f41722ec25e19de3f1e0ea54a423eadf63073d49c"
@@ -436,9 +435,7 @@ class ForgePreflight:
 
 def _verify_pinned_contract_identity(
     *, validate_schema: bool
-) -> tuple[
-    dict[str, Any], dict[str, Any], list[dict[str, Any]]
-]:
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
     profile_seal = seal_regular_file(
         PROFILE_PATH,
         label="pinned HSSD profile",
@@ -471,9 +468,7 @@ def _verify_pinned_contract_identity(
         from tools.worlds import vista_playable_home_hssd_private_research
 
         try:
-            vista_playable_home_hssd_private_research.validate_profile(
-                profile, house
-            )
+            vista_playable_home_hssd_private_research.validate_profile(profile, house)
         except (
             vista_playable_home_hssd_private_research.HssdPrivateResearchProfileError
         ) as exc:
@@ -571,7 +566,11 @@ def _load_catalog_semantic_rows(root: pathlib.Path) -> dict[str, dict[str, Any]]
     except hssd.HssdBindingError as exc:
         raise ForgeError("HSSD_DATASET_INVALID", str(exc)) from exc
     id_field = next(
-        (field for field in fields if field.strip().casefold() in {"object hash", "id"}),
+        (
+            field
+            for field in fields
+            if field.strip().casefold() in {"object hash", "id"}
+        ),
         None,
     )
     condensed_field = next(
@@ -581,7 +580,8 @@ def _load_catalog_semantic_rows(root: pathlib.Path) -> dict[str, dict[str, Any]]
         (
             field
             for field in fields
-            if field != condensed_field and "primary semantic category" in field.casefold()
+            if field != condensed_field
+            and "primary semantic category" in field.casefold()
         ),
         None,
     )
@@ -601,9 +601,7 @@ def _load_catalog_semantic_rows(root: pathlib.Path) -> dict[str, dict[str, Any]]
                 f"duplicate semantic catalog model: {model_id}",
             )
         result[model_id] = {
-            "semantic_condensed_category": str(
-                row.get(condensed_field, "")
-            ).strip(),
+            "semantic_condensed_category": str(row.get(condensed_field, "")).strip(),
             "semantic_primary_category": str(row.get(primary_field, "")).strip(),
         }
     return result
@@ -648,8 +646,7 @@ def _verify_dataset_and_sources(
         raise ForgeError("HSSD_DATASET_INVALID", str(exc)) from exc
     catalog_semantics = _load_catalog_semantic_rows(root)
     catalog_receipts = {
-        item["source_asset_id"]: item
-        for item in profile["catalog_semantic_receipts"]
+        item["source_asset_id"]: item for item in profile["catalog_semantic_receipts"]
     }
     if len(catalog_receipts) != EXPECTED_SOURCE_COUNT:
         _fail(
@@ -712,9 +709,7 @@ def _verify_dataset_and_sources(
                 "semantic_condensed_category": semantic_row[
                     "semantic_condensed_category"
                 ],
-                "semantic_primary_category": semantic_row[
-                    "semantic_primary_category"
-                ],
+                "semantic_primary_category": semantic_row["semantic_primary_category"],
                 "catalog_has_multiple_objects": catalog_has_multiple_objects,
                 "reviewed_semantic_category": source["semantic_category"],
                 "review_status": "catalog_verified_identity_visual_review_pending",
@@ -1258,9 +1253,7 @@ def _validate_asset_job(job: Mapping[str, Any]) -> None:
         )
         or type(catalog_receipt.get("catalog_has_multiple_objects")) is not bool
     ):
-        _fail(
-            "PLAN_ASSET_JOB_INVALID", "catalog semantic receipt identity drifted"
-        )
+        _fail("PLAN_ASSET_JOB_INVALID", "catalog semantic receipt identity drifted")
     for bounds_key in ("gltf_bounds_m", "blender_bounds_m"):
         bounds = geometry.get(bounds_key)
         if not isinstance(bounds, dict):
@@ -1427,7 +1420,7 @@ def validate_build_plan(
     if house != {
         "house_id": "home.r1",
         "revision": "vista_playable_home_r1",
-        "content_digest": "51208e0ecc1ad1450ca6d9b14a4fb46989bff90fd8dc15422a0a47df6827c8c3",
+        "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7",
     }:
         _fail("PLAN_HOUSE_INVALID", "house receipt differs from the pinned HouseSpec")
 

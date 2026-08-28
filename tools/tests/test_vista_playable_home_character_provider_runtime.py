@@ -13,7 +13,9 @@ NPC_SOURCE = PLUGIN / "Private" / "VistaHomeNpcCharacter.cpp"
 PLAYER_HEADER = PLUGIN / "Public" / "VistaPlayableHomeCharacter.h"
 PLAYER_SOURCE = PLUGIN / "Private" / "VistaPlayableHomeCharacter.cpp"
 BUILD_RULES = PLUGIN / "VistaPlayableHome.Build.cs"
-PLUGIN_DESCRIPTOR = ROOT / "unreal_plugins" / "VistaPlayableHome" / "VistaPlayableHome.uplugin"
+PLUGIN_DESCRIPTOR = (
+    ROOT / "unreal_plugins" / "VistaPlayableHome" / "VistaPlayableHome.uplugin"
+)
 
 
 def test_provider_selection_is_default_manny_and_closed_to_one_reviewed_class() -> None:
@@ -104,9 +106,7 @@ def test_epic_retarget_component_drives_vivian_from_hidden_manny() -> None:
     assert "TSoftObjectPtr<UIKRetargeter>" in source
     configure = source.split(
         "bool UVistaCharacterProviderComponent::ConfigureMetaHumanRetarget", 1
-    )[1].split(
-        "bool UVistaCharacterProviderComponent::ValidateMetaHumanVisual", 1
-    )[0]
+    )[1].split("bool UVistaCharacterProviderComponent::ValidateMetaHumanVisual", 1)[0]
     for token in (
         "NewObject<URetargetComponent>",
         "&VisualActor",
@@ -141,10 +141,13 @@ def test_epic_retarget_component_drives_vivian_from_hidden_manny() -> None:
     validate = source.split(
         "bool UVistaCharacterProviderComponent::ValidateMetaHumanVisual(", 1
     )[1].split(
-        "USkeletalMeshComponent* UVistaCharacterProviderComponent::FindNamedSkeletalMesh", 1
+        "USkeletalMeshComponent* UVistaCharacterProviderComponent::FindNamedSkeletalMesh",
+        1,
     )[0]
     assert "Cast<URetargetAnimInstance>(Body->GetAnimInstance())" in validate
-    assert "ProviderRetargetComponent->bForceOtherMeshesToFollowControlledMesh" in validate
+    assert (
+        "ProviderRetargetComponent->bForceOtherMeshesToFollowControlledMesh" in validate
+    )
     assert "ProviderRetargetComponent->RetargetAsset" in validate
 
 
@@ -163,9 +166,7 @@ def test_hidden_manny_keeps_animation_authority_without_hiding_children() -> Non
 
     teardown = source.split(
         "void UVistaCharacterProviderComponent::DestroyProviderRetargetComponent", 1
-    )[1].split(
-        "void UVistaCharacterProviderComponent::SetPhotorealUnavailable", 1
-    )[0]
+    )[1].split("void UVistaCharacterProviderComponent::SetPhotorealUnavailable", 1)[0]
     assert "UActorComponent* RetargetComponentToDestroy" in teardown
     assert "RetargetComponentToDestroy->DestroyComponent();" in teardown
 
@@ -180,9 +181,7 @@ def test_hidden_manny_keeps_animation_authority_without_hiding_children() -> Non
 
     child_teardown = source.split(
         "void UVistaCharacterProviderComponent::DestroyProviderChildActorComponent", 1
-    )[1].split(
-        "void UVistaCharacterProviderComponent::SetPhotorealUnavailable", 1
-    )[0]
+    )[1].split("void UVistaCharacterProviderComponent::SetPhotorealUnavailable", 1)[0]
     assert "ProviderChildActorComponent->DestroyChildActor();" in child_teardown
     assert "ProviderChildActorComponent->DestroyComponent();" in child_teardown
     assert "ProviderChildActorComponent = nullptr;" in child_teardown
@@ -282,3 +281,28 @@ def test_runtime_state_reports_provider_without_accepting_mutation() -> None:
     )[1].split("AVistaHomeNpcCharacter::VistaInteract_Implementation", 1)[0]
     assert "character_provider" not in apply_state
     assert "photoreal_character" not in apply_state
+
+
+def test_event_only_npc_visibility_also_controls_capsule_collision() -> None:
+    source = NPC_SOURCE.read_text(encoding="utf-8")
+    event_source = (PLUGIN / "Private" / "VistaEventSubsystem.cpp").read_text(
+        encoding="utf-8"
+    )
+
+    apply_state = source.split(
+        "AVistaHomeNpcCharacter::VistaApplyRuntimeState_Implementation", 1
+    )[1].split("AVistaHomeNpcCharacter::VistaInteract_Implementation", 1)[0]
+    assert "SetActorHiddenInGame(State.bHidden);" in apply_state
+    assert "SetActorEnableCollision(!State.bHidden);" in apply_state
+    begin_play = source.split("void AVistaHomeNpcCharacter::BeginPlay()", 1)[1].split(
+        "USceneComponent* AVistaHomeNpcCharacter::VistaGetCarryAnchor", 1
+    )[0]
+    assert "SetActorEnableCollision(!IsHidden());" in begin_play
+
+    queue = event_source.split(
+        "if (Operation.Type == EVistaEventOperationType::SetNpcQueue)", 1
+    )[1].split('OutCode = TEXT("TARGET_NOT_STATEFUL")', 1)[0]
+    assert queue.index("ReplaceActionQueue") < queue.index(
+        "Npc->SetActorHiddenInGame(false);"
+    )
+    assert "Npc->SetActorEnableCollision(true);" in queue

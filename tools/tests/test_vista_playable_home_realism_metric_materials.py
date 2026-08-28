@@ -21,7 +21,9 @@ from tools.blender.vista_playable_home_realism.export import (
     project_architecture_uv_contract,
 )
 from tools.blender.vista_playable_home_realism.materials import (
+    _height_field_numpy,
     _height_field_python,
+    _require_numpy,
     _save_image,
     _texture_pixels,
     _texture_pixels_from_height_python,
@@ -67,7 +69,9 @@ def test_project_metric_box_uv_uses_one_metre_tiles_and_binds_receipt() -> None:
             SimpleNamespace(normal=(0.0, 0.0, 1.0), loop_indices=(0, 1, 2, 3)),
             SimpleNamespace(normal=(1.0, 0.0, 0.0), loop_indices=(4, 5, 6, 7)),
         ],
-        loops=[SimpleNamespace(vertex_index=index) for index in range(len(coordinates))],
+        loops=[
+            SimpleNamespace(vertex_index=index) for index in range(len(coordinates))
+        ],
         vertices=[SimpleNamespace(co=value) for value in coordinates],
         update=lambda: None,
     )
@@ -149,13 +153,16 @@ def test_every_project_component_creation_applies_metric_uv(monkeypatch) -> None
         dimensions_m=(2.0, 3.0, 0.5),
         preview_visible=True,
     )
-    assert blender_build._component_object(
-        bpy,
-        component,
-        object(),
-        object(),
-        collection,
-    ) is obj
+    assert (
+        blender_build._component_object(
+            bpy,
+            component,
+            object(),
+            object(),
+            collection,
+        )
+        is obj
+    )
     assert applied == ["component.fixture"]
 
 
@@ -201,18 +208,62 @@ def test_material_receipt_reports_actual_and_minimum_metric_texel_density() -> N
     smoke = material_plan_manifest(64)
     assert {item["texel_density_px_per_m"] for item in production} == {2048}
     assert {item["texel_density_px_per_m"] for item in smoke} == {64}
-    assert {
-        item["design_minimum_texel_density_px_per_m"] for item in production
-    } == {1024}
+    assert {item["design_minimum_texel_density_px_per_m"] for item in production} == {
+        1024
+    }
 
 
-def test_shared_python_height_field_preserves_legacy_small_smoke_pixels() -> None:
+def test_architectural_whites_stay_below_high_linear_albedo() -> None:
+    specs = material_by_id()
+    expected = {
+        "r2.plaster_warm": (0.50, 0.46, 0.39),
+        "r2.ceiling_matte": (0.62, 0.62, 0.57),
+        "r2.trim_satin": (0.58, 0.57, 0.51),
+    }
+    for material_id, base_color in expected.items():
+        assert specs[material_id].base_color == base_color
+        assert max(base_color) <= 0.62
+
+
+def test_directional_wood_grain_cannot_form_broad_horizontal_bands() -> None:
+    field = _height_field_python(material_by_id()["r2.oak_natural"], 96)
+    row_means = [sum(row) / len(row) for row in field]
+    column_means = [
+        sum(row[column] for row in field) / len(field)
+        for column in range(len(field[0]))
+    ]
+    horizontal_band_span = max(row_means) - min(row_means)
+    directional_grain_span = max(column_means) - min(column_means)
+
+    assert horizontal_band_span < 0.05
+    assert directional_grain_span > 0.20
+    assert horizontal_band_span < directional_grain_span * 0.20
+
+
+def test_production_2k_numpy_wood_cannot_form_broad_horizontal_bands() -> None:
+    """Guard the vectorized path used by every production texture build."""
+
+    np = _require_numpy()
+    field = _height_field_numpy(np, material_by_id()["r2.oak_natural"], 2048)
+    row_means = field.mean(axis=1)
+    column_means = field.mean(axis=0)
+    horizontal_band_span = float(row_means.max() - row_means.min())
+    directional_grain_span = float(column_means.max() - column_means.min())
+
+    assert field.shape == (2048, 2048)
+    assert str(field.dtype) == "float32"
+    assert horizontal_band_span < 0.05
+    assert directional_grain_span > 0.20
+    assert horizontal_band_span < directional_grain_span * 0.20
+
+
+def test_shared_python_height_field_keeps_small_smoke_pixels_deterministic() -> None:
     spec = material_by_id()["r2.oak_natural"]
     heights = _height_field_python(spec, 8)
     expected_digests = {
-        "base_color": "9f6ad85064b61deac8552c4a4d5f46007bbc91252e8df3fd0342140d8c26f21c",
-        "normal": "ac036ffca6096efe88242344ec2014c60559849bccf3bbc052704c5aeba3ff5d",
-        "roughness": "55613dabcd3fa1fa4edd04a11e55450d4edee37dfa396ceb40a9916864f1f6b1",
+        "base_color": "18d8036af760d2562b07900a774e849d4e57b6f4a40813a2999f4da8613d49a3",
+        "normal": "9e8d19bbb151c806f679d4216083262f506595c9691a04f6833af49dcb69d300",
+        "roughness": "2e7764e24b45dc5188fe4fa1f02984ef73a24979b41dce99ca977ff3c414d43c",
     }
     for semantic, expected_digest in expected_digests.items():
         shared = _texture_pixels_from_height_python(spec, semantic, 8, heights)
@@ -256,12 +307,15 @@ def test_save_image_forwards_buffer_without_list_duplication(tmp_path) -> None:
         )
     )
     path = tmp_path / "texture.png"
-    assert _save_image(
-        bpy,
-        path,
-        "fixture",
-        source_buffer,
-        64,
-        color_space="Non-Color",
-    ) is image
+    assert (
+        _save_image(
+            bpy,
+            path,
+            "fixture",
+            source_buffer,
+            64,
+            color_space="Non-Color",
+        )
+        is image
+    )
     assert image.pixels.received is source_buffer

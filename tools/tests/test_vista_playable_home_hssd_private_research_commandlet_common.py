@@ -85,7 +85,7 @@ def _source_fixture(
     monkeypatch: pytest.MonkeyPatch,
     namespace: str = NAMESPACE,
 ) -> tuple[pathlib.Path, list[dict]]:
-    source = tmp_path / "hssd-r5-fixture"
+    source = tmp_path / "hssd-r7-fixture"
     assets = source / "assets"
     receipts = source / "receipts"
     assets.mkdir(parents=True)
@@ -512,8 +512,34 @@ def test_strict_json_rejects_duplicate_and_nonfinite_values() -> None:
         common._strict_json(b'{"x":NaN}\n', "fixture")
 
 
-def test_checked_in_r5_pin_table_is_complete_and_non_placeholder() -> None:
+def test_checked_in_r7_pin_table_is_complete_and_non_placeholder() -> None:
     assert common.EXPECTED_ENGINE_VERSION == "5.7.3-50162420+++UE5+Release-5.7"
+    assert common.PROFILE_CONTENT_DIGEST == (
+        "f4d761968ba38582888e52ea208c6c38bb404cda749fd05e54cf90d5d32eda03"
+    )
+    assert common.EXPECTED_DOCUMENT_SHA256 == {
+        "build-plan.json": (
+            "7288b02e620487edc8bc5dcb15af443b279bdf201f92e26eaa7eed357c8bc297"
+        ),
+        "build-result.json": (
+            "eb062679a9b9568ce47564a9d3b0228a9c66cd53b37b675c3cc4a511ea263cce"
+        ),
+        "scene-plan.json": (
+            "2015ac8b5583e6ba243e45648968a2e91f33c0681fefaa25fb411c666b1f287f"
+        ),
+    }
+    assert common.EXPECTED_CONTENT_DIGESTS == {
+        "build-plan.json": (
+            "54697e69f9d69bc22f2a1a13299585837cb3e8a92583cc6d0fbb3de5e1b40ca6"
+        ),
+        "build-result.json": (
+            "6d866072884a8bedb7131b92fce2bca0b5b210ad8d1c39a5e9141af3822a48f7"
+        ),
+        "scene-plan.json": (
+            "f347572aa945112ffef3705a6c198a05d230ddab02e5807c9c553726e290dc28"
+        ),
+    }
+    assert runner.SOURCE_HSSD_RUN.name == ("hssd-private-research-r7-20260828t163000z")
     assert len(common.EXPECTED_ASSET_PINS) == 26
     assert tuple(sorted(common.EXPECTED_ASSET_PINS)) == common.EXPECTED_ASSET_IDS
     for pin in common.EXPECTED_ASSET_PINS.values():
@@ -543,10 +569,10 @@ def test_checked_in_r5_pin_table_is_complete_and_non_placeholder() -> None:
     anja_sofa = common.EXPECTED_ASSET_PINS["hssd.static.sofa"]
     assert anja_sofa == {
         "receipt_sha256": (
-            "735dd4c82d9fe2d312a6f86f83e4f466ea8ec95b13edf00c9f99ac30b8f5ba9b"
+            "758f29d3725a6365dbb2e07b952683440c0e4164ca2cc5876afa5cd8c129b322"
         ),
         "receipt_content_digest": (
-            "6a3aab176f8eb7d796744cba8fec956d7110c9e006e0b5b981258ebf2b3b568e"
+            "6d6209aa41258cafec2fb19c9afc2bbf17a2947b9f8faf9e951126a457f653ab"
         ),
         "glb_sha256": (
             "c322d9e3a0dcef0d2e0efd7e5f4227779afcecc8c388a49a11c2fae0e2811288"

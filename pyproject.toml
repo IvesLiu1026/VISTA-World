@@ -5,6 +5,7 @@ description = "Agent-driven interactive 3D simulation world contracts and toolin
 requires-python = ">=3.10,<3.13"
 dependencies = [
   "jsonschema>=4.26,<5",
+  "numpy>=2.0,<3",
 ]
 
 [tool.uv]

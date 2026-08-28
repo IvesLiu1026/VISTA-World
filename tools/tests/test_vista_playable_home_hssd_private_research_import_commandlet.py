@@ -408,7 +408,7 @@ def test_terminal_receipt_records_exact_26_and_visual_only_gates(
     assert receipt["interaction_authority"] == "none_static_joined_glb"
     assert len(receipt["assets"]) == 26
     assert receipt["gates"] == {
-        "exact_r5_source_inventory_verified": True,
+        "exact_r7_source_inventory_verified": True,
         "compatibility_derivatives_revalidated": True,
         "diagnostic_nonpromotable_disposition_recorded": True,
         "namespace_fresh": True,

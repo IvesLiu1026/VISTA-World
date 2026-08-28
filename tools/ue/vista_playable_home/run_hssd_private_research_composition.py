@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compose the exact HSSD R5 scene plan into an isolated Unreal candidate.
+"""Compose the exact pinned HSSD scene plan into an isolated Unreal candidate.
 
 The default mode is a zero-write preflight.  ``--apply`` is deliberately
 refused unless the caller also acknowledges the known non-promotable material
@@ -9,10 +9,12 @@ existing R1 semantic proxy is explicitly repaired to query-only collision before
 it is hidden.  No visual, interaction, character, or "GTA-quality" acceptance is
 claimed.
 
-The Phase-1 input is intentionally not caller-selectable.  It is the one exact
-successful diagnostic import pinned below.  All project, receipt, profile,
-house, scene-plan, script, and Unreal toolchain bytes are checked before a fresh
-attempt directory can be created.
+The Phase-1 input is intentionally not caller-selectable.  The immutable
+historical diagnostic import pinned below is revalidated against the current
+source contracts, so it fails closed after a source reseal until a fresh
+Phase-1 import is pinned.  All project, receipt, profile, house, scene-plan,
+script, and Unreal toolchain bytes are checked before a fresh attempt directory
+can be created.
 """
 
 from __future__ import annotations
@@ -99,10 +101,10 @@ PROFILE_SOURCE_PATH = (
 )
 HOUSE_SOURCE_PATH = REPOSITORY_ROOT / "world_packs/vista_playable_home_r1/house.json"
 SCENE_PLAN_SOURCE_PATH = phase1.SOURCE_HSSD_RUN / "scene-plan.json"
-PROFILE_SHA256 = "45085a4c3153c204cde92045af84cc1cc4f5c679bc881057de5b8d0ffeaddd24"
-HOUSE_SHA256 = "ccdf385b4ec8b88221ccd5c68eb5553fb7186e5aa5e87095176e1c3c62fec45f"
+PROFILE_SHA256 = "c619bdb0cfee1dadea6a24f73e7e04cd78b5bf8d6ed6d0d6554c26cb0e720ec1"
+HOUSE_SHA256 = "3d73f84365a1adfbda408d8c49ac5f95370a221c6ed4fb880838d86b0c71b0c3"
 HOUSE_CONTENT_DIGEST = (
-    "51208e0ecc1ad1450ca6d9b14a4fb46989bff90fd8dc15422a0a47df6827c8c3"
+    "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
 )
 SCENE_PLAN_SHA256 = hssd.EXPECTED_DOCUMENT_SHA256["scene-plan.json"]
 SCENE_PLAN_CONTENT_DIGEST = hssd.EXPECTED_CONTENT_DIGESTS["scene-plan.json"]
@@ -587,7 +589,7 @@ def compose_transform(
 
 
 def safe_label(instance_id: str) -> str:
-    return ("VISTA_HSSD_R5_" + SAFE_LABEL_RE.sub("_", instance_id))[:180]
+    return ("VISTA_HSSD_R7_" + SAFE_LABEL_RE.sub("_", instance_id))[:180]
 
 
 def placement_tags(placement: Mapping[str, Any]) -> list[str]:

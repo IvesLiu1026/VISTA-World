@@ -568,8 +568,8 @@
     ],
     "gameplay_exposure": {
       "metering_mode": "histogram",
-      "min_ev100": 2,
-      "max_ev100": 12,
+      "min_ev100": 7.5,
+      "max_ev100": 11,
       "speed_up": 3,
       "speed_down": 1
     }
@@ -664,7 +664,7 @@
     "maximum_post_warmup_freeze_s": 1
   },
   "provenance": {
-    "source_house_content_digest": "51208e0ecc1ad1450ca6d9b14a4fb46989bff90fd8dc15422a0a47df6827c8c3",
+    "source_house_content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7",
     "source_spec": "docs/specs/vista-playable-home-realism",
     "authoring_policy": "headless_reproducible",
     "asset_policy": "local_first_fail_closed",
@@ -676,5 +676,5 @@
       "home.r1/room.bedroom/entity.phone.01"
     ]
   },
-  "content_digest": "ba7283f04ebacc2e3dc157980af2a20e9be62bbc8232de60b6da6a206c2e9d32"
+  "content_digest": "a596a6f384ea0a1d4f321e8e60e603356cd7c4a500b893addbbe6d16aee8b53b"
 }

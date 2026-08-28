@@ -33,7 +33,9 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
         self.profile = contract.load_json(PROFILE_PATH)
         self.house = contract.load_json(HOUSE_PATH)
 
-    def assert_contract_error(self, code: str, callback) -> contract.HssdPrivateResearchProfileError:
+    def assert_contract_error(
+        self, code: str, callback
+    ) -> contract.HssdPrivateResearchProfileError:
         with self.assertRaises(contract.HssdPrivateResearchProfileError) as caught:
             callback()
         self.assertEqual(caught.exception.code, code, str(caught.exception))
@@ -63,7 +65,10 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
     def test_fixture_validates_as_a_closed_six_room_profile(self) -> None:
         contract.validate_profile(self.profile, self.house)
         self.assertEqual(self.profile["schema_version"], contract.SCHEMA_VERSION)
-        self.assertEqual(set(self.profile["coverage"]["required_room_ids"]), set(contract.EXPECTED_ROOMS))
+        self.assertEqual(
+            set(self.profile["coverage"]["required_room_ids"]),
+            set(contract.EXPECTED_ROOMS),
+        )
         self.assertEqual(len(self.profile["source_assets"]), 26)
         self.assertEqual(len(self.profile["catalog_semantic_receipts"]), 26)
         self.assertEqual(len(self.profile["placements"]), 60)
@@ -80,7 +85,9 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
         )
 
     def test_core_room_sources_pin_exact_model_ids_and_relative_paths(self) -> None:
-        sources = {item["semantic_category"]: item for item in self.profile["source_assets"]}
+        sources = {
+            item["semantic_category"]: item for item in self.profile["source_assets"]
+        }
         expected = {
             "sofa": "4a8cb0dd106792b60dc7ae879985930550e51ffc",
             "coffee_table": "f8a1e9ad71428615e74490c8fe10d309b527ee55",
@@ -96,12 +103,16 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
         for category, model_id in expected.items():
             source = sources[category]
             self.assertEqual(source["model_id"], model_id)
-            self.assertEqual(source["render_asset_relpath"], f"objects/{model_id[0]}/{model_id}.glb")
+            self.assertEqual(
+                source["render_asset_relpath"], f"objects/{model_id[0]}/{model_id}.glb"
+            )
             self.assertEqual(
                 source["object_config_relpath"],
                 f"objects/{model_id[0]}/{model_id}.object_config.json",
             )
-            self.assertTrue(all(value > 0 for value in source["normalized_dimensions_m"]))
+            self.assertTrue(
+                all(value > 0 for value in source["normalized_dimensions_m"])
+            )
 
         sofa = sources["sofa"]
         self.assertEqual(
@@ -117,8 +128,12 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
             [0.808865, 1.972667, 0.718913],
         )
 
-    def test_catalog_semantic_receipts_are_closed_and_pending_visual_review(self) -> None:
-        sources = {item["source_asset_id"]: item for item in self.profile["source_assets"]}
+    def test_catalog_semantic_receipts_are_closed_and_pending_visual_review(
+        self,
+    ) -> None:
+        sources = {
+            item["source_asset_id"]: item for item in self.profile["source_assets"]
+        }
         receipts = {
             item["source_asset_id"]: item
             for item in self.profile["catalog_semantic_receipts"]
@@ -150,23 +165,44 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
             lambda: contract.validate_profile(mismatch, self.house),
         )
 
-    def test_license_payload_and_basisu_transport_are_private_research_only(self) -> None:
+    def test_license_payload_and_basisu_transport_are_private_research_only(
+        self,
+    ) -> None:
         self.assertEqual(self.profile["dataset"]["license"]["spdx"], "CC-BY-NC-4.0")
-        self.assertEqual(self.profile["license_scope"]["use_class"], "private_noncommercial_research_only")
+        self.assertEqual(
+            self.profile["license_scope"]["use_class"],
+            "private_noncommercial_research_only",
+        )
         self.assertEqual(self.profile["license_scope"]["commercial_release"], "blocked")
-        self.assertEqual(self.profile["license_scope"]["public_payload_distribution"], "prohibited")
-        self.assertEqual(self.profile["payload_policy"]["binary_payload_location"], "outside_git_required")
-        self.assertEqual(self.profile["payload_policy"]["git_contents"], "manifests_digests_licenses_and_recipes_only")
+        self.assertEqual(
+            self.profile["license_scope"]["public_payload_distribution"], "prohibited"
+        )
+        self.assertEqual(
+            self.profile["payload_policy"]["binary_payload_location"],
+            "outside_git_required",
+        )
+        self.assertEqual(
+            self.profile["payload_policy"]["git_contents"],
+            "manifests_digests_licenses_and_recipes_only",
+        )
         transport = self.profile["texture_transport_policy"]
         self.assertTrue(transport["transport_required"])
         self.assertEqual(transport["required_mode"], "KHR_texture_basisu_to_core_png")
         self.assertTrue(transport["source_basisu_required"])
         self.assertFalse(transport["output_basisu_required"])
         self.assertEqual(transport["missing_transport_policy"], "reject")
-        self.assertTrue(all(source["source_basisu_required"] for source in self.profile["source_assets"]))
+        self.assertTrue(
+            all(
+                source["source_basisu_required"]
+                for source in self.profile["source_assets"]
+            )
+        )
 
     def test_articulated_siblings_are_exact_but_all_remain_pending(self) -> None:
-        candidates = {item["semantic_role"]: item for item in self.profile["articulated_sibling_candidates"]}
+        candidates = {
+            item["semantic_role"]: item
+            for item in self.profile["articulated_sibling_candidates"]
+        }
         self.assertEqual(set(candidates), contract.EXPECTED_ARTICULATION_ROLES)
         expected = {
             "fridge": "01841f449f738c1e24fa15753d1fbc5fe0c6a92c",
@@ -178,32 +214,50 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
         for role, model_id in expected.items():
             candidate = candidates[role]
             self.assertEqual(candidate["candidate_model_id"], model_id)
-            self.assertEqual(candidate["urdf_relpath"], f"urdf/{model_id}/{model_id}.urdf")
-            self.assertEqual(candidate["ao_config_relpath"], f"urdf/{model_id}/{model_id}.ao_config.json")
-            self.assertEqual(candidate["relationship_status"], "pending_unverified_semantic_sibling")
+            self.assertEqual(
+                candidate["urdf_relpath"], f"urdf/{model_id}/{model_id}.urdf"
+            )
+            self.assertEqual(
+                candidate["ao_config_relpath"],
+                f"urdf/{model_id}/{model_id}.ao_config.json",
+            )
+            self.assertEqual(
+                candidate["relationship_status"], "pending_unverified_semantic_sibling"
+            )
             self.assertEqual(candidate["selection_status"], "pending")
             self.assertEqual(candidate["validation_status"], "pending")
             self.assertEqual(candidate["ue_integration_status"], "pending")
-            self.assertEqual(candidate["articulation_authority"], "blocked_until_validated")
-            self.assertEqual(candidate["static_fallback_policy"], "presentation_only_never_interactive")
+            self.assertEqual(
+                candidate["articulation_authority"], "blocked_until_validated"
+            )
+            self.assertEqual(
+                candidate["static_fallback_policy"],
+                "presentation_only_never_interactive",
+            )
 
     def test_static_joined_sources_never_claim_interaction_authority(self) -> None:
         self.assertTrue(
-            all(source["interaction_authority"] == "none_static_joined_glb" for source in self.profile["source_assets"])
+            all(
+                source["interaction_authority"] == "none_static_joined_glb"
+                for source in self.profile["source_assets"]
+            )
         )
         self.assertTrue(
             all(
-                placement["interaction_policy"] == "visual_only_hidden_r1_proxy_remains_authoritative"
+                placement["interaction_policy"]
+                == "visual_only_hidden_r1_proxy_remains_authoritative"
                 for placement in self.profile["placements"]
             )
         )
 
     def test_digest_is_canonical_and_repeatable(self) -> None:
-        expected = "4b76e178ab1a3043d6adda6fe5786a5111f58523f4f8a23eb9cc2c82d883e8d3"
+        expected = "f4d761968ba38582888e52ea208c6c38bb404cda749fd05e54cf90d5d32eda03"
         self.assertEqual(self.profile["content_digest"], expected)
         self.assertEqual(contract.content_digest(self.profile), expected)
         self.assertEqual(self.reseal(self.profile), self.profile)
-        reverse_key_order = {key: self.profile[key] for key in reversed(list(self.profile))}
+        reverse_key_order = {
+            key: self.profile[key] for key in reversed(list(self.profile))
+        }
         self.assertEqual(contract.content_digest(reverse_key_order), expected)
 
     def test_unknown_fields_and_digest_drift_fail_closed(self) -> None:
@@ -251,14 +305,18 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
         )
 
         duplicate = copy.deepcopy(self.profile)
-        duplicate["placements"][1]["instance_id"] = duplicate["placements"][0]["instance_id"]
+        duplicate["placements"][1]["instance_id"] = duplicate["placements"][0][
+            "instance_id"
+        ]
         duplicate = self.reseal(duplicate)
         self.assert_contract_error(
             "VISTA_HSSD_PROFILE_DUPLICATE_ID",
             lambda: contract.validate_profile(duplicate, self.house),
         )
 
-    def test_static_interaction_and_articulation_promotion_lies_fail_closed(self) -> None:
+    def test_static_interaction_and_articulation_promotion_lies_fail_closed(
+        self,
+    ) -> None:
         interactive = copy.deepcopy(self.profile)
         interactive["source_assets"][0]["interaction_authority"] = "interactive"
         interactive = self.reseal(interactive)
@@ -277,7 +335,11 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
 
     def test_semantic_room_and_declared_count_mismatches_fail_closed(self) -> None:
         wrong_room = copy.deepcopy(self.profile)
-        sofa = next(item for item in wrong_room["placements"] if item["instance_id"] == "hssd.r1/living_room.sofa.01")
+        sofa = next(
+            item
+            for item in wrong_room["placements"]
+            if item["instance_id"] == "hssd.r1/living_room.sofa.01"
+        )
         sofa["semantic_target_id"] = "home.r1/room.bedroom/entity.fake.01"
         wrong_room = self.reseal(wrong_room)
         self.assert_contract_error(
@@ -303,8 +365,12 @@ class HssdPrivateResearchProfileTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary:
             path = pathlib.Path(temporary) / "duplicate.json"
-            path.write_text('{"schema_version":"first","schema_version":"second"}', encoding="utf-8")
-            self.assert_contract_error("VISTA_HSSD_PROFILE_DUPLICATE_KEY", lambda: contract.load_json(path))
+            path.write_text(
+                '{"schema_version":"first","schema_version":"second"}', encoding="utf-8"
+            )
+            self.assert_contract_error(
+                "VISTA_HSSD_PROFILE_DUPLICATE_KEY", lambda: contract.load_json(path)
+            )
 
 
 if __name__ == "__main__":

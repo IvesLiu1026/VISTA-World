@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Materialize and run one isolated HSSD R5 Unreal import candidate.
+"""Materialize and run one isolated HSSD Unreal import candidate.
 
 The default mode is a zero-write dry run.  Normal ``--apply`` refuses because
-the exact R5 corpus contains one active transmission/clear-coat conflict.  The
+the exact pinned corpus contains one active transmission/clear-coat conflict.  The
 explicit ``--allow-nonpromotable-material-conflict`` override creates only a
 diagnostic candidate: it pins attempt-local compatibility derivatives before
 copying the clean project, runs UE 5.7.3 with NullRHI, and never promotes visual
@@ -51,7 +51,7 @@ SOURCE_ANIMATION_RECEIPT_SHA256 = (
 )
 SOURCE_HSSD_RUN = pathlib.Path(
     "/data/sysx/vista-world/runs/vista-action-world-r1/"
-    "hssd-private-research-r5-20260828t040000z"
+    "hssd-private-research-r7-20260828t163000z"
 )
 UNREAL_EDITOR_CMD = pathlib.Path(
     "/mnt/NAS2/yhliu/UE_5.7.3_prebuilt/Engine/Binaries/Linux/UnrealEditor-Cmd"
@@ -65,6 +65,8 @@ BUILD_VERSION = pathlib.Path(
 BUILD_VERSION_SHA256 = (
     "ffe01f6d1e96ef86cd06158cfb561150971823fc77e5c8df352910bcf4d365ef"
 )
+# Stable imported-content namespace ABI; ``r5`` is not the source-receipt
+# generation.  Fresh R7 imports keep this object-path contract intentionally.
 DEFAULT_NAMESPACE = (
     "/Game/VISTA/PlayableHome/hssd_private_research_r5_phase1/HSSDPrivateResearch"
 )
@@ -407,22 +409,22 @@ def _read_pinned_regular_file(
 def _source_glb_path(binding: Mapping[str, Any]) -> pathlib.Path:
     relative = binding.get("glb_relative_path")
     if not isinstance(relative, str) or not relative:
-        raise RunnerError("R5 source binding GLB path is invalid")
+        raise RunnerError("R7 source binding GLB path is invalid")
     pure = pathlib.PurePosixPath(relative)
     if (
         pure.is_absolute()
         or pure.as_posix() != relative
         or any(part in {"", ".", ".."} for part in pure.parts)
     ):
-        raise RunnerError("R5 source binding GLB path is unsafe")
+        raise RunnerError("R7 source binding GLB path is unsafe")
     root = SOURCE_HSSD_RUN.resolve(strict=True)
     lexical = pathlib.Path(os.path.normpath(root.joinpath(*pure.parts)))
     try:
         resolved = lexical.resolve(strict=True)
     except OSError as exc:
-        raise RunnerError("R5 source binding GLB is missing") from exc
+        raise RunnerError("R7 source binding GLB is missing") from exc
     if resolved != lexical or resolved.parent != root / "assets":
-        raise RunnerError("R5 source binding GLB uses a symlink or escapes assets")
+        raise RunnerError("R7 source binding GLB uses a symlink or escapes assets")
     return resolved
 
 
@@ -432,7 +434,7 @@ def _derive_compatibility_bundle(
     if len(source_bindings) != 26 or [
         item.get("source_asset_id") for item in source_bindings
     ] != list(hssd.EXPECTED_ASSET_IDS):
-        raise RunnerError("compatibility derivation requires the exact 26 R5 assets")
+        raise RunnerError("compatibility derivation requires the exact 26 R7 assets")
     assets: list[CompatibilityAsset] = []
     aggregate_assets: list[dict[str, Any]] = []
     for source_binding in source_bindings:
@@ -441,7 +443,7 @@ def _derive_compatibility_bundle(
             _source_glb_path(source_binding),
             expected_bytes=source_binding["glb_bytes"],
             expected_sha256=source_binding["glb_sha256"],
-            label="R5 GLB " + asset_id,
+            label="R7 GLB " + asset_id,
         )
         try:
             derivative, receipt = compatibility.derive_glb(
@@ -572,7 +574,7 @@ def build_plan(
     bundle = _derive_compatibility_bundle(bindings, _sha256(scripts["compatibility"]))
     if apply and not allow_nonpromotable_material_conflict:
         raise RunnerError(
-            "HSSD R5 compatibility aggregate is nonpromotable; normal --apply "
+            "HSSD R7 compatibility aggregate is nonpromotable; normal --apply "
             "is blocked before attempt creation (diagnostic override required)"
         )
     snapshot = _snapshot_project(SOURCE_PROJECT_ROOT)
@@ -867,7 +869,7 @@ def _validate_terminal(
     receipt = _strict_json_file(receipt_path, "HSSD import receipt")
     result = _strict_json_file(result_path, "HSSD import result")
     expected_gates = {
-        "exact_r5_source_inventory_verified",
+        "exact_r7_source_inventory_verified",
         "compatibility_derivatives_revalidated",
         "diagnostic_nonpromotable_disposition_recorded",
         "namespace_fresh",

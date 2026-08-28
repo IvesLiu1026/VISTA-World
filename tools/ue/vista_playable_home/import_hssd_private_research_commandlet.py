@@ -1,4 +1,4 @@
-"""Import the exact 26 normalized HSSD R5 GLBs into a fresh UE namespace.
+"""Import the exact 26 normalized HSSD R7 GLBs into a fresh UE namespace.
 
 The imported meshes are presentation-only.  This phase does not place actors
 or replace any r1 interaction authority.  It removes asset collision, disables
@@ -470,7 +470,7 @@ def run():
         "assets": imported,
         "policy": EXECUTION_POLICY,
         "gates": {
-            "exact_r5_source_inventory_verified": True,
+            "exact_r7_source_inventory_verified": True,
             "namespace_fresh": namespace_fresh,
             "namespace_created": namespace_created,
             "exact_26_assets_imported": complete

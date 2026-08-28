@@ -13,7 +13,12 @@ from world_packs.vista_playable_home_r1.visual_profiles import contract
 
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[2]
-SCHEMA_PATH = REPOSITORY_ROOT / "world_packs" / "schemas" / "vista-playable-home-visual-profile-v1.schema.json"
+SCHEMA_PATH = (
+    REPOSITORY_ROOT
+    / "world_packs"
+    / "schemas"
+    / "vista-playable-home-visual-profile-v1.schema.json"
+)
 HOUSE_PATH = REPOSITORY_ROOT / "world_packs" / "vista_playable_home_r1" / "house.json"
 PROFILE_PATH = (
     REPOSITORY_ROOT
@@ -29,7 +34,9 @@ class RealisticInteriorContractTests(unittest.TestCase):
         self.house = contract.load_json(HOUSE_PATH)
         self.profile = contract.load_json(PROFILE_PATH)
 
-    def assert_contract_error(self, code: str, callback) -> contract.VisualProfileContractError:
+    def assert_contract_error(
+        self, code: str, callback
+    ) -> contract.VisualProfileContractError:
         with self.assertRaises(contract.VisualProfileContractError) as caught:
             callback()
         self.assertEqual(caught.exception.code, code, str(caught.exception))
@@ -59,26 +66,46 @@ class RealisticInteriorContractTests(unittest.TestCase):
     def test_fixture_validates_and_pins_three_room_scope(self) -> None:
         contract.validate_profile(self.profile, self.house)
         self.assertEqual(self.profile["schema_version"], contract.SCHEMA_VERSION)
-        self.assertEqual(set(self.profile["finished_room_ids"]), contract.EXPECTED_FINISHED_ROOMS)
+        self.assertEqual(
+            set(self.profile["finished_room_ids"]), contract.EXPECTED_FINISHED_ROOMS
+        )
         self.assertEqual(
             set(self.profile["compatibility_room_ids"]),
-            {room["room_id"] for room in self.house["rooms"]} - contract.EXPECTED_FINISHED_ROOMS,
+            {room["room_id"] for room in self.house["rooms"]}
+            - contract.EXPECTED_FINISHED_ROOMS,
         )
-        self.assertEqual(self.profile["architecture_profile"]["portal_topology_policy"], "preserve_r1")
-        self.assertEqual(self.profile["architecture_profile"]["collision_policy"], "hidden_r1_proxies")
+        self.assertEqual(
+            self.profile["architecture_profile"]["portal_topology_policy"],
+            "preserve_r1",
+        )
+        self.assertEqual(
+            self.profile["architecture_profile"]["collision_policy"],
+            "hidden_r1_proxies",
+        )
 
     def test_profile_and_receipt_digests_are_canonical_and_repeatable(self) -> None:
-        expected = "ba7283f04ebacc2e3dc157980af2a20e9be62bbc8232de60b6da6a206c2e9d32"
+        expected = "a596a6f384ea0a1d4f321e8e60e603356cd7c4a500b893addbbe6d16aee8b53b"
         self.assertEqual(self.profile["content_digest"], expected)
         self.assertEqual(contract.content_digest(self.profile), expected)
         first = self.reseal(self.profile)
         second = self.reseal(first)
         self.assertEqual(first, second)
 
-        reverse_key_order = {key: self.profile[key] for key in reversed(list(self.profile))}
+        reverse_key_order = {
+            key: self.profile[key] for key in reversed(list(self.profile))
+        }
         self.assertEqual(contract.content_digest(reverse_key_order), expected)
         for receipt in self.profile["asset_source_receipts"]:
-            self.assertEqual(receipt["receipt_digest"], contract.content_digest(receipt, "receipt_digest"))
+            self.assertEqual(
+                receipt["receipt_digest"],
+                contract.content_digest(receipt, "receipt_digest"),
+            )
+
+    def test_gameplay_exposure_stays_in_a_narrow_interior_daylight_range(self) -> None:
+        exposure = self.profile["lighting_rig"]["gameplay_exposure"]
+        self.assertEqual(exposure["min_ev100"], 7.5)
+        self.assertEqual(exposure["max_ev100"], 11)
+        self.assertLessEqual(exposure["max_ev100"] - exposure["min_ev100"], 4)
 
     def test_external_hero_receipts_pin_truthful_poly_haven_sources(self) -> None:
         receipts = {
@@ -110,7 +137,13 @@ class RealisticInteriorContractTests(unittest.TestCase):
                 "min_m": [-0.25129741430282593, -0.3238105922937393, 0],
                 "max_m": [0.25129741430282593, 0.3238105922937393, 0.8586971759796143],
                 "blend_mode": "masked",
-                "texture_semantics": ["base_color", "normal", "roughness", "metalness", "opacity"],
+                "texture_semantics": [
+                    "base_color",
+                    "normal",
+                    "roughness",
+                    "metalness",
+                    "opacity",
+                ],
                 "texture_count": 5,
                 "entitlement_record": "local-audit://poly-haven-cc0-20260816/electric_stove",
                 "attribution": "Electric Stove by Poly Haven, provided under CC0 1.0.",
@@ -140,23 +173,33 @@ class RealisticInteriorContractTests(unittest.TestCase):
                 "https://creativecommons.org/publicdomain/zero/1.0/",
             )
             self.assertEqual(receipt["license"]["entitlement_status"], "verified")
-            self.assertEqual(receipt["license"]["entitlement_record"], pinned["entitlement_record"])
+            self.assertEqual(
+                receipt["license"]["entitlement_record"], pinned["entitlement_record"]
+            )
             self.assertEqual(receipt["license"]["attribution"], pinned["attribution"])
             self.assertEqual(
                 receipt["license"]["modification_notice"],
                 pinned["modification_notice"],
             )
             self.assertEqual(receipt["license"]["commercial_use"], "allowed")
-            self.assertEqual(receipt["license"]["redistribution_restriction"], "project_policy")
+            self.assertEqual(
+                receipt["license"]["redistribution_restriction"], "project_policy"
+            )
             slot = receipt["material_inventory"]["slots"][0]
             self.assertEqual(slot["blend_mode"], pinned["blend_mode"])
             self.assertEqual(slot["texture_semantics"], pinned["texture_semantics"])
             self.assertEqual(slot["minimum_texture_size_px"], 4096)
-            self.assertEqual(receipt["material_inventory"]["texture_count"], pinned["texture_count"])
+            self.assertEqual(
+                receipt["material_inventory"]["texture_count"], pinned["texture_count"]
+            )
             self.assertEqual(receipt["import_policy"]["nanite"], "disabled_ineligible")
             self.assertEqual(receipt["import_policy"]["mobility"], "static")
-            self.assertEqual(receipt["import_policy"]["lod_policy"], "single_mesh_measured")
-            self.assertEqual(receipt["import_policy"]["collision_policy"], "hidden_r1_proxy")
+            self.assertEqual(
+                receipt["import_policy"]["lod_policy"], "single_mesh_measured"
+            )
+            self.assertEqual(
+                receipt["import_policy"]["collision_policy"], "hidden_r1_proxy"
+            )
             self.assertEqual(receipt["receipt_digest"], pinned["receipt_digest"])
 
     def test_unknown_and_executable_fields_fail_closed(self) -> None:
@@ -164,21 +207,24 @@ class RealisticInteriorContractTests(unittest.TestCase):
         unknown["mystery"] = True
         unknown = self.reseal(unknown)
         self.assert_contract_error(
-            "VISTA_VISUAL_SCHEMA_INVALID", lambda: contract.validate_profile(unknown, self.house)
+            "VISTA_VISUAL_SCHEMA_INVALID",
+            lambda: contract.validate_profile(unknown, self.house),
         )
 
         executable = copy.deepcopy(self.profile)
         executable["renderer_profile"]["execute_python_script"] = "do not run"
         executable = self.reseal(executable)
         self.assert_contract_error(
-            "VISTA_VISUAL_PROHIBITED_FIELD", lambda: contract.validate_profile(executable, self.house)
+            "VISTA_VISUAL_PROHIBITED_FIELD",
+            lambda: contract.validate_profile(executable, self.house),
         )
 
         nested = copy.deepcopy(self.profile)
         nested["dressing_instances"][0]["caller_script"] = "unsafe"
         nested = self.reseal(nested)
         self.assert_contract_error(
-            "VISTA_VISUAL_PROHIBITED_FIELD", lambda: contract.validate_profile(nested, self.house)
+            "VISTA_VISUAL_PROHIBITED_FIELD",
+            lambda: contract.validate_profile(nested, self.house),
         )
 
     def test_stale_house_revision_and_digest_fail_closed(self) -> None:
@@ -228,12 +274,18 @@ class RealisticInteriorContractTests(unittest.TestCase):
     def test_strict_loader_rejects_duplicate_json_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             path = pathlib.Path(temporary) / "duplicate.json"
-            path.write_text('{"schema_version":"a","schema_version":"b"}', encoding="utf-8")
-            self.assert_contract_error("VISTA_VISUAL_DUPLICATE_KEY", lambda: contract.load_json(path))
+            path.write_text(
+                '{"schema_version":"a","schema_version":"b"}', encoding="utf-8"
+            )
+            self.assert_contract_error(
+                "VISTA_VISUAL_DUPLICATE_KEY", lambda: contract.load_json(path)
+            )
 
     def test_nonfinite_and_invalid_transforms_fail_closed(self) -> None:
         nonfinite = copy.deepcopy(self.profile)
-        nonfinite["semantic_visual_bindings"][0]["transform_offset"]["location_cm"][0] = math.nan
+        nonfinite["semantic_visual_bindings"][0]["transform_offset"]["location_cm"][
+            0
+        ] = math.nan
         self.assert_contract_error(
             "VISTA_VISUAL_JSON_NON_FINITE",
             lambda: contract.validate_profile(nonfinite, self.house),
@@ -254,7 +306,8 @@ class RealisticInteriorContractTests(unittest.TestCase):
         )
         traversal = self.reseal(traversal)
         self.assert_contract_error(
-            "VISTA_VISUAL_URI_UNSAFE", lambda: contract.validate_profile(traversal, self.house)
+            "VISTA_VISUAL_URI_UNSAFE",
+            lambda: contract.validate_profile(traversal, self.house),
         )
 
         private_path = copy.deepcopy(self.profile)
@@ -272,7 +325,8 @@ class RealisticInteriorContractTests(unittest.TestCase):
         del missing["asset_source_receipts"][0]["license"]["entitlement_record"]
         missing = self.reseal(missing)
         self.assert_contract_error(
-            "VISTA_VISUAL_SCHEMA_INVALID", lambda: contract.validate_profile(missing, self.house)
+            "VISTA_VISUAL_SCHEMA_INVALID",
+            lambda: contract.validate_profile(missing, self.house),
         )
 
         hssd_mislabeled = copy.deepcopy(self.profile)
@@ -316,7 +370,8 @@ class RealisticInteriorContractTests(unittest.TestCase):
         euler["review_shots"][0]["rotation_deg"] = [-10, 0, 90]
         euler = self.reseal(euler)
         self.assert_contract_error(
-            "VISTA_VISUAL_SCHEMA_INVALID", lambda: contract.validate_profile(euler, self.house)
+            "VISTA_VISUAL_SCHEMA_INVALID",
+            lambda: contract.validate_profile(euler, self.house),
         )
 
         outside_room = copy.deepcopy(self.profile)
@@ -337,14 +392,20 @@ class RealisticInteriorContractTests(unittest.TestCase):
         self.assertEqual(locations["light.kitchen_dining.01"], [400, -180, 250])
 
         room_local_mistake = copy.deepcopy(self.profile)
-        room_local_mistake["lighting_rig"]["practical_lights"][1]["location_cm"] = [120, -180, 165]
+        room_local_mistake["lighting_rig"]["practical_lights"][1]["location_cm"] = [
+            120,
+            -180,
+            165,
+        ]
         room_local_mistake = self.reseal(room_local_mistake)
         self.assert_contract_error(
             "VISTA_VISUAL_LIGHTING_RIG_INVALID",
             lambda: contract.validate_profile(room_local_mistake, self.house),
         )
 
-    def test_public_fixture_contains_no_private_paths_or_unresolved_fallback(self) -> None:
+    def test_public_fixture_contains_no_private_paths_or_unresolved_fallback(
+        self,
+    ) -> None:
         corpus = json.dumps(self.profile, sort_keys=True).lower()
         for prohibited in (
             "/home/",
@@ -357,7 +418,9 @@ class RealisticInteriorContractTests(unittest.TestCase):
             "access_token",
         ):
             self.assertNotIn(prohibited, corpus)
-        self.assertEqual(self.profile["material_quality_tier"]["default_material_policy"], "reject")
+        self.assertEqual(
+            self.profile["material_quality_tier"]["default_material_policy"], "reject"
+        )
 
 
 if __name__ == "__main__":
