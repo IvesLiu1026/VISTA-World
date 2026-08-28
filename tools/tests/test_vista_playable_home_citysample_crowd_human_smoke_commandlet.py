@@ -241,6 +241,31 @@ def test_sanitized_config_byte_pins_match_host_runner() -> None:
     )
 
 
+def test_commandlet_authorization_requires_exact_six_true_fields() -> None:
+    module = _pure_commandlet()
+    required = {
+        "epic_ue_only_content_entitlement_acknowledged": True,
+        "large_full_content_copy_acknowledged": True,
+        "metahuman_visual_demo_only_not_ai_training_testing_acknowledged": True,
+        "no_redistribution_acknowledged": True,
+        "private_noncommercial_research_acknowledged": True,
+        "source_uassets_outside_git_acknowledged": True,
+    }
+
+    assert module._validate_authorization({"authorization": required}) == required
+    missing = dict(required)
+    missing.pop("metahuman_visual_demo_only_not_ai_training_testing_acknowledged")
+    false_value = dict(required)
+    false_value["metahuman_visual_demo_only_not_ai_training_testing_acknowledged"] = (
+        False
+    )
+    variants = [missing, false_value, {**required, "unexpected_acknowledgement": True}]
+
+    for authorization in variants:
+        with pytest.raises(module.SmokeFailure, match="authorization differs"):
+            module._validate_authorization({"authorization": authorization})
+
+
 def test_engine_plugin_descriptor_pins_match_host_runner() -> None:
     module = _pure_commandlet()
     expected = [

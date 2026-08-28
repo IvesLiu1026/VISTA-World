@@ -4,8 +4,9 @@
 The default operation is a read-only plan.  An apply is deliberately awkward:
 the operator must acknowledge the private/noncommercial research scope, their
 Epic/Unreal content entitlement, the no-redistribution boundary, the rule that
-source-format UAssets stay outside Git, and the roughly 10 GiB full-Content
-fallback copy.
+source-format UAssets stay outside Git, the roughly 10 GiB full-Content
+fallback copy, and that the MetaHuman-backed crowd remains isolated to a
+human-operated visual demo rather than any VISTA dataset or AI/VLM use.
 
 There is no trustworthy source-side ``AssetRegistry.bin`` in the pinned
 SimWorld project.  Consequently this runner never guesses a dependency closure
@@ -406,6 +407,7 @@ ACKNOWLEDGEMENT_KEYS = (
     "no_redistribution",
     "source_uassets_outside_git",
     "large_full_content_copy",
+    "metahuman_visual_demo_only_not_ai_training_testing",
 )
 
 REQUEST_ENV = "VISTA_CITYSAMPLE_CROWD_HUMAN_REQUEST"
@@ -1322,6 +1324,7 @@ def _build_request(
         "authorization": {
             "epic_ue_only_content_entitlement_acknowledged": False,
             "large_full_content_copy_acknowledged": False,
+            "metahuman_visual_demo_only_not_ai_training_testing_acknowledged": False,
             "no_redistribution_acknowledged": False,
             "private_noncommercial_research_acknowledged": False,
             "source_uassets_outside_git_acknowledged": False,
@@ -1829,6 +1832,9 @@ def _bind_execution_request(
         "large_full_content_copy_acknowledged": acknowledgements[
             "large_full_content_copy"
         ],
+        "metahuman_visual_demo_only_not_ai_training_testing_acknowledged": (
+            acknowledgements["metahuman_visual_demo_only_not_ai_training_testing"]
+        ),
         "no_redistribution_acknowledged": acknowledgements["no_redistribution"],
         "private_noncommercial_research_acknowledged": acknowledgements[
             "private_noncommercial_research"
@@ -2262,6 +2268,9 @@ def _host_receipt(
             "large_full_content_copy_acknowledged": acknowledgements[
                 "large_full_content_copy"
             ],
+            "metahuman_visual_demo_only_not_ai_training_testing_acknowledged": (
+                acknowledgements["metahuman_visual_demo_only_not_ai_training_testing"]
+            ),
             "no_redistribution_acknowledged": acknowledgements["no_redistribution"],
             "private_noncommercial_research_acknowledged": acknowledgements[
                 "private_noncommercial_research"
@@ -2305,6 +2314,19 @@ def _host_receipt(
         "engine_native_module_evidence": native_module_evidence,
         "engine_plugin_descriptor_evidence": plugin_descriptor_evidence,
         "scope": "private_noncommercial_research_only",
+        "metahuman_usage_scope": {
+            "human_operated_visual_demo_only": True,
+            "vista_dataset_inclusion": False,
+            "ai_training": False,
+            "ai_testing": False,
+            "ai_evaluation": False,
+            "ai_review": False,
+            "vlm_training": False,
+            "vlm_testing": False,
+            "vlm_evaluation": False,
+            "vlm_review": False,
+            "database_creation_or_population": False,
+        },
         "redistribution_authorized": False,
         "source_format_uassets_in_git": False,
         "runtime_visual_acceptance": False,
@@ -2343,6 +2365,7 @@ def apply_smoke(
     acknowledge_no_redistribution: bool,
     acknowledge_source_uassets_outside_git: bool,
     acknowledge_large_full_content_copy: bool,
+    acknowledge_metahuman_visual_demo_only_not_ai_training_testing: bool,
 ) -> Mapping[str, Any]:
     acknowledgements = {
         "private_noncommercial_research": acknowledge_private_noncommercial_research,
@@ -2350,11 +2373,14 @@ def apply_smoke(
         "no_redistribution": acknowledge_no_redistribution,
         "source_uassets_outside_git": acknowledge_source_uassets_outside_git,
         "large_full_content_copy": acknowledge_large_full_content_copy,
+        "metahuman_visual_demo_only_not_ai_training_testing": (
+            acknowledge_metahuman_visual_demo_only_not_ai_training_testing
+        ),
     }
     if any(value is not True for value in acknowledgements.values()):
         _fail(
             "ACKNOWLEDGEMENT_REQUIRED",
-            "all five private-content apply gates are required",
+            "all six private-content apply gates are required",
         )
 
     attempt = plan.config.attempt_root
@@ -2504,6 +2530,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--ack-no-redistribution", action="store_true")
     parser.add_argument("--ack-source-uassets-outside-git", action="store_true")
     parser.add_argument("--ack-large-full-content-copy", action="store_true")
+    parser.add_argument(
+        "--ack-metahuman-visual-demo-only-not-ai-training-testing",
+        action="store_true",
+    )
     return parser
 
 
@@ -2527,6 +2557,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 arguments.ack_source_uassets_outside_git
             ),
             acknowledge_large_full_content_copy=(arguments.ack_large_full_content_copy),
+            acknowledge_metahuman_visual_demo_only_not_ai_training_testing=(
+                arguments.ack_metahuman_visual_demo_only_not_ai_training_testing
+            ),
         )
         sys.stdout.buffer.write(canonical_json(receipt))
         return 0
