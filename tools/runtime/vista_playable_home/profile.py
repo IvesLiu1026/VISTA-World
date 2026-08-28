@@ -59,9 +59,7 @@ PLAN_MODE = "unreal-editor-game-preview"
 R2_PLAN_MODE = "unreal-editor-game-preview-realistic"
 MAX_JSON_BYTES = 64 * 1024
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-OUTPUT_RE = re.compile(
-    r"^sunshine-profile(?:-[A-Za-z0-9][A-Za-z0-9_-]{0,63})?\.json$"
-)
+OUTPUT_RE = re.compile(r"^sunshine-profile(?:-[A-Za-z0-9][A-Za-z0-9_-]{0,63})?\.json$")
 
 PLAN_KEYS = frozenset(
     {
@@ -105,6 +103,7 @@ R2_PLAN_SECURITY = {
     **PLAN_SECURITY,
     "runtime_profile_closed": True,
     "camera_profile_closed": True,
+    "trace_server_disabled": True,
 }
 
 PROFILE_REQUIRED_FIELDS = frozenset({"workspace", "project", "ue_editor", "map"})
@@ -121,9 +120,7 @@ PROFILE_OPTIONAL_FIELDS = frozenset(
     }
 )
 PROFILE_FIELDS = PROFILE_REQUIRED_FIELDS | PROFILE_OPTIONAL_FIELDS
-R2_PROFILE_FIELDS = PROFILE_FIELDS | frozenset(
-    {"runtime_profile", "camera_profile"}
-)
+R2_PROFILE_FIELDS = PROFILE_FIELDS | frozenset({"runtime_profile", "camera_profile"})
 PROFILE_PATH_FIELDS = frozenset(
     {"workspace", "project", "ue_editor", "nvidia_icd", "nvidia_compat"}
 )
@@ -234,7 +231,9 @@ def _absolute_lexical(path: Path, label: str) -> Path:
     return candidate
 
 
-def _canonical_file(path: Path, label: str, *, expected_name: str | None = None) -> Path:
+def _canonical_file(
+    path: Path, label: str, *, expected_name: str | None = None
+) -> Path:
     candidate = _absolute_lexical(path, label)
     if expected_name is not None and candidate.name != expected_name:
         raise ProfileError(f"{label} must be named {expected_name}")
@@ -273,7 +272,9 @@ def _contained(path: Path, root: Path, label: str) -> None:
         raise ProfileError(f"{label} must be contained by the plan workspace") from exc
 
 
-def _read_pinned_json(path: Path, expected_sha256: str, label: str) -> tuple[Any, bytes]:
+def _read_pinned_json(
+    path: Path, expected_sha256: str, label: str
+) -> tuple[Any, bytes]:
     if not isinstance(expected_sha256, str) or not SHA256_RE.fullmatch(expected_sha256):
         raise ProfileError(f"{label} SHA-256 must be lowercase hexadecimal")
     try:
@@ -387,21 +388,21 @@ def _config_from_plan(
     except RuntimeSafetyError as exc:
         raise ProfileError(f"launch plan config is invalid: {exc}") from exc
     config = GameRuntimeConfig(
-            workspace=workspace,
-            project=project,
-            ue_editor=ue_editor,
-            map_path=map_path,
-            display=display,
-            gpu=gpu,
-            vista_world_port=port,
-            width=width,
-            height=height,
-            fps=fps,
-            title=value["title"],
-            nvidia_icd=nvidia_icd,
-            nvidia_compat=nvidia_compat,
-            runtime_profile=R2_RUNTIME_PROFILE if r2 else None,
-        )
+        workspace=workspace,
+        project=project,
+        ue_editor=ue_editor,
+        map_path=map_path,
+        display=display,
+        gpu=gpu,
+        vista_world_port=port,
+        width=width,
+        height=height,
+        fps=fps,
+        title=value["title"],
+        nvidia_icd=nvidia_icd,
+        nvidia_compat=nvidia_compat,
+        runtime_profile=R2_RUNTIME_PROFILE if r2 else None,
+    )
     try:
         validate_runtime_profile_binding(config)
     except RuntimeSafetyError as exc:
@@ -500,7 +501,9 @@ def _validate_output(path: Path, workspace: Path) -> Path:
     except (FileNotFoundError, OSError) as exc:
         raise ProfileError("profile output parent does not exist") from exc
     if parent != output.parent or parent != workspace:
-        raise ProfileError("profile output must be a direct child of the plan workspace")
+        raise ProfileError(
+            "profile output must be a direct child of the plan workspace"
+        )
     return output
 
 
@@ -522,7 +525,9 @@ def write_profile(
     try:
         descriptor = os.open(output_path, flags, 0o600)
     except FileExistsError as exc:
-        raise ProfileError("profile output already exists and will not be replaced") from exc
+        raise ProfileError(
+            "profile output already exists and will not be replaced"
+        ) from exc
     except OSError as exc:
         raise ProfileError("could not create profile output") from exc
     try:
