@@ -19,7 +19,6 @@ import stat
 
 import unreal
 
-
 REQUEST_SCHEMA = "vista.citysample-crowd-human-forward-load-request/v1"
 RESULT_SCHEMA = "vista.citysample-crowd-human-forward-load-result/v1"
 COPY_MANIFEST_SCHEMA = "vista.citysample-crowd-human-full-content-copy-manifest/v1"
@@ -87,6 +86,17 @@ ENGINE_PLUGIN_PINS = [
         "sha256": "7a355543790998ba9bf947abc0ac52bdcc942b173d6c863d687d84e95c894699",
         "size_bytes": 1_006,
     },
+    {
+        "name": "RigLogic",
+        "relative_path": "Engine/Plugins/Animation/RigLogic/RigLogic.uplugin",
+        "required_native_modules": [
+            "RigLogicLib",
+            "RigLogicModule",
+            "RigLogicDeveloper",
+        ],
+        "sha256": "c6ce682b00793943614fea31fdae5c201a6a4595f96bf4a901d3657f79e5e340",
+        "size_bytes": 1_044,
+    },
 ]
 ENGINE_NATIVE_BINARY_PINS = [
     {
@@ -151,6 +161,51 @@ ENGINE_NATIVE_BINARY_PINS = [
         ),
         "plugin_name": "PythonScriptPlugin",
     },
+    {
+        "binary_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/"
+            "libUnrealEditor-RigLogicLib.so"
+        ),
+        "binary_sha256": (
+            "efda18f1bb2d361ca96833541d4f95e9240c44a491c882dd5cd7ae3beb15968e"
+        ),
+        "binary_size_bytes": 1_942_744,
+        "module_name": "RigLogicLib",
+        "modules_receipt_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules"
+        ),
+        "plugin_name": "RigLogic",
+    },
+    {
+        "binary_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/"
+            "libUnrealEditor-RigLogicModule.so"
+        ),
+        "binary_sha256": (
+            "c5244c83d59cbfda87e07554c7f59da04601202f23ca69a191d26f670b067b64"
+        ),
+        "binary_size_bytes": 849_728,
+        "module_name": "RigLogicModule",
+        "modules_receipt_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules"
+        ),
+        "plugin_name": "RigLogic",
+    },
+    {
+        "binary_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/"
+            "libUnrealEditor-RigLogicDeveloper.so"
+        ),
+        "binary_sha256": (
+            "d53c036d5f4b7e695f1d1107de0ab248bdf29fa41979580c9f4d89d0053fdefb"
+        ),
+        "binary_size_bytes": 59_464,
+        "module_name": "RigLogicDeveloper",
+        "modules_receipt_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules"
+        ),
+        "plugin_name": "RigLogic",
+    },
 ]
 ENGINE_MODULES_RECEIPT_PINS = [
     {
@@ -198,6 +253,22 @@ ENGINE_MODULES_RECEIPT_PINS = [
         ),
         "modules_receipt_size_bytes": 189,
         "plugin_name": "PythonScriptPlugin",
+    },
+    {
+        "module_bindings": {
+            "RigLogicDeveloper": "libUnrealEditor-RigLogicDeveloper.so",
+            "RigLogicLib": "libUnrealEditor-RigLogicLib.so",
+            "RigLogicModule": "libUnrealEditor-RigLogicModule.so",
+        },
+        "modules_receipt_build_id": "47537391",
+        "modules_receipt_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules"
+        ),
+        "modules_receipt_sha256": (
+            "d92089953171e325bb03cf40be10138ee1d77d4143d0e529eb62fc9233b2ab62"
+        ),
+        "modules_receipt_size_bytes": 273,
+        "plugin_name": "RigLogic",
     },
 ]
 KEY_DEPENDENCY_BINDINGS = [
@@ -559,6 +630,26 @@ def _native_authority_contract():
             "native binary receipt association differs",
         )
         use_counts[binary["modules_receipt_relative_path"]] += 1
+    required_modules_by_plugin = {
+        plugin["name"]: sorted(plugin["required_native_modules"])
+        for plugin in ENGINE_PLUGIN_PINS
+    }
+    observed_modules_by_plugin = {}
+    for binary in ENGINE_NATIVE_BINARY_PINS:
+        observed_modules_by_plugin.setdefault(binary["plugin_name"], []).append(
+            binary["module_name"]
+        )
+    observed_modules_by_plugin = {
+        plugin_name: sorted(module_names)
+        for plugin_name, module_names in observed_modules_by_plugin.items()
+    }
+    require(
+        observed_modules_by_plugin == required_modules_by_plugin
+        and {pin["plugin_name"] for pin in ENGINE_MODULES_RECEIPT_PINS}
+        == set(required_modules_by_plugin),
+        "ENGINE_NATIVE_MODULE_PIN_MISMATCH",
+        "native binaries do not exactly cover required plugin modules",
+    )
     return {
         "binary_files": ENGINE_NATIVE_BINARY_PINS,
         "inventory": {
@@ -590,9 +681,9 @@ def _validate_engine_native_authority(request, engine_directory):
         len(binary_paths) == len(set(binary_paths))
         and len(receipt_paths) == len(set(receipt_paths))
         and not set(binary_paths).intersection(receipt_paths)
-        and contract["inventory"]["binary_file_count"] == 4
-        and contract["inventory"]["modules_receipt_file_count"] == 3
-        and contract["inventory"]["distinct_file_count"] == 7,
+        and contract["inventory"]["binary_file_count"] == 7
+        and contract["inventory"]["modules_receipt_file_count"] == 4
+        and contract["inventory"]["distinct_file_count"] == 11,
         "ENGINE_NATIVE_MODULE_PIN_MISMATCH",
         "native authority distinct-file inventory differs",
     )
@@ -774,6 +865,7 @@ def _validate_request(
             {"Enabled": True, "Name": "HairStrands"},
             {"Enabled": True, "Name": "MassGameplay"},
             {"Enabled": True, "Name": "PythonScriptPlugin"},
+            {"Enabled": True, "Name": "RigLogic"},
             {"Enabled": True, "Name": "SunPosition"},
         ]
         and "Modules" not in project,
@@ -983,7 +1075,7 @@ def _validate_copy_manifest(request, manifest_path, project_path):
             "relative path escapes project",
         )
         require(
-            relative.startswith("Config/") or relative.startswith("Content/"),
+            relative.startswith(("Config/", "Content/")),
             "MANIFEST_INVALID",
             "manifest includes an unsupported root",
         )
@@ -1161,7 +1253,7 @@ def _dependency_options():
     for name, value in values.items():
         try:
             options.set_editor_property(name, value)
-        except Exception:
+        except Exception:  # noqa: BLE001 - Unreal reflection exceptions vary by build.
             try:
                 setattr(options, name, value)
             except Exception as exc:
@@ -1244,7 +1336,7 @@ def _asset_data_for_package(registry, package_name):
 def _property(value, name):
     try:
         return value.get_editor_property(name)
-    except Exception:
+    except Exception:  # noqa: BLE001 - Unreal reflection exceptions vary by build.
         return getattr(value, name, None)
 
 
@@ -1587,8 +1679,10 @@ def main():
                     result_sha_path,
                     _failure_result(request, error.code, error.message),
                 )
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - preserve the primary smoke failure.
+                unreal.log_error(
+                    "VISTA_CITYSAMPLE_CROWD_HUMAN_FAILURE_RESULT_WRITE_FAILED"
+                )
         unreal.log_error("VISTA_CITYSAMPLE_CROWD_HUMAN_QUARANTINED " + error.code)
         raise RuntimeError(
             "CitySampleCrowd forward-load smoke failed; attempt quarantined: "
@@ -1605,8 +1699,10 @@ def main():
                     result_sha_path,
                     _failure_result(request, error.code, error.message),
                 )
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - preserve the primary smoke failure.
+                unreal.log_error(
+                    "VISTA_CITYSAMPLE_CROWD_HUMAN_FAILURE_RESULT_WRITE_FAILED"
+                )
         unreal.log_error("VISTA_CITYSAMPLE_CROWD_HUMAN_QUARANTINED " + error.code)
         raise RuntimeError(
             "CitySampleCrowd forward-load smoke failed; attempt quarantined: "

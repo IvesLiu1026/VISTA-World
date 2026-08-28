@@ -483,7 +483,7 @@ def test_plan_pins_project_target_receipt_engine_runner_and_commandlet(
     assert plan.report["toolchain"]["commandlet_sha256"] == plan.commandlet_seal.sha256
     assert [
         item["name"] for item in plan.report["toolchain"]["engine_plugin_descriptors"]
-    ] == ["HairStrands", "MassGameplay", "PythonScriptPlugin"]
+    ] == ["HairStrands", "MassGameplay", "PythonScriptPlugin", "RigLogic"]
     assert (
         plan.report["toolchain"]["engine_native_authority"]
         == plan.request["engine_native_authority"]
@@ -494,14 +494,20 @@ def test_plan_pins_project_target_receipt_engine_runner_and_commandlet(
         "MassActors",
         "PythonScriptPlugin",
         "PythonScriptPluginPreload",
+        "RigLogicLib",
+        "RigLogicModule",
+        "RigLogicDeveloper",
     ]
     assert authority["inventory"] == {
-        "binary_file_count": 4,
-        "distinct_file_count": 7,
-        "modules_receipt_file_count": 3,
+        "binary_file_count": 7,
+        "distinct_file_count": 11,
+        "modules_receipt_file_count": 4,
         "shared_modules_receipt_paths": [
-            "Engine/Plugins/Experimental/PythonScriptPlugin/Binaries/Linux/"
-            "UnrealEditor.modules"
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules",
+            (
+                "Engine/Plugins/Experimental/PythonScriptPlugin/Binaries/Linux/"
+                "UnrealEditor.modules"
+            ),
         ],
     }
     assert plan.request["commandlet_sha256"] == plan.commandlet_seal.sha256
@@ -532,6 +538,82 @@ def test_plan_pins_project_target_receipt_engine_runner_and_commandlet(
     assert plan.report["acknowledgements"] == {
         key: False for key in runner.ACKNOWLEDGEMENT_KEYS
     }
+
+
+def test_riglogic_authority_is_exactly_linux_editor_forward_load_scope() -> None:
+    descriptor_relative, descriptor_sha256, descriptor_size = runner.ENGINE_PLUGIN_PINS[
+        "RigLogic"
+    ]
+    assert descriptor_relative.as_posix() == (
+        "Engine/Plugins/Animation/RigLogic/RigLogic.uplugin"
+    )
+    assert descriptor_sha256 == (
+        "c6ce682b00793943614fea31fdae5c201a6a4595f96bf4a901d3657f79e5e340"
+    )
+    assert descriptor_size == 1_044
+    assert runner.REQUIRED_NATIVE_MODULES_BY_PLUGIN["RigLogic"] == (
+        "RigLogicLib",
+        "RigLogicModule",
+        "RigLogicDeveloper",
+    )
+
+    riglogic_binaries = [
+        pin
+        for pin in runner.ENGINE_NATIVE_BINARY_PINS
+        if pin["plugin_name"] == "RigLogic"
+    ]
+    assert [pin["module_name"] for pin in riglogic_binaries] == [
+        "RigLogicLib",
+        "RigLogicModule",
+        "RigLogicDeveloper",
+    ]
+    assert all(
+        pin["modules_receipt_relative_path"]
+        == "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules"
+        for pin in riglogic_binaries
+    )
+    assert all(pin["module_name"] != "RigLogicEditor" for pin in riglogic_binaries)
+
+    riglogic_receipts = [
+        pin
+        for pin in runner.ENGINE_MODULES_RECEIPT_PINS
+        if pin["plugin_name"] == "RigLogic"
+    ]
+    assert len(riglogic_receipts) == 1
+    assert riglogic_receipts[0]["module_bindings"] == {
+        "RigLogicDeveloper": "libUnrealEditor-RigLogicDeveloper.so",
+        "RigLogicLib": "libUnrealEditor-RigLogicLib.so",
+        "RigLogicModule": "libUnrealEditor-RigLogicModule.so",
+    }
+    assert riglogic_receipts[0]["modules_receipt_build_id"] == "47537391"
+
+
+def test_native_authority_rejects_win64_riglogic_editor_substitution() -> None:
+    binary_pins = [dict(pin) for pin in runner.ENGINE_NATIVE_BINARY_PINS]
+    receipt_pins = [
+        {**dict(pin), "module_bindings": dict(pin["module_bindings"])}
+        for pin in runner.ENGINE_MODULES_RECEIPT_PINS
+    ]
+    developer_binary = next(
+        pin for pin in binary_pins if pin["module_name"] == "RigLogicDeveloper"
+    )
+    developer_binary["module_name"] = "RigLogicEditor"
+    developer_binary["binary_relative_path"] = developer_binary[
+        "binary_relative_path"
+    ].replace("RigLogicDeveloper", "RigLogicEditor")
+    riglogic_receipt = next(
+        pin for pin in receipt_pins if pin["plugin_name"] == "RigLogic"
+    )
+    riglogic_receipt["module_bindings"].pop("RigLogicDeveloper")
+    riglogic_receipt["module_bindings"]["RigLogicEditor"] = (
+        "libUnrealEditor-RigLogicEditor.so"
+    )
+
+    with pytest.raises(
+        runner.CitySampleCrowdSmokeError,
+        match="exactly cover required plugin modules",
+    ):
+        runner._native_authority_inventory(binary_pins, receipt_pins)
 
 
 @pytest.mark.parametrize("missing", sorted(_acknowledgements()))
@@ -624,6 +706,7 @@ def test_apply_copies_full_projection_invokes_isolated_nullrhi_and_seals_receipt
         "HairStrands",
         "MassGameplay",
         "PythonScriptPlugin",
+        "RigLogic",
         "SunPosition",
     ]
     for relative in [runner.TARGET_RELATIVE, *runner.KEY_SOURCE_PINS]:
@@ -863,6 +946,9 @@ def test_host_receipt_rejects_forged_execution_evidence(
         "MassActors",
         "PythonScriptPlugin",
         "PythonScriptPluginPreload",
+        "RigLogicLib",
+        "RigLogicModule",
+        "RigLogicDeveloper",
     ],
 )
 def test_native_module_preflight_rejects_each_binary_mutation(
@@ -883,7 +969,7 @@ def test_native_module_preflight_rejects_each_binary_mutation(
 
 @pytest.mark.parametrize(
     "plugin_name",
-    ["HairStrands", "MassGameplay", "PythonScriptPlugin"],
+    ["HairStrands", "MassGameplay", "PythonScriptPlugin", "RigLogic"],
 )
 def test_native_module_preflight_rejects_each_distinct_receipt_mutation(
     tmp_path: pathlib.Path,
@@ -903,7 +989,7 @@ def test_native_module_preflight_rejects_each_distinct_receipt_mutation(
 
 @pytest.mark.parametrize(
     "plugin_name",
-    ["HairStrands", "MassGameplay", "PythonScriptPlugin"],
+    ["HairStrands", "MassGameplay", "PythonScriptPlugin", "RigLogic"],
 )
 def test_plugin_descriptor_preflight_rejects_each_descriptor_mutation(
     tmp_path: pathlib.Path,
@@ -928,21 +1014,21 @@ def test_host_result_revalidates_native_module_bytes_from_disk(
     fixture = Fixture(tmp_path, monkeypatch)
     plan = runner.plan_smoke(fixture.config())
     _write_commandlet_result_for_host_validation(plan, _success_result(plan))
-    binary = fixture.engine_native_binaries["PythonScriptPluginPreload"]
+    binary = fixture.engine_native_binaries["RigLogicDeveloper"]
     binary.write_bytes(binary.read_bytes() + b"changed-after-commandlet")
 
     with pytest.raises(runner.CitySampleCrowdSmokeError, match="SOURCE_CHANGED"):
         runner._read_sealed_result(plan)
 
 
-def test_host_result_revalidates_python_plugin_descriptor_from_disk(
+def test_host_result_revalidates_riglogic_descriptor_from_disk(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fixture = Fixture(tmp_path, monkeypatch)
     plan = runner.plan_smoke(fixture.config())
     _write_commandlet_result_for_host_validation(plan, _success_result(plan))
-    descriptor = fixture.engine_plugins["PythonScriptPlugin"]
+    descriptor = fixture.engine_plugins["RigLogic"]
     descriptor.write_bytes(descriptor.read_bytes() + b"changed-after-commandlet")
 
     with pytest.raises(runner.CitySampleCrowdSmokeError, match="SOURCE_CHANGED"):
@@ -959,7 +1045,7 @@ def test_success_receipt_revalidates_native_module_receipt_from_disk(
         plan, "a" * 64, _bound_acknowledgements()
     )
     execution = runner._validated_execution_contract(plan, request_raw)
-    receipt = fixture.engine_modules_receipts["PythonScriptPlugin"]
+    receipt = fixture.engine_modules_receipts["RigLogic"]
     receipt.write_bytes(receipt.read_bytes() + b"changed-after-result")
 
     with pytest.raises(runner.CitySampleCrowdSmokeError, match="SOURCE_CHANGED"):
@@ -976,7 +1062,7 @@ def test_success_receipt_revalidates_native_module_receipt_from_disk(
         )
 
 
-def test_success_receipt_revalidates_python_plugin_descriptor_from_disk(
+def test_success_receipt_revalidates_riglogic_descriptor_from_disk(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -986,7 +1072,7 @@ def test_success_receipt_revalidates_python_plugin_descriptor_from_disk(
         plan, "a" * 64, _bound_acknowledgements()
     )
     execution = runner._validated_execution_contract(plan, request_raw)
-    descriptor = fixture.engine_plugins["PythonScriptPlugin"]
+    descriptor = fixture.engine_plugins["RigLogic"]
     descriptor.write_bytes(descriptor.read_bytes() + b"changed-after-result")
 
     with pytest.raises(runner.CitySampleCrowdSmokeError, match="SOURCE_CHANGED"):
