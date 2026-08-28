@@ -9,6 +9,7 @@
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
 #include "VistaAnimationComponent.h"
+#include "VistaCharacterProviderComponent.h"
 #include "VistaHomeNpcController.h"
 #include "VistaPickupActor.h"
 
@@ -44,6 +45,10 @@ AVistaHomeNpcCharacter::AVistaHomeNpcCharacter()
     AnimationComponent =
         CreateDefaultSubobject<UVistaAnimationComponent>(TEXT("VistaAnimationComponent"));
 
+    CharacterProviderComponent =
+        CreateDefaultSubobject<UVistaCharacterProviderComponent>(
+            TEXT("VistaCharacterProviderComponent"));
+
     CarryAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("VistaCarryAnchor"));
     CarryAnchor->SetupAttachment(GetMesh());
     CarryAnchor->SetRelativeLocation(FVector(35.0f, 25.0f, 110.0f));
@@ -67,6 +72,26 @@ FVistaEntityRuntimeState AVistaHomeNpcCharacter::VistaGetRuntimeState_Implementa
     State.Transform = GetActorTransform();
     State.bHidden = IsHidden();
     State.Values.Add(TEXT("current_room_id"), CurrentRoomId);
+    if (IsValid(CharacterProviderComponent))
+    {
+        State.Values.Add(
+            TEXT("character_provider_id"),
+            CharacterProviderComponent->ActiveProviderId.ToString());
+        State.Values.Add(
+            TEXT("character_provider_status"),
+            CharacterProviderComponent->GetProviderStatus().ToString());
+        State.Values.Add(
+            TEXT("photoreal_character_ready"),
+            CharacterProviderComponent->IsPhotorealCharacterReady()
+                ? TEXT("true")
+                : TEXT("false"));
+        if (!CharacterProviderComponent->ProviderFailureCode.IsNone())
+        {
+            State.Values.Add(
+                TEXT("character_provider_failure_code"),
+                CharacterProviderComponent->ProviderFailureCode.ToString());
+        }
+    }
     return State;
 }
 

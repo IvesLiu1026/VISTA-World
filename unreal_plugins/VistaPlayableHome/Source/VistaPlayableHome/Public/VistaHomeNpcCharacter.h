@@ -9,6 +9,7 @@
 class AVistaPickupActor;
 class USceneComponent;
 class UVistaAnimationComponent;
+class UVistaCharacterProviderComponent;
 
 UCLASS(Blueprintable)
 class VISTAPLAYABLEHOME_API AVistaHomeNpcCharacter final
@@ -52,6 +53,10 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
     TObjectPtr<UVistaAnimationComponent> AnimationComponent;
+
+    /** Visual-only provider; semantic NPC logic and collision remain on this actor. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Character Provider")
+    TObjectPtr<UVistaCharacterProviderComponent> CharacterProviderComponent;
 
     virtual FString VistaGetSemanticId_Implementation() const override;
     virtual TArray<EVistaAffordance> VistaGetAffordances_Implementation() const override;
