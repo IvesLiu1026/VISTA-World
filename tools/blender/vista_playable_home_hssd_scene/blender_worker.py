@@ -44,6 +44,26 @@ EXPECTED_POLY_HAVEN_ASSET_IDS = {
     "throw_pillows_01",
     "white_oak_veneer",
 }
+EXPECTED_POLY_HAVEN_INPUT_DIGEST = (
+    "c9706c9fd95daed410a4144f568ab1e1f2d5d029003807a1baeb043bce7c98c5"
+)
+EXPECTED_SOURCE_DOCUMENTS = {
+    "build-plan.json": {
+        "sha256": "88b645fc81936b2eefe7e2d572d7b6e4959aede2d20b3277096753edeba78c1e",
+        "content_digest": "b06e0fb2cc92231f3ddc674a9adf99c7684204978e3ba303239484335cb33de7",
+    },
+    "build-result.json": {
+        "sha256": "f9cdeff719e6faf0850d1fb0184406a5a49c9a772cb8889022c1f465cc3150be",
+        "content_digest": "6b75a0c83191873b5e62e465d266f340d37aa24befda1e5e291686137d1685c7",
+    },
+    "scene-plan.json": {
+        "sha256": "bcf8d1cc63fd6529a7277020ba6712b88de7dc04e0f7448df98e24e0c54238fc",
+        "content_digest": "c02223bf7d113264455d83f5426cbb3efca171f087a654492af01d7c619cae0f",
+    },
+}
+EXPECTED_PLACEMENTS_DIGEST = (
+    "5728c5dc211e6770129e49b75d0a2bc07bb5ece202bf641fb97b0d0a492aa914"
+)
 EXPECTED_R3_DRESSING_DIGEST = (
     "a6f4d28b75fac17cd4e9b135132c066b86df0bdd4a3064cf7ddfdddb2631f941"
 )
@@ -90,9 +110,16 @@ def sha256_file(path: pathlib.Path) -> str:
 
 
 def _regular_file(root: pathlib.Path, relative: str) -> pathlib.Path:
-    candidate = root / relative
-    if candidate.is_symlink():
-        raise RuntimeError(f"receipt-bound payload is a symlink: {relative}")
+    if not isinstance(relative, str) or not relative or "\\" in relative:
+        raise RuntimeError(f"receipt-bound payload path is invalid: {relative!r}")
+    pure = pathlib.PurePosixPath(relative)
+    if pure.is_absolute() or any(part in {"", ".", ".."} for part in pure.parts):
+        raise RuntimeError(f"receipt-bound payload path is unsafe: {relative}")
+    candidate = root
+    for part in pure.parts:
+        candidate /= part
+        if candidate.is_symlink():
+            raise RuntimeError(f"receipt-bound payload is a symlink: {relative}")
     try:
         metadata = candidate.stat()
     except OSError as exc:
@@ -119,6 +146,7 @@ def _validate_poly_haven_plan(plan: Mapping[str, Any]) -> pathlib.Path:
         or poly.get("schema_version")
         != "simworld.vista.hssd-living-poly-haven-input/v1"
         or poly.get("content_digest") != content_digest(poly)
+        or poly.get("content_digest") != EXPECTED_POLY_HAVEN_INPUT_DIGEST
         or poly.get("selected_asset_count") != 6
         or poly.get("selected_payload_count") != 28
         or poly.get("receipt") != EXPECTED_POLY_HAVEN_RECEIPT
@@ -223,6 +251,65 @@ def _validate_poly_haven_plan(plan: Mapping[str, Any]) -> pathlib.Path:
     return root
 
 
+def _validate_hssd_source_plan(
+    plan: Mapping[str, Any], source_root: pathlib.Path
+) -> None:
+    source = plan.get("source_run")
+    expected_records = [
+        {
+            "relative_path": name,
+            "sha256": record["sha256"],
+            "content_digest": record["content_digest"],
+        }
+        for name, record in EXPECTED_SOURCE_DOCUMENTS.items()
+    ]
+    if not isinstance(source, dict) or source.get("documents") != expected_records:
+        raise RuntimeError("HSSD source document manifest is not the exact R5 set")
+    for name, expected in EXPECTED_SOURCE_DOCUMENTS.items():
+        document_path = _regular_file(source_root, name)
+        document = json.loads(document_path.read_text(encoding="utf-8"))
+        if (
+            type(document) is not dict
+            or sha256_file(document_path) != expected["sha256"]
+            or document.get("content_digest") != expected["content_digest"]
+            or content_digest(document) != expected["content_digest"]
+        ):
+            raise RuntimeError(f"HSSD source document changed: {name}")
+
+    placements = plan.get("placements")
+    if (
+        not isinstance(placements, list)
+        or hashlib.sha256(canonical_json(placements, newline=False)).hexdigest()
+        != EXPECTED_PLACEMENTS_DIGEST
+    ):
+        raise RuntimeError("HSSD living-room placement manifest changed")
+    receipts_seen: set[str] = set()
+    for placement in placements:
+        asset_id = placement["source_asset_id"]
+        if asset_id in receipts_seen:
+            continue
+        receipts_seen.add(asset_id)
+        glb_relative = placement["source_glb_relpath"]
+        receipt_relative = f"receipts/{asset_id}.json"
+        glb_path = _regular_file(source_root, glb_relative)
+        receipt_path = _regular_file(source_root, receipt_relative)
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        if (
+            type(receipt) is not dict
+            or receipt.get("source_asset_id") != asset_id
+            or receipt.get("output_relpath") != glb_relative
+            or receipt.get("output_sha256") != placement["source_glb_sha256"]
+            or receipt.get("content_digest")
+            != placement["source_receipt_content_digest"]
+            or content_digest(receipt) != receipt.get("content_digest")
+            or receipt.get("status") != "normalized_pbr_glb_built_for_private_research"
+            or receipt.get("accepted_as_interactive_asset") is not False
+            or glb_path.stat().st_size != receipt.get("output_bytes")
+            or sha256_file(glb_path) != placement["source_glb_sha256"]
+        ):
+            raise RuntimeError(f"HSSD source receipt or GLB changed: {asset_id}")
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     raw = list(sys.argv if argv is None else argv)
     forwarded = raw[raw.index("--") + 1 :] if "--" in raw else raw
@@ -257,6 +344,14 @@ def _load_plan(path: pathlib.Path, output_root: pathlib.Path) -> dict[str, Any]:
     if source_root.is_symlink() or not source_root.is_dir():
         raise RuntimeError("source run identity is invalid")
     source_root = source_root.resolve(strict=True)
+    _validate_hssd_source_plan(plan, source_root)
+    preflight_gates = plan.get("preflight_gates")
+    if (
+        not isinstance(preflight_gates, dict)
+        or not preflight_gates
+        or any(value is not True for value in preflight_gates.values())
+    ):
+        raise RuntimeError("sealed preflight gate assertions are incomplete")
     if ".git" in output_root.parts or any(
         os.path.lexists(str(ancestor / ".git"))
         for ancestor in (output_root, *output_root.parents)
@@ -566,7 +661,7 @@ def _build_shell(plan: Mapping[str, Any]) -> tuple[list[Any], dict[str, Any]]:
 
 
 def _import_placements(plan: Mapping[str, Any]) -> tuple[int, int, list[str]]:
-    source_root = pathlib.Path(plan["source_run"]["path"])
+    source_root = pathlib.Path(plan["source_run"]["path"]).resolve(strict=True)
     imported_materials: set[int] = set()
     imported_names: list[str] = []
     for placement in plan["placements"]:
@@ -586,7 +681,7 @@ def _import_placements(plan: Mapping[str, Any]) -> tuple[int, int, list[str]]:
             raise RuntimeError(
                 f"unknown HSSD visual import policy: {placement['instance_id']}"
             )
-        glb_path = source_root / placement["source_glb_relpath"]
+        glb_path = _regular_file(source_root, placement["source_glb_relpath"])
         if sha256_file(glb_path) != placement["source_glb_sha256"]:
             raise RuntimeError(
                 f"GLB changed after preflight: {placement['source_asset_id']}"
@@ -993,7 +1088,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise RuntimeError("render artifact is absent or implausibly small")
     gates = {
         "pinned_blender_4_5_8": True,
-        "preflight_gates_replayed": all(plan["preflight_gates"].values()),
+        "sealed_preflight_gate_assertions_present": True,
+        "exact_source_documents_receipts_and_glbs_revalidated": True,
+        "exact_placement_manifest_revalidated": True,
+        "poly_haven_receipt_tree_and_payloads_revalidated": True,
         "nine_hssd_visual_placements_imported": hssd_count == 9,
         "four_poly_haven_collections_appended": r3_import["instance_count"] == 4,
         "eighteen_poly_haven_model_images_receipt_remapped": r3_import[
