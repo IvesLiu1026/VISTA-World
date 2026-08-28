@@ -1,0 +1,1422 @@
+{
+  "schema_version": "simworld.vista.ycb-handheld-kit-source-contract/v1",
+  "content_digest": "b88676c016eb229000f54fb43965329e09e0e462073b376e438c6d4d984b2962",
+  "profile_id": "vista_playable_home_ycb_handheld_kit_r1",
+  "scope": "source_verification_and_preparation_only",
+  "source": {
+    "repository": "https://huggingface.co/datasets/ai-habitat/ycb.git",
+    "root": "/mnt/NAS2/yhliu/habitat_data/versioned_data/ycb",
+    "revision": "29be64fdd95b4881f244152ad653058e0a48c28f",
+    "evidence": {
+      "license": {
+        "path": "LICENSE.txt",
+        "bytes": 1462,
+        "sha256": "e27f44c4a022a3eded568d1ec821c2220dcd4187bf735fb8136ad3c401e21472"
+      },
+      "readme": {
+        "path": "README.md",
+        "bytes": 1270,
+        "sha256": "b4990c4d174c44c32c760fe9883a05a8e3904cdc351f04730e75e169bbebce28"
+      }
+    }
+  },
+  "license": {
+    "spdx": "CC-BY-4.0",
+    "url": "https://creativecommons.org/licenses/by/4.0/",
+    "source_credit": "Habitat YCB Objects Dataset; assets originate from the YCB Object and Model Set.",
+    "source_urls": [
+      "https://huggingface.co/datasets/ai-habitat/ycb",
+      "https://www.ycbbenchmarks.com/"
+    ],
+    "acknowledgement": "I acknowledge CC-BY-4.0 attribution, license-link, and modification-notice obligations.",
+    "obligations": [
+      "credit_ai_habitat_and_ycb_origins",
+      "link_cc_by_4_0_license",
+      "indicate_all_source_and_downstream_modifications",
+      "do_not_imply_licensor_endorsement",
+      "do_not_apply_additional_legal_or_technical_restrictions"
+    ],
+    "source_modifications": [
+      "model_texture_changes",
+      "derivative_collision_models",
+      "render_mesh_simplification",
+      "obj_to_glb_conversion_and_removal_of_other_formats",
+      "basis_texture_compression_for_non_orig_variants"
+    ],
+    "planned_downstream_modifications": [
+      "byte_identical_glb_orig_to_glb_filename_change",
+      "blender_origin_and_orientation_normalization_planned_not_executed",
+      "collision_primitives_to_ucx_naming_planned_not_executed",
+      "optional_fbx_or_glb_export_planned_not_executed"
+    ]
+  },
+  "blender": {
+    "version": "4.5.8",
+    "executable": {
+      "path": "/home/yhliu/.local/opt/blender-4.5.8-linux-x64/blender",
+      "bytes": 163587256,
+      "sha256": "86b39e16cf8043a93de6b4ac5e23399d790f662c644573f600398a3c3bd121eb"
+    },
+    "execution_status": "planned_not_executed"
+  },
+  "preparation_policy": {
+    "default_mode": "dry_run_zero_writes",
+    "network": "disabled",
+    "source_mutation": "prohibited",
+    "apply_destination": "fresh_external_append_only_attempt",
+    "render_transport": "prefer_byte_identical_glb_orig_to_glb_filename_change",
+    "preserve_embedded_texture_resolution": [
+      4096,
+      4096
+    ],
+    "ue_mobility": "Movable",
+    "ue_simulate_physics": false,
+    "caveat": "No Blender execution, full-PBR proof, Unreal import, collision validation, LOD validation, or interaction proof is asserted."
+  },
+  "aggregate_evidence": {
+    "asset_count": 18,
+    "pinned_source_file_count": 54,
+    "pinned_source_bytes": 102844700,
+    "render_triangle_count": 58968,
+    "initial_interaction_candidates": [
+      "ycb.013_apple",
+      "ycb.025_mug",
+      "ycb.026_sponge",
+      "ycb.040_large_marker"
+    ]
+  },
+  "assets": [
+    {
+      "asset_id": "ycb.003_cracker_box",
+      "slug": "cracker_box",
+      "semantic_role": "pantry_box",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/003_cracker_box.object_config.json",
+        "bytes": 286,
+        "sha256": "32f73310b1e02df758e9d8ad066b92e31bea5ddb0feac22ac76055d9b01b6bae"
+      },
+      "render": {
+        "path": "meshes/003_cracker_box/google_16k/textured.glb.orig",
+        "bytes": 9752804,
+        "sha256": "41e628b5d4e393e8b7cadbc43ba2165e02ad82cf81f2b09ea6d77495b4abe43e"
+      },
+      "collision": {
+        "path": "collision_meshes/003_cracker_cv_decomp.glb",
+        "bytes": 4700,
+        "sha256": "11146d0c9bfb37815e3284341f064832d4f43346dc3b94b16c33a3170a6dd137"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/003_cracker_cv_decomp.glb",
+        "render_asset": "../meshes/003_cracker_box/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.04875300079584122,
+          -0.0961420014500618,
+          -0.0031850000377744436
+        ],
+        "max": [
+          0.02296699956059456,
+          0.06784400343894958,
+          0.21023599803447723
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 1,
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 36
+      }
+    },
+    {
+      "asset_id": "ycb.005_tomato_soup_can",
+      "slug": "tomato_soup_can",
+      "semantic_role": "pantry_can",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/005_tomato_soup_can.object_config.json",
+        "bytes": 294,
+        "sha256": "5602509795fb9505c8c45c230490db935725e2f139739ecb86e7035c616278de"
+      },
+      "render": {
+        "path": "meshes/005_tomato_soup_can/google_16k/textured.glb.orig",
+        "bytes": 8940284,
+        "sha256": "f77b023d25a4ae5163ad27c10bd9e69b31f3bcf8fc406a286e5cce20c2857cfc"
+      },
+      "collision": {
+        "path": "collision_meshes/005_tomato_soup_cv_decomp.glb",
+        "bytes": 4476,
+        "sha256": "67315ebe87c3e0bcb73ffc4ede7741657a4d040982f4a12ec093243a30791ab4"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/005_tomato_soup_cv_decomp.glb",
+        "render_asset": "../meshes/005_tomato_soup_can/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.04308199882507324,
+          0.05017299950122833,
+          0.00004199999966658652
+        ],
+        "max": [
+          0.0247809998691082,
+          0.11786899715662003,
+          0.10193700343370438
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 1,
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 36
+      }
+    },
+    {
+      "asset_id": "ycb.006_mustard_bottle",
+      "slug": "mustard_bottle",
+      "semantic_role": "condiment_bottle",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/006_mustard_bottle.object_config.json",
+        "bytes": 292,
+        "sha256": "ff4da10ef4ea0b2ffe14da9d65e13e1e5701c44f5719bc1031995d0857456291"
+      },
+      "render": {
+        "path": "meshes/006_mustard_bottle/google_16k/textured.glb.orig",
+        "bytes": 8989860,
+        "sha256": "ebac2df8b9942718e00459cb37d182f2f8d3d56606fcf393ba857ffe4265c2e0"
+      },
+      "collision": {
+        "path": "collision_meshes/006_mustard_bo_cv_decomp.glb",
+        "bytes": 8836,
+        "sha256": "725e1db70fc09e3c3fb50c90b9b59ef128e9eaef91b727582e0517509d7c4369"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/006_mustard_bo_cv_decomp.glb",
+        "render_asset": "../meshes/006_mustard_bottle/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.06392800062894821,
+          -0.05687500163912773,
+          -0.003226999891921878
+        ],
+        "max": [
+          0.03328299894928932,
+          0.00980599969625473,
+          0.18816299736499786
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 2,
+        "mesh_count": 2,
+        "primitive_count": 2,
+        "triangle_count": 72
+      }
+    },
+    {
+      "asset_id": "ycb.011_banana",
+      "slug": "banana",
+      "semantic_role": "food",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/011_banana.object_config.json",
+        "bytes": 276,
+        "sha256": "e1fbed20a9bcf43ff7ae258524179eba4288186202fed98b275fc4e243d0486d"
+      },
+      "render": {
+        "path": "meshes/011_banana/google_16k/textured.glb.orig",
+        "bytes": 4055736,
+        "sha256": "24798b8926b899df70e62a07105691bba859429807d032346db3b5d05b5cd5ae"
+      },
+      "collision": {
+        "path": "collision_meshes/011_ba_cv_decomp.glb",
+        "bytes": 13200,
+        "sha256": "dfd115158474a029db20e0414d8dd711601de18fd7a6b39ae8d2ff9f1bf14cc4"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/011_ba_cv_decomp.glb",
+        "render_asset": "../meshes/011_banana/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.04299499839544296,
+          -0.09653700143098831,
+          -0.0004199999966658652
+        ],
+        "max": [
+          0.06597600132226944,
+          0.08185800164937973,
+          0.03633200004696846
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 3,
+        "mesh_count": 3,
+        "primitive_count": 3,
+        "triangle_count": 108
+      }
+    },
+    {
+      "asset_id": "ycb.013_apple",
+      "slug": "apple",
+      "semantic_role": "food",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": true,
+      "config": {
+        "path": "configs/013_apple.object_config.json",
+        "bytes": 274,
+        "sha256": "4dcb8392a2fc434773b324dba8af72b4250e43b9107b63715a3471c30a97b15d"
+      },
+      "render": {
+        "path": "meshes/013_apple/google_16k/textured.glb.orig",
+        "bytes": 4253012,
+        "sha256": "b37b4d5bf1f49ee187264201500f39dfae529269cdb6d2fb7b7ccc1a1e452193"
+      },
+      "collision": {
+        "path": "collision_meshes/013_a_cv_decomp.glb",
+        "bytes": 4700,
+        "sha256": "289410a0a90624e26255560ad0f4efc4d1ef85aa675e6c960f1f22a72f73e2de"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/013_a_cv_decomp.glb",
+        "render_asset": "../meshes/013_apple/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.03684600070118904,
+          -0.0412059985101223,
+          -0.00041199999395757914
+        ],
+        "max": [
+          0.0385730005800724,
+          0.0336339995265007,
+          0.07149499654769897
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 1,
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 36
+      }
+    },
+    {
+      "asset_id": "ycb.021_bleach_cleanser",
+      "slug": "bleach_cleanser",
+      "semantic_role": "cleaning_bottle",
+      "room": "bathroom_laundry",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/021_bleach_cleanser.object_config.json",
+        "bytes": 294,
+        "sha256": "2b82019dc2b81f0b7f5a014099eeab71284a7e003fb6f718ea2dfa8e2cae482f"
+      },
+      "render": {
+        "path": "meshes/021_bleach_cleanser/google_16k/textured.glb.orig",
+        "bytes": 8954232,
+      "sha256": "5b428afc8abe89c976cbd08c0bde129b6d4b9e10662bf6c875f293fa91b0e497"
+      },
+      "collision": {
+        "path": "collision_meshes/021_bleach_clea_cv_decomp.glb",
+        "bytes": 4696,
+        "sha256": "d037a8c9f98dad35257101234821d3dca2566e9c4dd5006b1dea9efba66d6dbc"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/021_bleach_clea_cv_decomp.glb",
+        "render_asset": "../meshes/021_bleach_cleanser/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.0728909969329834,
+          -0.022179000079631805,
+          -0.00047599998652003706
+        ],
+        "max": [
+          0.02958899922668934,
+          0.045563001185655594,
+          0.2501319944858551
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 1,
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 36
+      }
+    },
+    {
+      "asset_id": "ycb.024_bowl",
+      "slug": "bowl",
+      "semantic_role": "bowl",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/024_bowl.object_config.json",
+        "bytes": 272,
+        "sha256": "89d8a49c0684229479641d83e86bdaf5ff9c0d13b9f7ac382274c1a27f046938"
+      },
+      "render": {
+        "path": "meshes/024_bowl/google_16k/textured.glb.orig",
+        "bytes": 5556168,
+        "sha256": "a1d04839b9fc748ea0234da30f757bcc248b2d649b31073d1dfb41544f1bb062"
+      },
+      "collision": {
+        "path": "collision_meshes/024__cv_decomp.glb",
+        "bytes": 201872,
+        "sha256": "6a18360d837180c3723618cde3eb9db6b043ade7a20d312cf6a8a57492996012"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/024__cv_decomp.glb",
+        "render_asset": "../meshes/024_bowl/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.09540800005197525,
+          -0.12423299998044968,
+          -0.0004939999780617654
+        ],
+        "max": [
+          0.06581699848175049,
+          0.036726001650094986,
+          0.054471999406814575
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 50,
+        "mesh_count": 50,
+        "primitive_count": 50,
+        "triangle_count": 1706
+      }
+    },
+    {
+      "asset_id": "ycb.025_mug",
+      "slug": "mug",
+      "semantic_role": "mug",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": true,
+      "config": {
+        "path": "configs/025_mug.object_config.json",
+        "bytes": 270,
+        "sha256": "68ac28e92ceb08f72484cf6699dca3a4d333f10512801e2aca97e678828b5cc8"
+      },
+      "render": {
+        "path": "meshes/025_mug/google_16k/textured.glb.orig",
+        "bytes": 5883560,
+        "sha256": "338229e01f5629e4f05c234e6e5d89faa439187c7d23fc0fe5e6b6b0397e6b46"
+      },
+      "collision": {
+        "path": "collision_meshes/025_cv_decomp.glb",
+        "bytes": 110684,
+        "sha256": "8ed1745c47c2e44a8b4f8132b16ccb62a8fcbef31574444d4e71e3c6f9f36c10"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/025_cv_decomp.glb",
+        "render_asset": "../meshes/025_mug/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.06732399761676788,
+          -0.029198000207543373,
+          -0.0005699999746866524
+        ],
+        "max": [
+          0.04961699992418289,
+          0.06388100236654282,
+          0.08078400045633316
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 30,
+        "mesh_count": 30,
+        "primitive_count": 30,
+        "triangle_count": 990
+      }
+    },
+    {
+      "asset_id": "ycb.026_sponge",
+      "slug": "sponge",
+      "semantic_role": "sponge",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": true,
+      "config": {
+        "path": "configs/026_sponge.object_config.json",
+        "bytes": 276,
+        "sha256": "e3f3947bbbd5335b2a257218739c7004a5822fab0f398bfd93f906d1600c2b1a"
+      },
+      "render": {
+        "path": "meshes/026_sponge/google_16k/textured.glb.orig",
+        "bytes": 10160828,
+        "sha256": "ac7d01ff309c4aa589e0ea40a876fbf7268707d4aecdce35a9c397ccba7ad517"
+      },
+      "collision": {
+        "path": "collision_meshes/026_sp_cv_decomp.glb",
+        "bytes": 4704,
+        "sha256": "1c383752ddb2cd5b1231fee4175797058025e1658e2e5b682b07e041ba1524c4"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/026_sp_cv_decomp.glb",
+        "render_asset": "../meshes/026_sponge/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.054666001349687576,
+          -0.0422540009021759,
+          0.00036800000816583633
+        ],
+        "max": [
+          0.02416599914431572,
+          0.06996399909257889,
+          0.018928999081254005
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 1,
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 36
+      }
+    },
+    {
+      "asset_id": "ycb.029_plate",
+      "slug": "plate",
+      "semantic_role": "plate",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/029_plate.object_config.json",
+        "bytes": 274,
+        "sha256": "f5f0b2876fb78b0e8d52ed818e92116913db7c58cbb536fb434320eaf10b7d41"
+      },
+      "render": {
+        "path": "meshes/029_plate/google_16k/textured.glb.orig",
+        "bytes": 8289104,
+        "sha256": "50b3dbba596351148e306755e017a0d7981f8f45dc67883f9649da6658cedf0c"
+      },
+      "collision": {
+        "path": "collision_meshes/029_p_cv_decomp.glb",
+        "bytes": 177440,
+        "sha256": "8b9600f392b4494f17d7056f7d21cd7c3488b5fa85e0436f615f7b86bf7ec091"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/029_p_cv_decomp.glb",
+        "render_asset": "../meshes/029_plate/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.14167599380016327,
+          -0.1302960067987442,
+          -0.003166999900713563
+        ],
+        "max": [
+          0.11831799894571304,
+          0.1303739994764328,
+          0.023610999807715416
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 45,
+        "mesh_count": 45,
+        "primitive_count": 45,
+        "triangle_count": 1514
+      }
+    },
+    {
+      "asset_id": "ycb.030_fork",
+      "slug": "fork",
+      "semantic_role": "fork",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/030_fork.object_config.json",
+        "bytes": 272,
+        "sha256": "9776dd12079c4c1ae67b9c910fb9c28affbb817fc1f1f9a9c353b0b8a41a49e9"
+      },
+      "render": {
+        "path": "meshes/030_fork/google_16k/textured.glb.orig",
+        "bytes": 2659408,
+        "sha256": "89aa7e06030fb0b7fe98c558bcf06f3386d3de8e0fbc2be428580e6ab78fa96f"
+      },
+      "collision": {
+        "path": "collision_meshes/030__cv_decomp.glb",
+        "bytes": 34564,
+        "sha256": "21671d17caad62059d42d8452f263b1c75d5e831056c3d36da35a9910e6b3ed3"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/030__cv_decomp.glb",
+        "render_asset": "../meshes/030_fork/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.12416200339794159,
+          -0.03583800047636032,
+          -0.0009539999882690609
+        ],
+        "max": [
+          0.07339999824762344,
+          -0.008785000070929527,
+          0.015168000012636185
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 8,
+        "mesh_count": 8,
+        "primitive_count": 8,
+        "triangle_count": 288
+      }
+    },
+    {
+      "asset_id": "ycb.031_spoon",
+      "slug": "spoon",
+      "semantic_role": "spoon",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/031_spoon.object_config.json",
+        "bytes": 274,
+        "sha256": "d4e1e6db17388d61a78588266cf7ae60b6d12eba3f2d7c33af59bbde4f7ab84a"
+      },
+      "render": {
+        "path": "meshes/031_spoon/google_16k/textured.glb.orig",
+        "bytes": 2846156,
+        "sha256": "9c86ee9210cf0d595f044a4a522f8873aa896bc9d43732846a4d01c32f3b0a2f"
+      },
+      "collision": {
+        "path": "collision_meshes/031_s_cv_decomp.glb",
+        "bytes": 30308,
+        "sha256": "da3b7ea02bd2a08ab633172f5a0960ae4b9dc810c0b71a0975f533a7c2d48d06"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/031_s_cv_decomp.glb",
+        "render_asset": "../meshes/031_spoon/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.12011999636888504,
+          -0.04656499996781349,
+          -0.0006380000268109143
+        ],
+        "max": [
+          0.06588800251483917,
+          0.036288999021053314,
+          0.02035200037062168
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 7,
+        "mesh_count": 7,
+        "primitive_count": 7,
+        "triangle_count": 252
+      }
+    },
+    {
+      "asset_id": "ycb.032_knife",
+      "slug": "knife",
+      "semantic_role": "knife",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/032_knife.object_config.json",
+        "bytes": 274,
+        "sha256": "e2de22ebb6fddcf010aff5c2610e249b4a997dd706121236fd3db8d3329eabe4"
+      },
+      "render": {
+        "path": "meshes/032_knife/google_16k/textured.glb.orig",
+        "bytes": 2515344,
+        "sha256": "12e058435011b5b9a3e4f5e54b992e468337b19c883334b22afbeed8be504779"
+      },
+      "collision": {
+        "path": "collision_meshes/032_k_cv_decomp.glb",
+        "bytes": 17256,
+        "sha256": "87c8d2465b124352f74b57c72476a576e39ffe1dd4d6a59509c700c839f9dee0"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/032_k_cv_decomp.glb",
+        "render_asset": "../meshes/032_knife/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.12690000236034393,
+          -0.03762400150299072,
+          -0.007335999980568886
+        ],
+        "max": [
+          0.0879250019788742,
+          -0.017160000279545784,
+          0.015275999903678894
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 4,
+        "mesh_count": 4,
+        "primitive_count": 4,
+        "triangle_count": 144
+      }
+    },
+    {
+      "asset_id": "ycb.033_spatula",
+      "slug": "spatula",
+      "semantic_role": "spatula",
+      "room": "kitchen_dining",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/033_spatula.object_config.json",
+        "bytes": 278,
+        "sha256": "f60a81d569483595cf1209cd51115ba86c5e71e4af06450c6a1de7cf14f9a3e7"
+      },
+      "render": {
+        "path": "meshes/033_spatula/google_16k/textured.glb.orig",
+        "bytes": 3710976,
+        "sha256": "01fdcd838e645d862b6ce5d1297391969dbe169fe5ff9ff9e305f9f35121565e"
+      },
+      "collision": {
+        "path": "collision_meshes/033_spa_cv_decomp.glb",
+        "bytes": 29808,
+        "sha256": "f9ffb3e0f9a8be6dfd855bddebf7f31ef2cd5005d70a35e0d689aaf2ef66a039"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/033_spa_cv_decomp.glb",
+        "render_asset": "../meshes/033_spatula/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.17998699843883514,
+          -0.1593559980392456,
+          -0.0006890000076964498
+        ],
+        "max": [
+          0.12562400102615356,
+          -0.03489600121974945,
+          0.032200999557971954
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 7,
+        "mesh_count": 7,
+        "primitive_count": 7,
+        "triangle_count": 252
+      }
+    },
+    {
+      "asset_id": "ycb.035_power_drill",
+      "slug": "power_drill",
+      "semantic_role": "power_drill",
+      "room": "office",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/035_power_drill.object_config.json",
+        "bytes": 286,
+        "sha256": "c302f56feb2a2406b0aa6326b351e181c69cab4874e38e3aa8b50dc868ba8d84"
+      },
+      "render": {
+        "path": "meshes/035_power_drill/google_16k/textured.glb.orig",
+        "bytes": 5666788,
+        "sha256": "aa927b8244662ef55d837c70ebf32deb413b722bf9312c04a453fbd7a1e11d55"
+      },
+      "collision": {
+        "path": "collision_meshes/035_power_d_cv_decomp.glb",
+        "bytes": 17468,
+        "sha256": "813a9d7ba5d3aedd9807bbd73c1e4fb1a70713f3c9dde84bbda58a0320b8898e"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/035_power_d_cv_decomp.glb",
+        "render_asset": "../meshes/035_power_drill/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.13786399364471436,
+          -0.08312900364398956,
+          -0.0034229999873787165
+        ],
+        "max": [
+          0.04613099992275238,
+          0.10411500185728073,
+          0.053954001516103745
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 4,
+        "mesh_count": 4,
+        "primitive_count": 4,
+        "triangle_count": 144
+      }
+    },
+    {
+      "asset_id": "ycb.037_scissors",
+      "slug": "scissors",
+      "semantic_role": "scissors",
+      "room": "office",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/037_scissors.object_config.json",
+        "bytes": 280,
+        "sha256": "6e075091318bde8ffc632024bbc3eab845dc8f703c35c391c9bea7493cb85cab"
+      },
+      "render": {
+        "path": "meshes/037_scissors/google_16k/textured.glb.orig",
+        "bytes": 3083808,
+        "sha256": "6e11358d43f23bac1201d17908b369a34244697bcdca6cf0b72766896edd1c40"
+      },
+      "collision": {
+        "path": "collision_meshes/037_scis_cv_decomp.glb",
+        "bytes": 54600,
+        "sha256": "778699f124a644d55d8373c35003b83dbbe2eaa281d36ac8f5fc66b338c5ac3f"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/037_scis_cv_decomp.glb",
+        "render_asset": "../meshes/037_scissors/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.03804900124669075,
+          -0.0648370012640953,
+          -0.00028199999360367656
+        ],
+        "max": [
+          0.05804799869656563,
+          0.1367190033197403,
+          0.015286999754607677
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 13,
+        "mesh_count": 13,
+        "primitive_count": 13,
+        "triangle_count": 468
+      }
+    },
+    {
+      "asset_id": "ycb.040_large_marker",
+      "slug": "large_marker",
+      "semantic_role": "marker",
+      "room": "office",
+      "initial_interaction_candidate": true,
+      "config": {
+        "path": "configs/040_large_marker.object_config.json",
+        "bytes": 288,
+        "sha256": "be6eb51c604eedc3e2457bad6df3b6d2ceb88874bc5977c3a06ff2c180d4f93e"
+      },
+      "render": {
+        "path": "meshes/040_large_marker/google_16k/textured.glb.orig",
+        "bytes": 3177904,
+        "sha256": "0f92756088eb7798cfa5d063a9a17fe0b3e228db5575aa7e2f7325618c824933"
+      },
+      "collision": {
+        "path": "collision_meshes/040_large_ma_cv_decomp.glb",
+        "bytes": 4640,
+        "sha256": "810e3007577e4ff0eeced5fba91da3a5be44f0daa8a3064739644a682abb03e3"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/040_large_ma_cv_decomp.glb",
+        "render_asset": "../meshes/040_large_marker/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.046170998364686966,
+          -0.06550300121307373,
+          -0.00031900001340545714
+        ],
+        "max": [
+          -0.025113999843597412,
+          0.055438000708818436,
+          0.0186149999499321
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 1,
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 36
+      }
+    },
+    {
+      "asset_id": "ycb.043_phillips_screwdriver",
+      "slug": "phillips_screwdriver",
+      "semantic_role": "screwdriver",
+      "room": "office",
+      "initial_interaction_candidate": false,
+      "config": {
+        "path": "configs/043_phillips_screwdriver.object_config.json",
+        "bytes": 304,
+        "sha256": "13263097808ceeafb163aa3656367a9e0705a2bc891c8a9da0c2c434076baa04"
+      },
+      "render": {
+        "path": "meshes/043_phillips_screwdriver/google_16k/textured.glb.orig",
+        "bytes": 3606460,
+        "sha256": "7c126976f9bc875230a94853a67ffc4b711bc4986e193b768aebcf511a666ead"
+      },
+      "collision": {
+        "path": "collision_meshes/043_phillips_screwdr_cv_decomp.glb",
+        "bytes": 13252,
+        "sha256": "2afd060c2df985ec6b78bd6803ccd28d99e6265178cdbb520235f4311eaf98d9"
+      },
+      "expected_config": {
+        "friction_coefficient": 3,
+        "join_collision_meshes": false,
+        "collision_asset": "../collision_meshes/043_phillips_screwdr_cv_decomp.glb",
+        "render_asset": "../meshes/043_phillips_screwdriver/google_16k/textured.glb",
+        "requires_lighting": true,
+        "up": [
+          0,
+          0,
+          1
+        ],
+        "front": [
+          0,
+          1,
+          0
+        ]
+      },
+      "source_geometry": {
+        "format": "glb_2",
+        "mesh_count": 1,
+        "primitive_count": 1,
+        "triangle_count": 3276,
+        "material_count": 1,
+        "embedded_image_count": 1,
+        "embedded_image_mime": "image/png",
+        "embedded_image_dimensions": [
+          4096,
+          4096
+        ],
+        "texture_semantics": [
+          "base_color"
+        ],
+        "verified_normal_or_orm_maps": false
+      },
+      "render_bounds_m": {
+        "min": [
+          -0.1402049958705902,
+          -0.0500900000333786,
+          -0.0004070000140927732
+        ],
+        "max": [
+          0.05469299852848053,
+          0.05685000121593475,
+          0.035252999514341354
+        ]
+      },
+      "collision_geometry": {
+        "convex_parts": 3,
+        "mesh_count": 3,
+        "primitive_count": 3,
+        "triangle_count": 108
+      }
+    }
+  ]
+}
