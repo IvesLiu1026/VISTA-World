@@ -4,13 +4,17 @@
 #include "Components/ChildActorComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/EngineBaseTypes.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Character.h"
 #include "GameFramework/Pawn.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
+#include "RetargetAnimInstance.h"
+#include "RetargetComponent.h"
+#include "Retargeter/IKRetargeter.h"
 #include "UObject/SoftObjectPtr.h"
-#include "VistaHomeNpcCharacter.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVistaCharacterProvider, Log, All);
 
@@ -29,6 +33,9 @@ const TCHAR* CharacterProviderCommandLineKey = TEXT("VistaCharacterProvider=");
 const TCHAR* MetaHumanVivianClassPath =
     TEXT("/Game/VISTA/Characters/MetaHumans/Vivian_VISTA/"
          "BP_Vivian_VISTA.BP_Vivian_VISTA_C");
+const TCHAR* MetaHumanRetargetAssetPath =
+    TEXT("/Game/Characters/Mannequins/Rigs/"
+         "RTG_Mannequin.RTG_Mannequin");
 
 const FName BodyComponentName(TEXT("Body"));
 const FName FaceComponentName(TEXT("Face"));
@@ -39,11 +46,21 @@ UVistaCharacterProviderComponent::UVistaCharacterProviderComponent()
     PrimaryComponentTick.bCanEverTick = false;
 }
 
+FName UVistaCharacterProviderComponent::GetMannyProviderId()
+{
+    return MannyProviderId;
+}
+
+FName UVistaCharacterProviderComponent::GetMetaHumanVivianProviderId()
+{
+    return MetaHumanVivianProviderId;
+}
+
 void UVistaCharacterProviderComponent::BeginPlay()
 {
     Super::BeginPlay();
 
-    AVistaHomeNpcCharacter* OwnerCharacter = Cast<AVistaHomeNpcCharacter>(GetOwner());
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
     if (!IsValid(OwnerCharacter))
     {
         ProviderStatus = PhotorealUnavailableStatus;
@@ -52,7 +69,7 @@ void UVistaCharacterProviderComponent::BeginPlay()
     }
 
     // Manny is deliberately made visible first. Every failure path therefore
-    // leaves the semantic NPC functional and visually inspectable.
+    // leaves the semantic character functional and visually inspectable.
     SetMannyFallbackVisible(*OwnerCharacter, true);
     ActiveProviderId = MannyProviderId;
     ProviderStatus = MannyActiveStatus;
@@ -77,13 +94,13 @@ void UVistaCharacterProviderComponent::BeginPlay()
 
 FName UVistaCharacterProviderComponent::ResolveRequestedProviderId() const
 {
-    FString ProviderValue;
-    if (!FParse::Value(
+    FString ProviderValue = RequestedProviderId.ToString();
+    if (bAllowCommandLineProviderOverride)
+    {
+        FParse::Value(
             FCommandLine::Get(),
             CharacterProviderCommandLineKey,
-            ProviderValue))
-    {
-        ProviderValue = RequestedProviderId.ToString();
+            ProviderValue);
     }
     ProviderValue.TrimStartAndEndInline();
     ProviderValue.ToLowerInline();
@@ -91,7 +108,7 @@ FName UVistaCharacterProviderComponent::ResolveRequestedProviderId() const
 }
 
 bool UVistaCharacterProviderComponent::ActivateAllowlistedMetaHuman(
-    AVistaHomeNpcCharacter& OwnerCharacter)
+    ACharacter& OwnerCharacter)
 {
     const TSoftClassPtr<AActor> ProviderClass{
         FSoftObjectPath(MetaHumanVivianClassPath)};
@@ -103,6 +120,17 @@ bool UVistaCharacterProviderComponent::ActivateAllowlistedMetaHuman(
         SetPhotorealUnavailable(
             OwnerCharacter,
             TEXT("character_provider_class_unavailable"));
+        return false;
+    }
+
+    const TSoftObjectPtr<UIKRetargeter> RetargetAsset{
+        FSoftObjectPath(MetaHumanRetargetAssetPath)};
+    UIKRetargeter* LoadedRetargetAsset = RetargetAsset.LoadSynchronous();
+    if (!IsValid(LoadedRetargetAsset))
+    {
+        SetPhotorealUnavailable(
+            OwnerCharacter,
+            TEXT("character_provider_retarget_asset_unavailable"));
         return false;
     }
 
@@ -134,11 +162,17 @@ bool UVistaCharacterProviderComponent::ActivateAllowlistedMetaHuman(
     else
     {
         // The assembled Blueprint is a visual shell. Canonical movement,
-        // navigation and interaction collision stay on AVistaHomeNpcCharacter.
+        // navigation and interaction collision stay on ACharacter.
         VisualActor->SetActorEnableCollision(false);
         VisualActor->SetCanBeDamaged(false);
         DisableVisualCollision(*VisualActor);
-        if (ValidateMetaHumanVisual(*VisualActor, FailureCode))
+        if (ValidateMetaHumanVisualShell(*VisualActor, FailureCode) &&
+            ConfigureMetaHumanRetarget(
+                OwnerCharacter,
+                *VisualActor,
+                *LoadedRetargetAsset,
+                FailureCode) &&
+            ValidateMetaHumanVisual(*VisualActor, FailureCode))
         {
             // This is intentionally the only path that hides Manny.
             SetMannyFallbackVisible(OwnerCharacter, false);
@@ -159,12 +193,13 @@ bool UVistaCharacterProviderComponent::ActivateAllowlistedMetaHuman(
     {
         VisualActor->SetActorHiddenInGame(true);
     }
-    ProviderChildActorComponent->SetVisibility(false, true);
+    DestroyProviderRetargetComponent();
+    DestroyProviderChildActorComponent();
     SetPhotorealUnavailable(OwnerCharacter, FailureCode);
     return false;
 }
 
-bool UVistaCharacterProviderComponent::ValidateMetaHumanVisual(
+bool UVistaCharacterProviderComponent::ValidateMetaHumanVisualShell(
     AActor& VisualActor,
     FName& OutFailureCode) const
 {
@@ -193,9 +228,122 @@ bool UVistaCharacterProviderComponent::ValidateMetaHumanVisual(
         return false;
     }
 
+    OutFailureCode = NAME_None;
+    return true;
+}
+
+bool UVistaCharacterProviderComponent::ConfigureMetaHumanRetarget(
+    ACharacter& OwnerCharacter,
+    AActor& VisualActor,
+    UIKRetargeter& RetargetAsset,
+    FName& OutFailureCode)
+{
+    USkeletalMeshComponent* SourceManny = OwnerCharacter.GetMesh();
+    if (!IsValid(SourceManny) || !SourceManny->IsRegistered() ||
+        !IsValid(SourceManny->GetSkeletalMeshAsset()) ||
+        (!IsValid(SourceManny->GetAnimInstance()) &&
+         !IsValid(SourceManny->GetAnimClass())))
+    {
+        OutFailureCode = TEXT("character_provider_source_animation_not_ready");
+        return false;
+    }
+
+    USkeletalMeshComponent* Body =
+        FindNamedSkeletalMesh(VisualActor, BodyComponentName);
+    if (!IsValid(Body))
+    {
+        OutFailureCode = TEXT("character_provider_body_not_ready");
+        return false;
+    }
+
+    // URetargetComponent::OnRegister clears its source override. Register first,
+    // then wire the external Manny source exactly as Epic's MetaHuman editor
+    // actor does after registration.
+    ProviderRetargetComponent = NewObject<URetargetComponent>(
+        &VisualActor,
+        TEXT("VistaMetaHumanRetarget"));
+    if (!IsValid(ProviderRetargetComponent))
+    {
+        OutFailureCode = TEXT("character_provider_retarget_component_unavailable");
+        return false;
+    }
+    VisualActor.AddInstanceComponent(ProviderRetargetComponent);
+    ProviderRetargetComponent->RegisterComponent();
+    if (!ProviderRetargetComponent->IsRegistered())
+    {
+        OutFailureCode = TEXT("character_provider_retarget_component_unavailable");
+        DestroyProviderRetargetComponent();
+        return false;
+    }
+
+    // Call this before source/controlled assignment. With both assigned, Epic's
+    // false branch resets the Face and clothing animation state we must retain.
+    ProviderRetargetComponent->SetForceOtherMeshesToFollowControlledMesh(false);
+    ProviderRetargetComponent->SetSourcePerformerMesh(SourceManny);
+    ProviderRetargetComponent->SetControlledMesh(Body);
+    ProviderRetargetComponent->SetRetargetAsset(&RetargetAsset);
+    if (ProviderRetargetComponent->SourceSkeletalMeshComponent.OverrideComponent.Get() !=
+            SourceManny ||
+        ProviderRetargetComponent->ControlledSkeletalMeshComponent.OverrideComponent.Get() !=
+            Body ||
+        ProviderRetargetComponent->RetargetAsset != &RetargetAsset)
+    {
+        OutFailureCode = TEXT("character_provider_retarget_binding_failed");
+        DestroyProviderRetargetComponent();
+        return false;
+    }
+    ProviderRetargetComponent->InitiateAnimation();
+
+    const bool bSourceTicksBeforeBody =
+        Body->PrimaryComponentTick.GetPrerequisites().ContainsByPredicate(
+            [SourceManny](const FTickPrerequisite& Prerequisite)
+            {
+                return Prerequisite.PrerequisiteObject.Get() == SourceManny &&
+                    Prerequisite.Get() == &SourceManny->PrimaryComponentTick;
+            });
+    if (!bSourceTicksBeforeBody)
+    {
+        OutFailureCode = TEXT("character_provider_retarget_tick_order_invalid");
+        DestroyProviderRetargetComponent();
+        return false;
+    }
+
+    // Manny remains the animation authority after becoming visually hidden.
+    // Its mesh never participates in gameplay collision; the character capsule
+    // remains the sole authoritative collider.
+    SourceManny->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    SourceManny->SetGenerateOverlapEvents(false);
+    SourceManny->SetComponentTickEnabled(true);
+    SourceManny->VisibilityBasedAnimTickOption =
+        EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+    OutFailureCode = NAME_None;
+    return true;
+}
+
+bool UVistaCharacterProviderComponent::ValidateMetaHumanVisual(
+    AActor& VisualActor,
+    FName& OutFailureCode) const
+{
+    if (!ValidateMetaHumanVisualShell(VisualActor, OutFailureCode))
+    {
+        return false;
+    }
+
+    USkeletalMeshComponent* Body =
+        FindNamedSkeletalMesh(VisualActor, BodyComponentName);
     if (!IsValid(Body->GetAnimInstance()) && !IsValid(Body->GetAnimClass()))
     {
         OutFailureCode = TEXT("character_provider_animation_not_ready");
+        return false;
+    }
+
+    if (!IsValid(ProviderRetargetComponent) ||
+        !ProviderRetargetComponent->IsRegistered() ||
+        ProviderRetargetComponent->bForceOtherMeshesToFollowControlledMesh ||
+        !IsValid(ProviderRetargetComponent->RetargetAsset) ||
+        !IsValid(Cast<URetargetAnimInstance>(Body->GetAnimInstance())))
+    {
+        OutFailureCode = TEXT("character_provider_retarget_not_ready");
         return false;
     }
 
@@ -263,18 +411,48 @@ void UVistaCharacterProviderComponent::DisableVisualCollision(AActor& VisualActo
 }
 
 void UVistaCharacterProviderComponent::SetMannyFallbackVisible(
-    AVistaHomeNpcCharacter& OwnerCharacter,
+    ACharacter& OwnerCharacter,
     bool bVisible)
 {
     if (USkeletalMeshComponent* MannyMesh = OwnerCharacter.GetMesh())
     {
-        MannyMesh->SetVisibility(bVisible, true);
-        MannyMesh->SetHiddenInGame(!bVisible, true);
+        // The Manny mesh is the hidden retarget source. Do not propagate
+        // visibility to attached camera, carry, or interaction components.
+        MannyMesh->SetVisibility(bVisible, false);
+        MannyMesh->SetHiddenInGame(!bVisible, false);
     }
 }
 
+void UVistaCharacterProviderComponent::DestroyProviderRetargetComponent()
+{
+    if (IsValid(ProviderRetargetComponent))
+    {
+        // UE 5.7 narrows URetargetComponent::DestroyComponent to protected,
+        // while UActorComponent keeps the virtual lifecycle entry point public.
+        // Dispatch through the public base so Epic's retarget cleanup override
+        // still runs before the instance component is removed and collected.
+        UActorComponent* RetargetComponentToDestroy =
+            ProviderRetargetComponent.Get();
+        RetargetComponentToDestroy->DestroyComponent();
+    }
+    ProviderRetargetComponent = nullptr;
+}
+
+void UVistaCharacterProviderComponent::DestroyProviderChildActorComponent()
+{
+    if (IsValid(ProviderChildActorComponent))
+    {
+        // A rejected MetaHuman shell is expensive even while hidden: Face,
+        // Groom and clothing components can continue ticking. Tear down both
+        // the spawned actor and its dynamic component on every failure path.
+        ProviderChildActorComponent->DestroyChildActor();
+        ProviderChildActorComponent->DestroyComponent();
+    }
+    ProviderChildActorComponent = nullptr;
+}
+
 void UVistaCharacterProviderComponent::SetPhotorealUnavailable(
-    AVistaHomeNpcCharacter& OwnerCharacter,
+    ACharacter& OwnerCharacter,
     FName FailureCode)
 {
     SetMannyFallbackVisible(OwnerCharacter, true);

@@ -13,6 +13,7 @@ class UInputMappingContext;
 class USceneComponent;
 class USpringArmComponent;
 class UVistaAnimationComponent;
+class UVistaCharacterProviderComponent;
 class UVistaInteractionComponent;
 struct FInputActionValue;
 
@@ -86,6 +87,13 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
     TObjectPtr<UVistaAnimationComponent> AnimationComponent;
+
+    /**
+     * Visual-only provider. Gameplay, collision and input remain on this
+     * character while the reviewed Vivian assembly mirrors the Manny pose.
+     */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Character Provider")
+    TObjectPtr<UVistaCharacterProviderComponent> CharacterProviderComponent;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Carry")
     TObjectPtr<USceneComponent> CarryAnchor;
