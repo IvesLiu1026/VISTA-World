@@ -20,11 +20,15 @@ import struct
 from typing import Any
 
 import commandlet_common as base
+import hssd_ue57_glb_compatibility as compatibility
 
 
-EXECUTION_SCHEMA = "simworld.vista.playable-home-hssd-private-research-ue-execution/v1"
+EXECUTION_SCHEMA = "simworld.vista.playable-home-hssd-private-research-ue-execution/v2"
 IMPORT_RECEIPT_SCHEMA = (
-    "simworld.vista.playable-home-hssd-private-research-ue-import-receipt/v1"
+    "simworld.vista.playable-home-hssd-private-research-ue-import-receipt/v2"
+)
+COMPATIBILITY_AGGREGATE_SCHEMA = (
+    "simworld.vista.hssd-ue57-glb-compatibility-aggregate/v1"
 )
 EXECUTION_ENV = "VISTA_PLAYABLE_HOME_HSSD_EXECUTION"
 EXECUTION_SHA_ENV = "VISTA_PLAYABLE_HOME_HSSD_EXECUTION_SHA256"
@@ -32,6 +36,21 @@ PROJECT_ENV = "VISTA_PLAYABLE_HOME_PROJECT"
 IMPORT_MARKER = "VISTA_PLAYABLE_HOME_HSSD_PRIVATE_RESEARCH_IMPORT_RESULT:"
 IMPORT_RESULT_FILE = "hssd-private-research-import-result.json"
 EXPECTED_ENGINE_VERSION = "5.7.3-50162420+++UE5+Release-5.7"
+DIAGNOSTIC_NAMESPACE = (
+    "/Game/VISTA/PlayableHome/"
+    "hssd_private_research_r5_phase1_diagnostic/HSSDPrivateResearch"
+)
+DIAGNOSTIC_IMPORT_MODE = "diagnostic_nonpromotable_material_conflict"
+DIAGNOSTIC_IMPORT_STATUS = "diagnostic_nonpromotable_imported_candidate"
+COMPATIBILITY_STATUS = "nonpromotable_active_dual_material_conflict"
+PROMOTION_STATUS = "blocked_active_dual_material_conflict"
+EXPECTED_COMPATIBILITY_COUNTS = {
+    "asset_count": 26,
+    "removed_noop_transmission": 82,
+    "retained_active_transmission": 2,
+    "retained_active_dual_conflicts": 1,
+    "blocking_asset_count": 1,
+}
 
 BUILD_PLAN_SCHEMA = "simworld.vista.hssd-private-research-forge-plan/v1"
 BUILD_RESULT_SCHEMA = "simworld.vista.hssd-private-research-forge-result/v1"
@@ -364,6 +383,8 @@ EXECUTION_KEYS = {
     "content_namespace",
     "source_run",
     "asset_bindings",
+    "compatibility",
+    "import_mode",
     "scripts",
     "import_receipt",
     "policy",
@@ -375,7 +396,7 @@ SOURCE_RUN_KEYS = {
     "scene_plan_sha256",
 }
 SCRIPT_KEYS = {"path", "sha256"}
-BINDING_KEYS = {
+SOURCE_BINDING_KEYS = {
     "source_asset_id",
     "semantic_category",
     "glb_relative_path",
@@ -391,6 +412,60 @@ BINDING_KEYS = {
     "base_normal_orm_texture_slot_count",
     "target_object_path",
 }
+DERIVATIVE_BINDING_KEYS = {
+    "source_asset_id",
+    "glb_path",
+    "glb_sha256",
+    "glb_bytes",
+    "receipt_path",
+    "receipt_sha256",
+    "receipt_content_digest",
+    "compatibility_status",
+    "blocks_full_material_fidelity",
+}
+EXECUTION_BINDING_KEYS = {"source", "derivative"}
+COMPATIBILITY_EXECUTION_KEYS = {
+    "schema_version",
+    "rule_id",
+    "aggregate_receipt",
+    "aggregate_receipt_sha256",
+    "aggregate_receipt_content_digest",
+    "status",
+    "counts",
+    "blocking_asset_ids",
+    "promotable",
+    "full_material_fidelity",
+    "diagnostic_only",
+}
+COMPATIBILITY_AGGREGATE_KEYS = {
+    "schema_version",
+    "status",
+    "accepted_as_visual_evidence",
+    "full_material_fidelity",
+    "promotable",
+    "diagnostic_only",
+    "asset_count",
+    "source_asset_ids",
+    "transform",
+    "counts",
+    "blocking_asset_ids",
+    "assets",
+    "source_license_scope",
+    "content_digest",
+}
+COMPATIBILITY_AGGREGATE_ASSET_KEYS = {
+    "source_asset_id",
+    "source_sha256",
+    "source_bytes",
+    "derivative_relative_path",
+    "derivative_sha256",
+    "derivative_bytes",
+    "receipt_relative_path",
+    "receipt_sha256",
+    "receipt_content_digest",
+    "compatibility_status",
+    "blocks_full_material_fidelity",
+}
 EXECUTION_POLICY = {
     "append_only_namespace": True,
     "quarantine_on_failure": True,
@@ -401,6 +476,8 @@ EXECUTION_POLICY = {
     "articulation": "blocked_until_validated",
     "license_scope": "private_noncommercial_research_only",
     "public_payload_distribution": "prohibited",
+    "compatibility_derivative_required": True,
+    "full_material_fidelity_promotion": "blocked_active_dual_material_conflict",
 }
 SOURCE_LICENSE_SCOPE = {
     "commercial_release": "blocked",
@@ -940,20 +1017,249 @@ def validate_source_run(source_root: str, namespace: str) -> list[dict[str, Any]
 
 
 def binding_source_path(execution: dict[str, Any], binding: dict[str, Any]) -> str:
+    source = binding["source"] if "source" in binding else binding
     root = _canonical_nonsymlink_path(execution["source_run"]["path"], "R5 source root")
     return _source_child(
         root,
-        binding["glb_relative_path"],
-        "R5 GLB " + binding["source_asset_id"],
+        source["glb_relative_path"],
+        "R5 GLB " + source["source_asset_id"],
     )
 
 
 def verify_binding_source(execution: dict[str, Any], binding: dict[str, Any]) -> str:
-    path = binding_source_path(execution, binding)
-    pin = EXPECTED_ASSET_PINS[binding["source_asset_id"]]
-    base.require(binding["glb_sha256"] == pin["glb_sha256"], "binding GLB pin differs")
-    _verify_glb(path, pin, "R5 GLB " + binding["source_asset_id"])
-    return path
+    """Revalidate source and compatibility bytes, then return derivative input."""
+
+    source = binding["source"]
+    derivative = binding["derivative"]
+    source_path = binding_source_path(execution, binding)
+    pin = EXPECTED_ASSET_PINS[source["source_asset_id"]]
+    base.require(
+        source["glb_sha256"] == pin["glb_sha256"], "binding R5 GLB pin differs"
+    )
+    _verify_glb(source_path, pin, "R5 GLB " + source["source_asset_id"])
+    derivative_raw, metadata = _read_regular_file(
+        derivative["glb_path"], "HSSD compatibility GLB " + source["source_asset_id"]
+    )
+    base.require(
+        metadata.st_size == derivative["glb_bytes"]
+        and hashlib.sha256(derivative_raw).hexdigest() == derivative["glb_sha256"],
+        "HSSD compatibility derivative pin differs",
+    )
+    return derivative["glb_path"]
+
+
+def _validate_compatibility_execution(
+    execution: dict[str, Any],
+    attempt_root: str,
+    source_bindings: list[dict[str, Any]],
+    transform_script_sha256: str,
+) -> list[dict[str, Any]]:
+    """Independently re-derive every attempt-local GLB and aggregate receipt."""
+
+    compatibility_execution = execution.get("compatibility")
+    _exact_keys(
+        compatibility_execution,
+        COMPATIBILITY_EXECUTION_KEYS,
+        "HSSD compatibility execution",
+    )
+    aggregate_path = base.safe_attempt_child(
+        compatibility_execution["aggregate_receipt"],
+        attempt_root,
+        "HSSD compatibility aggregate receipt",
+    )
+    aggregate_path = _canonical_nonsymlink_path(
+        aggregate_path, "HSSD compatibility aggregate receipt"
+    )
+    compatibility_root = _canonical_nonsymlink_path(
+        os.path.join(attempt_root, "compatibility"), "HSSD compatibility root"
+    )
+    base.require(
+        os.path.dirname(aggregate_path) == compatibility_root
+        and os.path.basename(aggregate_path) == "aggregate-receipt.json",
+        "HSSD compatibility aggregate path differs",
+    )
+    expected_asset_names = {asset_id + ".glb" for asset_id in EXPECTED_ASSET_IDS}
+    expected_receipt_names = {asset_id + ".json" for asset_id in EXPECTED_ASSET_IDS}
+    assets_root = _source_child(
+        compatibility_root, "assets", "HSSD compatibility assets"
+    )
+    receipts_root = _source_child(
+        compatibility_root, "receipts", "HSSD compatibility receipts"
+    )
+    base.require(
+        set(os.listdir(compatibility_root))
+        == {"aggregate-receipt.json", "assets", "receipts"}
+        and set(os.listdir(assets_root)) == expected_asset_names
+        and set(os.listdir(receipts_root)) == expected_receipt_names,
+        "HSSD compatibility attempt inventory is not the exact closed set",
+    )
+    aggregate_sha = base.require_sha(
+        compatibility_execution["aggregate_receipt_sha256"],
+        "HSSD compatibility aggregate receipt",
+    )
+    aggregate = _load_pinned_json(
+        aggregate_path, aggregate_sha, "HSSD compatibility aggregate receipt"
+    )
+    _exact_keys(
+        aggregate,
+        COMPATIBILITY_AGGREGATE_KEYS,
+        "HSSD compatibility aggregate receipt",
+    )
+    _require_document_digest(
+        aggregate,
+        compatibility_execution["aggregate_receipt_content_digest"],
+        "HSSD compatibility aggregate receipt",
+    )
+    base.require(
+        aggregate.get("schema_version") == COMPATIBILITY_AGGREGATE_SCHEMA
+        and aggregate.get("status") == COMPATIBILITY_STATUS
+        and aggregate.get("accepted_as_visual_evidence") is False
+        and aggregate.get("full_material_fidelity") is False
+        and aggregate.get("promotable") is False
+        and aggregate.get("diagnostic_only") is True
+        and aggregate.get("asset_count") == 26
+        and aggregate.get("source_asset_ids") == list(EXPECTED_ASSET_IDS)
+        and aggregate.get("counts") == EXPECTED_COMPATIBILITY_COUNTS
+        and aggregate.get("blocking_asset_ids") == ["hssd.static.washer"]
+        and aggregate.get("source_license_scope") == SOURCE_LICENSE_SCOPE
+        and aggregate.get("transform")
+        == {
+            "rule_id": compatibility.RULE_ID,
+            "script_sha256": transform_script_sha256,
+        },
+        "HSSD compatibility aggregate identity or promotion state differs",
+    )
+    aggregate_assets = aggregate.get("assets")
+    base.require(
+        isinstance(aggregate_assets, list) and len(aggregate_assets) == 26,
+        "HSSD compatibility aggregate asset count differs",
+    )
+
+    expected_bindings: list[dict[str, Any]] = []
+    receipts: list[dict[str, Any]] = []
+    for source, aggregate_asset in zip(source_bindings, aggregate_assets):
+        asset_id = source["source_asset_id"]
+        _exact_keys(
+            aggregate_asset,
+            COMPATIBILITY_AGGREGATE_ASSET_KEYS,
+            "HSSD compatibility aggregate asset " + asset_id,
+        )
+        derivative_relative = "assets/" + asset_id + ".glb"
+        receipt_relative = "receipts/" + asset_id + ".json"
+        derivative_path = _source_child(
+            compatibility_root,
+            derivative_relative,
+            "HSSD compatibility derivative " + asset_id,
+        )
+        derivative_receipt_path = _source_child(
+            compatibility_root,
+            receipt_relative,
+            "HSSD compatibility receipt " + asset_id,
+        )
+        source_path = _source_child(
+            execution["source_run"]["path"],
+            source["glb_relative_path"],
+            "R5 GLB " + asset_id,
+        )
+        source_raw, source_metadata = _read_regular_file(
+            source_path, "R5 GLB " + asset_id
+        )
+        derivative_raw, derivative_metadata = _read_regular_file(
+            derivative_path, "HSSD compatibility derivative " + asset_id
+        )
+        receipt_sha = base.require_sha(
+            aggregate_asset["receipt_sha256"],
+            "HSSD compatibility receipt " + asset_id,
+        )
+        receipt = _load_pinned_json(
+            derivative_receipt_path,
+            receipt_sha,
+            "HSSD compatibility receipt " + asset_id,
+        )
+        compatibility.validate_derivation(
+            source_raw,
+            derivative_raw,
+            receipt,
+            source_asset_id=asset_id,
+            transform_script_sha256=transform_script_sha256,
+        )
+        base.require(
+            source_metadata.st_size == source["glb_bytes"]
+            and hashlib.sha256(source_raw).hexdigest() == source["glb_sha256"]
+            and derivative_metadata.st_size == receipt["output_bytes"]
+            and hashlib.sha256(derivative_raw).hexdigest() == receipt["output_sha256"]
+            and aggregate_asset
+            == {
+                "source_asset_id": asset_id,
+                "source_sha256": source["glb_sha256"],
+                "source_bytes": source["glb_bytes"],
+                "derivative_relative_path": derivative_relative,
+                "derivative_sha256": receipt["output_sha256"],
+                "derivative_bytes": receipt["output_bytes"],
+                "receipt_relative_path": receipt_relative,
+                "receipt_sha256": receipt_sha,
+                "receipt_content_digest": receipt["content_digest"],
+                "compatibility_status": receipt["status"],
+                "blocks_full_material_fidelity": receipt[
+                    "blocks_full_material_fidelity"
+                ],
+            },
+            "HSSD compatibility aggregate asset binding differs: " + asset_id,
+        )
+        derivative_binding = {
+            "source_asset_id": asset_id,
+            "glb_path": derivative_path,
+            "glb_sha256": receipt["output_sha256"],
+            "glb_bytes": receipt["output_bytes"],
+            "receipt_path": derivative_receipt_path,
+            "receipt_sha256": receipt_sha,
+            "receipt_content_digest": receipt["content_digest"],
+            "compatibility_status": receipt["status"],
+            "blocks_full_material_fidelity": receipt["blocks_full_material_fidelity"],
+        }
+        expected_bindings.append({"source": source, "derivative": derivative_binding})
+        receipts.append(receipt)
+
+    counts = {
+        "asset_count": len(receipts),
+        "removed_noop_transmission": sum(
+            len(receipt["removed_noop_transmission"]) for receipt in receipts
+        ),
+        "retained_active_transmission": sum(
+            len(receipt["retained_active_transmission"]) for receipt in receipts
+        ),
+        "retained_active_dual_conflicts": sum(
+            len(receipt["retained_active_dual_conflicts"]) for receipt in receipts
+        ),
+        "blocking_asset_count": sum(
+            receipt["blocks_full_material_fidelity"] for receipt in receipts
+        ),
+    }
+    blocking_asset_ids = [
+        receipt["source_asset_id"]
+        for receipt in receipts
+        if receipt["blocks_full_material_fidelity"]
+    ]
+    base.require(
+        counts == EXPECTED_COMPATIBILITY_COUNTS
+        and blocking_asset_ids == ["hssd.static.washer"]
+        and compatibility_execution
+        == {
+            "schema_version": COMPATIBILITY_AGGREGATE_SCHEMA,
+            "rule_id": compatibility.RULE_ID,
+            "aggregate_receipt": aggregate_path,
+            "aggregate_receipt_sha256": aggregate_sha,
+            "aggregate_receipt_content_digest": aggregate["content_digest"],
+            "status": COMPATIBILITY_STATUS,
+            "counts": counts,
+            "blocking_asset_ids": blocking_asset_ids,
+            "promotable": False,
+            "full_material_fidelity": False,
+            "diagnostic_only": True,
+        },
+        "HSSD compatibility corpus or execution disposition differs",
+    )
+    return expected_bindings
 
 
 def _load_execution_json(path: str, expected_sha: str) -> dict[str, Any]:
@@ -1031,10 +1337,30 @@ def load_hssd_execution(
     )
 
     scripts = execution.get("scripts")
-    _exact_keys(scripts, {"base", "common", "import"}, "HSSD scripts")
+    _exact_keys(scripts, {"base", "common", "compatibility", "import"}, "HSSD scripts")
+    expected_script_names = {
+        "base": "commandlet_common.py",
+        "common": "hssd_private_research_commandlet_common.py",
+        "compatibility": "hssd_ue57_glb_compatibility.py",
+        "import": "import_hssd_private_research_commandlet.py",
+    }
+    scripts_root = os.path.join(attempt_root, "scripts")
     for label, record in scripts.items():
         _exact_keys(record, SCRIPT_KEYS, "HSSD " + label + " script")
-        base.require_sha(record["sha256"], "HSSD " + label + " script")
+        expected_script_sha = base.require_sha(
+            record["sha256"], "HSSD " + label + " script"
+        )
+        script_path = _canonical_nonsymlink_path(
+            record["path"], "HSSD " + label + " script"
+        )
+        base.safe_attempt_child(script_path, attempt_root, "HSSD " + label + " script")
+        script_raw, _ = _read_regular_file(script_path, "HSSD " + label + " script")
+        base.require(
+            os.path.dirname(script_path) == scripts_root
+            and os.path.basename(script_path) == expected_script_names[label]
+            and hashlib.sha256(script_raw).hexdigest() == expected_script_sha,
+            "HSSD " + label + " script is not the exact attempt-local dependency",
+        )
     base_pin = scripts["base"]
     base.require(
         base.canonical_path(base.__file__) == base.canonical_path(base_pin["path"])
@@ -1047,6 +1373,13 @@ def load_hssd_execution(
         and base.sha256_file(__file__) == common_pin["sha256"],
         "HSSD common helper identity or digest differs",
     )
+    compatibility_pin = scripts["compatibility"]
+    base.require(
+        base.canonical_path(compatibility.__file__)
+        == base.canonical_path(compatibility_pin["path"])
+        and base.sha256_file(compatibility.__file__) == compatibility_pin["sha256"],
+        "HSSD compatibility helper identity or digest differs",
+    )
     script_pin = scripts[script_kind]
     base.require(
         base.canonical_path(script_file) == base.canonical_path(script_pin["path"])
@@ -1054,16 +1387,33 @@ def load_hssd_execution(
         "HSSD commandlet identity or digest differs",
     )
 
-    derived_bindings = validate_source_run(source_root, namespace)
+    source_bindings = validate_source_run(source_root, namespace)
+    derived_bindings = _validate_compatibility_execution(
+        execution,
+        attempt_root,
+        source_bindings,
+        compatibility_pin["sha256"],
+    )
     bindings = execution.get("asset_bindings")
     base.require(
         isinstance(bindings, list)
         and len(bindings) == 26
         and all(
-            isinstance(item, dict) and set(item) == BINDING_KEYS for item in bindings
+            isinstance(item, dict)
+            and set(item) == EXECUTION_BINDING_KEYS
+            and isinstance(item["source"], dict)
+            and set(item["source"]) == SOURCE_BINDING_KEYS
+            and isinstance(item["derivative"], dict)
+            and set(item["derivative"]) == DERIVATIVE_BINDING_KEYS
+            for item in bindings
         )
         and bindings == derived_bindings,
-        "HSSD execution bindings differ from the exact derived R5 inventory",
+        "HSSD execution bindings differ from exact source/derivative inventory",
+    )
+    base.require(
+        execution.get("import_mode") == DIAGNOSTIC_IMPORT_MODE
+        and namespace == DIAGNOSTIC_NAMESPACE,
+        "HSSD nonpromotable corpus is not bound to its diagnostic mode/namespace",
     )
     return execution, manifest_path, expected_sha, derived_bindings
 

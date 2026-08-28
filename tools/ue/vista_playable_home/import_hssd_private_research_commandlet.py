@@ -20,11 +20,14 @@ from hssd_private_research_commandlet_common import (  # noqa: E402
     EXPECTED_CONTENT_DIGESTS,
     EXPECTED_DOCUMENT_SHA256,
     EXPECTED_ENGINE_VERSION,
+    DIAGNOSTIC_IMPORT_MODE,
+    DIAGNOSTIC_IMPORT_STATUS,
     EXECUTION_POLICY,
     IMPORT_MARKER,
     IMPORT_RECEIPT_SCHEMA,
     IMPORT_RESULT_FILE,
     PROFILE_CONTENT_DIGEST,
+    PROMOTION_STATUS,
     SOURCE_LICENSE_SCOPE,
     clear_simple_collision,
     derived_hssd_asset_path,
@@ -252,10 +255,12 @@ def _verify_mesh_safety(mesh):
 
 def import_one(execution, binding, namespace):
     source = verify_binding_source(execution, binding)
-    asset_id = binding["source_asset_id"]
+    source_binding = binding["source"]
+    derivative = binding["derivative"]
+    asset_id = source_binding["source_asset_id"]
     expected_path = derived_hssd_asset_path(namespace, asset_id)
     require(
-        expected_path == binding["target_object_path"],
+        expected_path == source_binding["target_object_path"],
         "HSSD binding target path is not contract-derived",
     )
     name = expected_path.rsplit("/", 1)[-1].split(".", 1)[0]
@@ -304,7 +309,7 @@ def import_one(execution, binding, namespace):
     )
 
     dependency_inspection = inspect_materials_and_textures(
-        loaded, imported_objects, binding, private_destination
+        loaded, imported_objects, source_binding, private_destination
     )
     disable_collision_and_navigation(loaded)
     disable_nanite(loaded)
@@ -322,21 +327,26 @@ def import_one(execution, binding, namespace):
     )
     return {
         "source_asset_id": asset_id,
-        "semantic_category": binding["semantic_category"],
-        "glb_sha256": binding["glb_sha256"],
-        "receipt_sha256": binding["receipt_sha256"],
-        "receipt_content_digest": binding["receipt_content_digest"],
+        "semantic_category": source_binding["semantic_category"],
+        "source_glb_sha256": source_binding["glb_sha256"],
+        "source_receipt_sha256": source_binding["receipt_sha256"],
+        "source_receipt_content_digest": source_binding["receipt_content_digest"],
+        "derivative_glb_sha256": derivative["glb_sha256"],
+        "derivative_receipt_sha256": derivative["receipt_sha256"],
+        "derivative_receipt_content_digest": derivative["receipt_content_digest"],
+        "compatibility_status": derivative["compatibility_status"],
+        "blocks_full_material_fidelity": derivative["blocks_full_material_fidelity"],
         "object_path": expected_path,
         "raw_returned_object_paths": raw_returned_paths,
         "returned_object_paths": returned_paths,
         "inspection": {
             "class_path": _class_path(loaded),
             "static_mesh_count": 1,
-            "expected_material_count": binding["material_count"],
-            "expected_pbr_material_count": binding["pbr_material_count"],
-            "expected_texture2d_count": binding["texture_count"],
-            "source_pbr_texture_slot_count": binding["pbr_texture_slot_count"],
-            "source_base_normal_orm_texture_slot_count": binding[
+            "expected_material_count": source_binding["material_count"],
+            "expected_pbr_material_count": source_binding["pbr_material_count"],
+            "expected_texture2d_count": source_binding["texture_count"],
+            "source_pbr_texture_slot_count": source_binding["pbr_texture_slot_count"],
+            "source_base_normal_orm_texture_slot_count": source_binding[
                 "base_normal_orm_texture_slot_count"
             ],
             **dependency_inspection,
@@ -378,6 +388,13 @@ def run():
     status = "failed_clean_quarantined"
     error = None
     try:
+        require(
+            execution["import_mode"] == DIAGNOSTIC_IMPORT_MODE
+            and execution["compatibility"]["promotable"] is False
+            and execution["compatibility"]["full_material_fidelity"] is False
+            and execution["compatibility"]["diagnostic_only"] is True,
+            "HSSD compatibility conflict is not diagnostic-only",
+        )
         engine, project, namespace = verify_runtime(execution)
         namespace_fresh = True
         require(
@@ -405,7 +422,7 @@ def run():
                 == {key: item["inspection"][key] for key in reloaded_safety},
                 "reloaded HSSD StaticMesh safety observations differ",
             )
-        status = "imported_candidate"
+        status = DIAGNOSTIC_IMPORT_STATUS
     except Exception as exc:
         error = {"type": type(exc).__name__, "message": str(exc)[:512]}
         status = (
@@ -414,11 +431,15 @@ def run():
             else "failed_clean_quarantined"
         )
 
-    complete = status == "imported_candidate"
+    complete = status == DIAGNOSTIC_IMPORT_STATUS
     receipt = {
         "schema_version": IMPORT_RECEIPT_SCHEMA,
         "status": status,
         "accepted_as_visual_evidence": False,
+        "full_material_fidelity": False,
+        "promotable": False,
+        "diagnostic_only": True,
+        "promotion_status": PROMOTION_STATUS,
         "error": error,
         "bindings": {
             "engine": engine,
@@ -435,7 +456,14 @@ def run():
             "scene_plan_sha256": EXPECTED_DOCUMENT_SHA256["scene-plan.json"],
             "scene_plan_content_digest": EXPECTED_CONTENT_DIGESTS["scene-plan.json"],
             "profile_content_digest": PROFILE_CONTENT_DIGEST,
+            "compatibility_aggregate_receipt_sha256": execution["compatibility"][
+                "aggregate_receipt_sha256"
+            ],
+            "compatibility_aggregate_content_digest": execution["compatibility"][
+                "aggregate_receipt_content_digest"
+            ],
         },
+        "compatibility": execution["compatibility"],
         "license_scope": SOURCE_LICENSE_SCOPE,
         "interaction_authority": "none_static_joined_glb",
         "content_namespace": namespace,
@@ -448,6 +476,8 @@ def run():
             "exact_26_assets_imported": complete
             and [item["source_asset_id"] for item in imported]
             == list(EXPECTED_ASSET_IDS),
+            "compatibility_derivatives_revalidated": complete,
+            "diagnostic_nonpromotable_disposition_recorded": complete,
             "one_static_mesh_per_source": complete
             and all(item["inspection"]["static_mesh_count"] == 1 for item in imported),
             "pbr_material_interfaces_verified": complete
@@ -496,7 +526,7 @@ def run():
     marker = IMPORT_MARKER + json.dumps(result, sort_keys=True)
     unreal.log(marker)
     print(marker, flush=True)
-    if status != "imported_candidate":
+    if status != DIAGNOSTIC_IMPORT_STATUS:
         raise RuntimeError(
             "VISTA HSSD private-research import failed; fresh namespace quarantined"
         )
