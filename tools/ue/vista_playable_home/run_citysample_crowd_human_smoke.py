@@ -32,10 +32,10 @@ import signal
 import stat
 import subprocess
 import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping, Sequence
-
+from typing import Any
 
 PLAN_SCHEMA = "vista.citysample-crowd-human-forward-load-plan/v1"
 REQUEST_SCHEMA = "vista.citysample-crowd-human-forward-load-request/v1"
@@ -90,11 +90,20 @@ ENGINE_PLUGIN_PINS: Mapping[str, tuple[PurePosixPath, str, int]] = {
         "7a355543790998ba9bf947abc0ac52bdcc942b173d6c863d687d84e95c894699",
         1_006,
     ),
+    "RigLogic": (
+        PurePosixPath("Engine/Plugins/Animation/RigLogic/RigLogic.uplugin"),
+        "c6ce682b00793943614fea31fdae5c201a6a4595f96bf4a901d3657f79e5e340",
+        1_044,
+    ),
 }
 REQUIRED_NATIVE_MODULES_BY_PLUGIN = {
     "HairStrands": ("HairStrandsCore",),
     "MassGameplay": ("MassActors",),
     "PythonScriptPlugin": ("PythonScriptPlugin", "PythonScriptPluginPreload"),
+    # The pinned Linux editor descriptor loads the two runtime modules and the
+    # UncookedOnly/PreDefault developer module.  RigLogicEditor is deliberately
+    # excluded because that exact descriptor restricts it to Win64.
+    "RigLogic": ("RigLogicLib", "RigLogicModule", "RigLogicDeveloper"),
 }
 PINNED_ENGINE_BUILD_ID = "47537391"
 ENGINE_NATIVE_BINARY_PINS: tuple[Mapping[str, Any], ...] = (
@@ -160,6 +169,51 @@ ENGINE_NATIVE_BINARY_PINS: tuple[Mapping[str, Any], ...] = (
         ),
         "plugin_name": "PythonScriptPlugin",
     },
+    {
+        "binary_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/"
+            "libUnrealEditor-RigLogicLib.so"
+        ),
+        "binary_sha256": (
+            "efda18f1bb2d361ca96833541d4f95e9240c44a491c882dd5cd7ae3beb15968e"
+        ),
+        "binary_size_bytes": 1_942_744,
+        "module_name": "RigLogicLib",
+        "modules_receipt_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules"
+        ),
+        "plugin_name": "RigLogic",
+    },
+    {
+        "binary_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/"
+            "libUnrealEditor-RigLogicModule.so"
+        ),
+        "binary_sha256": (
+            "c5244c83d59cbfda87e07554c7f59da04601202f23ca69a191d26f670b067b64"
+        ),
+        "binary_size_bytes": 849_728,
+        "module_name": "RigLogicModule",
+        "modules_receipt_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules"
+        ),
+        "plugin_name": "RigLogic",
+    },
+    {
+        "binary_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/"
+            "libUnrealEditor-RigLogicDeveloper.so"
+        ),
+        "binary_sha256": (
+            "d53c036d5f4b7e695f1d1107de0ab248bdf29fa41979580c9f4d89d0053fdefb"
+        ),
+        "binary_size_bytes": 59_464,
+        "module_name": "RigLogicDeveloper",
+        "modules_receipt_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules"
+        ),
+        "plugin_name": "RigLogic",
+    },
 )
 ENGINE_MODULES_RECEIPT_PINS: tuple[Mapping[str, Any], ...] = (
     {
@@ -207,6 +261,22 @@ ENGINE_MODULES_RECEIPT_PINS: tuple[Mapping[str, Any], ...] = (
         ),
         "modules_receipt_size_bytes": 189,
         "plugin_name": "PythonScriptPlugin",
+    },
+    {
+        "module_bindings": {
+            "RigLogicDeveloper": "libUnrealEditor-RigLogicDeveloper.so",
+            "RigLogicLib": "libUnrealEditor-RigLogicLib.so",
+            "RigLogicModule": "libUnrealEditor-RigLogicModule.so",
+        },
+        "modules_receipt_build_id": PINNED_ENGINE_BUILD_ID,
+        "modules_receipt_relative_path": (
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules"
+        ),
+        "modules_receipt_sha256": (
+            "d92089953171e325bb03cf40be10138ee1d77d4143d0e529eb62fc9233b2ab62"
+        ),
+        "modules_receipt_size_bytes": 273,
+        "plugin_name": "RigLogic",
     },
 )
 
@@ -755,7 +825,9 @@ def _disposable_project_descriptor(source_raw: bytes) -> bytes:
 def _engine_plugin_descriptor_records(
     seals: Sequence[FileSeal],
 ) -> list[dict[str, Any]]:
-    if len(seals) != len(ENGINE_PLUGIN_PINS):
+    if len(seals) != len(ENGINE_PLUGIN_PINS) or set(ENGINE_PLUGIN_PINS) != set(
+        REQUIRED_NATIVE_MODULES_BY_PLUGIN
+    ):
         raise AssertionError("engine plugin descriptor seal inventory differs")
     records = []
     for (name, (relative, expected_sha, expected_size)), seal in zip(
@@ -933,6 +1005,26 @@ def _native_authority_inventory(
         _fail(
             "ENGINE_NATIVE_MODULE_PIN_MISMATCH",
             "native authority distinct-file inventory differs",
+        )
+    required_modules_by_plugin = {
+        plugin_name: sorted(module_names)
+        for plugin_name, module_names in REQUIRED_NATIVE_MODULES_BY_PLUGIN.items()
+    }
+    observed_modules_by_plugin: dict[str, list[str]] = {}
+    for binary in binaries:
+        observed_modules_by_plugin.setdefault(binary["plugin_name"], []).append(
+            binary["module_name"]
+        )
+    observed_modules_by_plugin = {
+        plugin_name: sorted(module_names)
+        for plugin_name, module_names in observed_modules_by_plugin.items()
+    }
+    if observed_modules_by_plugin != required_modules_by_plugin or {
+        pin["plugin_name"] for pin in receipts
+    } != set(required_modules_by_plugin):
+        _fail(
+            "ENGINE_NATIVE_MODULE_PIN_MISMATCH",
+            "native binaries do not exactly cover required plugin modules",
         )
     receipt_by_path = {pin["modules_receipt_relative_path"]: pin for pin in receipts}
     receipt_use_counts = {path: 0 for path in receipt_paths}

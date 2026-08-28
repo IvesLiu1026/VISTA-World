@@ -10,7 +10,6 @@ import pytest
 
 from tools.ue.vista_playable_home import run_citysample_crowd_human_smoke as runner
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMMANDLET = (
     ROOT / "tools/ue/vista_playable_home/citysample_crowd_human_smoke_commandlet.py"
@@ -37,7 +36,7 @@ def _pure_commandlet() -> types.ModuleType:
     ast.fix_missing_locations(tree)
     module = types.ModuleType("citysample_crowd_human_smoke_commandlet_test")
     module.__dict__["unreal"] = types.SimpleNamespace()
-    exec(compile(tree, str(COMMANDLET), "exec"), module.__dict__)
+    exec(compile(tree, str(COMMANDLET), "exec"), module.__dict__)  # noqa: S102
     return module
 
 
@@ -276,16 +275,15 @@ def test_native_module_authority_constants_match_exact_ue57_files() -> None:
     module = _pure_commandlet()
 
     assert module.ENGINE_PLUGIN_PINS[-1] == {
-        "name": "PythonScriptPlugin",
-        "relative_path": (
-            "Engine/Plugins/Experimental/PythonScriptPlugin/PythonScriptPlugin.uplugin"
-        ),
+        "name": "RigLogic",
+        "relative_path": "Engine/Plugins/Animation/RigLogic/RigLogic.uplugin",
         "required_native_modules": [
-            "PythonScriptPlugin",
-            "PythonScriptPluginPreload",
+            "RigLogicLib",
+            "RigLogicModule",
+            "RigLogicDeveloper",
         ],
-        "sha256": ("7a355543790998ba9bf947abc0ac52bdcc942b173d6c863d687d84e95c894699"),
-        "size_bytes": 1_006,
+        "sha256": ("c6ce682b00793943614fea31fdae5c201a6a4595f96bf4a901d3657f79e5e340"),
+        "size_bytes": 1_044,
     }
     assert [
         (
@@ -315,6 +313,21 @@ def test_native_module_authority_constants_match_exact_ue57_files() -> None:
             "aaf9458af7925a23fc003f258115027f20cb2640c0c742196a5f1ee3ae7a2655",
             364_128,
         ),
+        (
+            "RigLogicLib",
+            "efda18f1bb2d361ca96833541d4f95e9240c44a491c882dd5cd7ae3beb15968e",
+            1_942_744,
+        ),
+        (
+            "RigLogicModule",
+            "c5244c83d59cbfda87e07554c7f59da04601202f23ca69a191d26f670b067b64",
+            849_728,
+        ),
+        (
+            "RigLogicDeveloper",
+            "d53c036d5f4b7e695f1d1107de0ab248bdf29fa41979580c9f4d89d0053fdefb",
+            59_464,
+        ),
     ]
     assert [
         (
@@ -338,6 +351,11 @@ def test_native_module_authority_constants_match_exact_ue57_files() -> None:
             "PythonScriptPlugin",
             "6f436c8e22ce1b75ac0721a91a257b731131932b80b9328835cbb1e361aaff3b",
             189,
+        ),
+        (
+            "RigLogic",
+            "d92089953171e325bb03cf40be10138ee1d77d4143d0e529eb62fc9233b2ab62",
+            273,
         ),
     ]
 
@@ -372,7 +390,7 @@ def _plugin_descriptor_fixture(module, tmp_path: pathlib.Path):
     return engine_directory.as_posix(), pins, paths
 
 
-def test_commandlet_validates_python_descriptor_and_rejects_request_or_disk_mutation(
+def test_commandlet_validates_riglogic_descriptor_and_rejects_mutation(
     tmp_path: pathlib.Path,
 ) -> None:
     module = _pure_commandlet()
@@ -390,7 +408,7 @@ def test_commandlet_validates_python_descriptor_and_rejects_request_or_disk_muta
     with pytest.raises(module.SmokeFailure, match="descriptor pins differ"):
         module._validate_engine_plugin_descriptors(mutated_request, engine_directory)
 
-    descriptor = paths["PythonScriptPlugin"]
+    descriptor = paths["RigLogic"]
     descriptor.write_bytes(descriptor.read_bytes() + b"mutated")
     with pytest.raises(module.SmokeFailure, match="descriptor differs"):
         module._validate_engine_plugin_descriptors(request, engine_directory)
@@ -452,16 +470,19 @@ def test_commandlet_validates_exact_native_module_binary_and_receipt_binding(
     evidence = module._validate_engine_native_authority(request, engine_directory)
 
     assert evidence["inventory"] == {
-        "binary_file_count": 4,
-        "distinct_file_count": 7,
-        "modules_receipt_file_count": 3,
+        "binary_file_count": 7,
+        "distinct_file_count": 11,
+        "modules_receipt_file_count": 4,
         "shared_modules_receipt_paths": [
-            "Engine/Plugins/Experimental/PythonScriptPlugin/Binaries/Linux/"
-            "UnrealEditor.modules"
+            "Engine/Plugins/Animation/RigLogic/Binaries/Linux/UnrealEditor.modules",
+            (
+                "Engine/Plugins/Experimental/PythonScriptPlugin/Binaries/Linux/"
+                "UnrealEditor.modules"
+            ),
         ],
     }
-    assert len(evidence["binary_files"]) == 4
-    assert len(evidence["modules_receipt_files"]) == 3
+    assert len(evidence["binary_files"]) == 7
+    assert len(evidence["modules_receipt_files"]) == 4
 
 
 def test_commandlet_rejects_mutated_native_module_request_or_disk_bytes(
@@ -472,13 +493,16 @@ def test_commandlet_rejects_mutated_native_module_request_or_disk_bytes(
         module, tmp_path
     )
     mutated_request = json.loads(json.dumps({"engine_native_authority": authority}))
-    mutated_request["engine_native_authority"]["binary_files"][3]["binary_sha256"] = (
-        "0" * 64
+    riglogic_developer = next(
+        pin
+        for pin in mutated_request["engine_native_authority"]["binary_files"]
+        if pin["module_name"] == "RigLogicDeveloper"
     )
+    riglogic_developer["binary_sha256"] = "0" * 64
     with pytest.raises(module.SmokeFailure, match="native authority differs"):
         module._validate_engine_native_authority(mutated_request, engine_directory)
 
-    binary = binaries["PythonScriptPluginPreload"]
+    binary = binaries["RigLogicDeveloper"]
     binary.write_bytes(binary.read_bytes() + b"mutated")
     with pytest.raises(module.SmokeFailure, match="native module binary differs"):
         module._validate_engine_native_authority(
@@ -493,16 +517,16 @@ def test_commandlet_rejects_byte_pinned_receipt_with_wrong_module_binding(
     engine_directory, authority, _binaries, receipts = _native_authority_fixture(
         module, tmp_path
     )
-    receipt = receipts["PythonScriptPlugin"]
+    receipt = receipts["RigLogic"]
     receipt.write_bytes(
         json.dumps(
             {
                 "BuildId": "47537391",
                 "Modules": {
-                    "PythonScriptPlugin": "libUnrealEditor-PythonScriptPlugin.so",
-                    "PythonScriptPluginPreload": (
-                        "libUnrealEditor-UnrelatedPreload.so"
-                    ),
+                    "RigLogicDeveloper": "libUnrealEditor-UnrelatedDeveloper.so",
+                    "RigLogicEditor": "libUnrealEditor-RigLogicEditor.so",
+                    "RigLogicLib": "libUnrealEditor-RigLogicLib.so",
+                    "RigLogicModule": "libUnrealEditor-RigLogicModule.so",
                 },
             },
             sort_keys=True,
@@ -510,12 +534,15 @@ def test_commandlet_rejects_byte_pinned_receipt_with_wrong_module_binding(
         ).encode()
         + b"\n"
     )
-    module.ENGINE_MODULES_RECEIPT_PINS[-1]["modules_receipt_sha256"] = hashlib.sha256(
+    riglogic_receipt_pin = next(
+        pin
+        for pin in module.ENGINE_MODULES_RECEIPT_PINS
+        if pin["plugin_name"] == "RigLogic"
+    )
+    riglogic_receipt_pin["modules_receipt_sha256"] = hashlib.sha256(
         receipt.read_bytes()
     ).hexdigest()
-    module.ENGINE_MODULES_RECEIPT_PINS[-1]["modules_receipt_size_bytes"] = (
-        receipt.stat().st_size
-    )
+    riglogic_receipt_pin["modules_receipt_size_bytes"] = receipt.stat().st_size
     authority = module._native_authority_contract()
 
     with pytest.raises(module.SmokeFailure, match="module receipt binding differs"):
