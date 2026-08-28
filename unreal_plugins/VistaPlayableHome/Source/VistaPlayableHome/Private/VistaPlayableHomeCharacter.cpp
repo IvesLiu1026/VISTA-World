@@ -9,6 +9,7 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Camera/PlayerCameraManager.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "InputAction.h"
@@ -35,6 +36,8 @@ namespace
 {
 const FName RealisticInteriorR2CameraProfileId(TEXT("realistic_interior_r2"));
 const TCHAR* CameraProfileCommandLineKey = TEXT("VistaCameraProfile=");
+constexpr float IndoorViewPitchMinDegrees = -60.0f;
+constexpr float IndoorViewPitchMaxDegrees = 45.0f;
 }
 
 FVistaIndoorCameraProfile FVistaIndoorCameraProfile::RealisticInteriorR2()
@@ -183,6 +186,7 @@ void AVistaPlayableHomeCharacter::BeginPlay()
     }
 
     ApplyRequestedCameraProfile();
+    ConfigureIndoorViewLimits();
 
     const APlayerController* PlayerController = Cast<APlayerController>(Controller);
     if (IsValid(PlayerController) && IsValid(DefaultMappingContext))
@@ -196,6 +200,59 @@ void AVistaPlayableHomeCharacter::BeginPlay()
             }
         }
     }
+}
+
+void AVistaPlayableHomeCharacter::ConfigureIndoorViewLimits()
+{
+    if (ActiveCameraProfileId != RealisticInteriorR2CameraProfileId)
+    {
+        return;
+    }
+    APlayerController* PlayerController = Cast<APlayerController>(Controller);
+    if (!IsValid(PlayerController) || !IsValid(PlayerController->PlayerCameraManager))
+    {
+        UE_LOG(
+            LogVistaPlayableHomeCamera,
+            Warning,
+            TEXT("VISTA_CAMERA_VIEW_LIMITS_DEFERRED player camera manager unavailable"));
+        return;
+    }
+    APlayerCameraManager* CameraManager = PlayerController->PlayerCameraManager;
+    if (bIndoorViewLimitsApplied && IndoorViewCameraManager.Get() != CameraManager)
+    {
+        RestoreIndoorViewLimits();
+    }
+    if (!bIndoorViewLimitsApplied)
+    {
+        IndoorViewCameraManager = CameraManager;
+        PreviousViewPitchMin = CameraManager->ViewPitchMin;
+        PreviousViewPitchMax = CameraManager->ViewPitchMax;
+        PreviousViewRollMin = CameraManager->ViewRollMin;
+        PreviousViewRollMax = CameraManager->ViewRollMax;
+        bIndoorViewLimitsApplied = true;
+    }
+    CameraManager->ViewPitchMin = IndoorViewPitchMinDegrees;
+    CameraManager->ViewPitchMax = IndoorViewPitchMaxDegrees;
+    CameraManager->ViewRollMin = 0.0f;
+    CameraManager->ViewRollMax = 0.0f;
+}
+
+void AVistaPlayableHomeCharacter::RestoreIndoorViewLimits()
+{
+    if (!bIndoorViewLimitsApplied)
+    {
+        return;
+    }
+    APlayerCameraManager* CameraManager = IndoorViewCameraManager.Get();
+    if (IsValid(CameraManager))
+    {
+        CameraManager->ViewPitchMin = PreviousViewPitchMin;
+        CameraManager->ViewPitchMax = PreviousViewPitchMax;
+        CameraManager->ViewRollMin = PreviousViewRollMin;
+        CameraManager->ViewRollMax = PreviousViewRollMax;
+    }
+    IndoorViewCameraManager.Reset();
+    bIndoorViewLimitsApplied = false;
 }
 
 void AVistaPlayableHomeCharacter::ApplyRequestedCameraProfile()
@@ -274,6 +331,7 @@ bool AVistaPlayableHomeCharacter::ApplyIndoorCameraProfile(
         Profile.RecoverySnapThresholdCm);
     FollowCamera->SetFieldOfView(Profile.FieldOfViewDegrees);
     ActiveCameraProfileId = Profile.ProfileId;
+    ConfigureIndoorViewLimits();
 
     UE_LOG(
         LogVistaPlayableHomeCamera,
@@ -287,6 +345,7 @@ bool AVistaPlayableHomeCharacter::ApplyIndoorCameraProfile(
 
 void AVistaPlayableHomeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    RestoreIndoorViewLimits();
     SetSprinting(false);
     UnCrouch();
     if (HasAuthority() && IsValid(HeldItem))
@@ -296,9 +355,19 @@ void AVistaPlayableHomeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReas
     Super::EndPlay(EndPlayReason);
 }
 
+void AVistaPlayableHomeCharacter::UnPossessed()
+{
+    // Restore the shared camera manager before APawn clears Controller. This
+    // also covers ordinary controller switches where the pawn stays alive and
+    // EndPlay is never called.
+    RestoreIndoorViewLimits();
+    Super::UnPossessed();
+}
+
 void AVistaPlayableHomeCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
+    ConfigureIndoorViewLimits();
 
     if (UEnhancedInputComponent* Enhanced = Cast<UEnhancedInputComponent>(PlayerInputComponent))
     {

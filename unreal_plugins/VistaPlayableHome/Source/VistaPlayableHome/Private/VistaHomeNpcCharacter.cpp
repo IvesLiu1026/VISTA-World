@@ -108,6 +108,7 @@ FVistaInteractionResult AVistaHomeNpcCharacter::VistaApplyRuntimeState_Implement
     }
     SetActorTransform(State.Transform, false, nullptr, ETeleportType::TeleportPhysics);
     SetActorHiddenInGame(State.bHidden);
+    SetActorEnableCollision(!State.bHidden);
     if (const FString* Room = State.Values.Find(TEXT("current_room_id")))
     {
         CurrentRoomId = *Room;
@@ -141,6 +142,10 @@ FVistaInteractionResult AVistaHomeNpcCharacter::VistaInteract_Implementation(
 void AVistaHomeNpcCharacter::BeginPlay()
 {
     Super::BeginPlay();
+    // Event-only residents are serialized hidden by the world composer.  Keep
+    // their capsule from becoming an invisible navigation obstacle until an
+    // event queue explicitly reveals them.
+    SetActorEnableCollision(!IsHidden());
     if (!SemanticId.IsEmpty())
     {
         Tags.AddUnique(FName(*SemanticId));

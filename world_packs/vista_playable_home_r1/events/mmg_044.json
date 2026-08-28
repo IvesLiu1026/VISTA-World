@@ -2,7 +2,7 @@
   "schema_version": "simworld.vista.playable-event/v1",
   "event_id": "mmg_044",
   "title": "Keys left in the living room",
-  "compatible_house": {"house_id": "home.r1", "revision": "vista_playable_home_r1", "content_digest": "51208e0ecc1ad1450ca6d9b14a4fb46989bff90fd8dc15422a0a47df6827c8c3"},
+  "compatible_house": {"house_id": "home.r1", "revision": "vista_playable_home_r1", "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"},
   "participating_room_ids": ["home.r1/room.entry_hall", "home.r1/room.living_room"],
   "participating_entity_ids": [
     "home.r1/room.entry_hall/entity.exit_door.01",
@@ -28,5 +28,5 @@
   "timeout_s": 600,
   "reset_policy": {"mode": "restore_baseline", "reset_npc_queues": true, "release_held_items": true},
   "source": {"dataset": "VISTA", "sample_id": "mmg_044", "verification": "verified", "public_reference": "vista://assist-step/mmg_044"},
-  "content_digest": "929a46c5642adf7afad47088e4566b55275af7d9d41c30c1f815aa1cd73a58be"
+  "content_digest": "6d7487760faed67dba961d8c7acbd07476af1c4d197160263f4b413bd9a60340"
 }

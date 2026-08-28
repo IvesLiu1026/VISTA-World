@@ -7,6 +7,7 @@
 #include "VistaPlayableHomeCharacter.generated.h"
 
 class AVistaPickupActor;
+class APlayerCameraManager;
 class UCameraComponent;
 class UInputAction;
 class UInputMappingContext;
@@ -161,6 +162,7 @@ public:
 protected:
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+    virtual void UnPossessed() override;
     virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 private:
@@ -168,6 +170,12 @@ private:
     TObjectPtr<AVistaPickupActor> HeldItem = nullptr;
 
     bool bSprinting = false;
+    bool bIndoorViewLimitsApplied = false;
+    TWeakObjectPtr<APlayerCameraManager> IndoorViewCameraManager;
+    float PreviousViewPitchMin = 0.0f;
+    float PreviousViewPitchMax = 0.0f;
+    float PreviousViewRollMin = 0.0f;
+    float PreviousViewRollMax = 0.0f;
 
     void Move(const FInputActionValue& Value);
     void Look(const FInputActionValue& Value);
@@ -183,6 +191,8 @@ private:
     void LookYawLegacy(float Value);
     void LookPitchLegacy(float Value);
     void ApplyRequestedCameraProfile();
+    void ConfigureIndoorViewLimits();
+    void RestoreIndoorViewLimits();
 
     UFUNCTION(Server, Reliable)
     void ServerPerformDefaultInteraction();
