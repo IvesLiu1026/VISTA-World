@@ -28,7 +28,7 @@ import stat
 import subprocess
 import sys
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,7 +36,13 @@ import materialize_hybrid_camera_overlay as camera_overlay
 
 
 PLAN_SCHEMA = "simworld.vista.playable-home-ycb-scene-plan/v1"
-EXECUTION_SCHEMA = "simworld.vista.playable-home-ycb-scene-execution/v1"
+# R7's closed v1 execution remains immutable.  The R8-only remediation member
+# is introduced under v2 rather than silently widening that historical schema.
+LEGACY_EXECUTION_SCHEMA = "simworld.vista.playable-home-ycb-scene-execution/v1"
+EXECUTION_SCHEMA = "simworld.vista.playable-home-ycb-scene-execution/v2"
+CAMERA_REMEDIATION_EXECUTION_SCHEMA = (
+    "simworld.vista.playable-home-ycb-camera-remediation-execution/v1"
+)
 SCENE_RECEIPT_SCHEMA = "simworld.vista.playable-home-ycb-scene-receipt/v1"
 HOST_RECEIPT_SCHEMA = "simworld.vista.playable-home-ycb-scene-host-receipt/v1"
 IMPORT_RECEIPT_SCHEMA = "simworld.vista.playable-home-ycb-ue-import-receipt/v1"
@@ -471,6 +477,111 @@ PRESENTATION_SUPPORT_MANIFEST_SHA256 = (
 PRESENTATION_EXTERNAL_PLACEMENT_DIGEST = (
     "6f13455faf22205aa36f7ea055ad9405c936a4747602bc44d784ed4ced964c0d"
 )
+
+# R8 is a remediation candidate, not a visual acceptance result.  These pins
+# bind its camera/exposure changes to the exact R7 diagnostic render and to the
+# production bathroom geometry that was actually composed.  Apply copies the
+# inputs into the fresh attempt before the Unreal commandlet revalidates them.
+R7_ATTEMPT_ROOT = RUN_PARENT / "ycb-hybrid-camera-r7-20260828"
+R7_SCENE_RECEIPT = R7_ATTEMPT_ROOT / SCENE_RECEIPT_NAME
+R7_SCENE_RECEIPT_SHA256 = (
+    "cd67c217dd24ea091581c8f2241467a77b9fdc4f0d849bcee6dc55073ec33448"
+)
+R7_HOST_RECEIPT = R7_ATTEMPT_ROOT / HOST_RECEIPT_NAME
+R7_HOST_RECEIPT_SHA256 = (
+    "1ac0e2092640202026e14e51f433b823abfdbf90f633dece00ef5fc82fff7c0b"
+)
+R7_EXECUTION = R7_ATTEMPT_ROOT / EXECUTION_NAME
+R7_EXECUTION_SHA256 = "2f7b737a40aaa3e88a827f1404def30941fd1af926e561c0d0f692a2afddf743"
+R7_REVIEW_ROOT = RUN_PARENT / "ycb-visual-review-r7-20260828"
+R7_REVIEW_PNG_PINS = {
+    "ycb.kitchen.dining_table": {
+        "path": R7_REVIEW_ROOT / "02-kitchen-dining-table.png",
+        "sha256": "8a319ced285d52c320475ffbef3e5c5e40b73e5a476a5ae563060380efb3ddfc",
+        "diagnostic": "white_wall_highlights_require_lower_exposure_candidate",
+    },
+    "ycb.bathroom.washer_top": {
+        "path": R7_REVIEW_ROOT / "03-bathroom-washer-top.png",
+        "sha256": "041bcc1677b01e77c045e90951da2e1d3d1b1f5418b5b1c13d78a53b3c3b607c",
+        "diagnostic": "open_boundary_dominates_background_requires_room_facing_camera",
+    },
+    "ycb.office.desk_top": {
+        "path": R7_REVIEW_ROOT / "04-office-desk-top.png",
+        "sha256": "08fade5912c0aebf391803154534cd22211ccff276e36a5bef3255ccf7e4224d",
+        "diagnostic": "white_wall_highlights_require_lower_exposure_candidate",
+    },
+}
+PRODUCTION_ATTEMPT_ROOT = RUN_PARENT / "hybrid-r3-production-r3-20260828"
+PRODUCTION_HOUSE_CONTRACT = PRODUCTION_ATTEMPT_ROOT / "contracts/house.json"
+PRODUCTION_HOUSE_CONTRACT_SHA256 = (
+    "ccdf385b4ec8b88221ccd5c68eb5553fb7186e5aa5e87095176e1c3c62fec45f"
+)
+PRODUCTION_HOST_RECEIPT = PRODUCTION_ATTEMPT_ROOT / "hybrid-r3-host-receipt.json"
+PRODUCTION_HOST_RECEIPT_SHA256 = (
+    "29668652067729fa35c22577bcc1ac37a090d5d116e07d5044e1bd92f110fe9f"
+)
+PRODUCTION_SCENE_RECEIPT = PRODUCTION_ATTEMPT_ROOT / "hybrid-r3-scene-receipt.json"
+PRODUCTION_SCENE_RECEIPT_SHA256 = (
+    "08d629e002c150365ae9aae647a2eb490fff1624f2ffef67b9f253bda3352ddc"
+)
+WASHER_ASSET_RECEIPT = (
+    RUN_PARENT
+    / "hssd-private-research-r5-20260828t040000z/receipts/hssd.static.washer.json"
+)
+WASHER_ASSET_RECEIPT_SHA256 = (
+    "f490e0b131ed41a568c398971d487dc029b6604e2f62e8c747b79a1142d8bed9"
+)
+BATHROOM_ARCHITECTURE_SOURCE = (
+    REPOSITORY_ROOT / "tools/blender/vista_playable_home/contract_scene.py"
+)
+BATHROOM_ARCHITECTURE_SOURCE_SHA256 = (
+    "4cc1618a508359d0f018745ebc9e1f9a6b2fb39d7bcca1c44eef77127b92827c"
+)
+R8_REMEDIATION_SOURCE_PINS = {
+    "architecture_source": {
+        "path": BATHROOM_ARCHITECTURE_SOURCE,
+        "sha256": BATHROOM_ARCHITECTURE_SOURCE_SHA256,
+    },
+    "house_contract": {
+        "path": PRODUCTION_HOUSE_CONTRACT,
+        "sha256": PRODUCTION_HOUSE_CONTRACT_SHA256,
+    },
+    "camera_host_receipt": {
+        "path": CAMERA_HOST_RECEIPT,
+        "sha256": CAMERA_HOST_RECEIPT_SHA256,
+    },
+    "production_host_receipt": {
+        "path": PRODUCTION_HOST_RECEIPT,
+        "sha256": PRODUCTION_HOST_RECEIPT_SHA256,
+    },
+    "production_scene_receipt": {
+        "path": PRODUCTION_SCENE_RECEIPT,
+        "sha256": PRODUCTION_SCENE_RECEIPT_SHA256,
+    },
+    "washer_asset_receipt": {
+        "path": WASHER_ASSET_RECEIPT,
+        "sha256": WASHER_ASSET_RECEIPT_SHA256,
+    },
+    "r7_scene_receipt": {
+        "path": R7_SCENE_RECEIPT,
+        "sha256": R7_SCENE_RECEIPT_SHA256,
+    },
+    "r7_host_receipt": {
+        "path": R7_HOST_RECEIPT,
+        "sha256": R7_HOST_RECEIPT_SHA256,
+    },
+    "r7_execution": {
+        "path": R7_EXECUTION,
+        "sha256": R7_EXECUTION_SHA256,
+    },
+    **{
+        "r7_" + route_id.split(".")[1] + "_png": {
+            "path": pin["path"],
+            "sha256": pin["sha256"],
+        }
+        for route_id, pin in R7_REVIEW_PNG_PINS.items()
+    },
+}
 # The room bundle is authored in Blender and imported through glTF/Interchange.
 # Unreal keeps X/Z but reflects the room-local Y axis and yaw.  The bundle actor
 # itself remains at the canonical room origin, so all presentation-local support
@@ -620,7 +731,7 @@ SCREENSHOT_ROUTES = (
             "aperture_fstop": 4.0,
             "shutter_speed_s": 0.008333,
             "iso": 400.0,
-            "exposure_compensation_ev": 0.0,
+            "exposure_compensation_ev": -1.0,
         },
         "aspect_ratio": REVIEW_CAMERA_ASPECT_RATIO,
         "frustum_margin_deg": REVIEW_CAMERA_FRUSTUM_MARGIN_DEG,
@@ -636,17 +747,17 @@ SCREENSHOT_ROUTES = (
         ),
         "actor_label": "VISTA_YCB_CAMERA_BATHROOM_WASHER_TOP",
         "world_transform_cm": {
-            "location_cm": [75.0, 620.0, 155.0],
-            "rotation_deg": [0.0, -27.0, 90.0],
+            "location_cm": [-110.0, 500.0, 170.0],
+            "rotation_deg": [0.0, -17.0, 40.0],
             "scale": [1.0, 1.0, 1.0],
         },
-        "fov_deg": 43.0,
+        "fov_deg": 75.0,
         "exposure": {
             "mode": "pinned_physical_camera",
             "aperture_fstop": 4.0,
             "shutter_speed_s": 0.008333,
             "iso": 400.0,
-            "exposure_compensation_ev": -0.5,
+            "exposure_compensation_ev": -0.75,
         },
         "aspect_ratio": REVIEW_CAMERA_ASPECT_RATIO,
         "frustum_margin_deg": REVIEW_CAMERA_FRUSTUM_MARGIN_DEG,
@@ -670,7 +781,7 @@ SCREENSHOT_ROUTES = (
             "aperture_fstop": 4.0,
             "shutter_speed_s": 0.008333,
             "iso": 400.0,
-            "exposure_compensation_ev": 0.0,
+            "exposure_compensation_ev": -0.75,
         },
         "aspect_ratio": REVIEW_CAMERA_ASPECT_RATIO,
         "frustum_margin_deg": REVIEW_CAMERA_FRUSTUM_MARGIN_DEG,
@@ -678,6 +789,36 @@ SCREENSHOT_ROUTES = (
         "expected_asset_ids": [item[0] for item in _PLACEMENT_ROOM_LOCAL_METRES[14:]],
     },
 )
+
+R7_ROUTE_CAMERA_POLICY = {
+    "ycb.kitchen.dining_table": {
+        "world_transform_cm": {
+            "location_cm": [205.0, -360.0, 165.0],
+            "rotation_deg": [0.0, -20.0, 57.0],
+            "scale": [1.0, 1.0, 1.0],
+        },
+        "fov_deg": 60.0,
+        "exposure_compensation_ev": 0.0,
+    },
+    "ycb.bathroom.washer_top": {
+        "world_transform_cm": {
+            "location_cm": [75.0, 620.0, 155.0],
+            "rotation_deg": [0.0, -27.0, 90.0],
+            "scale": [1.0, 1.0, 1.0],
+        },
+        "fov_deg": 43.0,
+        "exposure_compensation_ev": -0.5,
+    },
+    "ycb.office.desk_top": {
+        "world_transform_cm": {
+            "location_cm": [630.0, 150.0, 170.0],
+            "rotation_deg": [0.0, -28.0, 129.0],
+            "scale": [1.0, 1.0, 1.0],
+        },
+        "fov_deg": 65.0,
+        "exposure_compensation_ev": 0.0,
+    },
+}
 
 ATTEMPT_RE = re.compile(r"^ycb-hybrid-camera-[a-z0-9](?:[a-z0-9-]{0,63}[a-z0-9])?$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -792,6 +933,7 @@ EXECUTION_KEYS = {
     "engine_version",
     "source_camera_host_receipt_sha256",
     "presentation_support_evidence",
+    "camera_remediation_evidence",
     "ycb_import_host_receipt",
     "ycb_import_host_receipt_sha256",
     "ycb_import_receipt",
@@ -809,6 +951,7 @@ EXECUTION_KEYS = {
     "claims",
     "content_digest",
 }
+LEGACY_EXECUTION_KEYS = EXECUTION_KEYS - {"camera_remediation_evidence"}
 TRANSFORM_KEYS = {"location_cm", "rotation_deg", "scale"}
 VISUAL_OBSERVATION_KEYS = {
     "instance_id",
@@ -2192,6 +2335,709 @@ def screenshot_routes(
     return tuple(routes)
 
 
+def _remediation_source_paths(
+    overrides: Mapping[str, pathlib.Path] | None = None,
+) -> dict[str, pathlib.Path]:
+    expected = set(R8_REMEDIATION_SOURCE_PINS)
+    if overrides is None:
+        return {
+            name: pathlib.Path(pin["path"])
+            for name, pin in R8_REMEDIATION_SOURCE_PINS.items()
+        }
+    _require(
+        type(overrides) is dict and set(overrides) == expected,
+        "R8 remediation source inventory differs",
+    )
+    result = {}
+    for name, value in overrides.items():
+        result[name] = _normalized_absolute(
+            pathlib.Path(value), "R8 remediation source " + name
+        )
+    return result
+
+
+def _regular_file_identity(path: pathlib.Path, label: str) -> dict[str, int]:
+    _require(path.is_absolute() and not path.is_symlink(), label + " path is invalid")
+    try:
+        metadata = os.stat(path, follow_symlinks=False)
+    except OSError as exc:
+        raise YcbSceneError(label + " metadata is unavailable") from exc
+    _require(stat.S_ISREG(metadata.st_mode), label + " is not a regular file")
+    return {
+        "device": metadata.st_dev,
+        "inode": metadata.st_ino,
+        "size_bytes": metadata.st_size,
+        "mtime_ns": metadata.st_mtime_ns,
+        "ctime_ns": metadata.st_ctime_ns,
+        "uid": metadata.st_uid,
+        "gid": metadata.st_gid,
+        "mode": stat.S_IMODE(metadata.st_mode),
+    }
+
+
+def _validate_pinned_png(
+    path: pathlib.Path, expected_sha256: str, label: str
+) -> dict[str, Any]:
+    raw = _read_regular(path, label)
+    _require(
+        hashlib.sha256(raw).hexdigest() == expected_sha256,
+        label + " SHA-256 differs",
+    )
+    _require(
+        len(raw) >= 33
+        and raw[:8] == b"\x89PNG\r\n\x1a\n"
+        and int.from_bytes(raw[8:12], "big") == 13
+        and raw[12:16] == b"IHDR",
+        label + " is not a closed PNG IHDR stream",
+    )
+    width = int.from_bytes(raw[16:20], "big")
+    height = int.from_bytes(raw[20:24], "big")
+    _require(
+        width == 1920
+        and height == 1080
+        and raw[24] == 8
+        and raw[25] == 2
+        and raw[26:29] == b"\x00\x00\x00",
+        label + " pixel contract differs",
+    )
+    return {
+        "path": str(path),
+        "sha256": expected_sha256,
+        "size_bytes": len(raw),
+        "width": width,
+        "height": height,
+        "bit_depth": 8,
+        "color_type": "rgb",
+        "interlaced": False,
+    }
+
+
+def _first_room_boundary_hit(
+    camera_location: Sequence[float],
+    yaw_deg: float,
+    pitch_deg: float,
+    room_min_cm: Sequence[float],
+    room_max_cm: Sequence[float],
+) -> dict[str, Any]:
+    yaw = math.radians(float(yaw_deg))
+    pitch = math.radians(float(pitch_deg))
+    direction_x = math.cos(yaw)
+    direction_y = math.sin(yaw)
+    candidates: list[tuple[float, str, float, float]] = []
+    boundaries = (
+        ("west", 0, float(room_min_cm[0])),
+        ("east", 0, float(room_max_cm[0])),
+        ("south", 1, float(room_min_cm[1])),
+        ("north", 1, float(room_max_cm[1])),
+    )
+    for wall_id, axis, coordinate in boundaries:
+        direction = direction_x if axis == 0 else direction_y
+        if abs(direction) <= 1e-9:
+            continue
+        distance = (coordinate - float(camera_location[axis])) / direction
+        if distance <= 0.0:
+            continue
+        hit_x = float(camera_location[0]) + distance * direction_x
+        hit_y = float(camera_location[1]) + distance * direction_y
+        if (
+            float(room_min_cm[0]) - 1e-6 <= hit_x <= float(room_max_cm[0]) + 1e-6
+            and float(room_min_cm[1]) - 1e-6 <= hit_y <= float(room_max_cm[1]) + 1e-6
+        ):
+            candidates.append((distance, wall_id, hit_x, hit_y))
+    _require(bool(candidates), "bathroom camera ray has no room-boundary hit")
+    distance, wall_id, hit_x, hit_y = min(candidates)
+    hit_z = float(camera_location[2]) + distance * math.tan(pitch)
+    return {
+        "wall_id": wall_id,
+        "distance_cm": round(distance, 6),
+        "world_cm": [round(hit_x, 6), round(hit_y, 6), round(hit_z, 6)],
+    }
+
+
+def _bathroom_camera_composition_evidence(
+    selected: Sequence[Mapping[str, Any]],
+    house: Mapping[str, Any],
+    production_scene: Mapping[str, Any],
+    washer_receipt: Mapping[str, Any],
+) -> dict[str, Any]:
+    rooms = house.get("rooms")
+    _require(type(rooms) is list, "production house room inventory differs")
+    matches = [item for item in rooms if item.get("room_id") == BATHROOM_ROOM]
+    _require(len(matches) == 1, "production bathroom room identity differs")
+    room = matches[0]
+    transform = room.get("transform")
+    bounds = room.get("bounds_m")
+    _require(
+        house.get("schema_version") == "simworld.vista.playable-house/v1"
+        and type(transform) is dict
+        and transform.get("location_m") == [0, 6, 0]
+        and transform.get("rotation_deg") == [0, 0, 0]
+        and transform.get("scale") == [1, 1, 1]
+        and type(bounds) is dict
+        and bounds.get("min_m") == [-1.5, -2, 0]
+        and bounds.get("max_m") == [1.5, 2, 3],
+        "production bathroom room geometry differs",
+    )
+    room_min_cm = [
+        (float(transform["location_m"][axis]) + float(bounds["min_m"][axis])) * 100.0
+        for axis in range(3)
+    ]
+    room_max_cm = [
+        (float(transform["location_m"][axis]) + float(bounds["max_m"][axis])) * 100.0
+        for axis in range(3)
+    ]
+
+    hssd_actors = production_scene.get("hssd_actors")
+    _require(type(hssd_actors) is list, "production HSSD actor inventory differs")
+    washer_actors = [
+        item
+        for item in hssd_actors
+        if item.get("source_asset_id") == "hssd.static.washer"
+        and item.get("room_id") == BATHROOM_ROOM
+    ]
+    _require(len(washer_actors) == 1, "production washer actor identity differs")
+    washer_actor = washer_actors[0]
+    washer_transform = washer_actor.get("world_transform_cm")
+    _require(
+        production_scene.get("schema_version")
+        == "simworld.vista.playable-home-hybrid-r3-scene-receipt/v1"
+        and production_scene.get("status")
+        == "diagnostic_nonpromotable_hybrid_r3_composed_reloaded"
+        and production_scene.get("accepted_as_visual_evidence") is False
+        and production_scene.get("promotable") is False
+        and production_scene.get("diagnostic_only") is True
+        and type(washer_transform) is dict
+        and washer_transform.get("location_cm") == [85, 720, 0]
+        and washer_transform.get("rotation_deg") == [0, 0, 180]
+        and washer_transform.get("scale") == [1, 1, 1]
+        and washer_actor.get("visible") is True,
+        "production washer actor transform differs",
+    )
+    normalization = washer_receipt.get("normalization")
+    source_bounds = (
+        normalization.get("actual_bounds_m") if type(normalization) is dict else None
+    )
+    _require(
+        washer_receipt.get("schema_version")
+        == "simworld.vista.hssd-private-research-asset-receipt/v1"
+        and washer_receipt.get("status")
+        == "normalized_pbr_glb_built_for_private_research"
+        and washer_receipt.get("source_asset_id") == "hssd.static.washer"
+        and washer_receipt.get("accepted_as_interactive_asset") is False
+        and type(source_bounds) is dict
+        and source_bounds.get("min_m")
+        == [-0.36000001430511475, -0.38374999165534973, 0]
+        and source_bounds.get("max_m")
+        == [0.36000001430511475, 0.38374999165534973, 0.9199999570846558]
+        and normalization.get("origin_policy") == "footprint_center_bottom_z_zero",
+        "pinned washer source bounds differ",
+    )
+    yaw = math.radians(float(washer_transform["rotation_deg"][2]))
+    washer_corners = []
+    for local_x in (source_bounds["min_m"][0], source_bounds["max_m"][0]):
+        for local_y in (source_bounds["min_m"][1], source_bounds["max_m"][1]):
+            for local_z in (source_bounds["min_m"][2], source_bounds["max_m"][2]):
+                washer_corners.append(
+                    [
+                        float(washer_transform["location_cm"][0])
+                        + (
+                            float(local_x) * math.cos(yaw)
+                            - float(local_y) * math.sin(yaw)
+                        )
+                        * 100.0,
+                        float(washer_transform["location_cm"][1])
+                        + (
+                            float(local_x) * math.sin(yaw)
+                            + float(local_y) * math.cos(yaw)
+                        )
+                        * 100.0,
+                        float(washer_transform["location_cm"][2])
+                        + float(local_z) * 100.0,
+                    ]
+                )
+
+    route = next(
+        item
+        for item in SCREENSHOT_ROUTES
+        if item["route_id"] == "ycb.bathroom.washer_top"
+    )
+    camera_transform = route["world_transform_cm"]
+    camera_location = camera_transform["location_cm"]
+    camera_rotation = camera_transform["rotation_deg"]
+    camera_clearance = min(
+        float(camera_location[0]) - room_min_cm[0],
+        room_max_cm[0] - float(camera_location[0]),
+        float(camera_location[1]) - room_min_cm[1],
+        room_max_cm[1] - float(camera_location[1]),
+        float(camera_location[2]) - room_min_cm[2],
+        room_max_cm[2] - float(camera_location[2]),
+    )
+    _require(camera_clearance >= 25.0, "bathroom camera is not safely inside the room")
+    horizontal_half = float(route["fov_deg"]) / 2.0
+    vertical_half = math.degrees(
+        math.atan(
+            math.tan(math.radians(horizontal_half)) / float(route["aspect_ratio"])
+        )
+    )
+    margin = float(route["frustum_margin_deg"])
+    washer_clearances = []
+    for corner in washer_corners:
+        delta = [corner[index] - float(camera_location[index]) for index in range(3)]
+        yaw_delta, pitch_delta = _camera_space_angles_deg(delta, camera_rotation)
+        washer_clearances.append(
+            (horizontal_half - abs(yaw_delta), vertical_half - abs(pitch_delta))
+        )
+    minimum_washer_horizontal = min(item[0] for item in washer_clearances)
+    minimum_washer_vertical = min(item[1] for item in washer_clearances)
+    _require(
+        minimum_washer_horizontal >= margin and minimum_washer_vertical >= margin,
+        "complete production washer bounds leave the bathroom review frustum",
+    )
+    _frustum_evidence(route, selected)
+
+    yaw_center = float(camera_rotation[2])
+    _require(
+        0.0 < yaw_center - horizontal_half < yaw_center + horizontal_half < 90.0,
+        "bathroom horizontal frustum can see the open south boundary",
+    )
+    horizontal_hits = [
+        _first_room_boundary_hit(
+            camera_location,
+            yaw_center + offset,
+            float(camera_rotation[1]),
+            room_min_cm,
+            room_max_cm,
+        )
+        for offset in (-horizontal_half, 0.0, horizontal_half)
+    ]
+    _require(
+        [item["wall_id"] for item in horizontal_hits] == ["east", "east", "north"],
+        "bathroom horizontal frustum is not bounded by closed production walls",
+    )
+    floor_yaw = yaw_center - 0.9 * horizontal_half
+    floor_pitch = float(camera_rotation[1]) - 0.9 * vertical_half
+    _require(floor_pitch < 0.0, "bathroom floor evidence ray does not point down")
+    floor_distance = -float(camera_location[2]) / math.tan(math.radians(floor_pitch))
+    floor_hit = [
+        float(camera_location[0]) + floor_distance * math.cos(math.radians(floor_yaw)),
+        float(camera_location[1]) + floor_distance * math.sin(math.radians(floor_yaw)),
+        0.0,
+    ]
+    floor_boundary = _first_room_boundary_hit(
+        camera_location, floor_yaw, floor_pitch, room_min_cm, room_max_cm
+    )
+    _require(
+        room_min_cm[0] < floor_hit[0] < room_max_cm[0]
+        and room_min_cm[1] < floor_hit[1] < room_max_cm[1]
+        and floor_distance < float(floor_boundary["distance_cm"]),
+        "bathroom lower-frustum ray does not hit the production floor first",
+    )
+    wall_pitch = float(camera_rotation[1]) + 0.75 * vertical_half
+    wall_hit = _first_room_boundary_hit(
+        camera_location, yaw_center, wall_pitch, room_min_cm, room_max_cm
+    )
+    _require(
+        wall_hit["wall_id"] == "east"
+        and room_min_cm[2] < wall_hit["world_cm"][2] < room_max_cm[2],
+        "bathroom upper-frustum background does not hit the closed east wall",
+    )
+    return {
+        "route_id": route["route_id"],
+        "room_world_bounds_cm": {"min_cm": room_min_cm, "max_cm": room_max_cm},
+        "closed_wall_ids": ["east", "north", "west"],
+        "open_boundary_id": "south",
+        "camera_inside_room_clearance_cm": round(camera_clearance, 6),
+        "horizontal_frustum_boundary_hits": horizontal_hits,
+        "floor_interior_ray": {
+            "yaw_deg": round(floor_yaw, 6),
+            "pitch_deg": round(floor_pitch, 6),
+            "world_cm": [round(value, 6) for value in floor_hit],
+            "hits_floor_before_wall": True,
+        },
+        "background_wall_ray": {
+            "yaw_deg": round(yaw_center, 6),
+            "pitch_deg": round(wall_pitch, 6),
+            **wall_hit,
+        },
+        "washer_full_bounds_corner_count": len(washer_corners),
+        "washer_minimum_horizontal_clearance_deg": round(minimum_washer_horizontal, 6),
+        "washer_minimum_vertical_clearance_deg": round(minimum_washer_vertical, 6),
+        "washer_and_two_ycb_bounds_within_frustum": True,
+    }
+
+
+def _validate_r8_authoritative_lineage(
+    documents: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    required = {
+        "r7_host_receipt",
+        "r7_scene_receipt",
+        "r7_execution",
+        "camera_host_receipt",
+        "production_host_receipt",
+        "production_scene_receipt",
+    }
+    _require(
+        required.issubset(documents),
+        "R8 authoritative lineage document inventory differs",
+    )
+    r7_host = documents["r7_host_receipt"]
+    r7_scene = documents["r7_scene_receipt"]
+    r7_execution = documents["r7_execution"]
+    camera_host = documents["camera_host_receipt"]
+    production_host = documents["production_host_receipt"]
+    production_scene = documents["production_scene_receipt"]
+
+    r7_project_root = R7_ATTEMPT_ROOT / "project"
+    _require(
+        r7_host.get("schema_version") == HOST_RECEIPT_SCHEMA
+        and r7_host.get("status") == SUCCESS_STATUS
+        and r7_host.get("attempt_root") == str(R7_ATTEMPT_ROOT)
+        and r7_host.get("project_root") == str(r7_project_root)
+        and r7_host.get("scene_receipt_sha256") == R7_SCENE_RECEIPT_SHA256
+        and r7_host.get("execution_manifest_sha256") == R7_EXECUTION_SHA256
+        and r7_host.get("source_camera_host_receipt_sha256")
+        == CAMERA_HOST_RECEIPT_SHA256
+        and r7_host.get("screenshots_captured") is False,
+        "R7 host receipt lineage differs",
+    )
+    r7_bindings = r7_scene.get("bindings")
+    _require(
+        r7_scene.get("schema_version") == SCENE_RECEIPT_SCHEMA
+        and r7_scene.get("status") == SUCCESS_STATUS
+        and type(r7_bindings) is dict
+        and r7_bindings.get("project") == str(r7_project_root / PROJECT_DESCRIPTOR_NAME)
+        and r7_bindings.get("execution_manifest") == str(R7_EXECUTION)
+        and r7_bindings.get("execution_manifest_sha256") == R7_EXECUTION_SHA256
+        and r7_bindings.get("source_camera_host_receipt_sha256")
+        == CAMERA_HOST_RECEIPT_SHA256,
+        "R7 scene receipt lineage differs",
+    )
+    _exact_mapping(r7_execution, LEGACY_EXECUTION_KEYS, "R7 legacy execution manifest")
+    _require(
+        r7_execution.get("schema_version") == LEGACY_EXECUTION_SCHEMA
+        and r7_execution.get("execution_path") == str(R7_EXECUTION)
+        and r7_execution.get("attempt_root") == str(R7_ATTEMPT_ROOT)
+        and r7_execution.get("project_file")
+        == str(r7_project_root / PROJECT_DESCRIPTOR_NAME)
+        and r7_execution.get("source_camera_host_receipt_sha256")
+        == CAMERA_HOST_RECEIPT_SHA256,
+        "R7 legacy execution lineage differs",
+    )
+
+    production_projection = {
+        "sha256": production_host.get("post_project_projection_sha256"),
+        "file_count": production_host.get("post_project_file_count"),
+        "directory_count": production_host.get("post_project_directory_count"),
+        "total_bytes": production_host.get("post_project_total_bytes"),
+    }
+    source_hybrid = camera_host.get("source_hybrid")
+    _require(
+        camera_host.get("schema_version") == camera_overlay.HOST_RECEIPT_SCHEMA
+        and camera_host.get("status") == CAMERA_HOST_STATUS
+        and camera_host.get("attempt_root") == str(CAMERA_ATTEMPT_ROOT)
+        and camera_host.get("project_root") == str(CAMERA_PROJECT_ROOT)
+        and camera_host.get("output_project_projection")
+        == _pin_dict(CAMERA_PROJECT_PIN)
+        and camera_host.get("accepted_as_visual_evidence") is False
+        and camera_host.get("promotable") is False
+        and camera_host.get("diagnostic_only") is True
+        and type(source_hybrid) is dict
+        and source_hybrid.get("attempt_root") == str(PRODUCTION_ATTEMPT_ROOT)
+        and source_hybrid.get("host_receipt_sha256") == PRODUCTION_HOST_RECEIPT_SHA256
+        and source_hybrid.get("host_status")
+        == "diagnostic_nonpromotable_hybrid_r3_composed_reloaded"
+        and source_hybrid.get("project_projection") == production_projection,
+        "camera-to-production host lineage differs",
+    )
+    production_bindings = production_scene.get("bindings")
+    _require(
+        production_host.get("schema_version")
+        == "simworld.vista.playable-home-hybrid-r3-host-receipt/v1"
+        and production_host.get("status")
+        == "diagnostic_nonpromotable_hybrid_r3_composed_reloaded"
+        and production_host.get("attempt_root") == str(PRODUCTION_ATTEMPT_ROOT)
+        and production_host.get("scene_receipt_sha256")
+        == PRODUCTION_SCENE_RECEIPT_SHA256
+        and production_host.get("accepted_as_visual_evidence") is False
+        and production_host.get("promotable") is False
+        and production_host.get("diagnostic_only") is True
+        and production_scene.get("schema_version")
+        == "simworld.vista.playable-home-hybrid-r3-scene-receipt/v1"
+        and production_scene.get("status")
+        == "diagnostic_nonpromotable_hybrid_r3_composed_reloaded"
+        and type(production_bindings) is dict
+        and production_bindings.get("project")
+        == str(PRODUCTION_ATTEMPT_ROOT / "project" / PROJECT_DESCRIPTOR_NAME)
+        and production_bindings.get("execution_manifest")
+        == str(PRODUCTION_ATTEMPT_ROOT / "hybrid-r3-execution.json")
+        and production_scene.get("accepted_as_visual_evidence") is False
+        and production_scene.get("promotable") is False
+        and production_scene.get("diagnostic_only") is True,
+        "production host-to-scene lineage differs",
+    )
+    _require(
+        len({R7_ATTEMPT_ROOT, CAMERA_ATTEMPT_ROOT, PRODUCTION_ATTEMPT_ROOT}) == 3
+        and all(
+            path.parent == RUN_PARENT
+            for path in (R7_ATTEMPT_ROOT, CAMERA_ATTEMPT_ROOT, PRODUCTION_ATTEMPT_ROOT)
+        ),
+        "R8 authoritative lineage crosses an unpinned run boundary",
+    )
+    return {
+        "r7_host_to_scene_receipt": True,
+        "r7_host_and_scene_to_legacy_execution": True,
+        "r7_host_and_scene_to_camera_receipt": True,
+        "camera_receipt_to_production_host": True,
+        "production_host_to_scene_receipt": True,
+        "authoritative_attempt_chain": [
+            str(PRODUCTION_ATTEMPT_ROOT),
+            str(CAMERA_ATTEMPT_ROOT),
+            str(R7_ATTEMPT_ROOT),
+        ],
+        "cross_run_stitching_allowed": False,
+        "lineage_complete": True,
+    }
+
+
+def _validate_r8_camera_remediation_evidence(
+    selected: Sequence[Mapping[str, Any]],
+    source_paths: Mapping[str, pathlib.Path] | None = None,
+) -> dict[str, Any]:
+    paths = _remediation_source_paths(source_paths)
+    source_seals = {}
+    documents = {}
+    png_evidence = []
+    for name, pin in R8_REMEDIATION_SOURCE_PINS.items():
+        path = paths[name]
+        expected_sha = str(pin["sha256"])
+        identity_before = _regular_file_identity(path, "R8 remediation source " + name)
+        if name.endswith("_png"):
+            route_name = name.removeprefix("r7_").removesuffix("_png")
+            route_id = (
+                "ycb."
+                + route_name
+                + (
+                    ".dining_table"
+                    if route_name == "kitchen"
+                    else ".washer_top"
+                    if route_name == "bathroom"
+                    else ".desk_top"
+                )
+            )
+            observed_png = _validate_pinned_png(path, expected_sha, "R7 " + name)
+            observed_png["route_id"] = route_id
+            observed_png["candidate_reason"] = R7_REVIEW_PNG_PINS[route_id][
+                "diagnostic"
+            ]
+            observed_png["trust_classification"] = (
+                "untrusted_candidate_input_without_capture_receipt"
+            )
+            observed_png["capture_receipt_present"] = False
+            observed_png["route_binding_verified"] = False
+            observed_png["accepted_as_visual_evidence"] = False
+            observed_png["authoritative_lineage_input"] = False
+            observed_png["cross_run_authority_used"] = False
+            png_evidence.append(observed_png)
+        elif name == "architecture_source":
+            raw = _read_regular(path, "pinned bathroom architecture source")
+            _require(
+                hashlib.sha256(raw).hexdigest() == expected_sha
+                and b'"bathroom_laundry": (("x", -1.5, 4, 8), ("x", 1.5, 4, 8), ("y", 8, -1.5, 1.5))'
+                in raw
+                and b'"bathroom_laundry": "floor_bathroom_tile"' in raw,
+                "pinned bathroom wall/floor authoring source differs",
+            )
+        else:
+            document, _ = _read_pinned_json(path, expected_sha, "R8 " + name)
+            digest_matches = (
+                document.get("content_digest")
+                == "51208e0ecc1ad1450ca6d9b14a4fb46989bff90fd8dc15422a0a47df6827c8c3"
+                if name == "house_contract"
+                else document.get("content_digest") == _content_digest(document)
+            )
+            _require(digest_matches, "R8 " + name + " content digest differs")
+            documents[name] = document
+        identity_after = _regular_file_identity(path, "R8 remediation source " + name)
+        _require(
+            identity_before == identity_after,
+            "R8 remediation source changed while sealing: " + name,
+        )
+        source_seals[name] = {
+            "path": str(path),
+            "sha256": expected_sha,
+            "identity": identity_after,
+        }
+
+    r7_scene = documents["r7_scene_receipt"]
+    r7_host = documents["r7_host_receipt"]
+    _require(
+        r7_scene.get("schema_version") == SCENE_RECEIPT_SCHEMA
+        and r7_scene.get("status") == SUCCESS_STATUS
+        and r7_scene.get("accepted_as_visual_evidence") is False
+        and r7_scene.get("promotable") is False
+        and r7_scene.get("diagnostic_only") is True
+        and r7_scene.get("claims") == CLAIMS
+        and type(r7_scene.get("gates")) is dict
+        and r7_scene["gates"].get("screenshots_captured") is False
+        and r7_host.get("schema_version") == HOST_RECEIPT_SCHEMA
+        and r7_host.get("status") == SUCCESS_STATUS
+        and r7_host.get("accepted_as_visual_evidence") is False
+        and r7_host.get("promotable") is False
+        and r7_host.get("diagnostic_only") is True
+        and r7_host.get("screenshots_captured") is False
+        and r7_host.get("claims") == CLAIMS,
+        "R7 diagnostic receipt disposition differs",
+    )
+    r7_routes = r7_host.get("screenshot_routes")
+    _require(
+        type(r7_routes) is list
+        and len(r7_routes) == 3
+        and {route.get("route_id") for route in r7_routes}
+        == set(R7_ROUTE_CAMERA_POLICY),
+        "R7 diagnostic camera route inventory differs",
+    )
+    for route in r7_routes:
+        policy = R7_ROUTE_CAMERA_POLICY[route["route_id"]]
+        _require(
+            route.get("world_transform_cm") == policy["world_transform_cm"]
+            and float(route.get("fov_deg")) == policy["fov_deg"]
+            and type(route.get("exposure")) is dict
+            and float(route["exposure"].get("exposure_compensation_ev"))
+            == policy["exposure_compensation_ev"],
+            "R7 diagnostic camera/exposure authority differs",
+        )
+    authoritative_lineage = _validate_r8_authoritative_lineage(documents)
+
+    composition = _bathroom_camera_composition_evidence(
+        selected,
+        documents["house_contract"],
+        documents["production_scene_receipt"],
+        documents["washer_asset_receipt"],
+    )
+    candidate_exposure = {
+        route["route_id"]: route["exposure"]["exposure_compensation_ev"]
+        for route in SCREENSHOT_ROUTES
+    }
+    _require(
+        candidate_exposure
+        == {
+            "ycb.kitchen.dining_table": -1.0,
+            "ycb.bathroom.washer_top": -0.75,
+            "ycb.office.desk_top": -0.75,
+        }
+        and CLAIMS["full_pbr_verified"] is False
+        and CLAIMS["visual_acceptance"] is False
+        and CLAIMS["gta_level"] is False,
+        "R8 exposure candidate or non-acceptance claims differ",
+    )
+    return {
+        "revision": "r8_bathroom_geometry_and_exposure_candidate",
+        "source_seals": source_seals,
+        "authoritative_lineage": authoritative_lineage,
+        "untrusted_r7_png_candidate_inputs": sorted(
+            png_evidence, key=lambda item: item["route_id"]
+        ),
+        "bathroom_composition": composition,
+        "exposure_candidate": {
+            "r7_ev_by_route": {
+                route_id: policy["exposure_compensation_ev"]
+                for route_id, policy in sorted(R7_ROUTE_CAMERA_POLICY.items())
+            },
+            "r8_ev_by_route": dict(sorted(candidate_exposure.items())),
+            "intent": "retain_white_wall_highlight_detail",
+            "calibration_status": "unverified_candidate_requires_capture_receipt",
+            "r7_png_authority_used": False,
+            "fresh_r8_pixel_review_required": True,
+            "white_wall_detail_verified": False,
+            "visual_acceptance": False,
+        },
+    }
+
+
+def _paths_from_sealed_remediation_evidence(
+    value: Any, label: str
+) -> dict[str, pathlib.Path]:
+    evidence = _exact_mapping(
+        value,
+        {
+            "revision",
+            "source_seals",
+            "authoritative_lineage",
+            "untrusted_r7_png_candidate_inputs",
+            "bathroom_composition",
+            "exposure_candidate",
+        },
+        label,
+    )
+    seals = evidence.get("source_seals")
+    _require(
+        type(seals) is dict and set(seals) == set(R8_REMEDIATION_SOURCE_PINS),
+        label + " source-seal inventory differs",
+    )
+    paths = {}
+    for name, seal in seals.items():
+        _exact_mapping(seal, {"path", "sha256", "identity"}, label + " " + name)
+        identity = _exact_mapping(
+            seal.get("identity"),
+            {
+                "device",
+                "inode",
+                "size_bytes",
+                "mtime_ns",
+                "ctime_ns",
+                "uid",
+                "gid",
+                "mode",
+            },
+            label + " identity " + name,
+        )
+        _require(
+            seal.get("sha256") == R8_REMEDIATION_SOURCE_PINS[name]["sha256"]
+            and type(seal.get("path")) is str
+            and all(type(item) is int and item >= 0 for item in identity.values()),
+            label + " source seal differs: " + name,
+        )
+        paths[name] = pathlib.Path(seal["path"])
+    return paths
+
+
+def _camera_remediation_execution_bundle(
+    selected: Sequence[Mapping[str, Any]],
+    copied_paths: Mapping[str, pathlib.Path],
+) -> dict[str, Any]:
+    return {
+        "schema_version": CAMERA_REMEDIATION_EXECUTION_SCHEMA,
+        "copied_evidence": _validate_r8_camera_remediation_evidence(
+            selected, copied_paths
+        ),
+        "upstream_evidence": _validate_r8_camera_remediation_evidence(selected),
+    }
+
+
+def _validate_execution_camera_remediation_evidence(
+    selected: Sequence[Mapping[str, Any]], value: Any
+) -> Mapping[str, Any]:
+    bundle = _exact_mapping(
+        value,
+        {"schema_version", "copied_evidence", "upstream_evidence"},
+        "R8 execution camera remediation evidence",
+    )
+    _require(
+        bundle.get("schema_version") == CAMERA_REMEDIATION_EXECUTION_SCHEMA,
+        "R8 execution camera remediation schema differs",
+    )
+    for lane in ("copied_evidence", "upstream_evidence"):
+        sealed = bundle[lane]
+        paths = _paths_from_sealed_remediation_evidence(sealed, "R8 execution " + lane)
+        observed = _validate_r8_camera_remediation_evidence(selected, paths)
+        _require(
+            observed == sealed,
+            "R8 remediation source changed after seal: " + lane,
+        )
+    return bundle
+
+
 def _normalized_absolute(path: pathlib.Path, label: str) -> pathlib.Path:
     value = pathlib.Path(path)
     _require(
@@ -2464,6 +3310,7 @@ def build_plan(
     )
     selected = placements(imported.assets)
     review_routes = screenshot_routes(selected)
+    remediation_evidence = _validate_r8_camera_remediation_evidence(selected)
     scripts = _script_sources()
     script_pins = {
         name: {"path": str(path), "sha256": _sha256(path)}
@@ -2482,6 +3329,7 @@ def build_plan(
             "accepted": False,
             "attempt_root": str(attempt),
             "presentation_support_evidence": support_evidence,
+            "camera_remediation_evidence": remediation_evidence,
             "source_camera": {
                 "attempt_root": str(CAMERA_ATTEMPT_ROOT),
                 "host_receipt": str(CAMERA_HOST_RECEIPT),
@@ -2672,6 +3520,17 @@ def _materialize_inputs(
     presentation_sha = _copy_file_exclusive(
         PRESENTATION_SUPPORT_MANIFEST, presentation_copy
     )
+    remediation_sources = {}
+    for name, pin in sorted(R8_REMEDIATION_SOURCE_PINS.items()):
+        source = pathlib.Path(pin["path"])
+        suffix = source.suffix or ".bin"
+        destination = evidence_root / ("r8-" + name.replace("_", "-") + suffix)
+        observed_sha = _copy_file_exclusive(source, destination)
+        _require(
+            observed_sha == pin["sha256"],
+            "copied R8 remediation source differs: " + name,
+        )
+        remediation_sources[name] = str(destination)
     _require(
         host_sha == prepared.import_candidate.host_receipt_sha256
         and import_sha == prepared.import_candidate.receipt_sha256,
@@ -2690,6 +3549,7 @@ def _materialize_inputs(
         "import_receipt_sha256": import_sha,
         "presentation_manifest": str(presentation_copy),
         "presentation_manifest_sha256": presentation_sha,
+        "remediation_sources": remediation_sources,
     }
 
 
@@ -2701,6 +3561,13 @@ def _build_execution(
     project_file = pathlib.Path(materialized["project_root"]) / PROJECT_DESCRIPTOR_NAME
     selected = placements(prepared.import_candidate.assets)
     review_routes = screenshot_routes(selected)
+    remediation_sources = {
+        name: pathlib.Path(path)
+        for name, path in materialized["remediation_sources"].items()
+    }
+    remediation_evidence = _camera_remediation_execution_bundle(
+        selected, remediation_sources
+    )
     execution = _seal(
         {
             "schema_version": EXECUTION_SCHEMA,
@@ -2728,6 +3595,7 @@ def _build_execution(
                     row["placement_id"] for row in KITCHEN_RESERVED_DRESSING_AABBS
                 ),
             },
+            "camera_remediation_evidence": remediation_evidence,
             "ycb_import_host_receipt": materialized["import_host_receipt"],
             "ycb_import_host_receipt_sha256": materialized[
                 "import_host_receipt_sha256"
@@ -2931,10 +3799,14 @@ def load_execution_for_commandlet(
         "copied YCB import host receipt",
     )
     _validate_host_document_for_commandlet(host, import_sha)
+    selected = placements(assets)
     _require(
         execution.get("assets") == list(assets)
-        and execution.get("placements") == list(placements(assets)),
+        and execution.get("placements") == list(selected),
         "YCB execution asset or placement slice differs",
+    )
+    _validate_execution_camera_remediation_evidence(
+        selected, execution.get("camera_remediation_evidence")
     )
     return execution, imported
 
@@ -3518,12 +4390,36 @@ def _published_host_matches(attempt: pathlib.Path, expected_raw: bytes) -> bool:
         os.close(descriptor)
 
 
+def _revalidate_remediation_after_unreal(
+    execution: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    _require(
+        execution.get("schema_version") == EXECUTION_SCHEMA,
+        "post-Unreal remediation execution schema differs",
+    )
+    execution_path = pathlib.Path(str(execution.get("execution_path")))
+    _require(
+        _read_regular(execution_path, "post-Unreal YCB execution manifest")
+        == _canonical_json(execution),
+        "post-Unreal YCB execution manifest changed",
+    )
+    selected = placements(execution.get("assets", []))
+    return _validate_execution_camera_remediation_evidence(
+        selected, execution.get("camera_remediation_evidence")
+    )
+
+
 def _publish_host_receipt_recovering(
-    attempt: pathlib.Path, receipt: Mapping[str, Any]
+    attempt: pathlib.Path,
+    receipt: Mapping[str, Any],
+    *,
+    prepublish_validator: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     """Publish success or recover the exact post-link inode after interruption."""
 
     raw = _canonical_json(receipt)
+    if prepublish_validator is not None:
+        prepublish_validator()
     try:
         _publish_host_receipt(attempt, receipt)
     except BaseException:
@@ -3674,8 +4570,17 @@ def apply_plan(prepared: PreparedPlan) -> dict[str, Any]:
                 "claims": copy.deepcopy(CLAIMS),
             }
         )
-        expected_success_raw = _canonical_json(host_receipt)
-        return _publish_host_receipt_recovering(attempt, host_receipt)
+
+        def validate_success_publication() -> None:
+            nonlocal expected_success_raw
+            _revalidate_remediation_after_unreal(execution)
+            expected_success_raw = _canonical_json(host_receipt)
+
+        return _publish_host_receipt_recovering(
+            attempt,
+            host_receipt,
+            prepublish_validator=validate_success_publication,
+        )
     except BaseException as exc:
         if expected_success_raw is not None and _published_host_matches(
             attempt, expected_success_raw

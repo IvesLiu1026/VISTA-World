@@ -512,7 +512,11 @@ def test_screenshot_routes_cover_exact_kitchen_bathroom_and_office_slice() -> No
         and route["exposure"]["iso"] == 400.0
         for route in routes
     )
-    assert routes[1]["exposure"]["exposure_compensation_ev"] == -0.5
+    assert [route["exposure"]["exposure_compensation_ev"] for route in routes] == [
+        -1.0,
+        -0.75,
+        -0.75,
+    ]
     assert all(
         all(item["within_frustum_with_margin"] for item in route["frustum_evidence"])
         for route in routes
@@ -554,9 +558,10 @@ def test_review_cameras_leave_known_occluded_r2_poses() -> None:
     assert locations[0] != [320.0, -240.0, 165.0]
     assert routes[0]["fov_deg"] == 60.0
     assert routes[0]["world_transform_cm"]["rotation_deg"] == [0.0, -20.0, 57.0]
-    assert locations[1] == [75.0, 620.0, 155.0]
+    assert locations[1] == [-110.0, 500.0, 170.0]
     assert locations[1] != [85.0, 600.0, 145.0]
-    assert routes[1]["fov_deg"] == 43.0
+    assert routes[1]["world_transform_cm"]["rotation_deg"] == [0.0, -17.0, 40.0]
+    assert routes[1]["fov_deg"] == 75.0
     assert locations[2] == [630.0, 150.0, 170.0]
     assert locations[2] != [525.0, 100.0, 145.0]
     assert locations[2][0] >= 620.0
@@ -575,6 +580,230 @@ def test_legacy_bathroom_overview_cannot_claim_ycb_closeup_readiness() -> None:
 
     with pytest.raises(runner.YcbSceneError, match="does not frame"):
         runner._frustum_evidence(route, selected)
+
+
+def test_r8_bathroom_camera_is_bound_to_pinned_room_washer_and_r7_evidence() -> None:
+    if not all(
+        pathlib.Path(pin["path"]).is_file()
+        for pin in runner.R8_REMEDIATION_SOURCE_PINS.values()
+    ):
+        pytest.skip("server-side pinned R7/production evidence is unavailable")
+    selected = runner.placements(_assets())
+
+    evidence = runner._validate_r8_camera_remediation_evidence(selected)
+    composition = evidence["bathroom_composition"]
+
+    assert composition["horizontal_frustum_boundary_hits"] == [
+        {
+            "wall_id": "east",
+            "distance_cm": 260.247698,
+            "world_cm": [150.0, 511.351845, 90.434294],
+        },
+        {
+            "wall_id": "east",
+            "distance_cm": 339.405895,
+            "world_cm": [150.0, 718.165904, 66.233204],
+        },
+        {
+            "wall_id": "north",
+            "distance_cm": 307.283854,
+            "world_cm": [-43.491601, 800.0, 76.053898],
+        },
+    ]
+    assert composition["floor_interior_ray"]["hits_floor_before_wall"] is True
+    assert composition["background_wall_ray"]["wall_id"] == "east"
+    assert composition["washer_full_bounds_corner_count"] == 8
+    assert composition["washer_minimum_vertical_clearance_deg"] >= 4.0
+    assert composition["washer_and_two_ycb_bounds_within_frustum"] is True
+    assert evidence["exposure_candidate"]["fresh_r8_pixel_review_required"] is True
+    assert evidence["exposure_candidate"]["white_wall_detail_verified"] is False
+    assert evidence["exposure_candidate"]["visual_acceptance"] is False
+    assert evidence["authoritative_lineage"]["lineage_complete"] is True
+    assert evidence["authoritative_lineage"]["cross_run_stitching_allowed"] is False
+    assert all(
+        item["trust_classification"]
+        == "untrusted_candidate_input_without_capture_receipt"
+        and item["capture_receipt_present"] is False
+        and item["route_binding_verified"] is False
+        and item["accepted_as_visual_evidence"] is False
+        and item["authoritative_lineage_input"] is False
+        and item["cross_run_authority_used"] is False
+        for item in evidence["untrusted_r7_png_candidate_inputs"]
+    )
+    assert evidence["exposure_candidate"]["r7_png_authority_used"] is False
+
+
+def test_r8_bathroom_geometry_guard_rejects_external_house_drift() -> None:
+    if not all(
+        pathlib.Path(pin["path"]).is_file()
+        for name, pin in runner.R8_REMEDIATION_SOURCE_PINS.items()
+        if name
+        in {"house_contract", "production_scene_receipt", "washer_asset_receipt"}
+    ):
+        pytest.skip("server-side pinned production evidence is unavailable")
+    selected = runner.placements(_assets())
+    house = json.loads(runner.PRODUCTION_HOUSE_CONTRACT.read_text())
+    production = json.loads(runner.PRODUCTION_SCENE_RECEIPT.read_text())
+    washer = json.loads(runner.WASHER_ASSET_RECEIPT.read_text())
+    bathroom = next(
+        room for room in house["rooms"] if room["room_id"] == runner.BATHROOM_ROOM
+    )
+    bathroom["bounds_m"]["max_m"][1] = 1.9
+
+    with pytest.raises(runner.YcbSceneError, match="room geometry differs"):
+        runner._bathroom_camera_composition_evidence(
+            selected, house, production, washer
+        )
+
+
+def test_r8_bathroom_geometry_guard_rejects_unproven_open_boundary_view(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if not all(
+        pathlib.Path(pin["path"]).is_file()
+        for name, pin in runner.R8_REMEDIATION_SOURCE_PINS.items()
+        if name
+        in {"house_contract", "production_scene_receipt", "washer_asset_receipt"}
+    ):
+        pytest.skip("server-side pinned production evidence is unavailable")
+    selected = runner.placements(_assets())
+    house = json.loads(runner.PRODUCTION_HOUSE_CONTRACT.read_text())
+    production = json.loads(runner.PRODUCTION_SCENE_RECEIPT.read_text())
+    washer = json.loads(runner.WASHER_ASSET_RECEIPT.read_text())
+    routes = copy.deepcopy(runner.SCREENSHOT_ROUTES)
+    routes[1]["world_transform_cm"]["rotation_deg"][2] = 35.0
+    monkeypatch.setattr(runner, "SCREENSHOT_ROUTES", routes)
+
+    with pytest.raises(runner.YcbSceneError, match="open south boundary"):
+        runner._bathroom_camera_composition_evidence(
+            selected, house, production, washer
+        )
+
+
+def test_r8_png_guard_rejects_tampered_visual_evidence(tmp_path: pathlib.Path) -> None:
+    pin = runner.R7_REVIEW_PNG_PINS["ycb.bathroom.washer_top"]
+    source = pathlib.Path(pin["path"])
+    if not source.is_file():
+        pytest.skip("server-side pinned R7 PNG is unavailable")
+    tampered = bytearray(source.read_bytes())
+    tampered[-1] ^= 1
+    copied = _write(tmp_path / "tampered.png", bytes(tampered))
+
+    with pytest.raises(runner.YcbSceneError, match="SHA-256 differs"):
+        runner._validate_pinned_png(copied, pin["sha256"], "tampered R7 PNG")
+
+
+@pytest.mark.parametrize(
+    ("document_name", "field_path", "message"),
+    [
+        ("r7_host_receipt", ("scene_receipt_sha256",), "R7 host receipt lineage"),
+        (
+            "camera_host_receipt",
+            ("source_hybrid", "host_receipt_sha256"),
+            "camera-to-production host lineage",
+        ),
+        (
+            "production_host_receipt",
+            ("scene_receipt_sha256",),
+            "production host-to-scene lineage",
+        ),
+    ],
+)
+def test_r8_authoritative_lineage_rejects_cross_run_stitching(
+    document_name: str, field_path: tuple[str, ...], message: str
+) -> None:
+    required = {
+        "r7_host_receipt",
+        "r7_scene_receipt",
+        "r7_execution",
+        "camera_host_receipt",
+        "production_host_receipt",
+        "production_scene_receipt",
+    }
+    if not all(
+        pathlib.Path(runner.R8_REMEDIATION_SOURCE_PINS[name]["path"]).is_file()
+        for name in required
+    ):
+        pytest.skip("server-side pinned lineage receipts are unavailable")
+    documents = {
+        name: json.loads(
+            pathlib.Path(runner.R8_REMEDIATION_SOURCE_PINS[name]["path"]).read_text()
+        )
+        for name in required
+    }
+    target = documents[document_name]
+    for field in field_path[:-1]:
+        target = target[field]
+    target[field_path[-1]] = "f" * 64
+
+    with pytest.raises(runner.YcbSceneError, match=message):
+        runner._validate_r8_authoritative_lineage(documents)
+
+
+def test_r8_execution_schema_does_not_redefine_legacy_r7_v1() -> None:
+    if not runner.R7_EXECUTION.is_file():
+        pytest.skip("server-side pinned R7 execution is unavailable")
+    r7_execution = json.loads(runner.R7_EXECUTION.read_text())
+
+    assert runner.LEGACY_EXECUTION_SCHEMA.endswith("/v1")
+    assert runner.EXECUTION_SCHEMA.endswith("/v2")
+    assert runner.EXECUTION_SCHEMA != runner.LEGACY_EXECUTION_SCHEMA
+    assert r7_execution["schema_version"] == runner.LEGACY_EXECUTION_SCHEMA
+    assert set(r7_execution) == runner.LEGACY_EXECUTION_KEYS
+    assert runner.EXECUTION_KEYS == runner.LEGACY_EXECUTION_KEYS | {
+        "camera_remediation_evidence"
+    }
+    assert "camera_remediation_evidence" not in r7_execution
+
+
+def test_post_ue_revalidation_detects_same_uid_rewrite_before_success_publish(
+    tmp_path: pathlib.Path,
+) -> None:
+    if not all(
+        pathlib.Path(pin["path"]).is_file()
+        for pin in runner.R8_REMEDIATION_SOURCE_PINS.values()
+    ):
+        pytest.skip("server-side pinned R8 remediation inputs are unavailable")
+    selected = runner.placements(_assets())
+    copied_host = _write(
+        tmp_path / "r7-host-copy.json", runner.R7_HOST_RECEIPT.read_bytes()
+    )
+    copied_paths = runner._remediation_source_paths()
+    copied_paths["r7_host_receipt"] = copied_host
+    sealed_copy = runner._validate_r8_camera_remediation_evidence(
+        selected, copied_paths
+    )
+    bundle = {
+        "schema_version": runner.CAMERA_REMEDIATION_EXECUTION_SCHEMA,
+        "copied_evidence": sealed_copy,
+        "upstream_evidence": runner._validate_r8_camera_remediation_evidence(selected),
+    }
+    original_identity = sealed_copy["source_seals"]["r7_host_receipt"]["identity"]
+    copied_host.write_bytes(copied_host.read_bytes())
+    copied_host.chmod(0o600)
+    assert runner._sha256(copied_host) == runner.R7_HOST_RECEIPT_SHA256
+    assert runner._regular_file_identity(copied_host, "rewritten test source") != (
+        original_identity
+    )
+    attempt = tmp_path / "attempt"
+    attempt.mkdir(mode=0o700)
+    receipt = runner._seal(
+        {
+            "schema_version": runner.HOST_RECEIPT_SCHEMA,
+            "status": runner.SUCCESS_STATUS,
+            "attempt_root": str(attempt),
+        }
+    )
+
+    with pytest.raises(runner.YcbSceneError, match="changed after seal"):
+        runner._publish_host_receipt_recovering(
+            attempt,
+            receipt,
+            prepublish_validator=lambda: (
+                runner._validate_execution_camera_remediation_evidence(selected, bundle)
+            ),
+        )
+    assert not (attempt / runner.HOST_RECEIPT_NAME).exists()
 
 
 def test_origin_only_office_camera_is_rejected_for_clipped_power_drill_bounds() -> None:
@@ -716,6 +945,15 @@ def test_dry_run_is_deterministic_and_zero_write(
             "reserved_dressing_placement_ids": sorted(
                 item["placement_id"] for item in runner.KITCHEN_RESERVED_DRESSING_AABBS
             ),
+        },
+    )
+    monkeypatch.setattr(
+        runner,
+        "_validate_r8_camera_remediation_evidence",
+        lambda selected: {
+            "revision": "test_r8_remediation_evidence",
+            "placement_count": len(selected),
+            "visual_acceptance": False,
         },
     )
     imported = _candidate(tmp_path, monkeypatch)
