@@ -48,19 +48,73 @@ def _placement(
 
 def _evidence() -> tuple[dict, dict]:
     placements = [
-        _placement(assembler._LIVING_IDS[0], "hssd.static.sofa", [-1.35, 1.1, 0], -90, "floor"),
-        _placement(assembler._LIVING_IDS[1], "hssd.static.coffee_table", [0, 0.3, 0], 0, "floor"),
-        _placement(assembler._LIVING_IDS[2], "hssd.static.coffee_cup", [-0.25, 0.3, 0.441754], 18, "surface"),
-        _placement(assembler._LIVING_IDS[3], "hssd.static.coffee_cup", [0.25, 0.3, 0.441754], -22, "surface"),
-        _placement(assembler._LIVING_IDS[4], "hssd.static.flip_flops", [1.4, -0.5, 0.03], 25, "floor"),
-        _placement(assembler._LIVING_IDS[5], "hssd.static.flip_flops", [1.1, -0.7, 0.03], 5, "floor"),
-        _placement(assembler._LIVING_IDS[6], "hssd.static.plant", [2.15, 1.55, 0], -12, "wall_edge"),
-        _placement(assembler._LIVING_IDS[7], "hssd.static.phone", [0, 0.3, 0.441754], 3, "surface"),
-        _placement(assembler._LIVING_IDS[8], "hssd.static.bag", [2, -1.3, 0], -18, "wall_edge"),
-        _placement(assembler._LIVING_IDS[9], "hssd.static.accent_chair", [1.7, 0.5, 0], 145, "floor"),
+        _placement(
+            assembler._LIVING_IDS[0], "hssd.static.sofa", [-1.35, 1.1, 0], -90, "floor"
+        ),
+        _placement(
+            assembler._LIVING_IDS[1],
+            "hssd.static.coffee_table",
+            [0, 0.3, 0],
+            0,
+            "floor",
+        ),
+        _placement(
+            assembler._LIVING_IDS[2],
+            "hssd.static.coffee_cup",
+            [-0.25, 0.3, 0.441754],
+            18,
+            "surface",
+        ),
+        _placement(
+            assembler._LIVING_IDS[3],
+            "hssd.static.coffee_cup",
+            [0.25, 0.3, 0.441754],
+            -22,
+            "surface",
+        ),
+        _placement(
+            assembler._LIVING_IDS[4],
+            "hssd.static.flip_flops",
+            [1.4, -0.5, 0.03],
+            25,
+            "floor",
+        ),
+        _placement(
+            assembler._LIVING_IDS[5],
+            "hssd.static.flip_flops",
+            [1.1, -0.7, 0.03],
+            5,
+            "floor",
+        ),
+        _placement(
+            assembler._LIVING_IDS[6],
+            "hssd.static.plant",
+            [2.15, 1.55, 0],
+            -12,
+            "wall_edge",
+        ),
+        _placement(
+            assembler._LIVING_IDS[7],
+            "hssd.static.phone",
+            [0, 0.3, 0.441754],
+            3,
+            "surface",
+        ),
+        _placement(
+            assembler._LIVING_IDS[8], "hssd.static.bag", [2, -1.3, 0], -18, "wall_edge"
+        ),
+        _placement(
+            assembler._LIVING_IDS[9],
+            "hssd.static.accent_chair",
+            [1.7, 0.5, 0],
+            145,
+            "floor",
+        ),
     ]
     documents = {
-        "build-plan.json": {"license_scope": {"use_class": "private_noncommercial_research_only"}},
+        "build-plan.json": {
+            "license_scope": {"use_class": "private_noncommercial_research_only"}
+        },
         "scene-plan.json": {"placements": placements},
     }
     receipts = {
@@ -75,14 +129,42 @@ def _evidence() -> tuple[dict, dict]:
     return documents, receipts
 
 
-def test_dry_run_is_zero_write_and_non_promoting(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def _poly_evidence(root: pathlib.Path) -> dict:
+    return assembler.seal_document(
+        {
+            "schema_version": "simworld.vista.hssd-living-poly-haven-input/v1",
+            "path": str(root),
+            "receipt": {
+                **assembler._POLY_HAVEN_RECEIPT_REFERENCE,
+                "relative_path": "acquisition-receipt.json",
+                "license": assembler._POLY_HAVEN_LICENSE,
+            },
+            "assets": {asset_id: {} for asset_id in assembler._POLY_HAVEN_ASSET_PINS},
+            "selected_asset_count": 6,
+            "selected_payload_count": 28,
+            "validation_policy": "test-fixture",
+            "binary_payload_in_git": False,
+        }
+    )
+
+
+def test_dry_run_is_zero_write_and_non_promoting(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     documents, receipts = _evidence()
     source = tmp_path / "source"
     source.mkdir()
     blender = tmp_path / "blender"
     blender.write_bytes(b"fixed-test-binary")
     target = tmp_path / "must-not-exist"
-    monkeypatch.setattr(assembler, "_validate_source_run", lambda *_: (documents, receipts))
+    monkeypatch.setattr(
+        assembler, "_validate_source_run", lambda *_: (documents, receipts)
+    )
+    monkeypatch.setattr(
+        assembler,
+        "_validate_poly_haven_bundle",
+        lambda *_: _poly_evidence(source),
+    )
 
     plan = assembler.build_assembly_plan(
         source_run=source,
@@ -101,14 +183,14 @@ def test_dry_run_is_zero_write_and_non_promoting(tmp_path: pathlib.Path, monkeyp
     assert all(plan["preflight_gates"].values())
     assert not target.exists()
     assert plan["content_digest"] == assembler.content_digest(plan)
-    assert plan["render"]["camera_location_m"] == [2.15, -1.75, 1.62]
-    assert plan["render"]["camera_target_m"] == [-0.10, 0.60, 1.12]
+    assert plan["render"]["camera_location_m"] == [0.75, -1.75, 1.62]
+    assert plan["render"]["camera_target_m"] == [-0.35, 0.65, 1.05]
     assert plan["render"]["lens_mm"] == 32.0
     assert plan["render"]["aperture_fstop"] == 8.0
     assert plan["render"]["color_management"] == {
         "view_transform": "AgX",
         "look": "AgX - Medium High Contrast",
-        "exposure_ev": -0.5,
+        "exposure_ev": -0.75,
     }
     assert plan["render"]["cycles"]["samples"] == 64
     assert plan["render"]["cycles"]["adaptive_sampling"] is True
@@ -117,6 +199,14 @@ def test_dry_run_is_zero_write_and_non_promoting(tmp_path: pathlib.Path, monkeyp
     assert plan["render"]["lighting"]["window_day"]["energy_w"] == 330.0
     assert plan["render"]["lighting"]["ceiling_soft"]["energy_w"] == 80.0
     assert plan["render"]["lighting"]["camera_fill"]["energy_w"] == 20.0
+    assert plan["placements"][-1]["visual_import_policy"] == (
+        "replace_with_poly_haven_collection"
+    )
+    assert plan["r3_dressing"]["content_digest"] == (
+        "a6f4d28b75fac17cd4e9b135132c066b86df0bdd4a3064cf7ddfdddb2631f941"
+    )
+    assert len(plan["r3_dressing"]["model_instances"]) == 4
+    assert plan["poly_haven"]["selected_payload_count"] == 28
 
 
 @pytest.mark.parametrize(
@@ -158,7 +248,9 @@ def test_execute_requires_explicit_output_and_intact_plan() -> None:
         assembler.execute_assembly({"mode": "dry_run"})
 
 
-def test_terminal_receipt_cannot_auto_promote_visual_acceptance(tmp_path: pathlib.Path) -> None:
+def test_terminal_receipt_cannot_auto_promote_visual_acceptance(
+    tmp_path: pathlib.Path,
+) -> None:
     plan = assembler.seal_document({"mode": "execute"})
     receipt = assembler.seal_document(
         {
@@ -210,12 +302,112 @@ def test_output_rejects_source_run_descendant(tmp_path: pathlib.Path) -> None:
     source.mkdir()
     target = source / "render-attempt"
 
-    with pytest.raises(
-        assembler.SceneAssemblyError, match="OUTPUT_INSIDE_SOURCE_RUN"
-    ):
+    with pytest.raises(assembler.SceneAssemblyError, match="OUTPUT_INSIDE_SOURCE_RUN"):
         assembler._prepare_output_root(target, source_root=source)
 
     assert not target.exists()
+
+
+def test_output_rejects_poly_haven_descendant(tmp_path: pathlib.Path) -> None:
+    source = tmp_path / "fixed-source"
+    source.mkdir()
+    poly_haven = tmp_path / "poly-haven-acquisition"
+    poly_haven.mkdir()
+    target = poly_haven / "render-attempt"
+
+    with pytest.raises(assembler.SceneAssemblyError, match="OUTPUT_INSIDE_POLY_HAVEN"):
+        assembler._prepare_output_root(
+            target,
+            source_root=source,
+            poly_haven_root=poly_haven,
+        )
+
+    assert not target.exists()
+
+
+def test_poly_haven_receipt_tree_and_payload_pins_are_exact() -> None:
+    assert assembler._POLY_HAVEN_RECEIPT_REFERENCE == {
+        "provider": "poly_haven",
+        "receipt_schema_version": "simworld.vista.playable-home-poly-haven-receipt/v1",
+        "receipt_digest": "a8a6b03c8fae71b299a2fcb36764e2dc1ec32c1e4dcd0b30ff0d3db3223fef70",
+        "receipt_file_sha256": "6b894d75f61115a2d2d63769c091ae4da511e9ce9697cd0809fff1b3d1f910a3",
+        "acquisition_manifest_sha256": "317ca0f30409d04365ae8d7b5aa096e8454d8bc8fbe13a8b386935b19e719774",
+    }
+    assert set(assembler._POLY_HAVEN_ASSET_PINS) == {
+        "white_oak_veneer",
+        "poly_wool_herringbone",
+        "modern_ceiling_lamp_01",
+        "throw_pillows_01",
+        "potted_plant_04",
+        "modern_arm_chair_01",
+    }
+    assert (
+        sum(len(pin["files"]) for pin in assembler._POLY_HAVEN_ASSET_PINS.values())
+        == 28
+    )
+    assert (
+        assembler._POLY_HAVEN_ASSET_PINS["white_oak_veneer"]["source_tree_sha256"]
+        == "16b8c64f8fdb4301724373913909978a2c31fce1941a55677f4437b5b5976661"
+    )
+    assert (
+        assembler._POLY_HAVEN_ASSET_PINS["modern_arm_chair_01"]["files"][0][2]
+        == "c6c92b5a07be4ab37e48fbf43c7ff233b90b1e364987e2bae790aed501fe97f6"
+    )
+
+
+def test_poly_haven_selected_asset_validation_rejects_one_byte_pin_drift(
+    tmp_path: pathlib.Path,
+) -> None:
+    def fake_asset(asset_id: str, pin: dict) -> types.SimpleNamespace:
+        files = tuple(
+            types.SimpleNamespace(
+                relative_path=relative,
+                size_bytes=size,
+                sha256=digest,
+                semantic=(),
+                dimensions_px=None,
+            )
+            for relative, size, digest in pin["files"]
+        )
+        return types.SimpleNamespace(
+            asset_id=asset_id,
+            logical_asset_id=pin["logical_asset_id"],
+            asset_type=pin["asset_type"],
+            resolution=pin["resolution"],
+            provider_files_hash=pin["provider_files_hash"],
+            source_relative_root=pin["source_relative_root"],
+            primary_relative_path=pin["primary_relative_path"],
+            source_tree_sha256=pin["source_tree_sha256"],
+            files=files,
+        )
+
+    pins = {
+        asset_id: dict(pin)
+        for asset_id, pin in assembler._POLY_HAVEN_ASSET_PINS.items()
+    }
+    external = types.SimpleNamespace(
+        root=tmp_path,
+        assets=tuple(fake_asset(asset_id, pin) for asset_id, pin in pins.items()),
+        receipt_reference=lambda: assembler._POLY_HAVEN_RECEIPT_REFERENCE,
+    )
+    validated = assembler._validate_poly_haven_asset_set(external)
+    assert validated["selected_payload_count"] == 28
+
+    bad_assets = list(external.assets)
+    bad = bad_assets[0]
+    first = bad.files[0]
+    bad.files = (
+        types.SimpleNamespace(
+            relative_path=first.relative_path,
+            size_bytes=first.size_bytes + 1,
+            sha256=first.sha256,
+            semantic=(),
+            dimensions_px=None,
+        ),
+        *bad.files[1:],
+    )
+    with pytest.raises(assembler.SceneAssemblyError, match="POLY_HAVEN_ASSET_DRIFT"):
+        assembler._validate_poly_haven_asset_set(external)
 
 
 def _load_worker(monkeypatch: pytest.MonkeyPatch):
@@ -230,6 +422,85 @@ def _load_worker(monkeypatch: pytest.MonkeyPatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_worker_pins_r3_dependencies_and_new_image_only_remap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = _load_worker(monkeypatch)
+    source = pathlib.Path(worker.__file__).read_text(encoding="utf-8")
+
+    assert worker.EXPECTED_R3_DRESSING_DIGEST == assembler.content_digest(
+        assembler._R3_DRESSING_BODY
+    )
+    assert (
+        worker.EXPECTED_POLY_HAVEN_RECEIPT["receipt_file_sha256"]
+        == (assembler._POLY_HAVEN_RECEIPT_REFERENCE["receipt_file_sha256"])
+    )
+    assert "bpy.data.libraries.load(str(blend_path), link=False)" in source
+    assert "new_images = set(bpy.data.images) - before_images" in source
+    assert "image.reload()" in source
+    assert "appended model references a pre-existing/unpinned image" in source
+
+
+def test_worker_forces_lazy_image_decode_before_has_data_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = _load_worker(monkeypatch)
+
+    class LazyPixels:
+        def __init__(self, image: types.SimpleNamespace) -> None:
+            self.image = image
+
+        def __getitem__(self, index: int) -> float:
+            assert index == 0
+            self.image.has_data = True
+            return 0.25
+
+    image = types.SimpleNamespace(has_data=False)
+    image.pixels = LazyPixels(image)
+
+    worker._force_image_decode(image, "receipt-bound.jpg")
+
+    assert image.has_data is True
+
+
+def test_worker_rejects_lazy_image_decode_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = _load_worker(monkeypatch)
+
+    class BrokenPixels:
+        def __getitem__(self, index: int) -> float:
+            raise RuntimeError("decoder failed")
+
+    image = types.SimpleNamespace(has_data=False, pixels=BrokenPixels())
+
+    with pytest.raises(RuntimeError, match="image payload did not decode"):
+        worker._force_image_decode(image, "broken.jpg")
+
+
+def test_r3_dressing_config_replaces_chair_and_preserves_modifiers() -> None:
+    dressing = assembler._R3_DRESSING_BODY
+    models = {item["asset_id"]: item for item in dressing["model_instances"]}
+
+    assert dressing["surface_materials"]["floor"]["asset_id"] == ("white_oak_veneer")
+    assert dressing["surface_materials"]["rug"]["asset_id"] == ("poly_wool_herringbone")
+    assert models["modern_ceiling_lamp_01"]["transform"]["location_m"] == [
+        0.0,
+        0.25,
+        1.827356338501,
+    ]
+    assert models["potted_plant_04"]["expected_modifiers"]["potted_plant_04_plant"] == [
+        "NODES",
+        "WEIGHTED_NORMAL",
+    ]
+    chair = models["modern_arm_chair_01"]
+    assert chair["instance_id"] == "hssd.r1/living_room.rolling_chair.01"
+    assert chair["replacement_for"] == {
+        "source_asset_id": "hssd.static.accent_chair",
+        "interaction_policy": "visual_only_hidden_r1_proxy_remains_authoritative",
+    }
 
 
 def test_saved_png_metrics_reject_whitewash(
