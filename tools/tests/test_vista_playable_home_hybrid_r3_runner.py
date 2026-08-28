@@ -1005,6 +1005,25 @@ def test_upstream_commandlet_pin_has_one_terminal_run() -> None:
     )
 
 
+def test_execution_manifest_sha_survives_later_contract_validation(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = tmp_path / "hybrid-r3-execution.json"
+    manifest.write_text('{"schema_version":"fixture"}', encoding="utf-8")
+    manifest_sha = hashlib.sha256(manifest.read_bytes()).hexdigest()
+    monkeypatch.setenv(runner.EXECUTION_ENV, str(manifest))
+    monkeypatch.setenv(runner.EXECUTION_SHA_ENV, manifest_sha)
+
+    path, observed_sha, execution = runner._load_execution_manifest_from_environment()
+
+    assert path == manifest
+    assert observed_sha == manifest_sha
+    assert execution == {"schema_version": "fixture"}
+    source = pathlib.Path(runner.__file__).read_text(encoding="utf-8")
+    assert "expected_contract_sha" in source
+    assert "str(manifest_path),\n        execution_manifest_sha," in source
+
+
 def test_upstream_helper_loader_executes_only_allowlisted_definitions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
