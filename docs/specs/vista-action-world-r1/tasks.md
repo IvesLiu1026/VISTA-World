@@ -113,8 +113,15 @@ Depends on: requirements.md, design.md
     action coverage, packaged render and performance tier
   - Progress: the local UE 5.7.3 MetaHuman Character plugin, 29 presets, native
     retarget rigs, UEFN locomotion set and Manny/Quinn fallback are inventoried.
-    Provider contract, entitlement receipt, assembled character and packaged
-    render remain open. SimWorld Human_Avatar motion reuse is license-blocked.
+    The Vivian provider now has a closed byte-pinned contract, zero-write-first
+    materializer and a fail-closed runtime visual bridge. A real UE 5.7.3
+    lifecycle smoke verifies the effective optimized/high legacy pipeline while
+    performing no cloud, build or save calls. The bridge compiles for UnrealEditor
+    Development plus UnrealGame Development/Shipping and preserves Manny with
+    `photoreal_character_unavailable` until every visual component is ready. Epic
+    device authorization, the assembled candidate, component/package receipts,
+    retarget evidence and player-eye UE acceptance remain open.
+    SimWorld Human_Avatar motion reuse is license-blocked.
 
 - [ ] T13. Replace placeholder motions with semantic variants
   - Files: action catalog, animation authoring sources/recipes and UE content receipts
@@ -143,9 +150,10 @@ Depends on: requirements.md, design.md
 - Completed in source: T8 now has a 2K production default, honest effective vs
   design-minimum texel-density receipts, metric UV generation and GLB-level UV
   evidence gates. Full-scene 2K and UE observation remain acceptance work.
-- Active next slices: reconcile visible support/seat surfaces with HouseSpec,
-  add eye-level review cameras, bind T4 to EventSpec/runtime evidence, then
-  create the T12 MetaHuman provider before T5/T6 contact actions.
+- Active next slices: complete Epic device authorization and the first private
+  assembled Vivian candidate, assemble and visually audit the catalog-verified
+  HSSD living-room slice, then combine both in an eye-level UE candidate before
+  T5/T6 contact actions.
 - Golden Room R2 smoke evidence: append-only accepted forge
   `golden-room-r2-smoke-20260827T212250Z` contains 45 placements, 40 external
   dressing instances, 211 components and seven GLBs. All 424 vertical-slice
@@ -154,6 +162,20 @@ Depends on: requirements.md, design.md
   back to the manifest. The retained-output gate passes. Its receipt remains
   `smoke_only`, `accepted_as_r2_visual_evidence=false`; the
   overview is diagnostic evidence, not a GTA-quality acceptance image.
+- Golden Room R2 player-eye rejection: the first 1920x1080 eye-level render
+  proved that real CC0 PBR props alone do not close the requested fidelity bar;
+  the procedural sofa and wall/exposure treatment remain visibly blockout. The
+  other two renders were stopped, and the partial output is retained only as
+  rejected evidence under `golden-room-r2-player-eye-20260828T102000Z`.
+- HSSD R1 source contract: 26 exact private-research HSSD models and 60
+  unassembled plan placements (ten per room across six rooms) are byte-pinned.
+  Catalog name, WordNet/category metadata and multi-object state are sealed but
+  visual review remains pending. A real Blender 4.5.8 execution produced and
+  revalidated 26 normalized PBR GLBs plus 26 receipts under the private external
+  run `hssd-private-research-r4-20260828t122000z`; the result intentionally says
+  `scene_assembly_status=plan_only_not_assembled` and is not accepted scene
+  evidence. Static visual use is allowed only under CC-BY-NC-4.0; fridge, desk,
+  nightstand, wardrobe and stove articulation remain explicitly pending.
 - Runtime/GPU ownership: none; current live package remains untouched.
 
 ## Notes
