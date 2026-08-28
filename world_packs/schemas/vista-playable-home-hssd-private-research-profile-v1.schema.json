@@ -1,0 +1,435 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simworld.org/schemas/vista-playable-home-hssd-private-research-profile-v1.schema.json",
+  "title": "VISTA Playable Home HSSD Private Research Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "house_id",
+    "house_revision",
+    "source_house_content_digest",
+    "source_binding_plan",
+    "dataset",
+    "license_scope",
+    "payload_policy",
+    "texture_transport_policy",
+    "source_assets",
+    "catalog_semantic_receipts",
+    "placements",
+    "articulated_sibling_candidates",
+    "coverage",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "simworld.vista.playable-home-hssd-private-research-profile/v1"},
+    "profile_id": {"const": "hssd_private_research_r1"},
+    "house_id": {"const": "home.r1"},
+    "house_revision": {"const": "vista_playable_home_r1"},
+    "source_house_content_digest": {"$ref": "#/$defs/digest"},
+    "source_binding_plan": {"$ref": "#/$defs/sourceBindingPlan"},
+    "dataset": {"$ref": "#/$defs/dataset"},
+    "license_scope": {"$ref": "#/$defs/licenseScope"},
+    "payload_policy": {"$ref": "#/$defs/payloadPolicy"},
+    "texture_transport_policy": {"$ref": "#/$defs/textureTransportPolicy"},
+    "source_assets": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/sourceAsset"}
+    },
+    "catalog_semantic_receipts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/catalogSemanticReceipt"}
+    },
+    "placements": {
+      "type": "array",
+      "minItems": 60,
+      "maxItems": 4096,
+      "items": {"$ref": "#/$defs/placement"}
+    },
+    "articulated_sibling_candidates": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 128,
+      "items": {"$ref": "#/$defs/articulatedCandidate"}
+    },
+    "coverage": {"$ref": "#/$defs/coverage"},
+    "content_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitRevision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "modelId": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "roomId": {
+      "enum": [
+        "home.r1/room.entry_hall",
+        "home.r1/room.living_room",
+        "home.r1/room.kitchen_dining",
+        "home.r1/room.bedroom",
+        "home.r1/room.office",
+        "home.r1/room.bathroom_laundry"
+      ]
+    },
+    "semanticCategory": {
+      "enum": [
+        "accent_chair",
+        "bag",
+        "bathtub",
+        "bed",
+        "cabinet",
+        "clothes",
+        "coffee_cup",
+        "coffee_table",
+        "cooking_pot",
+        "desk",
+        "dining_chair",
+        "dining_table",
+        "faucet",
+        "flip_flops",
+        "fridge",
+        "ladder",
+        "laundry_basket",
+        "nightstand",
+        "phone",
+        "plant",
+        "rolling_chair",
+        "shoe_bench",
+        "sofa",
+        "storage_box",
+        "stove",
+        "washer"
+      ]
+    },
+    "vector3m": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "number", "minimum": -1000, "maximum": 1000},
+        {"type": "number", "minimum": -1000, "maximum": 1000},
+        {"type": "number", "minimum": -1000, "maximum": 1000}
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "dimensions3m": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "number", "exclusiveMinimum": 0, "maximum": 5},
+        {"type": "number", "exclusiveMinimum": 0, "maximum": 5},
+        {"type": "number", "exclusiveMinimum": 0, "maximum": 5}
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "rotation3": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "number", "minimum": -360, "maximum": 360},
+        {"type": "number", "minimum": -360, "maximum": 360},
+        {"type": "number", "minimum": -360, "maximum": 360}
+      ],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "identityScale": {
+      "type": "array",
+      "prefixItems": [{"const": 1}, {"const": 1}, {"const": 1}],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "roomLocalTransform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["coordinate_frame", "location_m", "rotation_deg", "scale"],
+      "properties": {
+        "coordinate_frame": {"const": "room_local_m"},
+        "location_m": {"$ref": "#/$defs/vector3m"},
+        "rotation_deg": {"$ref": "#/$defs/rotation3"},
+        "scale": {"$ref": "#/$defs/identityScale"}
+      }
+    },
+    "sourceBindingPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "content_digest", "source_normalized_manifest_digest"],
+      "properties": {
+        "schema_version": {"const": "simworld.vista.playable-home-hssd-binding-plan/v1"},
+        "content_digest": {"const": "07ba1221aac1bfd39651953cdf932bbb7d43e39f94d4107020aa96d1b43db44b"},
+        "source_normalized_manifest_digest": {"const": "fa74ca115fb93e3ab658a5b253b96615bdcf3390d5bf9afbb01a7b05e50ea745"}
+      }
+    },
+    "datasetLicense": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spdx", "url", "attribution_required", "modification_notice_required", "commercial_use"],
+      "properties": {
+        "spdx": {"const": "CC-BY-NC-4.0"},
+        "url": {"const": "https://creativecommons.org/licenses/by-nc/4.0/"},
+        "attribution_required": {"const": true},
+        "modification_notice_required": {"const": true},
+        "commercial_use": {"const": "prohibited_without_separate_permission"}
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "project_url", "dataset_revision", "readme_relpath", "readme_sha256", "license"],
+      "properties": {
+        "name": {"const": "Habitat Synthetic Scenes Dataset (HSSD)"},
+        "project_url": {"const": "https://3dlg-hcvc.github.io/hssd/"},
+        "dataset_revision": {"const": "4369cb9876214c7fbebcf552eb532380e4d287e4"},
+        "readme_relpath": {"const": "README.md"},
+        "readme_sha256": {"const": "4509914d584031173390bf5f41722ec25e19de3f1e0ea54a423eadf63073d49c"},
+        "license": {"$ref": "#/$defs/datasetLicense"}
+      }
+    },
+    "licenseScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["use_class", "commercial_release", "public_payload_distribution", "attribution_notice"],
+      "properties": {
+        "use_class": {"const": "private_noncommercial_research_only"},
+        "commercial_release": {"const": "blocked"},
+        "public_payload_distribution": {"const": "prohibited"},
+        "attribution_notice": {
+          "const": "HSSD source models; deterministically normalized and used only for private non-commercial VISTA World research."
+        }
+      }
+    },
+    "payloadPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["git_contents", "binary_payload_location", "accepted_build_outputs", "network_fallback"],
+      "properties": {
+        "git_contents": {"const": "manifests_digests_licenses_and_recipes_only"},
+        "binary_payload_location": {"const": "outside_git_required"},
+        "accepted_build_outputs": {"const": "append_only_outside_git"},
+        "network_fallback": {"const": "disabled"}
+      }
+    },
+    "textureTransportPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_extension",
+        "transport_required",
+        "required_mode",
+        "source_basisu_required",
+        "output_basisu_required",
+        "output_image_transport",
+        "receipt_policy",
+        "missing_transport_policy"
+      ],
+      "properties": {
+        "source_extension": {"const": "KHR_texture_basisu"},
+        "transport_required": {"const": true},
+        "required_mode": {"const": "KHR_texture_basisu_to_core_png"},
+        "source_basisu_required": {"const": true},
+        "output_basisu_required": {"const": false},
+        "output_image_transport": {"const": "embedded_core_png"},
+        "receipt_policy": {"const": "per_asset_hash_pinned_required_before_import"},
+        "missing_transport_policy": {"const": "reject"}
+      }
+    },
+    "sourceAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_asset_id",
+        "semantic_category",
+        "model_id",
+        "render_asset_relpath",
+        "render_asset_sha256",
+        "object_config_relpath",
+        "object_config_sha256",
+        "source_basisu_required",
+        "normalized_dimensions_m",
+        "normalized_origin_policy",
+        "visual_role",
+        "interaction_authority"
+      ],
+      "properties": {
+        "source_asset_id": {"type": "string", "pattern": "^hssd\\.static\\.[a-z][a-z0-9_]*$", "maxLength": 128},
+        "semantic_category": {"$ref": "#/$defs/semanticCategory"},
+        "model_id": {"$ref": "#/$defs/modelId"},
+        "render_asset_relpath": {"type": "string", "pattern": "^objects/[0-9a-f]/[0-9a-f]{40}\\.glb$", "maxLength": 80},
+        "render_asset_sha256": {"$ref": "#/$defs/digest"},
+        "object_config_relpath": {"type": "string", "pattern": "^objects/[0-9a-f]/[0-9a-f]{40}\\.object_config\\.json$", "maxLength": 100},
+        "object_config_sha256": {"$ref": "#/$defs/digest"},
+        "source_basisu_required": {"const": true},
+        "normalized_dimensions_m": {"$ref": "#/$defs/dimensions3m"},
+        "normalized_origin_policy": {"const": "footprint_center_bottom_z_zero"},
+        "visual_role": {"const": "static_presentation_shell"},
+        "interaction_authority": {"const": "none_static_joined_glb"}
+      }
+    },
+    "catalogSemanticReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_asset_id",
+        "model_id",
+        "catalog_name",
+        "catalog_wnsynsetkey",
+        "semantic_condensed_category",
+        "semantic_primary_category",
+        "catalog_has_multiple_objects",
+        "reviewed_semantic_category",
+        "review_status"
+      ],
+      "properties": {
+        "source_asset_id": {"type": "string", "pattern": "^hssd\\.static\\.[a-z][a-z0-9_]*$", "maxLength": 128},
+        "model_id": {"$ref": "#/$defs/modelId"},
+        "catalog_name": {"type": "string", "maxLength": 256},
+        "catalog_wnsynsetkey": {"type": "string", "maxLength": 256},
+        "semantic_condensed_category": {"type": "string", "minLength": 1, "maxLength": 128},
+        "semantic_primary_category": {"type": "string", "minLength": 1, "maxLength": 128},
+        "catalog_has_multiple_objects": {"type": "boolean"},
+        "reviewed_semantic_category": {"$ref": "#/$defs/semanticCategory"},
+        "review_status": {"const": "catalog_verified_identity_visual_review_pending"}
+      }
+    },
+    "placementIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "support_mode", "reason"],
+      "properties": {
+        "role": {"enum": ["semantic_hero", "secondary_dressing", "surface_dressing"]},
+        "support_mode": {"enum": ["floor", "surface", "wall_edge"]},
+        "reason": {"type": "string", "minLength": 8, "maxLength": 240}
+      }
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instance_id",
+        "room_id",
+        "source_asset_id",
+        "transform",
+        "placement_intent",
+        "semantic_target_id",
+        "normalization_policy",
+        "interaction_policy"
+      ],
+      "properties": {
+        "instance_id": {"type": "string", "pattern": "^hssd\\.r1/[a-z_]+\\.[a-z0-9_]+\\.[0-9]{2}$", "maxLength": 160},
+        "room_id": {"$ref": "#/$defs/roomId"},
+        "source_asset_id": {"type": "string", "pattern": "^hssd\\.static\\.[a-z][a-z0-9_]*$", "maxLength": 128},
+        "transform": {"$ref": "#/$defs/roomLocalTransform"},
+        "placement_intent": {"$ref": "#/$defs/placementIntent"},
+        "semantic_target_id": {
+          "type": ["string", "null"],
+          "pattern": "^home\\.r1/room\\.[a-z][a-z0-9_]*/entity\\.[a-z][a-z0-9_]*\\.[0-9]{2}$",
+          "maxLength": 192
+        },
+        "normalization_policy": {"const": "use_source_normalized_dimensions_exactly"},
+        "interaction_policy": {"const": "visual_only_hidden_r1_proxy_remains_authoritative"}
+      }
+    },
+    "articulatedCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semantic_role",
+        "static_source_asset_id",
+        "candidate_model_id",
+        "urdf_relpath",
+        "urdf_sha256",
+        "ao_config_relpath",
+        "ao_config_sha256",
+        "relationship_status",
+        "selection_status",
+        "validation_status",
+        "ue_integration_status",
+        "articulation_authority",
+        "static_fallback_policy"
+      ],
+      "properties": {
+        "semantic_role": {"enum": ["fridge", "desk", "nightstand", "wardrobe", "stove"]},
+        "static_source_asset_id": {"type": "string", "pattern": "^hssd\\.static\\.[a-z][a-z0-9_]*$", "maxLength": 128},
+        "candidate_model_id": {"$ref": "#/$defs/modelId"},
+        "urdf_relpath": {"type": "string", "pattern": "^urdf/[0-9a-f]{40}/[0-9a-f]{40}\\.urdf$", "maxLength": 100},
+        "urdf_sha256": {"$ref": "#/$defs/digest"},
+        "ao_config_relpath": {"type": "string", "pattern": "^urdf/[0-9a-f]{40}/[0-9a-f]{40}\\.ao_config\\.json$", "maxLength": 120},
+        "ao_config_sha256": {"$ref": "#/$defs/digest"},
+        "relationship_status": {"const": "pending_unverified_semantic_sibling"},
+        "selection_status": {"const": "pending"},
+        "validation_status": {"const": "pending"},
+        "ue_integration_status": {"const": "pending"},
+        "articulation_authority": {"const": "blocked_until_validated"},
+        "static_fallback_policy": {"const": "presentation_only_never_interactive"}
+      }
+    },
+    "roomInstanceCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry_hall", "living_room", "kitchen_dining", "bedroom", "office", "bathroom_laundry"],
+      "properties": {
+        "entry_hall": {"type": "integer", "minimum": 8},
+        "living_room": {"type": "integer", "minimum": 8},
+        "kitchen_dining": {"type": "integer", "minimum": 8},
+        "bedroom": {"type": "integer", "minimum": 8},
+        "office": {"type": "integer", "minimum": 8},
+        "bathroom_laundry": {"type": "integer", "minimum": 8}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_room_ids",
+        "minimum_instances_per_room",
+        "minimum_total_instances",
+        "room_instance_counts",
+        "closed_source_asset_ids",
+        "closed_placement_ids",
+        "closed_articulation_roles",
+        "unaccounted_source_asset_ids",
+        "unaccounted_placement_ids"
+      ],
+      "properties": {
+        "required_room_ids": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/roomId"}
+        },
+        "minimum_instances_per_room": {"const": 8},
+        "minimum_total_instances": {"const": 60},
+        "room_instance_counts": {"$ref": "#/$defs/roomInstanceCounts"},
+        "closed_source_asset_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^hssd\\.static\\.[a-z][a-z0-9_]*$"}
+        },
+        "closed_placement_ids": {
+          "type": "array",
+          "minItems": 60,
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^hssd\\.r1/[a-z_]+\\.[a-z0-9_]+\\.[0-9]{2}$"}
+        },
+        "closed_articulation_roles": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"enum": ["fridge", "desk", "nightstand", "wardrobe", "stove"]}
+        },
+        "unaccounted_source_asset_ids": {"type": "array", "maxItems": 0},
+        "unaccounted_placement_ids": {"type": "array", "maxItems": 0}
+      }
+    }
+  }
+}
