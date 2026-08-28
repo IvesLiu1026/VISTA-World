@@ -52,6 +52,7 @@ VisualProfile + ScenePlacementSpec
   -> local acquisition receipt and exact digest verification
   -> AssetDescriptor (geometry, UV, PBR, collision, sockets, license)
   -> headless Blender normalization / metric UV / modular export
+  -> receipt-bound UE-version compatibility derivative when required
   -> Unreal StaticMesh + MaterialInstance + semantic actor binding
   -> visual, collision, performance and provenance acceptance receipt
 ```
@@ -61,6 +62,29 @@ Haven models (ceiling lamp, throw pillows and apple) are zero-download wins. New
 public visual acquisitions prefer CC0. HSSD supplies private-research visual
 shell candidates for the unfinished rooms; YCB supplies interactive small
 objects. Staticized HSSD geometry never provides articulation authority.
+
+### HSSD UE 5.7 material compatibility
+
+The normalized HSSD R5 payload stays immutable. Before Interchange reads an R5
+GLB, an attempt-local pure-Python derivation rewrites only the JSON chunk and
+copies every non-JSON chunk byte-for-byte. The transform removes a
+`KHR_materials_transmission` object only when its effective factor is zero, it
+has no transmission texture and it has no unknown fields. Root extension lists
+are recomputed from the resulting graph. Geometry, primitive/material
+assignments, core PBR, clear-coat, textures, images, samplers, accessors, buffer
+views and binary payloads are otherwise identical.
+
+Each derivative receipt binds the exact R5 source digest, output digest, transform
+implementation digest, changed material indices, canonical removed objects,
+unchanged binary-chunk digest and any retained active dual-extension conflict.
+The commandlet independently re-derives and verifies those bytes before import.
+The original all-returned-textures-bound gate remains unchanged.
+
+An active transmission plus active clear-coat material is not silently simplified.
+It can remain in an experimental import candidate with an explicit
+`blocks_full_material_fidelity` observation so the scene can be visually
+inspected, but R7/R11 promotion remains blocked until a custom UE/Substrate
+material bridge closes that conflict.
 
 ### Character-provider flow
 
@@ -141,6 +165,9 @@ parts/joints.
   the catalog validator and executor support the new entries.
 - Existing external placement and visual profiles remain readable; V2 contracts
   are introduced alongside them and materialized by explicit adapters.
+- HSSD R5, its failed UE import attempt and every derivative attempt remain
+  append-only. A derivative is execution input only when its receipt and
+  transform script digest match the exact attempt manifest.
 - Runs and packages remain append-only. No canonical dataset or previous receipt
   is rewritten.
 
@@ -181,6 +208,9 @@ Provider/six-room slices:
   failure of rollback.
 - A missing provider, hash drift, license mismatch, unsupported NoAI policy,
   absent texture, invalid UV or invalid collider rejects the build.
+- Unknown transmission fields, an active transmission that a transform tries to
+  remove, changed geometry/binary data or an unbound returned Texture2D
+  quarantines the compatibility/import attempt.
 - A character provider failure falls back to Manny only with an explicit
   unavailability status; it never passes the photoreal gate.
 - Live/runtime failure never overwrites the currently sealed package.
@@ -193,6 +223,9 @@ Provider/six-room slices:
   wait/timeout ordering, receipt clearing and state rollback.
 - UE editor/package tests validate actual class/skeleton/object paths, montage
   notifies, Motion Warp windows, IK rigs, semantic sockets and material imports.
+- HSSD compatibility tests prove no-op-only removal, deterministic output,
+  byte-identical non-JSON chunks, exact receipt binding, active/unknown fail-safe
+  behavior and continued all-textures-bound enforcement in real UE 5.7.
 - Live acceptance verifies no movement before command, explicit pickup/place,
   exact contact state, interruption rollback, final idle, reset and replay.
 - Blender gates measure output size, mesh/material counts, metric UV/texel
@@ -209,6 +242,8 @@ Provider/six-room slices:
    loopback port before switching any demo launcher.
 5. Add private-research HSSD bindings, YCB interaction objects and MetaHuman as
    independently promotable providers.
+   HSSD first runs through the attempt-bound UE 5.7 compatibility derivative;
+   a quarantined first import is evidence, never overwritten or relabeled.
 6. Expand action coverage only when each action has state, animation and evidence
    closure.
 
