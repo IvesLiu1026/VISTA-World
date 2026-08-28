@@ -52,6 +52,8 @@ FVistaIndoorCameraProfile FVistaIndoorCameraProfile::RealisticInteriorR2()
     Profile.CameraLagMaxDistanceCm = 30.0f;
     Profile.CollisionRecoverySpeed = 8.0f;
     Profile.RecoverySnapThresholdCm = 1.0f;
+    Profile.NearCameraHideDistanceCm = 82.0f;
+    Profile.NearCameraShowDistanceCm = 108.0f;
     Profile.bEnableCameraCollision = true;
     Profile.bEnableCameraLag = true;
     Profile.bEnableCameraLagSubstepping = true;
@@ -69,7 +71,9 @@ bool FVistaIndoorCameraProfile::IsValid(FString& OutReason) const
         FMath::IsFinite(CameraLagSpeed) &&
         FMath::IsFinite(CameraLagMaxDistanceCm) &&
         FMath::IsFinite(CollisionRecoverySpeed) &&
-        FMath::IsFinite(RecoverySnapThresholdCm);
+        FMath::IsFinite(RecoverySnapThresholdCm) &&
+        FMath::IsFinite(NearCameraHideDistanceCm) &&
+        FMath::IsFinite(NearCameraShowDistanceCm);
     if (!bFinite)
     {
         OutReason = TEXT("non_finite_setting");
@@ -101,7 +105,10 @@ bool FVistaIndoorCameraProfile::IsValid(FString& OutReason) const
         CameraLagSpeed < 8.0f || CameraLagSpeed > 30.0f ||
         CameraLagMaxDistanceCm < 0.0f || CameraLagMaxDistanceCm > 50.0f ||
         CollisionRecoverySpeed < 4.0f || CollisionRecoverySpeed > 20.0f ||
-        RecoverySnapThresholdCm < 0.1f || RecoverySnapThresholdCm > 5.0f)
+        RecoverySnapThresholdCm < 0.1f || RecoverySnapThresholdCm > 5.0f ||
+        NearCameraHideDistanceCm < 60.0f || NearCameraHideDistanceCm > 100.0f ||
+        NearCameraShowDistanceCm < 90.0f || NearCameraShowDistanceCm > 140.0f ||
+        NearCameraShowDistanceCm - NearCameraHideDistanceCm < 15.0f)
     {
         OutReason = TEXT("collision_or_lag_setting_out_of_range");
         return false;
@@ -200,6 +207,65 @@ void AVistaPlayableHomeCharacter::BeginPlay()
             }
         }
     }
+}
+
+void AVistaPlayableHomeCharacter::CalcCamera(
+    float DeltaTime,
+    FMinimalViewInfo& OutResult)
+{
+    Super::CalcCamera(DeltaTime, OutResult);
+    // CalcCamera runs after the PostPhysics spring-arm update and supplies the
+    // exact view used for this frame. Sampling FollowCamera from the actor's
+    // default PrePhysics tick would lag a new wall collision by one frame.
+    UpdateNearCameraVisualOcclusion(OutResult.Location);
+}
+
+void AVistaPlayableHomeCharacter::UpdateNearCameraVisualOcclusion(
+    const FVector& CameraLocation)
+{
+    if (ActiveCameraProfileId != RealisticInteriorR2CameraProfileId ||
+        !IsLocallyControlled() || !IsValid(CameraBoom) || !IsValid(FollowCamera))
+    {
+        RestoreNearCameraVisualOcclusion();
+        return;
+    }
+
+    const FVector ArmOrigin =
+        CameraBoom->GetComponentLocation() + CameraBoom->TargetOffset;
+    const float CameraDistanceCm =
+        FVector::Distance(ArmOrigin, CameraLocation);
+    if (!bNearCameraVisualHidden &&
+        CameraDistanceCm <= NearCameraHideDistanceCm)
+    {
+        SetNearCameraVisualHidden(true);
+    }
+    else if (bNearCameraVisualHidden &&
+             CameraDistanceCm >= NearCameraShowDistanceCm)
+    {
+        SetNearCameraVisualHidden(false);
+    }
+}
+
+void AVistaPlayableHomeCharacter::SetNearCameraVisualHidden(bool bHidden)
+{
+    if (bNearCameraVisualHidden == bHidden)
+    {
+        return;
+    }
+    bNearCameraVisualHidden = bHidden;
+    if (IsValid(GetMesh()))
+    {
+        GetMesh()->SetOwnerNoSee(bHidden);
+    }
+    if (IsValid(CharacterProviderComponent))
+    {
+        CharacterProviderComponent->SetOwnerNoSeeForNearCamera(bHidden);
+    }
+}
+
+void AVistaPlayableHomeCharacter::RestoreNearCameraVisualOcclusion()
+{
+    SetNearCameraVisualHidden(false);
 }
 
 void AVistaPlayableHomeCharacter::ConfigureIndoorViewLimits()
@@ -329,6 +395,8 @@ bool AVistaPlayableHomeCharacter::ApplyIndoorCameraProfile(
         Profile.bEnableCameraCollision,
         Profile.CollisionRecoverySpeed,
         Profile.RecoverySnapThresholdCm);
+    NearCameraHideDistanceCm = Profile.NearCameraHideDistanceCm;
+    NearCameraShowDistanceCm = Profile.NearCameraShowDistanceCm;
     FollowCamera->SetFieldOfView(Profile.FieldOfViewDegrees);
     ActiveCameraProfileId = Profile.ProfileId;
     ConfigureIndoorViewLimits();
@@ -345,6 +413,7 @@ bool AVistaPlayableHomeCharacter::ApplyIndoorCameraProfile(
 
 void AVistaPlayableHomeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    RestoreNearCameraVisualOcclusion();
     RestoreIndoorViewLimits();
     SetSprinting(false);
     UnCrouch();
@@ -361,6 +430,7 @@ void AVistaPlayableHomeCharacter::UnPossessed()
     // also covers ordinary controller switches where the pawn stays alive and
     // EndPlay is never called.
     RestoreIndoorViewLimits();
+    RestoreNearCameraVisualOcclusion();
     Super::UnPossessed();
 }
 

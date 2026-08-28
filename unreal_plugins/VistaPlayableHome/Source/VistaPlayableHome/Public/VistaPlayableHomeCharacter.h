@@ -16,6 +16,7 @@ class USpringArmComponent;
 class UVistaAnimationComponent;
 class UVistaCharacterProviderComponent;
 class UVistaInteractionComponent;
+struct FMinimalViewInfo;
 struct FInputActionValue;
 
 /** Closed, measured settings for the realistic-interior gameplay camera. */
@@ -50,6 +51,12 @@ struct VISTAPLAYABLEHOME_API FVistaIndoorCameraProfile
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Camera")
     float RecoverySnapThresholdCm = 0.0f;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Camera")
+    float NearCameraHideDistanceCm = 0.0f;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Camera")
+    float NearCameraShowDistanceCm = 0.0f;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Camera")
     bool bEnableCameraCollision = false;
@@ -161,6 +168,9 @@ public:
 
 protected:
     virtual void BeginPlay() override;
+    virtual void CalcCamera(
+        float DeltaTime,
+        FMinimalViewInfo& OutResult) override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void UnPossessed() override;
     virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
@@ -176,6 +186,9 @@ private:
     float PreviousViewPitchMax = 0.0f;
     float PreviousViewRollMin = 0.0f;
     float PreviousViewRollMax = 0.0f;
+    float NearCameraHideDistanceCm = 0.0f;
+    float NearCameraShowDistanceCm = 0.0f;
+    bool bNearCameraVisualHidden = false;
 
     void Move(const FInputActionValue& Value);
     void Look(const FInputActionValue& Value);
@@ -193,6 +206,9 @@ private:
     void ApplyRequestedCameraProfile();
     void ConfigureIndoorViewLimits();
     void RestoreIndoorViewLimits();
+    void UpdateNearCameraVisualOcclusion(const FVector& CameraLocation);
+    void SetNearCameraVisualHidden(bool bHidden);
+    void RestoreNearCameraVisualOcclusion();
 
     UFUNCTION(Server, Reliable)
     void ServerPerformDefaultInteraction();

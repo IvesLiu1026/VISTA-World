@@ -69,6 +69,12 @@ public:
     UFUNCTION(BlueprintPure, Category = "VISTA|Character Provider")
     FName GetProviderStatus() const { return ProviderStatus; }
 
+    /**
+     * Hide only this character provider from its owning local camera while a
+     * collision-compressed spring arm is inside the visual shell.
+     */
+    void SetOwnerNoSeeForNearCamera(bool bHidden);
+
 protected:
     virtual void BeginPlay() override;
 
@@ -78,6 +84,8 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<URetargetComponent> ProviderRetargetComponent = nullptr;
+
+    bool bOwnerNoSeeForNearCamera = false;
 
     FName ResolveRequestedProviderId() const;
     bool ActivateAllowlistedMetaHuman(ACharacter& OwnerCharacter);
