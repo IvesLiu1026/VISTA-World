@@ -443,6 +443,13 @@ def build_game_command(config: GameRuntimeConfig) -> list[str]:
         f"-LocalDataCachePath={user_root / 'xdg-cache' / 'UnrealEngine' / 'DDC'}",
         "-log",
     ]
+    # UE 5.7's editor game mode starts a machine-global UnrealTraceServer by
+    # default.  Realistic review lanes can run beside the accepted demo, so a
+    # shared profiling daemon is both unnecessary and capable of racing early
+    # engine/LLM initialization.  Keep legacy behavior unchanged, but make the
+    # closed realistic profiles independent of that daemon.
+    if spec.runtime_profile is not None:
+        command.insert(-1, "-notraceserver")
     if spec.camera_profile is not None:
         command.insert(
             10,
@@ -729,6 +736,7 @@ def redacted_plan(config: GameRuntimeConfig) -> dict[str, Any]:
             {
                 "runtime_profile_closed": True,
                 "camera_profile_closed": True,
+                "trace_server_disabled": True,
             }
         )
     schema = SCHEMA

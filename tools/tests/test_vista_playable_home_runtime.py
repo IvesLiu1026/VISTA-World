@@ -93,6 +93,7 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
         ):
             config = validate_config(self.make_config(), create_workspace=False)
         command = build_game_command(config)
+        self.assertNotIn("-notraceserver", command)
         self.assertIn("-game", command)
         self.assertIn("-Windowed", command)
         self.assertFalse(any("RenderOffScreen" in item for item in command))
@@ -180,6 +181,7 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
             config = validate_config(r2, create_workspace=False)
 
         command = build_game_command(config)
+        self.assertIn("-notraceserver", command)
         self.assertIn(f"-VistaCameraProfile={R2_CAMERA_PROFILE}", command)
         self.assertIn(f"-VistaWorldPort={R2_VISTA_WORLD_PORT}", command)
         self.assertIn(f"-ResX={R2_WIDTH}", command)
@@ -205,6 +207,7 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
         self.assertEqual(plan["config"]["runtime_profile"], R2_RUNTIME_PROFILE)
         self.assertEqual(plan["config"]["camera_profile"], R2_CAMERA_PROFILE)
         self.assertTrue(plan["security"]["runtime_profile_closed"])
+        self.assertTrue(plan["security"]["trace_server_disabled"])
 
     def test_realistic_r2_runtime_rejects_any_fixed_tuple_drift(self) -> None:
         base = self.make_config()
@@ -260,6 +263,7 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
             config = validate_config(isolated, create_workspace=False)
 
         command = build_game_command(config)
+        self.assertIn("-notraceserver", command)
         self.assertIn(f"-VistaCameraProfile={ISOLATED_REVIEW_CAMERA_PROFILE}", command)
         self.assertIn(f"-VistaWorldPort={ISOLATED_REVIEW_VISTA_WORLD_PORT}", command)
         self.assertIn(f"-ResX={ISOLATED_REVIEW_WIDTH}", command)
@@ -279,6 +283,7 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
             plan["config"]["camera_profile"], ISOLATED_REVIEW_CAMERA_PROFILE
         )
         self.assertTrue(plan["security"]["isolated_candidate_only"])
+        self.assertTrue(plan["security"]["trace_server_disabled"])
 
         for field, wrong in (
             ("display", R2_DISPLAY),
@@ -381,6 +386,7 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
         self.assertNotIn("runtime_profile", plan["config"])
         self.assertNotIn("camera_profile", plan["config"])
         self.assertNotIn("runtime_profile_closed", plan["security"])
+        self.assertNotIn("trace_server_disabled", plan["security"])
         self.assertFalse(any("VistaCameraProfile" in item for item in plan["command"]))
 
     def test_toolchain_report_is_honest(self) -> None:

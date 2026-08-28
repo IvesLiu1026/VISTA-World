@@ -203,6 +203,43 @@ class VistaPlayableHomeProfileTests(unittest.TestCase):
         self.assertEqual(arguments[profile_index + 1], runtime.R2_RUNTIME_PROFILE)
         self.assertNotIn("--camera-profile", arguments)
 
+    def test_realistic_r2_plan_requires_exact_trace_server_gate(self) -> None:
+        r2_config = runtime.GameRuntimeConfig(
+            **{
+                **self.fixture.config.__dict__,
+                "runtime_profile": runtime.R2_RUNTIME_PROFILE,
+                "display": runtime.R2_DISPLAY,
+                "gpu": runtime.R2_GPU,
+                "vista_world_port": runtime.R2_VISTA_WORLD_PORT,
+                "width": runtime.R2_WIDTH,
+                "height": runtime.R2_HEIGHT,
+                "fps": runtime.R2_FPS,
+            }
+        )
+        plan = runtime.redacted_plan(r2_config)
+        for label, mutate in (
+            (
+                "missing",
+                lambda value: value["security"].pop("trace_server_disabled"),
+            ),
+            (
+                "false",
+                lambda value: value["security"].update(
+                    {"trace_server_disabled": False}
+                ),
+            ),
+            (
+                "extra",
+                lambda value: value["security"].update({"trace_mode": "off"}),
+            ),
+        ):
+            with self.subTest(label=label):
+                drift = copy.deepcopy(plan)
+                mutate(drift)
+                digest = self.fixture.write_plan(drift)
+                with self.assertRaisesRegex(profile.ProfileError, "security"):
+                    profile.validate_launch_plan(self.fixture.plan_path, digest)
+
     def test_isolated_review_plan_cannot_be_published_to_sunshine(self) -> None:
         isolated = runtime.GameRuntimeConfig(
             **{
