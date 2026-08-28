@@ -179,6 +179,8 @@ def test_apply_requires_explicit_nonpromotable_override_before_any_write_or_pope
 
 def _terminal_fixture(
     tmp_path: pathlib.Path,
+    *,
+    baseline_hidden: bool = False,
 ) -> tuple[pathlib.Path, dict, pathlib.Path, pathlib.Path]:
     attempt = tmp_path / "phase2"
     attempt.mkdir()
@@ -271,7 +273,7 @@ def _terminal_fixture(
             "actor_class_path": (
                 "/Script/VistaPlayableHome.VistaStatefulApplianceActor"
             ),
-            "actor_hidden_in_game": False,
+            "actor_hidden_in_game": baseline_hidden,
             "actor_collision_enabled": True,
             "world_transform_cm": {
                 "location_cm": [0.0, 0.0, 0.0],
@@ -302,7 +304,7 @@ def _terminal_fixture(
                     "generate_overlap_events": False,
                     "can_ever_affect_navigation": True,
                     "mobility": "Static",
-                    "visible": True,
+                    "visible": not baseline_hidden,
                 }
             ],
         }
@@ -327,6 +329,8 @@ def _terminal_fixture(
                 "reloaded": reloaded,
                 "authority": runner.SEMANTIC_PROXY_AUTHORITY,
                 "authority_evidence": {
+                    "baseline_actor_hidden_in_game": baseline_hidden,
+                    "baseline_component_visible_states": [not baseline_hidden],
                     "actor_path_preserved": True,
                     "actor_class_preserved": True,
                     "actor_label_preserved": True,
@@ -409,6 +413,26 @@ def test_terminal_validation_requires_all_sixty_safe_reloaded_shells(
     _rewrite_terminal_receipt(attempt, receipt_path, stdout, receipt)
     with pytest.raises(runner.RunnerError, match="failed validation"):
         runner.validate_terminal(attempt, execution, stdout)
+
+
+def test_terminal_validation_accepts_already_hidden_presentation_proxy_baselines(
+    tmp_path: pathlib.Path,
+) -> None:
+    attempt, execution, stdout, _receipt_path = _terminal_fixture(
+        tmp_path, baseline_hidden=True
+    )
+
+    receipt = runner.validate_terminal(attempt, execution, stdout)
+
+    assert all(
+        proxy["baseline"]["actor_hidden_in_game"] is True
+        and proxy["baseline"]["components"][0]["visible"] is False
+        and proxy["authority_evidence"]["baseline_actor_hidden_in_game"] is True
+        and proxy["authority_evidence"]["baseline_component_visible_states"] == [False]
+        and proxy["reloaded"]["actor_hidden_in_game"] is True
+        and proxy["reloaded"]["components"][0]["visible"] is False
+        for proxy in receipt["semantic_proxies"]
+    )
 
 
 @pytest.mark.parametrize(

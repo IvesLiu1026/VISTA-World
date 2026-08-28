@@ -209,6 +209,8 @@ PROXY_COMPONENT_KEYS = {
     "visible",
 }
 PROXY_AUTHORITY_EVIDENCE_KEYS = {
+    "baseline_actor_hidden_in_game",
+    "baseline_component_visible_states",
     "actor_path_preserved",
     "actor_class_preserved",
     "actor_label_preserved",
@@ -1412,7 +1414,7 @@ def _proxy_component_triplet_repaired(
         and repaired.get("mobility")
         == reloaded.get("mobility")
         == baseline.get("mobility")
-        and baseline.get("visible") is True
+        and type(baseline.get("visible")) is bool
         and repaired.get("visible") is False
         and reloaded.get("visible") is False
     )
@@ -1549,7 +1551,7 @@ def _proxy_receipt_valid(proxy: Any) -> bool:
         )
         and baseline.get("tags") == repaired.get("tags") == reloaded.get("tags")
         and semantic_states[0] == semantic_states[1] == semantic_states[2]
-        and baseline.get("actor_hidden_in_game") is False
+        and type(baseline.get("actor_hidden_in_game")) is bool
         and repaired.get("actor_hidden_in_game") is True
         and reloaded.get("actor_hidden_in_game") is True
         and baseline.get("actor_collision_enabled") is True
@@ -1587,6 +1589,10 @@ def _proxy_receipt_valid(proxy: Any) -> bool:
         and set(evidence) == PROXY_AUTHORITY_EVIDENCE_KEYS
         and evidence
         == {
+            "baseline_actor_hidden_in_game": baseline["actor_hidden_in_game"],
+            "baseline_component_visible_states": [
+                component["visible"] for component in baseline_components
+            ],
             "actor_path_preserved": True,
             "actor_class_preserved": True,
             "actor_label_preserved": True,
