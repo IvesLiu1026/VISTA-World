@@ -303,6 +303,32 @@ def test_wait_interrupt_terminates_detached_process_group(
     assert calls == [(process.pid, signal.SIGTERM)]
 
 
+@pytest.mark.skipif(not hasattr(signal, "SIGHUP"), reason="SIGHUP is POSIX-only")
+def test_wait_sighup_terminates_detached_process_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[int, int]] = []
+
+    class HungUpProcess:
+        pid = 4343
+        waits = 0
+
+        def wait(self, timeout):
+            self.waits += 1
+            if self.waits == 1:
+                os.kill(os.getpid(), signal.SIGHUP)
+                raise AssertionError("SIGHUP handler did not interrupt wait")
+            return 0
+
+    process = HungUpProcess()
+    monkeypatch.setattr(os, "killpg", lambda pid, sig: calls.append((pid, sig)))
+
+    with pytest.raises(runner.RunnerError, match="termination requested"):
+        runner._wait_contained(process, timeout=900)
+
+    assert calls == [(process.pid, signal.SIGTERM)]
+
+
 def test_runner_source_disables_gpu_and_live_runtime_mutation() -> None:
     source = pathlib.Path(runner.__file__).read_text(encoding="utf-8")
 
