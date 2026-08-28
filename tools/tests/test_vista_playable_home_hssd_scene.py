@@ -433,6 +433,9 @@ def test_worker_pins_r3_dependencies_and_new_image_only_remap(
     assert worker.EXPECTED_R3_DRESSING_DIGEST == assembler.content_digest(
         assembler._R3_DRESSING_BODY
     )
+    assert worker.EXPECTED_POLY_HAVEN_INPUT_DIGEST == (
+        "c9706c9fd95daed410a4144f568ab1e1f2d5d029003807a1baeb043bce7c98c5"
+    )
     assert (
         worker.EXPECTED_POLY_HAVEN_RECEIPT["receipt_file_sha256"]
         == (assembler._POLY_HAVEN_RECEIPT_REFERENCE["receipt_file_sha256"])
@@ -441,6 +444,47 @@ def test_worker_pins_r3_dependencies_and_new_image_only_remap(
     assert "new_images = set(bpy.data.images) - before_images" in source
     assert "image.reload()" in source
     assert "appended model references a pre-existing/unpinned image" in source
+    assert '_regular_file(source_root, placement["source_glb_relpath"])' in source
+    assert '"preflight_gates_replayed"' not in source
+
+
+def test_worker_rejects_recomputed_poly_haven_semantic_subdocument(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = _load_worker(monkeypatch)
+    changed = {
+        "schema_version": "simworld.vista.hssd-living-poly-haven-input/v1",
+        "path": "/unused",
+        "receipt": worker.EXPECTED_POLY_HAVEN_RECEIPT,
+        "assets": {
+            asset_id: {"files": [{"texture_semantics": ["swapped"]}]}
+            for asset_id in worker.EXPECTED_POLY_HAVEN_ASSET_IDS
+        },
+        "selected_asset_count": 6,
+        "selected_payload_count": 28,
+        "binary_payload_in_git": False,
+    }
+    changed = worker.seal_document(changed)
+
+    with pytest.raises(RuntimeError, match="identity or receipt pin is invalid"):
+        worker._validate_poly_haven_plan({"poly_haven": changed})
+
+
+def test_worker_regular_file_rejects_absolute_and_symlink_escape(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    worker = _load_worker(monkeypatch)
+    root = tmp_path / "root"
+    root.mkdir()
+    outside = tmp_path / "outside.glb"
+    outside.write_bytes(b"glTF")
+
+    with pytest.raises(RuntimeError, match="path is unsafe"):
+        worker._regular_file(root, str(outside))
+
+    (root / "linked.glb").symlink_to(outside)
+    with pytest.raises(RuntimeError, match="is a symlink"):
+        worker._regular_file(root, "linked.glb")
 
 
 def test_worker_forces_lazy_image_decode_before_has_data_gate(
