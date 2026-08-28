@@ -318,6 +318,7 @@ def test_apply_writes_private_attempt_and_uses_safe_fixed_subprocess(
         "-vulkan",
         "-RenderOffscreen",
         "-graphicsadapter=0",
+        "-notraceserver",
         "-stdout",
         "-FullStdOutLogOutput",
     ]
