@@ -15,6 +15,7 @@ import json
 import os
 import re
 import stat
+import struct
 from collections import Counter
 from collections.abc import Mapping
 from typing import Any
@@ -30,6 +31,22 @@ MARKER = "VISTA_MAKEHUMAN_CC0_IMPORT_RESULT="
 EXECUTION_ENV = "VISTA_MAKEHUMAN_CC0_IMPORT_EXECUTION"
 EXECUTION_SHA_ENV = "VISTA_MAKEHUMAN_CC0_IMPORT_EXECUTION_SHA256"
 EXPECTED_ENGINE = "5.7.3-50162420+++UE5+Release-5.7"
+TRANSFORM_SCHEMA = "vista.makehuman-cc0-ue57-unique-morph-glb/v1"
+ORIGINAL_GLB_SHA256 = "7cdda8277fdac906672fc8d86b598c89f212f2081cbdcce283ce7461ee392a97"
+ORIGINAL_GLB_SIZE = 30_350_176
+UE_COMPATIBLE_GLB_SHA256 = (
+    "9a55b15a15ceeea1ca4ab6e21aae65640d8b5a575055dd0a45d5c0570ce8dcfe"
+)
+UE_COMPATIBLE_GLB_SIZE = 30_352_116
+ORIGINAL_RECEIPT_SHA256 = (
+    "bde68c074adfff335fab2974f8414ad18fb8182d36c672724674cf9ce771496d"
+)
+ORIGINAL_RECEIPT_SIZE = 7_050
+BASE_FACE_MESH_NAME = "base.002"
+EXPECTED_MESH_COUNT = 9
+EXPECTED_TARGET_ENTRY_COUNT = 196
+EXPECTED_BASE_TARGET_COUNT = 94
+EXPECTED_AUXILIARY_TARGET_COUNT = 102
 EXECUTION_ACKNOWLEDGEMENT = (
     "I acknowledge this isolated CC0 MakeHuman UE 5.7 import creates no runtime, "
     "Manny retarget, animation, interaction, photoreal, or GTA acceptance"
@@ -58,8 +75,10 @@ EXPECTED_EXECUTION_KEYS = {
 }
 EXPECTED_SOURCE_KEYS = {
     "root",
-    "glb",
+    "original_glb",
+    "ue_compatible_glb",
     "receipt",
+    "ue_compatibility_transform",
 }
 EXPECTED_FILE_KEYS = {"path", "sha256", "size_bytes"}
 EXPECTED_SOURCE_CONTRACT_KEYS = {
@@ -70,6 +89,28 @@ EXPECTED_SOURCE_CONTRACT_KEYS = {
     "material_alpha_mode_counts",
 }
 EXPECTED_COMMANDLET_KEYS = {"path", "sha256", "size_bytes"}
+EXPECTED_TRANSFORM_KEYS = {
+    "schema_version",
+    "algorithm",
+    "source_glb_sha256",
+    "source_glb_size_bytes",
+    "source_json_chunk_sha256",
+    "source_bin_chunk_sha256",
+    "source_bin_chunk_size_bytes",
+    "output_glb_sha256",
+    "output_glb_size_bytes",
+    "output_json_chunk_sha256",
+    "output_bin_chunk_sha256",
+    "output_bin_chunk_size_bytes",
+    "base_mesh_index",
+    "base_mesh_name",
+    "target_entry_count",
+    "globally_unique_target_name_count",
+    "preserved_base_target_count",
+    "renamed_auxiliary_target_count",
+    "mapping_sha256",
+    "mapping",
+}
 EXPECTED_CLAIMS = {
     "runtime_verified": False,
     "manny_retarget_verified": False,
@@ -176,6 +217,222 @@ def sha256_file(path: str, *, maximum: int | None = None) -> tuple[str, int]:
     return digest, size
 
 
+def _glb_document_chunks(raw: bytes, label: str) -> tuple[dict[str, Any], bytes, bytes]:
+    require(len(raw) >= 28, label + " is truncated")
+    magic, version, declared_size = struct.unpack_from("<4sII", raw, 0)
+    require(
+        magic == b"glTF" and version == 2 and declared_size == len(raw),
+        label + " header differs",
+    )
+    json_length, json_kind = struct.unpack_from("<II", raw, 12)
+    json_start = 20
+    json_end = json_start + json_length
+    require(
+        json_kind == 0x4E4F534A and json_end + 8 <= len(raw),
+        label + " JSON chunk differs",
+    )
+    bin_length, bin_kind = struct.unpack_from("<II", raw, json_end)
+    bin_start = json_end + 8
+    bin_end = bin_start + bin_length
+    require(
+        bin_kind == 0x004E4942 and bin_end == len(raw),
+        label + " BIN chunk differs",
+    )
+    json_chunk = raw[json_start:json_end]
+    try:
+        document = json.loads(json_chunk.rstrip(b" \x00"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(label + " JSON is invalid") from exc
+    require(isinstance(document, dict), label + " JSON must be one object")
+    return document, json_chunk, raw[bin_start:bin_end]
+
+
+def _auxiliary_target_name(
+    mesh_index: int, target_index: int, original_name: str
+) -> str:
+    readable = re.sub(r"[^A-Za-z0-9]+", "_", original_name).strip("_")
+    if not readable:
+        readable = "target"
+    return f"vista_aux_m{mesh_index:02d}_t{target_index:03d}_{readable}"
+
+
+def validate_ue_compatibility_transform(
+    source: Mapping[str, Any], contract: Mapping[str, Any]
+) -> None:
+    original_record = source["original_glb"]
+    output_record = source["ue_compatible_glb"]
+    receipt_record = source["receipt"]
+    transform = source["ue_compatibility_transform"]
+    require(
+        os.path.basename(original_record["path"]) == "vista_cc0_hero.glb"
+        and os.path.basename(output_record["path"])
+        == "vista_cc0_hero_ue57_unique_morphs.glb"
+        and os.path.basename(receipt_record["path"]) == "vista_cc0_hero_receipt.json"
+        and original_record["sha256"] == ORIGINAL_GLB_SHA256
+        and original_record["size_bytes"] == ORIGINAL_GLB_SIZE
+        and output_record["sha256"] == UE_COMPATIBLE_GLB_SHA256
+        and output_record["size_bytes"] == UE_COMPATIBLE_GLB_SIZE
+        and receipt_record["sha256"] == ORIGINAL_RECEIPT_SHA256
+        and receipt_record["size_bytes"] == ORIGINAL_RECEIPT_SIZE,
+        "sealed R6 source pin differs",
+    )
+    require(
+        isinstance(transform, Mapping) and set(transform) == EXPECTED_TRANSFORM_KEYS,
+        "UE morph transform fields differ",
+    )
+    original_raw, original_sha, original_size = read_regular_bytes(
+        original_record["path"]
+    )
+    output_raw, output_sha, output_size = read_regular_bytes(output_record["path"])
+    require(
+        (original_sha, original_size)
+        == (original_record["sha256"], original_record["size_bytes"])
+        and (output_sha, output_size)
+        == (output_record["sha256"], output_record["size_bytes"]),
+        "UE morph transform file seal differs",
+    )
+    original, original_json, original_bin = _glb_document_chunks(
+        original_raw, "original R6 GLB"
+    )
+    output, output_json, output_bin = _glb_document_chunks(
+        output_raw, "UE-compatible R6 GLB"
+    )
+    require(output_bin == original_bin, "UE morph transform changed BIN payload")
+    canonical_output_json = canonical_json(output)
+    canonical_output_json += b" " * ((-len(canonical_output_json)) % 4)
+    require(
+        output_json == canonical_output_json,
+        "UE morph transform JSON is not deterministic canonical JSON",
+    )
+    original_meshes = original.get("meshes")
+    output_meshes = output.get("meshes")
+    require(
+        isinstance(original_meshes, list)
+        and isinstance(output_meshes, list)
+        and len(original_meshes) == len(output_meshes) == EXPECTED_MESH_COUNT,
+        "UE morph transform mesh inventory differs",
+    )
+    base_indices = [
+        index
+        for index, mesh in enumerate(original_meshes)
+        if isinstance(mesh, Mapping) and mesh.get("name") == BASE_FACE_MESH_NAME
+    ]
+    require(len(base_indices) == 1, "UE morph transform base mesh differs")
+    base_index = base_indices[0]
+    expected_mapping = []
+    output_names = []
+    restored = json.loads(json.dumps(output))
+    for mesh_index, (original_mesh, output_mesh) in enumerate(
+        zip(original_meshes, output_meshes, strict=True)
+    ):
+        require(
+            isinstance(original_mesh, Mapping)
+            and isinstance(output_mesh, Mapping)
+            and original_mesh.get("name") == output_mesh.get("name"),
+            "UE morph transform mesh identity differs",
+        )
+        if original_mesh.get("extras") is None:
+            require(
+                output_mesh.get("extras") is None
+                and original_mesh.get("weights") is None
+                and output_mesh.get("weights") is None
+                and all(
+                    isinstance(primitive, Mapping)
+                    and primitive.get("targets", []) == []
+                    for primitive in original_mesh.get("primitives", [])
+                )
+                and all(
+                    isinstance(primitive, Mapping)
+                    and primitive.get("targets", []) == []
+                    for primitive in output_mesh.get("primitives", [])
+                ),
+                "UE morph transform zero-target mesh differs",
+            )
+            continue
+        require(
+            isinstance(original_mesh.get("extras"), Mapping)
+            and isinstance(output_mesh.get("extras"), Mapping),
+            "UE morph transform target metadata differs",
+        )
+        original_names = original_mesh["extras"].get("targetNames")
+        transformed_names = output_mesh["extras"].get("targetNames")
+        require(
+            isinstance(original_names, list)
+            and isinstance(transformed_names, list)
+            and len(original_names) == len(transformed_names),
+            "UE morph transform target-name inventory differs",
+        )
+        restored["meshes"][mesh_index]["extras"]["targetNames"] = list(original_names)
+        for target_index, (original_name, transformed_name) in enumerate(
+            zip(original_names, transformed_names, strict=True)
+        ):
+            require(
+                isinstance(original_name, str) and isinstance(transformed_name, str),
+                "UE morph transform target name is invalid",
+            )
+            preserved = mesh_index == base_index
+            expected_name = (
+                original_name
+                if preserved
+                else _auxiliary_target_name(mesh_index, target_index, original_name)
+            )
+            require(
+                transformed_name == expected_name,
+                "UE morph transform target mapping differs",
+            )
+            output_names.append(transformed_name)
+            expected_mapping.append(
+                {
+                    "mesh_index": mesh_index,
+                    "mesh_name": original_mesh["name"],
+                    "target_index": target_index,
+                    "original_name": original_name,
+                    "transformed_name": transformed_name,
+                    "preserved": preserved,
+                }
+            )
+    base_names = output_meshes[base_index]["extras"]["targetNames"]
+    require(
+        restored == original
+        and base_names == original_meshes[base_index]["extras"]["targetNames"]
+        and len(base_names) == EXPECTED_BASE_TARGET_COUNT
+        and set(contract["required_face_targets"]).issubset(base_names)
+        and len(output_names) == len(set(output_names))
+        and len({name.casefold() for name in output_names}) == len(output_names),
+        "UE morph transform semantic preservation differs",
+    )
+    require(
+        transform
+        == {
+            "schema_version": TRANSFORM_SCHEMA,
+            "algorithm": (
+                "preserve_base_002_prefix_every_auxiliary_target_by_mesh_and_index"
+            ),
+            "source_glb_sha256": original_sha,
+            "source_glb_size_bytes": original_size,
+            "source_json_chunk_sha256": hashlib.sha256(original_json).hexdigest(),
+            "source_bin_chunk_sha256": hashlib.sha256(original_bin).hexdigest(),
+            "source_bin_chunk_size_bytes": len(original_bin),
+            "output_glb_sha256": output_sha,
+            "output_glb_size_bytes": output_size,
+            "output_json_chunk_sha256": hashlib.sha256(output_json).hexdigest(),
+            "output_bin_chunk_sha256": hashlib.sha256(output_bin).hexdigest(),
+            "output_bin_chunk_size_bytes": len(output_bin),
+            "base_mesh_index": base_index,
+            "base_mesh_name": BASE_FACE_MESH_NAME,
+            "target_entry_count": EXPECTED_TARGET_ENTRY_COUNT,
+            "globally_unique_target_name_count": EXPECTED_TARGET_ENTRY_COUNT,
+            "preserved_base_target_count": EXPECTED_BASE_TARGET_COUNT,
+            "renamed_auxiliary_target_count": EXPECTED_AUXILIARY_TARGET_COUNT,
+            "mapping_sha256": hashlib.sha256(
+                canonical_json(expected_mapping)
+            ).hexdigest(),
+            "mapping": expected_mapping,
+        },
+        "UE morph transform receipt binding differs",
+    )
+
+
 def read_execution() -> tuple[dict[str, Any], str, str]:
     path = os.environ.get(EXECUTION_ENV, "")
     expected_sha = os.environ.get(EXECUTION_SHA_ENV, "")
@@ -236,7 +493,7 @@ def validate_execution(execution: Mapping[str, Any]) -> None:
         ),
         "fresh MakeHuman namespace is unavailable",
     )
-    for label in ("glb", "receipt"):
+    for label in ("original_glb", "ue_compatible_glb", "receipt"):
         record = source[label]
         require(
             isinstance(record, Mapping) and set(record) == EXPECTED_FILE_KEYS,
@@ -252,6 +509,7 @@ def validate_execution(execution: Mapping[str, Any]) -> None:
             digest == record["sha256"] and size == record["size_bytes"],
             label + " seal differs",
         )
+    validate_ue_compatibility_transform(source, contract)
     own_digest, own_size = sha256_file(os.path.realpath(__file__))
     require(
         os.path.realpath(str(commandlet["path"])) == os.path.realpath(__file__)
@@ -284,7 +542,7 @@ def revalidate_fixed_inputs(
         "execution manifest changed after loading",
     )
     source = execution["source"]
-    for label in ("glb", "receipt"):
+    for label in ("original_glb", "ue_compatible_glb", "receipt"):
         record = source[label]
         observed_digest, observed_size = sha256_file(record["path"])
         require(
@@ -292,6 +550,7 @@ def revalidate_fixed_inputs(
             == (record["sha256"], record["size_bytes"]),
             label + " changed after execution validation",
         )
+    validate_ue_compatibility_transform(source, execution["source_contract"])
     commandlet = execution["commandlet"]
     own_digest, own_size = sha256_file(os.path.realpath(__file__))
     require(
@@ -590,7 +849,7 @@ def run() -> None:
         )
         namespace_created = True
         manager = unreal.InterchangeManager.get_interchange_manager_scripted()
-        source = execution["source"]["glb"]["path"]
+        source = execution["source"]["ue_compatible_glb"]["path"]
         source_data = unreal.InterchangeManager.create_source_data(source)
         require(
             manager is not None and source_data is not None,
@@ -696,8 +955,12 @@ def run() -> None:
             "project": os.path.realpath(unreal.Paths.get_project_file_path()),
             "execution_manifest": execution_path,
             "execution_manifest_sha256": execution_sha,
-            "source_glb": execution["source"]["glb"],
+            "source_original_glb": execution["source"]["original_glb"],
+            "source_ue_compatible_glb": execution["source"]["ue_compatible_glb"],
             "source_receipt": execution["source"]["receipt"],
+            "ue_compatibility_transform": execution["source"][
+                "ue_compatibility_transform"
+            ],
         },
         "pipeline_policy": pipeline_policy,
         "returned_object_paths": imported_objects,
