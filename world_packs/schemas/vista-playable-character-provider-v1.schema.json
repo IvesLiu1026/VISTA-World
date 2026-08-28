@@ -1,0 +1,355 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/IvesLiu1026/VISTA-World/world_packs/schemas/vista-playable-character-provider-v1.schema.json",
+  "title": "VISTA Playable Character Provider V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "provider_id",
+    "provider_revision",
+    "identity",
+    "engine",
+    "plugin",
+    "preset",
+    "license_policy",
+    "entitlement_gate",
+    "assembly_contract",
+    "package_policy",
+    "fallback",
+    "current_readiness",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "vista.playable-character-provider/v1"},
+    "provider_id": {"const": "metahuman_vivian_ue57_v1"},
+    "provider_revision": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.-]{2,95}$"},
+    "identity": {"$ref": "#/$defs/identity"},
+    "engine": {"$ref": "#/$defs/engine"},
+    "plugin": {"$ref": "#/$defs/plugin"},
+    "preset": {"$ref": "#/$defs/preset"},
+    "license_policy": {"$ref": "#/$defs/licensePolicy"},
+    "entitlement_gate": {"$ref": "#/$defs/entitlementGate"},
+    "assembly_contract": {"$ref": "#/$defs/assemblyContract"},
+    "package_policy": {"$ref": "#/$defs/packagePolicy"},
+    "fallback": {"$ref": "#/$defs/fallback"},
+    "current_readiness": {"$ref": "#/$defs/readiness"},
+    "content_digest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_kind",
+        "character_name",
+        "research_role",
+        "photoreal_target",
+        "default_behavior"
+      ],
+      "properties": {
+        "provider_kind": {"const": "metahuman"},
+        "character_name": {"const": "Vivian"},
+        "research_role": {"const": "neutral_research_participant"},
+        "photoreal_target": {"const": true},
+        "default_behavior": {"const": "idle_until_player_event_or_agent_command"}
+      }
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "changelist",
+        "compatible_changelist",
+        "platform",
+        "branch_name",
+        "build_receipt"
+      ],
+      "properties": {
+        "name": {"const": "Unreal Engine"},
+        "version": {"const": "5.7.3"},
+        "changelist": {"const": 50162420},
+        "compatible_changelist": {"const": 47537391},
+        "platform": {"const": "Linux"},
+        "branch_name": {"const": "++UE5+Release-5.7"},
+        "build_receipt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "sha256", "size_bytes"],
+          "properties": {
+            "relative_path": {"const": "Engine/Build/Build.version"},
+            "sha256": {"const": "ffe01f6d1e96ef86cd06158cfb561150971823fc77e5c8df352910bcf4d365ef"},
+            "size_bytes": {"const": 215}
+          }
+        }
+      }
+    },
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plugin_name",
+        "friendly_name",
+        "descriptor",
+        "content_mount",
+        "enabled_by_default",
+        "required_modules",
+        "required_dependencies"
+      ],
+      "properties": {
+        "plugin_name": {"const": "MetaHumanCharacter"},
+        "friendly_name": {"const": "MetaHuman Creator"},
+        "descriptor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "sha256", "size_bytes"],
+          "properties": {
+            "relative_path": {"const": "Engine/Plugins/MetaHuman/MetaHumanCharacter/MetaHumanCharacter.uplugin"},
+            "sha256": {"const": "cdcbb519ae3b53aeb1c4bdaf9000cdd787c315543bff24e968b9243c6179df5c"},
+            "size_bytes": {"const": 2879}
+          }
+        },
+        "content_mount": {"const": "/MetaHumanCharacter"},
+        "enabled_by_default": {"const": false},
+        "required_modules": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "MetaHumanCharacter",
+              "MetaHumanCharacterEditor",
+              "MetaHumanDefaultPipeline"
+            ]
+          }
+        },
+        "required_dependencies": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "ChaosOutfitAsset",
+              "HairStrands",
+              "IKRig",
+              "MetaHuman",
+              "MetaHumanSDK",
+              "RigLogic"
+            ]
+          }
+        }
+      }
+    },
+    "preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset_id",
+        "display_name",
+        "object_path",
+        "expected_class",
+        "source_file"
+      ],
+      "properties": {
+        "preset_id": {"const": "vivian"},
+        "display_name": {"const": "Vivian"},
+        "object_path": {"const": "/MetaHumanCharacter/Optional/Presets/Vivian.Vivian"},
+        "expected_class": {"const": "/Script/MetaHumanCharacter.MetaHumanCharacter"},
+        "source_file": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "sha256", "size_bytes"],
+          "properties": {
+            "relative_path": {"const": "Engine/Plugins/MetaHuman/MetaHumanCharacter/Content/Optional/Presets/Vivian.uasset"},
+            "sha256": {"const": "3e10df5a8aec201de48437c16370d51913dfb0412d30fa393ac4710c4a4fd06a"},
+            "size_bytes": {"const": 2638032}
+          }
+        }
+      }
+    },
+    "licensePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "content_owner",
+        "license_id",
+        "use_context",
+        "engine_restriction",
+        "redistribution",
+        "raw_payload_policy",
+        "repository_contains_binary"
+      ],
+      "properties": {
+        "content_owner": {"const": "Epic Games"},
+        "license_id": {"const": "Epic-Content-License"},
+        "use_context": {"const": "private_noncommercial_research"},
+        "engine_restriction": {"const": "unreal_engine_only"},
+        "redistribution": {"const": "prohibited"},
+        "raw_payload_policy": {"const": "external_only_never_git"},
+        "repository_contains_binary": {"const": false}
+      }
+    },
+    "entitlementGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required",
+        "verification_method",
+        "inventory_network_policy",
+        "receipt_state",
+        "accepted",
+        "required_receipt_fields"
+      ],
+      "properties": {
+        "required": {"const": true},
+        "verification_method": {"const": "human_reviewed_external_receipt"},
+        "inventory_network_policy": {"const": "local_files_only_no_cloud_call"},
+        "receipt_state": {"const": "absent"},
+        "accepted": {"const": false},
+        "required_receipt_fields": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "evidence_digest",
+              "license_terms_revision",
+              "provider_account_scope",
+              "reviewed_at",
+              "reviewer_id",
+              "use_context"
+            ]
+          }
+        }
+      }
+    },
+    "assemblyContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "output_root",
+        "expected_blueprint_class_path",
+        "pipeline_object_path",
+        "pipeline_source_file",
+        "pipeline",
+        "quality",
+        "rig_type",
+        "action_profile_id",
+        "action_profile_content_digest",
+        "required_component_receipts",
+        "digest_algorithm",
+        "receipt_state",
+        "accepted"
+      ],
+      "properties": {
+        "mode": {"const": "disposable_append_only_project"},
+        "output_root": {"const": "/Game/VISTA/Characters/MetaHumans/Vivian_VISTA"},
+        "expected_blueprint_class_path": {"const": "/Game/VISTA/Characters/MetaHumans/Vivian_VISTA/BP_Vivian_VISTA.BP_Vivian_VISTA_C"},
+        "pipeline_object_path": {"const": "/MetaHumanCharacter/BuildPipeline/BP_DefaultLegacyPipeline_High.BP_DefaultLegacyPipeline_High_C"},
+        "pipeline_source_file": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "sha256", "size_bytes"],
+          "properties": {
+            "relative_path": {"const": "Engine/Plugins/MetaHuman/MetaHumanCharacter/Content/BuildPipeline/BP_DefaultLegacyPipeline_High.uasset"},
+            "sha256": {"const": "eeb9de018a74234c9b3da5cca3642dd59206cec1c356b78c2baf31bd02e32e16"},
+            "size_bytes": {"const": 9550}
+          }
+        },
+        "pipeline": {"const": "optimized"},
+        "quality": {"const": "high"},
+        "rig_type": {"const": "joints_and_blend_shapes"},
+        "action_profile_id": {"const": "ue_5_7_3_animation_v1"},
+        "action_profile_content_digest": {"const": "4a7947cd9f1a6edfaad32cc459d7193452dc938bccdb492ffa94af0af17320bd"},
+        "required_component_receipts": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "body",
+              "clothing",
+              "corrective_policy",
+              "face",
+              "hair",
+              "lod_policy",
+              "materials",
+              "retarget_mapping",
+              "skeleton"
+            ]
+          }
+        },
+        "digest_algorithm": {"const": "sha256"},
+        "receipt_state": {"const": "absent"},
+        "accepted": {"const": false}
+      }
+    },
+    "packagePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "materialization",
+        "binary_storage",
+        "checked_in_artifacts",
+        "accepted_package_receipt_required",
+        "receipt_state",
+        "accepted"
+      ],
+      "properties": {
+        "materialization": {"const": "package_only"},
+        "binary_storage": {"const": "external_append_only_run"},
+        "checked_in_artifacts": {"const": "manifests_digests_licenses_and_receipts_only"},
+        "accepted_package_receipt_required": {"const": true},
+        "receipt_state": {"const": "absent"},
+        "accepted": {"const": false}
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "status_code",
+        "world_remains_functional",
+        "counts_as_photoreal_evidence"
+      ],
+      "properties": {
+        "provider_id": {"const": "project_owned_manny_v1"},
+        "status_code": {"const": "photoreal_character_unavailable"},
+        "world_remains_functional": {"const": true},
+        "counts_as_photoreal_evidence": {"const": false}
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "accepted", "status_code", "blocking_conditions"],
+      "properties": {
+        "state": {"const": "source_inventory_only"},
+        "accepted": {"const": false},
+        "status_code": {"const": "photoreal_character_unavailable"},
+        "blocking_conditions": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "assembly_receipt_missing",
+              "entitlement_receipt_missing",
+              "package_receipt_missing"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
