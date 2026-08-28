@@ -134,20 +134,39 @@ def _production_evidence() -> dict[str, dict]:
         {
             "schema_version": "simworld.vista.playable-home-ue-build-result/v1",
             "status": "accepted_candidate",
+            "visual_profile_id": "realistic_interior_r2",
             "attempt_root": str(runner.PRODUCTION_ATTEMPT_ROOT),
             "map_path": runner.MAP_PATH,
             "presentation_bundle_count": 3,
             "presentation_external_content_verified": True,
             "presentation_external_nanite_disabled_verified": True,
+            "import_receipt_sha256": runner.PRODUCTION_EVIDENCE_PINS[
+                "import-receipt.json"
+            ],
+            "scene_receipt_sha256": runner.PRODUCTION_EVIDENCE_PINS[
+                "scene-receipt.json"
+            ],
+            "base_scene_receipt_sha256": runner.PRODUCTION_EVIDENCE_PINS[
+                "scene-receipt.json"
+            ],
             "presentation_import_receipt_sha256": runner.PRODUCTION_EVIDENCE_PINS[
                 "presentation-import-receipt.json"
             ],
             "presentation_scene_receipt_sha256": runner.PRODUCTION_EVIDENCE_PINS[
                 "presentation-scene-receipt.json"
             ],
+            "presentation_artifact_receipt_sha256": (
+                runner.PRODUCTION_EVIDENCE_PINS[
+                    "contracts/presentation-artifact-receipt.json"
+                ]
+            ),
             "presentation_manifest_sha256": runner.PRODUCTION_EVIDENCE_PINS[
                 "contracts/presentation-manifest.json"
             ],
+            "runtime_play_proof": "pending",
+            "presentation_runtime_play_proof": "pending",
+            "renderer_runtime_observation": "pending",
+            "presentation_ue_import_observation": "verified_by_commandlet",
         }
     )
     result["content_digest"] = runner.PRODUCTION_RESULT_CONTENT_DIGEST
@@ -168,17 +187,186 @@ def _production_evidence() -> dict[str, dict]:
             for index in range(target_count)
         ]
         target_serial += target_count
+        semantic_observations = [
+            {
+                "semantic_target_id": target,
+                "semantic_id_property": target,
+                "actor_path": "synthetic://" + target,
+                "actor_hidden_in_game": True,
+                "actor_class_path": (
+                    "/Script/VistaPlayableHome.VistaSemanticPropActor"
+                ),
+                "interaction_affordances": ["inspect"],
+                "render_components": [
+                    {
+                        "component_path": "synthetic://" + target + "/component",
+                        "collision_enabled": True,
+                        "collision_profile": (
+                            runner.PRODUCTION_SEMANTIC_COLLISION_PROFILE
+                        ),
+                        "visible": False,
+                    }
+                ],
+            }
+            for target in targets
+        ]
         rooms.append(
             {
                 "room_id": room_id,
+                "r1_authority_hidden_in_game": True,
+                "r1_authority_component_visible": False,
+                "r1_authority_collision_profile": (
+                    runner.PRODUCTION_SEMANTIC_COLLISION_PROFILE
+                ),
+                "r1_semantic_visual_observations": semantic_observations,
                 "external_content": {
                     "dressing_ids": dressings,
                     "semantic_target_ids": targets,
                 },
             }
         )
+    bundles = [
+        {
+            "room_id": room_id,
+            "mesh_count": 1,
+            "material_count": expected["material_count"],
+            "pbr_complete_material_count": expected["material_count"],
+            "texture_count": expected["texture_count"],
+            "collision_policy": ("presentation_no_collision_use_hidden_r1_proxies"),
+            "unreal_collision_profile": "NoCollision",
+            "semantic_policy": "presentation_only_preserve_r1_authority",
+            "external_content": {
+                "semantic_target_ids": next(
+                    room["external_content"]["semantic_target_ids"]
+                    for room in rooms
+                    if room["room_id"] == room_id
+                ),
+                "dressing_ids": next(
+                    room["external_content"]["dressing_ids"]
+                    for room in rooms
+                    if room["room_id"] == room_id
+                ),
+            },
+        }
+        for room_id, expected in runner.PRODUCTION_BUNDLE_EVIDENCE.items()
+    ]
+    model_sources = [
+        {
+            "asset_type": "model",
+            "resolution": "4k" if index >= 18 else "2k",
+            "logical_asset_id": f"visual.model.synthetic.{index}",
+            "source_tree_sha256": f"{index + 1:064x}",
+            "files": [
+                {
+                    "texture_semantics": [
+                        "base_color",
+                        "normal",
+                        "roughness",
+                    ]
+                }
+            ],
+        }
+        for index in range(runner.PRODUCTION_EXTERNAL_MODEL_SOURCE_COUNT)
+    ]
+    texture_sources = [
+        {
+            "asset_type": "texture",
+            "resolution": "4k",
+            "logical_asset_id": material_id,
+            "source_tree_sha256": f"{index + 101:064x}",
+            "files": [{"texture_semantics": ["base_color", "normal", "roughness"]}],
+        }
+        for index, material_id in enumerate(
+            runner.PRODUCTION_PROJECT_AUTHORED_PBR_MATERIAL_IDS
+        )
+    ]
+    pbr_sources = [*model_sources, *texture_sources]
+    all_dressings = [
+        dressing
+        for room in rooms
+        for dressing in room["external_content"]["dressing_ids"]
+    ]
+    all_targets = [
+        target
+        for room in rooms
+        for target in room["external_content"]["semantic_target_ids"]
+    ]
+    external_specs = [
+        (dressing, None, "dressing") for dressing in all_dressings[:28]
+    ] + [
+        (f"hero.synthetic.external.{index}", target, "semantic_fixed")
+        for index, target in enumerate(all_targets[:2])
+    ]
+    authored_specs = [
+        (dressing, None, "dressing") for dressing in all_dressings[28:]
+    ] + [
+        (f"hero.synthetic.authored.{index}", target, "semantic_fixed")
+        for index, target in enumerate(all_targets[2:])
+    ]
+    external_placements = [
+        {
+            "placement_id": placement_id,
+            "placement_kind": placement_kind,
+            "semantic_target_id": semantic_target_id,
+            "realization_mode": "external_blend",
+            "source_logical_asset_id": model_sources[index % len(model_sources)][
+                "logical_asset_id"
+            ],
+            "source_tree_sha256": model_sources[index % len(model_sources)][
+                "source_tree_sha256"
+            ],
+            "geometry_recipe": None,
+            "material_logical_asset_ids": [],
+        }
+        for index, (placement_id, semantic_target_id, placement_kind) in enumerate(
+            external_specs
+        )
+    ]
+    authored_placements = [
+        {
+            "placement_id": placement_id,
+            "placement_kind": placement_kind,
+            "semantic_target_id": semantic_target_id,
+            "realization_mode": "project_authored",
+            "source_logical_asset_id": None,
+            "source_tree_sha256": None,
+            "geometry_recipe": "synthetic_geometry_v1",
+            "material_logical_asset_ids": [
+                runner.PRODUCTION_PROJECT_AUTHORED_PBR_MATERIAL_IDS[
+                    index % len(runner.PRODUCTION_PROJECT_AUTHORED_PBR_MATERIAL_IDS)
+                ]
+            ],
+        }
+        for index, (placement_id, semantic_target_id, placement_kind) in enumerate(
+            authored_specs
+        )
+    ]
     return {
         "result-receipt.json": result,
+        "import-receipt.json": {
+            "schema_version": "simworld.vista.playable-home-ue-import-receipt/v1",
+            "status": "imported_candidate",
+            "error": None,
+            "assets": [{}] * runner.PRODUCTION_BASE_IMPORT_ASSET_COUNT,
+            "gates": {
+                "all_assets_bound": True,
+                "core_textures_imported_and_used": True,
+                "quarantined": False,
+            },
+        },
+        "scene-receipt.json": {
+            "schema_version": "simworld.vista.playable-home-ue-scene-receipt/v1",
+            "status": "saved_reloaded_candidate",
+            "error": None,
+            "map_path": runner.MAP_PATH,
+            "gates": {
+                "map_saved": True,
+                "map_reloaded": True,
+                "semantic_tags_verified": True,
+                "runtime_play_proof": "pending",
+                "quarantined": False,
+            },
+        },
         "presentation-import-receipt.json": {
             "schema_version": (
                 "simworld.vista.playable-home-ue-presentation-import-receipt/v2"
@@ -189,6 +377,8 @@ def _production_evidence() -> dict[str, dict]:
             "gates": {
                 "exact_three_room_bundles": True,
                 "external_content_preserved": True,
+                "materials_and_textures_inspected": True,
+                "runtime_play_proof": "pending",
                 "quarantined": False,
             },
         },
@@ -203,14 +393,40 @@ def _production_evidence() -> dict[str, dict]:
             "gates": {
                 "exact_three_presentation_actors": True,
                 "hidden_r1_collision_authority_verified": True,
+                "semantic_authority_preserved": True,
+                "external_r1_semantic_visual_targets_verified": True,
                 "presentation_no_collision_verified": True,
+                "runtime_play_proof": "pending",
                 "quarantined": False,
             },
+        },
+        "contracts/presentation-artifact-receipt.json": {
+            "schema_version": "simworld.vista.playable-home-realism-artifacts/v2",
+            "artifacts": [{}] * runner.PRODUCTION_PRESENTATION_ARTIFACT_COUNT,
+            "ue_import_bundles": copy.deepcopy(bundles),
         },
         "contracts/presentation-manifest.json": {
             "schema_version": "simworld.vista.playable-home-realism-forge/v2",
             "visual_profile_id": "realistic_interior_r2",
-            "ue_import_bundles": [{}, {}, {}],
+            "build_quality": {
+                "accepted_as_r2_visual_evidence": False,
+                "production_minimum_texture_size_px": (
+                    runner.PRODUCTION_MINIMUM_TEXTURE_SIZE_PX
+                ),
+                "requires_downstream_asset_and_ue_review": True,
+            },
+            "external_placement": {
+                "acquisition_receipt": {
+                    "provider": runner.PRODUCTION_EXTERNAL_ASSET_PROVIDER
+                },
+                "asset_sources": pbr_sources,
+                "placements": [*external_placements, *authored_placements],
+                "content_digest": runner.PRODUCTION_EXTERNAL_PLACEMENT_CONTENT_DIGEST,
+                "placement_manifest_sha256": (
+                    runner.PRODUCTION_EXTERNAL_PLACEMENT_MANIFEST_SHA256
+                ),
+            },
+            "ue_import_bundles": bundles,
         },
     }
 
@@ -221,6 +437,23 @@ def planned(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(runner, "_validate_toolchain", lambda: None)
     monkeypatch.setattr(runner, "validate_sources", lambda: sources)
     return sources
+
+
+def _patch_synthetic_production_digests(monkeypatch: pytest.MonkeyPatch) -> None:
+    def placement_digest(values):
+        modes = {item.get("realization_mode") for item in values}
+        if len(values) == runner.PRODUCTION_PBR_BACKED_PLACEMENT_COUNT:
+            return runner.PRODUCTION_PBR_PLACEMENTS_SHA256
+        if modes == {"external_blend"}:
+            return runner.PRODUCTION_EXTERNAL_MODEL_PLACEMENTS_SHA256
+        if modes == {"project_authored"}:
+            return runner.PRODUCTION_PROJECT_AUTHORED_PBR_PLACEMENTS_SHA256
+        return "0" * 64
+
+    monkeypatch.setattr(
+        runner, "_content_digest", lambda value: value.get("content_digest")
+    )
+    monkeypatch.setattr(runner, "_compact_json_sha256", placement_digest)
 
 
 def test_hybrid_contract_is_closed_to_unfinished_rooms() -> None:
@@ -278,29 +511,227 @@ def test_historical_proxy_validator_accepts_only_pinned_r3_authority() -> None:
     assert not runner._historical_proxy_receipt_valid(tampered)
 
 
-def test_production_evidence_derives_exact_45_pbr_placements(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    evidence = _production_evidence()
-    monkeypatch.setattr(
-        runner, "_content_digest", lambda value: value.get("content_digest")
+def test_production_r3_pins_match_attempt_bytes_and_projection() -> None:
+    assert runner.PRODUCTION_ATTEMPT_ROOT == pathlib.Path(
+        "/data/sysx/vista-world/runs/vista-action-world-r1/ue/"
+        "attempt-golden-r3-presentation-r1"
+    )
+    assert runner.PRODUCTION_EVIDENCE_PINS == {
+        "result-receipt.json": (
+            "5e2f511f5b42b99066b1f1ab5293f78d9dde25490ecf1f3cf48a888e800abe43"
+        ),
+        "import-receipt.json": (
+            "649e53e28183aa25a27ebf0939c82143a158ba8bb76a68548f22fbd704f26e7a"
+        ),
+        "scene-receipt.json": (
+            "4acb2541348c30107e259df7a0bec0214736d88fdd06c747f0855e76beb32dfd"
+        ),
+        "presentation-import-receipt.json": (
+            "7e46e1fb338b586ca0a64a1a917f07b8ca61a6c16df0b6bf662159ebd86c83b4"
+        ),
+        "presentation-scene-receipt.json": (
+            "3cd656faee49d53e067337242fd3b7a00fd1a326af9c59a0dbdc14e7712a009f"
+        ),
+        "contracts/presentation-artifact-receipt.json": (
+            "f4c55a1ef674ad3ba3cfa980e4321255663437fc0811723768ce32ce604488c5"
+        ),
+        "contracts/presentation-manifest.json": (
+            "b5c6b0dd2d172255cb5f7bb494657b8c1ed7f2f7a214557b08d7642590e0a71e"
+        ),
+    }
+    assert runner.PRODUCTION_RESULT_CONTENT_DIGEST == (
+        "03208aa552b8945e9ac4b4fdb15fe2862477e9f66ac79fb904ee0c623d7e975f"
+    )
+    assert runner.PRODUCTION_PROJECT_DESCRIPTOR_SHA256 == (
+        "784fbbf0bf2f2581571de6b190dc4d7e5f328d9c10ef561a8d9bb851e02604b4"
+    )
+    assert runner.PRODUCTION_MAP_SHA256 == (
+        "4767da064bcb0f470724635579e50fc288984cd2328849adda8a41b8e2e71a9f"
+    )
+    assert runner.PRODUCTION_PBR_BACKED_PLACEMENT_COUNT == 45
+    assert runner.PRODUCTION_EXTERNAL_MODEL_PLACEMENT_COUNT == 30
+    assert runner.PRODUCTION_PROJECT_AUTHORED_PBR_PLACEMENT_COUNT == 15
+    assert runner.PRODUCTION_PBR_PLACEMENTS_SHA256 == (
+        "56351a7753a9eb82169e78fc9164d901fa43c37f6ab7c55bf070aa6fa7f55ed4"
+    )
+    assert (
+        runner._sha256(runner.PRODUCTION_PROJECT_ROOT / runner.PRODUCTION_PROJECT_NAME)
+        == runner.PRODUCTION_PROJECT_DESCRIPTOR_SHA256
+    )
+    assert (
+        runner._sha256(
+            runner.PRODUCTION_PROJECT_ROOT / pathlib.Path(runner.MAP_RELATIVE_FILE)
+        )
+        == runner.PRODUCTION_MAP_SHA256
+    )
+    for relative, expected_sha in runner.PRODUCTION_EVIDENCE_PINS.items():
+        assert runner._sha256(runner.PRODUCTION_ATTEMPT_ROOT / relative) == expected_sha
+
+    source = runner._snapshot_tree(
+        runner.PRODUCTION_PROJECT_ROOT,
+        required_entries=(
+            *runner.PRODUCTION_COPY_ROOTS,
+            runner.PRODUCTION_PROJECT_NAME,
+        ),
+        allowed_entries=(
+            *runner.PRODUCTION_COPY_ROOTS,
+            *runner.PRODUCTION_EXCLUDED_ROOTS,
+            runner.PRODUCTION_PROJECT_NAME,
+        ),
+        include_entries=(*runner.PRODUCTION_COPY_ROOTS, runner.PRODUCTION_PROJECT_NAME),
+    )
+    assert source.snapshot.tree_sha256 == (
+        "9d8c234e12507b8c3d9e449cb6dafacb4d62b16ea2884dcdb1d35631bfdd30d6"
+    )
+    assert len(source.snapshot.files) == 745
+    assert len(source.snapshot.directories) == 190
+    assert source.snapshot.total_bytes == 2_497_876_659
+
+
+def test_production_r3_real_receipts_validate_without_mocks() -> None:
+    evidence = runner._load_evidence(
+        runner.PRODUCTION_ATTEMPT_ROOT,
+        runner.PRODUCTION_EVIDENCE_PINS,
+        "Production R3 test evidence",
     )
 
     runner._validate_production_evidence(evidence)
 
 
-def test_production_evidence_rejects_44_pbr_placements(
+def test_production_evidence_derives_exact_45_pbr_backed_placements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = _production_evidence()
+    _patch_synthetic_production_digests(monkeypatch)
+
+    runner._validate_production_evidence(evidence)
+
+
+def test_production_evidence_rejects_44_pbr_backed_placements(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     evidence = _production_evidence()
     evidence["presentation-scene-receipt.json"]["room_observations"][0][
         "external_content"
     ]["dressing_ids"].pop()
-    monkeypatch.setattr(
-        runner, "_content_digest", lambda value: value.get("content_digest")
-    )
+    _patch_synthetic_production_digests(monkeypatch)
 
     with pytest.raises(runner.RunnerError, match="scene receipt differs"):
+        runner._validate_production_evidence(evidence)
+
+
+def test_production_evidence_rejects_semantic_authority_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = _production_evidence()
+    observation = evidence["presentation-scene-receipt.json"]["room_observations"][0][
+        "r1_semantic_visual_observations"
+    ][0]
+    observation["render_components"][0]["collision_profile"] = "NoCollision"
+    _patch_synthetic_production_digests(monkeypatch)
+
+    with pytest.raises(runner.RunnerError, match="scene receipt differs"):
+        runner._validate_production_evidence(evidence)
+
+
+def test_runtime_semantic_authority_rejects_collision_and_affordance_drift() -> None:
+    evidence = _production_evidence()
+    expected = evidence["presentation-scene-receipt.json"]["room_observations"][0][
+        "r1_semantic_visual_observations"
+    ][0]
+    semantic_target_id = expected["semantic_target_id"]
+    component_path = expected["render_components"][0]["component_path"]
+    actual = {
+        "semantic_target_id": semantic_target_id,
+        "actor_path": expected["actor_path"],
+        "actor_label": "Synthetic authority",
+        "actor_class_path": expected["actor_class_path"],
+        "actor_hidden_in_game": True,
+        "actor_collision_enabled": True,
+        "world_transform_cm": {
+            "location_cm": [0, 0, 0],
+            "rotation_deg": [0, 0, 0],
+            "scale": [1, 1, 1],
+        },
+        "tags": ["VistaSemanticId=" + semantic_target_id],
+        "semantic_state": {
+            "semantic_id": semantic_target_id,
+            "world_revision": "vista_playable_home_r1",
+            "allowed_affordances": ["<VistaAffordance.INSPECT: 7>"],
+            "initial_state_values": {},
+        },
+        "components": [
+            {
+                "component_path": component_path,
+                "mesh_path": "/Game/Synthetic/SyntheticMesh.SyntheticMesh",
+                "collision_profile": runner.PRODUCTION_SEMANTIC_COLLISION_PROFILE,
+                "collision_mode": runner.PRODUCTION_SEMANTIC_COLLISION_MODE,
+                "collision_responses": (runner.PRODUCTION_SEMANTIC_COLLISION_RESPONSES),
+                "collision_enabled": True,
+                "simulate_physics": False,
+                "generate_overlap_events": False,
+                "can_ever_affect_navigation": True,
+                "mobility": "Static",
+                "visible": False,
+            }
+        ],
+    }
+
+    assert runner._production_runtime_semantic_valid(actual, expected)
+
+    wrong_mode = copy.deepcopy(actual)
+    wrong_mode["components"][0]["collision_mode"] = "NoCollision"
+    assert not runner._production_runtime_semantic_valid(wrong_mode, expected)
+
+    wrong_response = copy.deepcopy(actual)
+    wrong_response["components"][0]["collision_responses"]["Pawn"] = "Ignore"
+    assert not runner._production_runtime_semantic_valid(wrong_response, expected)
+
+    wrong_affordance = copy.deepcopy(actual)
+    wrong_affordance["semantic_state"]["allowed_affordances"] = [
+        "<VistaAffordance.TOGGLE: 5>"
+    ]
+    assert not runner._production_runtime_semantic_valid(wrong_affordance, expected)
+
+
+def test_production_evidence_rejects_incomplete_pbr_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = _production_evidence()
+    evidence["contracts/presentation-manifest.json"]["ue_import_bundles"][0][
+        "pbr_complete_material_count"
+    ] -= 1
+    _patch_synthetic_production_digests(monkeypatch)
+
+    with pytest.raises(runner.RunnerError, match="manifest differs"):
+        runner._validate_production_evidence(evidence)
+
+
+def test_production_evidence_rejects_30_15_realization_split_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = _production_evidence()
+    placements = evidence["contracts/presentation-manifest.json"]["external_placement"][
+        "placements"
+    ]
+    authored = next(
+        item for item in placements if item["realization_mode"] == "project_authored"
+    )
+    authored["realization_mode"] = "external_blend"
+    _patch_synthetic_production_digests(monkeypatch)
+
+    with pytest.raises(runner.RunnerError, match="manifest differs"):
+        runner._validate_production_evidence(evidence)
+
+
+def test_production_evidence_rejects_runtime_acceptance_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = _production_evidence()
+    evidence["result-receipt.json"]["runtime_play_proof"] = "accepted"
+    _patch_synthetic_production_digests(monkeypatch)
+
+    with pytest.raises(runner.RunnerError, match="Production R3 result"):
         runner._validate_production_evidence(evidence)
 
 
@@ -351,6 +782,13 @@ def test_dry_run_is_nonwriting_and_denies_quality_claims(planned) -> None:
     assert plan["will_run_unreal"] is False
     assert plan["placement_count"] == 30
     assert plan["room_counts"] == runner.SELECTED_ROOM_COUNTS
+    assert plan["production_source"] == runner._production_source_summary(planned)
+    assert plan["production_source"]["presentation_bundle_count"] == 3
+    assert plan["production_source"]["pbr_backed_placement_count"] == 45
+    assert plan["production_source"]["external_model_placement_count"] == 30
+    assert plan["production_source"]["project_authored_pbr_placement_count"] == 15
+    assert plan["production_source"]["semantic_target_count"] == 5
+    assert plan["production_source"]["runtime_play_proof"] == "pending"
     assert plan["claims"] == {
         "production_presentation_preserved": False,
         "hssd_placements_composed": False,
@@ -418,6 +856,44 @@ def test_apply_rejects_tampered_sealed_plan_before_creation(planned) -> None:
         runner.apply_plan(plan, planned)
 
     assert not os.path.lexists(attempt)
+
+
+def test_apply_rejects_resealed_production_source_tamper(planned) -> None:
+    attempt = runner.DEFAULT_OUTPUT_PARENT / "hybrid-r3-unit-source-tampered"
+    plan, _ = runner.build_plan(
+        attempt,
+        apply=True,
+        allow_private_noncommercial_license=True,
+        allow_nonpromotable_material_conflict=True,
+    )
+    plan["production_source"]["runtime_play_proof"] = "accepted"
+    plan["content_digest"] = runner._content_digest(plan)
+
+    with pytest.raises(runner.RunnerError, match="intact authorized"):
+        runner.apply_plan(plan, planned)
+
+    assert not os.path.lexists(attempt)
+
+
+def test_apply_rejects_resealed_attempt_redirect_before_creation(planned) -> None:
+    original = runner.DEFAULT_OUTPUT_PARENT / "hybrid-r3-unit-redirect-source"
+    redirected = pathlib.Path("/tmp/hybrid-r3-unit-redirect-target")
+    assert not os.path.lexists(original)
+    assert not os.path.lexists(redirected)
+    plan, _ = runner.build_plan(
+        original,
+        apply=True,
+        allow_private_noncommercial_license=True,
+        allow_nonpromotable_material_conflict=True,
+    )
+    plan["attempt_root"] = str(redirected)
+    plan["content_digest"] = runner._content_digest(plan)
+
+    with pytest.raises(runner.RunnerError):
+        runner.apply_plan(plan, planned)
+
+    assert not os.path.lexists(original)
+    assert not os.path.lexists(redirected)
 
 
 @pytest.mark.parametrize(
@@ -588,10 +1064,27 @@ def test_all_upstream_phase2_dependencies_match_successful_r3_pins() -> None:
 
 def test_policy_preserves_production_and_merges_only_hssd_namespace() -> None:
     assert runner.HYBRID_POLICY["source_candidate"] == (
-        "accepted_production_r2_presentation_exact"
+        "accepted_production_r3_presentation_exact"
     )
     assert runner.HYBRID_POLICY["production_presentation_bundles_preserved"] == 3
-    assert runner.HYBRID_POLICY["production_external_pbr_placements_preserved"] == 45
+    assert runner.HYBRID_POLICY["production_pbr_backed_placements_preserved"] == 45
+    assert runner.HYBRID_POLICY["production_external_model_placements_preserved"] == 30
+    assert (
+        runner.HYBRID_POLICY["production_project_authored_pbr_placements_preserved"]
+        == 15
+    )
+    assert runner.HYBRID_POLICY["production_external_asset_provider"] == "poly_haven"
+    assert runner.HYBRID_POLICY["production_semantic_authority"] == (
+        "hidden_r1_collision_authority_preserved"
+    )
+    assert runner.HYBRID_POLICY["production_semantic_collision_profile"] == "BlockAll"
+    assert runner.HYBRID_POLICY["production_semantic_collision_mode"] == (
+        "QueryAndPhysics"
+    )
+    assert runner.HYBRID_POLICY["production_semantic_collision_responses"] == {
+        "Pawn": "Block",
+        "Visibility": "Block",
+    }
     assert runner.HYBRID_POLICY["hssd_namespace_merge"] == (
         "exact_sealed_namespace_only"
     )

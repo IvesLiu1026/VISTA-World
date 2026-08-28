@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build one sealed Production-R2 + HSSD hybrid R3 Unreal candidate.
+"""Build one sealed Production-R3 + HSSD hybrid R3 Unreal candidate.
 
 Dry-run is the default.  ``--apply`` is fail-closed and requires separate
 acknowledgements for the private/noncommercial HSSD license and its known
-material-fidelity conflict.  An apply copies the exact accepted Production R2
+material-fidelity conflict.  An apply copies the exact accepted Production R3
 presentation project, adds only the exact imported HSSD namespace from the
 successful Phase-2 R3 diagnostic, and composes 30 visual-only HSSD shells in
 the bedroom, office, and bathroom/laundry.  The already dressed entry, living,
@@ -59,48 +59,116 @@ REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT_PARENT = pathlib.Path(
     "/data/sysx/vista-world/runs/vista-action-world-r1"
 )
-PRODUCTION_ATTEMPT_ROOT = DEFAULT_OUTPUT_PARENT / "ue/attempt-golden-r2-presentation-r1"
+PRODUCTION_ATTEMPT_ROOT = DEFAULT_OUTPUT_PARENT / "ue/attempt-golden-r3-presentation-r1"
 PRODUCTION_PROJECT_ROOT = PRODUCTION_ATTEMPT_ROOT / "project"
 PRODUCTION_PROJECT_NAME = "VistaPlayableHome.uproject"
 PRODUCTION_PROJECT_DESCRIPTOR_SHA256 = (
     "784fbbf0bf2f2581571de6b190dc4d7e5f328d9c10ef561a8d9bb851e02604b4"
 )
 PRODUCTION_PROJECT_TREE_SHA256 = (
-    "e7c22f11a88b221ea8967ece143f54bf713c1853f3e9e722d4ee61b86559e508"
+    "9d8c234e12507b8c3d9e449cb6dafacb4d62b16ea2884dcdb1d35631bfdd30d6"
 )
-PRODUCTION_PROJECT_FILE_COUNT = 703
+PRODUCTION_PROJECT_FILE_COUNT = 745
 PRODUCTION_PROJECT_DIRECTORY_COUNT = 190
-PRODUCTION_PROJECT_TOTAL_BYTES = 2_487_781_125
+PRODUCTION_PROJECT_TOTAL_BYTES = 2_497_876_659
 PRODUCTION_COPY_ROOTS = ("Config", "Content", "Plugins")
 PRODUCTION_EXCLUDED_ROOTS = ("DerivedDataCache",)
 PRODUCTION_EVIDENCE_PINS = {
     "result-receipt.json": (
-        "99855109d15999f0ad1d3c5ab19149f98b7489db4b3e9321226743176d5c0433"
+        "5e2f511f5b42b99066b1f1ab5293f78d9dde25490ecf1f3cf48a888e800abe43"
+    ),
+    "import-receipt.json": (
+        "649e53e28183aa25a27ebf0939c82143a158ba8bb76a68548f22fbd704f26e7a"
+    ),
+    "scene-receipt.json": (
+        "4acb2541348c30107e259df7a0bec0214736d88fdd06c747f0855e76beb32dfd"
     ),
     "presentation-import-receipt.json": (
-        "0f806fbf73f34a61ee7364bb9a47249fe5ebfa7d1279fe4017f06be9483d421c"
+        "7e46e1fb338b586ca0a64a1a917f07b8ca61a6c16df0b6bf662159ebd86c83b4"
     ),
     "presentation-scene-receipt.json": (
-        "5593a3fd88b8f22df2165b27ac759addbb6e7748f57eb10359220c999c12badf"
+        "3cd656faee49d53e067337242fd3b7a00fd1a326af9c59a0dbdc14e7712a009f"
+    ),
+    "contracts/presentation-artifact-receipt.json": (
+        "f4c55a1ef674ad3ba3cfa980e4321255663437fc0811723768ce32ce604488c5"
     ),
     "contracts/presentation-manifest.json": (
-        "6b0ce9525c559f2ba7691143e5b304586e0a17cb00be374aea8902f9006217f4"
+        "b5c6b0dd2d172255cb5f7bb494657b8c1ed7f2f7a214557b08d7642590e0a71e"
     ),
 }
 PRODUCTION_RESULT_CONTENT_DIGEST = (
-    "4e84c7cd5c9feaff8e42aa643883da0754b56555ef006b2462a96568e68be98b"
+    "03208aa552b8945e9ac4b4fdb15fe2862477e9f66ac79fb904ee0c623d7e975f"
 )
 PRODUCTION_MAP_SHA256 = (
-    "a7883850bf655fedfa56350e5d6d0d1fd36be62df56ef35b7b4de6571a1e9310"
+    "4767da064bcb0f470724635579e50fc288984cd2328849adda8a41b8e2e71a9f"
 )
 PRODUCTION_PRESENTATION_ROOMS = (
     "home.r1/room.entry_hall",
     "home.r1/room.kitchen_dining",
     "home.r1/room.living_room",
 )
-PRODUCTION_PBR_PLACEMENT_COUNT = 45
+PRODUCTION_PBR_BACKED_PLACEMENT_COUNT = 45
+PRODUCTION_EXTERNAL_MODEL_PLACEMENT_COUNT = 30
+PRODUCTION_PROJECT_AUTHORED_PBR_PLACEMENT_COUNT = 15
+PRODUCTION_PBR_PLACEMENTS_SHA256 = (
+    "56351a7753a9eb82169e78fc9164d901fa43c37f6ab7c55bf070aa6fa7f55ed4"
+)
+PRODUCTION_EXTERNAL_MODEL_PLACEMENTS_SHA256 = (
+    "9f05ceb0d9a69c60f68bc2d44217b91da4de7a343b044b4685153f89923aff0e"
+)
+PRODUCTION_PROJECT_AUTHORED_PBR_PLACEMENTS_SHA256 = (
+    "c10700a59ec8f8b4836c85ef0417f640db4c30c689f43a8634356434ceb15135"
+)
+PRODUCTION_PROJECT_AUTHORED_PBR_MATERIAL_IDS = (
+    "visual.material.poly_wool_herringbone",
+    "visual.material.white_oak_veneer",
+)
+PRODUCTION_EXTERNAL_PLACEMENT_CONTENT_DIGEST = (
+    "6f13455faf22205aa36f7ea055ad9405c936a4747602bc44d784ed4ced964c0d"
+)
+PRODUCTION_EXTERNAL_PLACEMENT_MANIFEST_SHA256 = (
+    "918e5eb53ffba60e83e30a33163d033aba2262c57cdded45f810351e650dfc76"
+)
 PRODUCTION_PRESENTATION_BUNDLE_COUNT = 3
 PRODUCTION_SEMANTIC_TARGET_COUNT = 5
+PRODUCTION_BASE_IMPORT_ASSET_COUNT = 38
+PRODUCTION_PRESENTATION_ARTIFACT_COUNT = 56
+PRODUCTION_EXTERNAL_ASSET_SOURCE_COUNT = 22
+PRODUCTION_EXTERNAL_MODEL_SOURCE_COUNT = 20
+PRODUCTION_EXTERNAL_TEXTURE_SOURCE_COUNT = 2
+PRODUCTION_EXTERNAL_2K_SOURCE_COUNT = 18
+PRODUCTION_EXTERNAL_4K_SOURCE_COUNT = 4
+PRODUCTION_EXTERNAL_ASSET_PROVIDER = "poly_haven"
+PRODUCTION_MINIMUM_TEXTURE_SIZE_PX = 2048
+PRODUCTION_PBR_COMPLETE_MATERIAL_COUNT = 63
+PRODUCTION_TEXTURE_COUNT = 189
+PRODUCTION_SEMANTIC_AUTHORITY = "hidden_r1_collision_authority_preserved"
+PRODUCTION_SEMANTIC_COLLISION_PROFILE = "BlockAll"
+PRODUCTION_SEMANTIC_COLLISION_MODE = "QueryAndPhysics"
+PRODUCTION_SEMANTIC_COLLISION_RESPONSES = {
+    "Pawn": "Block",
+    "Visibility": "Block",
+}
+PRODUCTION_BUNDLE_EVIDENCE = {
+    "home.r1/room.entry_hall": {
+        "dressing_count": 3,
+        "semantic_target_count": 1,
+        "material_count": 16,
+        "texture_count": 48,
+    },
+    "home.r1/room.kitchen_dining": {
+        "dressing_count": 9,
+        "semantic_target_count": 2,
+        "material_count": 22,
+        "texture_count": 66,
+    },
+    "home.r1/room.living_room": {
+        "dressing_count": 28,
+        "semantic_target_count": 2,
+        "material_count": 25,
+        "texture_count": 75,
+    },
+}
 
 HSSD_PHASE2_ATTEMPT_ROOT = DEFAULT_OUTPUT_PARENT / (
     "hssd-ue-phase2-r3-diagnostic-20260828T072356Z"
@@ -331,9 +399,19 @@ HYBRID_POLICY = {
     "append_only_attempt": True,
     "quarantine_on_failure": True,
     "replace_existing": False,
-    "source_candidate": "accepted_production_r2_presentation_exact",
+    "source_candidate": "accepted_production_r3_presentation_exact",
     "production_presentation_bundles_preserved": 3,
-    "production_external_pbr_placements_preserved": 45,
+    "production_pbr_backed_placements_preserved": 45,
+    "production_external_model_placements_preserved": 30,
+    "production_project_authored_pbr_placements_preserved": 15,
+    "production_external_asset_provider": PRODUCTION_EXTERNAL_ASSET_PROVIDER,
+    "production_minimum_texture_size_px": PRODUCTION_MINIMUM_TEXTURE_SIZE_PX,
+    "production_semantic_authority": PRODUCTION_SEMANTIC_AUTHORITY,
+    "production_semantic_collision_profile": PRODUCTION_SEMANTIC_COLLISION_PROFILE,
+    "production_semantic_collision_mode": PRODUCTION_SEMANTIC_COLLISION_MODE,
+    "production_semantic_collision_responses": (
+        PRODUCTION_SEMANTIC_COLLISION_RESPONSES
+    ),
     "hssd_namespace_merge": "exact_sealed_namespace_only",
     "upstream_phase2_commandlet_reuse": (
         "exact_pinned_helper_definitions_terminal_run_replaced_for_30_room_slice"
@@ -612,17 +690,78 @@ def _load_evidence(
     return values
 
 
+def _production_semantic_visual_valid(value: Any) -> bool:
+    components = value.get("render_components") if isinstance(value, dict) else None
+    return (
+        isinstance(value, dict)
+        and isinstance(value.get("semantic_target_id"), str)
+        and bool(value["semantic_target_id"])
+        and value.get("semantic_id_property") == value["semantic_target_id"]
+        and value.get("actor_hidden_in_game") is True
+        and value.get("actor_class_path")
+        in {
+            "/Script/VistaPlayableHome.VistaSemanticPropActor",
+            "/Script/VistaPlayableHome.VistaStatefulApplianceActor",
+        }
+        and isinstance(value.get("interaction_affordances"), list)
+        and bool(value["interaction_affordances"])
+        and isinstance(components, list)
+        and bool(components)
+        and all(
+            isinstance(component, dict)
+            and component.get("collision_enabled") is True
+            and component.get("collision_profile")
+            == PRODUCTION_SEMANTIC_COLLISION_PROFILE
+            and component.get("visible") is False
+            for component in components
+        )
+    )
+
+
+def _production_external_source_is_pbr(value: Any) -> bool:
+    files = value.get("files") if isinstance(value, dict) else None
+    semantics = {
+        semantic
+        for record in files or []
+        if isinstance(record, dict)
+        for semantic in record.get("texture_semantics", [])
+    }
+    return (
+        isinstance(value, dict)
+        and value.get("asset_type") in {"model", "texture"}
+        and value.get("resolution") in {"2k", "4k"}
+        and isinstance(files, list)
+        and bool(files)
+        and {"base_color", "normal", "roughness"}.issubset(semantics)
+    )
+
+
+def _compact_json_sha256(value: Any) -> str:
+    return hashlib.sha256(
+        json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
 def _validate_production_evidence(
     evidence: Mapping[str, Mapping[str, Any]],
 ) -> None:
     result = evidence["result-receipt.json"]
+    base_import = evidence["import-receipt.json"]
+    base_scene = evidence["scene-receipt.json"]
     imported = evidence["presentation-import-receipt.json"]
     scene = evidence["presentation-scene-receipt.json"]
+    artifact_receipt = evidence["contracts/presentation-artifact-receipt.json"]
     manifest = evidence["contracts/presentation-manifest.json"]
     _require(
         result.get("schema_version")
         == "simworld.vista.playable-home-ue-build-result/v1"
         and result.get("status") == "accepted_candidate"
+        and result.get("visual_profile_id") == "realistic_interior_r2"
         and result.get("content_digest") == PRODUCTION_RESULT_CONTENT_DIGEST
         and _content_digest(result) == PRODUCTION_RESULT_CONTENT_DIGEST
         and result.get("attempt_root") == str(PRODUCTION_ATTEMPT_ROOT)
@@ -631,13 +770,50 @@ def _validate_production_evidence(
         == PRODUCTION_PRESENTATION_BUNDLE_COUNT
         and result.get("presentation_external_content_verified") is True
         and result.get("presentation_external_nanite_disabled_verified") is True
+        and result.get("import_receipt_sha256")
+        == PRODUCTION_EVIDENCE_PINS["import-receipt.json"]
+        and result.get("scene_receipt_sha256")
+        == PRODUCTION_EVIDENCE_PINS["scene-receipt.json"]
+        and result.get("base_scene_receipt_sha256")
+        == PRODUCTION_EVIDENCE_PINS["scene-receipt.json"]
         and result.get("presentation_import_receipt_sha256")
         == PRODUCTION_EVIDENCE_PINS["presentation-import-receipt.json"]
         and result.get("presentation_scene_receipt_sha256")
         == PRODUCTION_EVIDENCE_PINS["presentation-scene-receipt.json"]
+        and result.get("presentation_artifact_receipt_sha256")
+        == PRODUCTION_EVIDENCE_PINS["contracts/presentation-artifact-receipt.json"]
         and result.get("presentation_manifest_sha256")
-        == PRODUCTION_EVIDENCE_PINS["contracts/presentation-manifest.json"],
-        "Production R2 result is not the exact accepted external presentation candidate",
+        == PRODUCTION_EVIDENCE_PINS["contracts/presentation-manifest.json"]
+        and result.get("runtime_play_proof") == "pending"
+        and result.get("presentation_runtime_play_proof") == "pending"
+        and result.get("renderer_runtime_observation") == "pending"
+        and result.get("presentation_ue_import_observation")
+        == "verified_by_commandlet",
+        "Production R3 result is not the exact accepted external presentation candidate",
+    )
+    _require(
+        base_import.get("schema_version")
+        == "simworld.vista.playable-home-ue-import-receipt/v1"
+        and base_import.get("status") == "imported_candidate"
+        and base_import.get("error") is None
+        and len(base_import.get("assets", [])) == PRODUCTION_BASE_IMPORT_ASSET_COUNT
+        and base_import.get("gates", {}).get("all_assets_bound") is True
+        and base_import.get("gates", {}).get("core_textures_imported_and_used") is True
+        and base_import.get("gates", {}).get("quarantined") is False,
+        "Production R3 base import receipt differs",
+    )
+    _require(
+        base_scene.get("schema_version")
+        == "simworld.vista.playable-home-ue-scene-receipt/v1"
+        and base_scene.get("status") == "saved_reloaded_candidate"
+        and base_scene.get("error") is None
+        and base_scene.get("map_path") == MAP_PATH
+        and base_scene.get("gates", {}).get("map_saved") is True
+        and base_scene.get("gates", {}).get("map_reloaded") is True
+        and base_scene.get("gates", {}).get("semantic_tags_verified") is True
+        and base_scene.get("gates", {}).get("runtime_play_proof") == "pending"
+        and base_scene.get("gates", {}).get("quarantined") is False,
+        "Production R3 base scene receipt differs",
     )
     _require(
         imported.get("schema_version")
@@ -646,12 +822,14 @@ def _validate_production_evidence(
         and imported.get("error") is None
         and imported.get("gates", {}).get("exact_three_room_bundles") is True
         and imported.get("gates", {}).get("external_content_preserved") is True
+        and imported.get("gates", {}).get("materials_and_textures_inspected") is True
+        and imported.get("gates", {}).get("runtime_play_proof") == "pending"
         and imported.get("gates", {}).get("quarantined") is False
         and len(imported.get("assets", [])) == PRODUCTION_PRESENTATION_BUNDLE_COUNT,
-        "Production R2 presentation import receipt differs",
+        "Production R3 presentation import receipt differs",
     )
     rooms = scene.get("room_observations")
-    observed_pbr_placements = -1
+    observed_pbr_backed_placements = -1
     observed_semantic_targets: list[str] = []
     observed_dressing_ids: list[str] = []
     if isinstance(rooms, list) and all(isinstance(room, dict) for room in rooms):
@@ -667,7 +845,7 @@ def _validate_production_evidence(
                 for record in external_records
                 for dressing in record.get("dressing_ids", [])
             ]
-            observed_pbr_placements = len(observed_semantic_targets) + len(
+            observed_pbr_backed_placements = len(observed_semantic_targets) + len(
                 observed_dressing_ids
             )
     _require(
@@ -678,25 +856,215 @@ def _validate_production_evidence(
         and scene.get("map_path") == MAP_PATH
         and scene.get("gates", {}).get("exact_three_presentation_actors") is True
         and scene.get("gates", {}).get("hidden_r1_collision_authority_verified") is True
+        and scene.get("gates", {}).get("semantic_authority_preserved") is True
+        and scene.get("gates", {}).get("external_r1_semantic_visual_targets_verified")
+        is True
         and scene.get("gates", {}).get("presentation_no_collision_verified") is True
+        and scene.get("gates", {}).get("runtime_play_proof") == "pending"
         and scene.get("gates", {}).get("quarantined") is False
         and isinstance(rooms, list)
         and len(rooms) == PRODUCTION_PRESENTATION_BUNDLE_COUNT
         and tuple(sorted(room["room_id"] for room in rooms))
         == PRODUCTION_PRESENTATION_ROOMS
-        and observed_pbr_placements == PRODUCTION_PBR_PLACEMENT_COUNT
+        and observed_pbr_backed_placements == PRODUCTION_PBR_BACKED_PLACEMENT_COUNT
         and len(observed_semantic_targets) == PRODUCTION_SEMANTIC_TARGET_COUNT
         and len(set(observed_semantic_targets)) == len(observed_semantic_targets)
-        and len(set(observed_dressing_ids)) == len(observed_dressing_ids),
-        "Production R2 presentation scene receipt differs",
+        and len(set(observed_dressing_ids)) == len(observed_dressing_ids)
+        and all(
+            room.get("r1_authority_hidden_in_game") is True
+            and room.get("r1_authority_component_visible") is False
+            and room.get("r1_authority_collision_profile")
+            == PRODUCTION_SEMANTIC_COLLISION_PROFILE
+            and {
+                item.get("semantic_target_id")
+                for item in room.get("r1_semantic_visual_observations", [])
+                if isinstance(item, dict)
+            }
+            == set(room["external_content"]["semantic_target_ids"])
+            and all(
+                _production_semantic_visual_valid(item)
+                for item in room.get("r1_semantic_visual_observations", [])
+            )
+            for room in rooms
+        ),
+        "Production R3 presentation scene receipt differs",
+    )
+    bundles = manifest.get("ue_import_bundles")
+    bundle_by_room = (
+        {bundle.get("room_id"): bundle for bundle in bundles}
+        if isinstance(bundles, list)
+        and all(isinstance(bundle, dict) for bundle in bundles)
+        else {}
+    )
+    external_placement = manifest.get("external_placement")
+    sources = (
+        external_placement.get("asset_sources")
+        if isinstance(external_placement, dict)
+        else None
+    )
+    placements = (
+        external_placement.get("placements")
+        if isinstance(external_placement, dict)
+        else None
+    )
+    external_models = (
+        [
+            item
+            for item in placements
+            if item.get("realization_mode") == "external_blend"
+        ]
+        if isinstance(placements, list)
+        and all(isinstance(item, dict) for item in placements)
+        else []
+    )
+    project_authored = (
+        [
+            item
+            for item in placements
+            if item.get("realization_mode") == "project_authored"
+        ]
+        if isinstance(placements, list)
+        and all(isinstance(item, dict) for item in placements)
+        else []
+    )
+    source_by_id = (
+        {source.get("logical_asset_id"): source for source in sources}
+        if isinstance(sources, list)
+        and all(isinstance(source, dict) for source in sources)
+        else {}
     )
     _require(
         manifest.get("schema_version")
         == "simworld.vista.playable-home-realism-forge/v2"
         and manifest.get("visual_profile_id") == "realistic_interior_r2"
-        and len(manifest.get("ue_import_bundles", []))
-        == PRODUCTION_PRESENTATION_BUNDLE_COUNT,
-        "Production R2 presentation manifest differs",
+        and manifest.get("build_quality", {}).get("production_minimum_texture_size_px")
+        == PRODUCTION_MINIMUM_TEXTURE_SIZE_PX
+        and manifest.get("build_quality", {}).get("accepted_as_r2_visual_evidence")
+        is False
+        and manifest.get("build_quality", {}).get(
+            "requires_downstream_asset_and_ue_review"
+        )
+        is True
+        and manifest.get("external_placement", {})
+        .get("acquisition_receipt", {})
+        .get("provider")
+        == PRODUCTION_EXTERNAL_ASSET_PROVIDER
+        and isinstance(sources, list)
+        and len(sources) == PRODUCTION_EXTERNAL_ASSET_SOURCE_COUNT
+        and len(source_by_id) == PRODUCTION_EXTERNAL_ASSET_SOURCE_COUNT
+        and sum(source.get("asset_type") == "model" for source in sources)
+        == PRODUCTION_EXTERNAL_MODEL_SOURCE_COUNT
+        and sum(source.get("asset_type") == "texture" for source in sources)
+        == PRODUCTION_EXTERNAL_TEXTURE_SOURCE_COUNT
+        and sum(source.get("resolution") == "2k" for source in sources)
+        == PRODUCTION_EXTERNAL_2K_SOURCE_COUNT
+        and sum(source.get("resolution") == "4k" for source in sources)
+        == PRODUCTION_EXTERNAL_4K_SOURCE_COUNT
+        and all(_production_external_source_is_pbr(source) for source in sources)
+        and isinstance(placements, list)
+        and len(placements) == PRODUCTION_PBR_BACKED_PLACEMENT_COUNT
+        and _compact_json_sha256(placements) == PRODUCTION_PBR_PLACEMENTS_SHA256
+        and len(external_models) == PRODUCTION_EXTERNAL_MODEL_PLACEMENT_COUNT
+        and _compact_json_sha256(external_models)
+        == PRODUCTION_EXTERNAL_MODEL_PLACEMENTS_SHA256
+        and len(project_authored) == PRODUCTION_PROJECT_AUTHORED_PBR_PLACEMENT_COUNT
+        and _compact_json_sha256(project_authored)
+        == PRODUCTION_PROJECT_AUTHORED_PBR_PLACEMENTS_SHA256
+        and external_placement.get("content_digest")
+        == PRODUCTION_EXTERNAL_PLACEMENT_CONTENT_DIGEST
+        and external_placement.get("placement_manifest_sha256")
+        == PRODUCTION_EXTERNAL_PLACEMENT_MANIFEST_SHA256
+        and {
+            item.get("semantic_target_id")
+            for item in placements
+            if item.get("placement_kind") == "semantic_fixed"
+        }
+        == set(observed_semantic_targets)
+        and {
+            item.get("placement_id")
+            for item in placements
+            if item.get("placement_kind") == "dressing"
+        }
+        == set(observed_dressing_ids)
+        and len({item.get("placement_id") for item in placements})
+        == PRODUCTION_PBR_BACKED_PLACEMENT_COUNT
+        and all(
+            isinstance(item.get("source_logical_asset_id"), str)
+            and item.get("source_logical_asset_id") in source_by_id
+            and source_by_id[item["source_logical_asset_id"]].get("asset_type")
+            == "model"
+            and item.get("source_tree_sha256")
+            == source_by_id[item["source_logical_asset_id"]].get("source_tree_sha256")
+            and item.get("geometry_recipe") is None
+            for item in external_models
+        )
+        and all(
+            item.get("source_logical_asset_id") is None
+            and item.get("source_tree_sha256") is None
+            and isinstance(item.get("geometry_recipe"), str)
+            and bool(item["geometry_recipe"])
+            and isinstance(item.get("material_logical_asset_ids"), list)
+            and bool(item["material_logical_asset_ids"])
+            and set(item["material_logical_asset_ids"]).issubset(
+                PRODUCTION_PROJECT_AUTHORED_PBR_MATERIAL_IDS
+            )
+            for item in project_authored
+        )
+        and {
+            material
+            for item in project_authored
+            for material in item["material_logical_asset_ids"]
+        }
+        == set(PRODUCTION_PROJECT_AUTHORED_PBR_MATERIAL_IDS)
+        and all(
+            material in source_by_id
+            and source_by_id[material].get("asset_type") == "texture"
+            and source_by_id[material].get("resolution") == "4k"
+            for material in PRODUCTION_PROJECT_AUTHORED_PBR_MATERIAL_IDS
+        )
+        and isinstance(bundles, list)
+        and len(bundles) == PRODUCTION_PRESENTATION_BUNDLE_COUNT
+        and set(bundle_by_room) == set(PRODUCTION_BUNDLE_EVIDENCE)
+        and all(
+            bundle_by_room[room_id].get("mesh_count") == 1
+            and bundle_by_room[room_id].get("material_count")
+            == expected["material_count"]
+            and bundle_by_room[room_id].get("pbr_complete_material_count")
+            == expected["material_count"]
+            and bundle_by_room[room_id].get("texture_count")
+            == expected["texture_count"]
+            and len(
+                bundle_by_room[room_id]
+                .get("external_content", {})
+                .get("semantic_target_ids", [])
+            )
+            == expected["semantic_target_count"]
+            and len(
+                bundle_by_room[room_id]
+                .get("external_content", {})
+                .get("dressing_ids", [])
+            )
+            == expected["dressing_count"]
+            and bundle_by_room[room_id].get("collision_policy")
+            == "presentation_no_collision_use_hidden_r1_proxies"
+            and bundle_by_room[room_id].get("unreal_collision_profile") == "NoCollision"
+            and bundle_by_room[room_id].get("semantic_policy")
+            == "presentation_only_preserve_r1_authority"
+            for room_id, expected in PRODUCTION_BUNDLE_EVIDENCE.items()
+        )
+        and sum(bundle["pbr_complete_material_count"] for bundle in bundles)
+        == PRODUCTION_PBR_COMPLETE_MATERIAL_COUNT
+        and sum(bundle["texture_count"] for bundle in bundles)
+        == PRODUCTION_TEXTURE_COUNT,
+        "Production R3 presentation manifest differs",
+    )
+    _require(
+        artifact_receipt.get("schema_version")
+        == "simworld.vista.playable-home-realism-artifacts/v2"
+        and len(artifact_receipt.get("artifacts", []))
+        == PRODUCTION_PRESENTATION_ARTIFACT_COUNT
+        and artifact_receipt.get("ue_import_bundles") == bundles,
+        "Production R3 presentation artifact receipt differs",
     )
 
 
@@ -1073,7 +1441,7 @@ def _derive_selected_placements() -> tuple[dict[str, Any], ...]:
 
 def validate_sources() -> AcceptedSources:
     production_evidence = _load_evidence(
-        PRODUCTION_ATTEMPT_ROOT, PRODUCTION_EVIDENCE_PINS, "Production R2 evidence"
+        PRODUCTION_ATTEMPT_ROOT, PRODUCTION_EVIDENCE_PINS, "Production R3 evidence"
     )
     _validate_production_evidence(production_evidence)
     hssd_evidence = _load_evidence(
@@ -1085,7 +1453,7 @@ def validate_sources() -> AcceptedSources:
         == PRODUCTION_PROJECT_DESCRIPTOR_SHA256
         and _sha256(PRODUCTION_PROJECT_ROOT / pathlib.Path(MAP_RELATIVE_FILE))
         == PRODUCTION_MAP_SHA256,
-        "Production R2 descriptor or presentation map byte pin differs",
+        "Production R3 descriptor or presentation map byte pin differs",
     )
     production = _snapshot_tree(
         PRODUCTION_PROJECT_ROOT,
@@ -1103,7 +1471,7 @@ def validate_sources() -> AcceptedSources:
         file_count=PRODUCTION_PROJECT_FILE_COUNT,
         directory_count=PRODUCTION_PROJECT_DIRECTORY_COUNT,
         total_bytes=PRODUCTION_PROJECT_TOTAL_BYTES,
-        label="Production R2 project",
+        label="Production R3 project",
     )
     hssd_namespace = _snapshot_tree(HSSD_NAMESPACE_SOURCE)
     _assert_snapshot(
@@ -1203,6 +1571,34 @@ def _fresh_attempt(attempt_root: pathlib.Path) -> pathlib.Path:
     return attempt
 
 
+def _production_source_summary(sources: AcceptedSources) -> dict[str, Any]:
+    return {
+        "attempt_root": str(PRODUCTION_ATTEMPT_ROOT),
+        "result_receipt_sha256": PRODUCTION_EVIDENCE_PINS["result-receipt.json"],
+        "evidence_sha256": dict(PRODUCTION_EVIDENCE_PINS),
+        "project_tree_sha256": sources.production.snapshot.tree_sha256,
+        "project_file_count": len(sources.production.snapshot.files),
+        "project_directory_count": len(sources.production.snapshot.directories),
+        "project_total_bytes": sources.production.snapshot.total_bytes,
+        "map_sha256": PRODUCTION_MAP_SHA256,
+        "presentation_bundle_count": PRODUCTION_PRESENTATION_BUNDLE_COUNT,
+        "pbr_backed_placement_count": PRODUCTION_PBR_BACKED_PLACEMENT_COUNT,
+        "external_model_placement_count": PRODUCTION_EXTERNAL_MODEL_PLACEMENT_COUNT,
+        "project_authored_pbr_placement_count": (
+            PRODUCTION_PROJECT_AUTHORED_PBR_PLACEMENT_COUNT
+        ),
+        "external_asset_source_count": PRODUCTION_EXTERNAL_ASSET_SOURCE_COUNT,
+        "external_asset_provider": PRODUCTION_EXTERNAL_ASSET_PROVIDER,
+        "minimum_texture_size_px": PRODUCTION_MINIMUM_TEXTURE_SIZE_PX,
+        "semantic_target_count": PRODUCTION_SEMANTIC_TARGET_COUNT,
+        "semantic_authority": PRODUCTION_SEMANTIC_AUTHORITY,
+        "semantic_collision_profile": PRODUCTION_SEMANTIC_COLLISION_PROFILE,
+        "semantic_collision_mode": PRODUCTION_SEMANTIC_COLLISION_MODE,
+        "semantic_collision_responses": PRODUCTION_SEMANTIC_COLLISION_RESPONSES,
+        "runtime_play_proof": "pending",
+    }
+
+
 def build_plan(
     attempt_root: pathlib.Path,
     *,
@@ -1239,19 +1635,7 @@ def build_plan(
             "full_material_fidelity": False,
             "promotable": False,
             "diagnostic_only": True,
-            "production_source": {
-                "attempt_root": str(PRODUCTION_ATTEMPT_ROOT),
-                "result_receipt_sha256": PRODUCTION_EVIDENCE_PINS[
-                    "result-receipt.json"
-                ],
-                "project_tree_sha256": sources.production.snapshot.tree_sha256,
-                "project_file_count": len(sources.production.snapshot.files),
-                "project_directory_count": len(sources.production.snapshot.directories),
-                "project_total_bytes": sources.production.snapshot.total_bytes,
-                "map_sha256": PRODUCTION_MAP_SHA256,
-                "presentation_bundle_count": PRODUCTION_PRESENTATION_BUNDLE_COUNT,
-                "external_pbr_placement_count": PRODUCTION_PBR_PLACEMENT_COUNT,
-            },
+            "production_source": _production_source_summary(sources),
             "hssd_source": {
                 "attempt_root": str(HSSD_PHASE2_ATTEMPT_ROOT),
                 "host_receipt_sha256": HSSD_EVIDENCE_PINS[
@@ -1426,7 +1810,7 @@ def _validate_post_project_projection(
     )
     map_relative = MAP_RELATIVE_FILE.as_posix()
     _require(
-        map_relative in production_files, "Production R2 map projection is missing"
+        map_relative in production_files, "Production R3 map projection is missing"
     )
     for relative, expected in production_files.items():
         if relative == map_relative:
@@ -1435,7 +1819,7 @@ def _validate_post_project_projection(
         _require(
             current.sha256 == expected.sha256
             and current.size_bytes == expected.size_bytes,
-            "post-composition Production R2 file changed: " + relative,
+            "post-composition Production R3 file changed: " + relative,
         )
     for relative, expected in namespace_files.items():
         current = observed_files[relative]
@@ -1488,7 +1872,7 @@ def _materialize_inputs(
             PRODUCTION_ATTEMPT_ROOT / relative,
             target,
             expected_sha,
-            "Production R2 evidence " + relative,
+            "Production R3 evidence " + relative,
         )
         production_evidence[relative] = {
             "path": str(target),
@@ -1520,7 +1904,7 @@ def _materialize_inputs(
         _sha256(project / PRODUCTION_PROJECT_NAME)
         == PRODUCTION_PROJECT_DESCRIPTOR_SHA256
         and _sha256(project / pathlib.Path(MAP_RELATIVE_FILE)) == PRODUCTION_MAP_SHA256,
-        "materialized hybrid baseline changed the Production R2 descriptor or map",
+        "materialized hybrid baseline changed the Production R3 descriptor or map",
     )
     return {
         "scripts": scripts,
@@ -1548,7 +1932,9 @@ def _build_execution(
         "namespace_relative_path": HSSD_NAMESPACE_RELATIVE.as_posix(),
         "namespace_tree_sha256": HSSD_NAMESPACE_TREE_SHA256,
         "map_path": MAP_PATH,
-        "production_pbr_placement_count": PRODUCTION_PBR_PLACEMENT_COUNT,
+        "production_pbr_backed_placement_count": (
+            PRODUCTION_PBR_BACKED_PLACEMENT_COUNT
+        ),
         "production_presentation_rooms": list(PRODUCTION_PRESENTATION_ROOMS),
         "production_room_observations": copy.deepcopy(
             sources.production_scene["room_observations"]
@@ -1621,7 +2007,7 @@ def load_execution_for_commandlet(
         "namespace_relative_path",
         "namespace_tree_sha256",
         "map_path",
-        "production_pbr_placement_count",
+        "production_pbr_backed_placement_count",
         "production_presentation_rooms",
         "production_room_observations",
         "contracts",
@@ -1653,8 +2039,8 @@ def load_execution_for_commandlet(
         and execution["namespace_relative_path"] == HSSD_NAMESPACE_RELATIVE.as_posix()
         and execution["namespace_tree_sha256"] == HSSD_NAMESPACE_TREE_SHA256
         and execution["map_path"] == MAP_PATH
-        and execution["production_pbr_placement_count"]
-        == PRODUCTION_PBR_PLACEMENT_COUNT
+        and execution["production_pbr_backed_placement_count"]
+        == PRODUCTION_PBR_BACKED_PLACEMENT_COUNT
         and execution["production_presentation_rooms"]
         == list(PRODUCTION_PRESENTATION_ROOMS)
         and execution["policy"] == HYBRID_POLICY
@@ -1723,7 +2109,7 @@ def load_execution_for_commandlet(
     _require(
         isinstance(production_records, dict)
         and set(production_records) == set(PRODUCTION_EVIDENCE_PINS),
-        "hybrid Production R2 evidence inventory differs",
+        "hybrid Production R3 evidence inventory differs",
     )
     production_values: dict[str, dict[str, Any]] = {}
     for relative, expected_evidence_sha in PRODUCTION_EVIDENCE_PINS.items():
@@ -1732,18 +2118,18 @@ def load_execution_for_commandlet(
             root=attempt / "production-evidence",
             expected_name=pathlib.Path(relative).name,
             expected_sha=expected_evidence_sha,
-            label="hybrid Production R2 evidence " + relative,
+            label="hybrid Production R3 evidence " + relative,
         )
         production_values[relative] = _read_pinned_json(
             evidence_path,
             expected_evidence_sha,
-            "hybrid Production R2 evidence " + relative,
+            "hybrid Production R3 evidence " + relative,
         )
     _validate_production_evidence(production_values)
     _require(
         execution["production_room_observations"]
         == production_values["presentation-scene-receipt.json"]["room_observations"],
-        "hybrid Production R2 room observations differ",
+        "hybrid Production R3 room observations differ",
     )
 
     hssd_records = execution["hssd_evidence"]
@@ -2278,6 +2664,110 @@ def _historical_semantic_proxy_component_total(proxies: Any) -> int:
     return total
 
 
+def _production_expected_semantics(rooms: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(rooms, list):
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    for room in rooms:
+        if not isinstance(room, dict):
+            return {}
+        values = room.get("r1_semantic_visual_observations")
+        if not isinstance(values, list):
+            return {}
+        for value in values:
+            semantic_target_id = (
+                value.get("semantic_target_id") if isinstance(value, dict) else None
+            )
+            if (
+                not isinstance(semantic_target_id, str)
+                or not semantic_target_id
+                or semantic_target_id in result
+            ):
+                return {}
+            result[semantic_target_id] = value
+    return result
+
+
+def _normalized_semantic_affordances(values: Any) -> list[str] | None:
+    if not isinstance(values, list) or not all(
+        isinstance(value, str) for value in values
+    ):
+        return None
+    result = []
+    for value in values:
+        label = value.strip().strip("<>")
+        if "." in label:
+            label = label.rsplit(".", 1)[-1]
+        if ":" in label:
+            label = label.split(":", 1)[0]
+        label = label.strip().lower()
+        if not label or label in result:
+            return None
+        result.append(label)
+    return sorted(result)
+
+
+def _production_runtime_semantic_valid(value: Any, expected: Any) -> bool:
+    if not isinstance(value, dict) or not isinstance(expected, dict):
+        return False
+    semantic_target_id = expected.get("semantic_target_id")
+    components = value.get("components")
+    expected_components = expected.get("render_components")
+    state = value.get("semantic_state")
+    if not (
+        isinstance(semantic_target_id, str)
+        and value.get("semantic_target_id") == semantic_target_id
+        and value.get("actor_path") == expected.get("actor_path")
+        and value.get("actor_class_path") == expected.get("actor_class_path")
+        and value.get("actor_hidden_in_game") is True
+        and value.get("actor_collision_enabled") is True
+        and isinstance(value.get("tags"), list)
+        and "VistaSemanticId=" + semantic_target_id in value["tags"]
+        and _historical_semantic_state_valid(state, semantic_target_id)
+        and _normalized_semantic_affordances(state.get("allowed_affordances"))
+        == sorted(expected.get("interaction_affordances", []))
+        and isinstance(components, list)
+        and isinstance(expected_components, list)
+        and len(components) == len(expected_components) > 0
+    ):
+        return False
+    actual_by_path = {
+        component.get("component_path"): component
+        for component in components
+        if isinstance(component, dict)
+    }
+    expected_by_path = {
+        component.get("component_path"): component
+        for component in expected_components
+        if isinstance(component, dict)
+    }
+    return (
+        len(actual_by_path) == len(components)
+        and len(expected_by_path) == len(expected_components)
+        and set(actual_by_path) == set(expected_by_path)
+        and all(
+            actual_by_path[path].get("collision_profile")
+            == expected_by_path[path].get("collision_profile")
+            == PRODUCTION_SEMANTIC_COLLISION_PROFILE
+            and actual_by_path[path].get("collision_mode")
+            == PRODUCTION_SEMANTIC_COLLISION_MODE
+            and actual_by_path[path].get("collision_responses")
+            == PRODUCTION_SEMANTIC_COLLISION_RESPONSES
+            and actual_by_path[path].get("collision_enabled")
+            is expected_by_path[path].get("collision_enabled")
+            is True
+            and actual_by_path[path].get("simulate_physics") is False
+            and actual_by_path[path].get("generate_overlap_events") is False
+            and actual_by_path[path].get("visible")
+            is expected_by_path[path].get("visible")
+            is False
+            and isinstance(actual_by_path[path].get("mesh_path"), str)
+            and bool(actual_by_path[path]["mesh_path"])
+            for path in expected_by_path
+        )
+    )
+
+
 def _presentation_observation_valid(value: Any) -> bool:
     expected_keys = {
         "room_id",
@@ -2358,7 +2848,8 @@ def validate_terminal(
         "exact_source_evidence_revalidated",
         "production_map_loaded",
         "production_three_presentation_bundles_preserved",
-        "production_external_pbr_placements_preserved",
+        "production_semantic_collision_authority_preserved",
+        "production_pbr_backed_placements_preserved",
         "exact_hssd_namespace_loaded",
         "exact_30_hssd_placements_spawned",
         "exact_10_per_selected_room",
@@ -2407,7 +2898,7 @@ def validate_terminal(
         "bindings",
         "content_namespace",
         "map_path",
-        "production_pbr_placement_count",
+        "production_pbr_backed_placement_count",
         "production_presentation_before",
         "production_presentation_reloaded",
         "production_semantic_authority_before",
@@ -2436,9 +2927,16 @@ def validate_terminal(
         for target in room["external_content"]["semantic_target_ids"]
     }
     observed_production_targets = (
-        {item.get("semantic_target_id") for item in semantic_before}
+        {
+            item.get("semantic_target_id")
+            for item in semantic_before
+            if isinstance(item, dict)
+        }
         if isinstance(semantic_before, list)
         else set()
+    )
+    expected_production_semantics = _production_expected_semantics(
+        execution["production_room_observations"]
     )
     valid = (
         set(result) == {"status", "receipt", "sha256"}
@@ -2460,8 +2958,8 @@ def validate_terminal(
         and receipt.get("diagnostic_only") is True
         and receipt.get("content_namespace") == HISTORICAL_HSSD_NAMESPACE
         and receipt.get("map_path") == MAP_PATH
-        and receipt.get("production_pbr_placement_count")
-        == PRODUCTION_PBR_PLACEMENT_COUNT
+        and receipt.get("production_pbr_backed_placement_count")
+        == PRODUCTION_PBR_BACKED_PLACEMENT_COUNT
         and receipt.get("policy") == HYBRID_POLICY
         and isinstance(bindings, dict)
         and set(bindings) == expected_binding_keys
@@ -2500,14 +2998,12 @@ def validate_terminal(
         and semantic_before == semantic_reloaded
         and len(expected_production_targets) == PRODUCTION_SEMANTIC_TARGET_COUNT
         and observed_production_targets == expected_production_targets
+        and set(expected_production_semantics) == expected_production_targets
         and all(
             isinstance(item, dict)
-            and item.get("actor_hidden_in_game") is True
-            and item.get("actor_collision_enabled") is True
-            and isinstance(item.get("components"), list)
-            and item["components"]
-            and all(
-                component.get("visible") is False for component in item["components"]
+            and item.get("semantic_target_id") in expected_production_semantics
+            and _production_runtime_semantic_valid(
+                item, expected_production_semantics[item["semantic_target_id"]]
             )
             for item in semantic_before
         )
@@ -2536,26 +3032,21 @@ def validate_terminal(
 
 
 def apply_plan(plan: Mapping[str, Any], sources: AcceptedSources) -> dict[str, Any]:
-    if (
-        plan.get("schema_version") != RUNNER_SCHEMA
-        or plan.get("mode") != "diagnostic_apply"
-        or plan.get("will_write") is not True
-        or plan.get("will_run_unreal") is not True
-        or plan.get("private_noncommercial_license_authorized") is not True
-        or plan.get("nonpromotable_material_conflict_authorized") is not True
-        or plan.get("accepted_as_visual_evidence") is not False
-        or plan.get("full_material_fidelity") is not False
-        or plan.get("promotable") is not False
-        or plan.get("diagnostic_only") is not True
-        or plan.get("policy") != HYBRID_POLICY
-        or plan.get("content_digest") != _content_digest(plan)
-        or plan.get("production_source", {}).get("project_tree_sha256")
-        != sources.production.snapshot.tree_sha256
-        or plan.get("hssd_source", {}).get("namespace_tree_sha256")
-        != sources.hssd_namespace.snapshot.tree_sha256
-    ):
+    try:
+        attempt_value = plan.get("attempt_root")
+        _require(isinstance(attempt_value, str), "hybrid R3 attempt binding differs")
+        attempt = _fresh_attempt(pathlib.Path(attempt_value))
+        expected_plan, verified_sources = build_plan(
+            attempt,
+            apply=True,
+            allow_private_noncommercial_license=True,
+            allow_nonpromotable_material_conflict=True,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        raise RunnerError("intact authorized hybrid R3 apply plan is required") from exc
+    if dict(plan) != expected_plan:
         raise RunnerError("intact authorized hybrid R3 apply plan is required")
-    attempt = pathlib.Path(plan["attempt_root"])
+    sources = verified_sources
     attempt.mkdir(mode=PRIVATE_DIRECTORY_MODE)
     try:
         materialized = _materialize_inputs(attempt, plan, sources)
@@ -2676,8 +3167,8 @@ def apply_plan(plan: Mapping[str, Any], sources: AcceptedSources) -> dict[str, A
                 "production_presentation_bundle_count": len(
                     receipt["production_presentation_reloaded"]
                 ),
-                "production_external_pbr_placement_count": (
-                    PRODUCTION_PBR_PLACEMENT_COUNT
+                "production_pbr_backed_placement_count": (
+                    PRODUCTION_PBR_BACKED_PLACEMENT_COUNT
                 ),
                 "hssd_placement_count": len(receipt["hssd_actors"]),
                 "hssd_room_counts": dict(SELECTED_ROOM_COUNTS),

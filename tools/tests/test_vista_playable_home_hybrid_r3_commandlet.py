@@ -94,6 +94,8 @@ def test_production_semantic_authority_rejects_duplicates(commandlet) -> None:
 
 def test_commandlet_uses_pinned_upstream_helpers_and_filtered_execution() -> None:
     source = COMMANDLET.read_text(encoding="utf-8")
+    assert "Production R3" in source
+    assert "Production R2" not in source
     assert "load_upstream_commandlet_helpers" in source
     assert 'execution["scripts"]["upstream_phase2_commandlet"]' in source
     assert "placements, imported" in source
@@ -102,6 +104,9 @@ def test_commandlet_uses_pinned_upstream_helpers_and_filtered_execution() -> Non
     assert "len(hssd_actors) == hybrid.HSSD_PLACEMENT_COUNT" in source
     assert "hybrid.HISTORICAL_ENGINE_VERSION" in source
     assert "hybrid.HISTORICAL_HSSD_ASSET_IDS" in source
+    assert "hybrid._production_runtime_semantic_valid" in source
+    assert "expected_production_semantics" in source
+    assert '"production_semantic_collision_authority_preserved"' in source
     assert "hybrid.phase2." not in source
 
 

@@ -1,4 +1,4 @@
-"""Compose the sealed 30-placement HSSD slice into Production R2."""
+"""Compose the sealed 30-placement HSSD slice into Production R3."""
 
 from __future__ import annotations
 
@@ -77,7 +77,7 @@ def _presentation_observation(actor, expected, helpers):
         and observation["attach_parent_actor_path"]
         == expected["attach_parent_actor_path"]
         and "VistaPresentationId=" + presentation_id in observation["tags"],
-        "Production R2 presentation bundle differs: " + room_id,
+        "Production R3 presentation bundle differs: " + room_id,
     )
     return observation
 
@@ -108,7 +108,7 @@ def _production_semantic_target_ids(expected_rooms):
     require(
         len(target_ids) == hybrid.PRODUCTION_SEMANTIC_TARGET_COUNT
         and len(set(target_ids)) == hybrid.PRODUCTION_SEMANTIC_TARGET_COUNT,
-        "Production R2 semantic authority target count differs",
+        "Production R3 semantic authority target count differs",
     )
     return sorted(target_ids)
 
@@ -189,21 +189,24 @@ def run():
     proxy_baselines = {}
     proxy_repaired = {}
     proxy_observations = []
+    expected_production_semantics = hybrid._production_expected_semantics(
+        execution["production_room_observations"]
+    )
     try:
         require(
             level_subsystem.load_level(execution["map_path"]),
-            "failed to load the Production R2 presentation map",
+            "failed to load the Production R3 presentation map",
         )
         production_map_loaded = True
         world = unreal.EditorLevelLibrary.get_editor_world()
-        require(world is not None, "Production R2 world is unavailable")
+        require(world is not None, "Production R3 world is unavailable")
         actors = actor_subsystem.get_all_level_actors()
         require(
             not any(
                 "VistaRole=hssd_visual_shell" in helpers.sorted_tags(actor)
                 for actor in actors
             ),
-            "Production R2 map already contains an HSSD visual shell",
+            "Production R3 map already contains an HSSD visual shell",
         )
 
         presentation_before = _presentation_observations(
@@ -212,20 +215,22 @@ def run():
         production_target_ids = _production_semantic_target_ids(
             execution["production_room_observations"]
         )
+        require(
+            set(expected_production_semantics) == set(production_target_ids),
+            "Production R3 pinned semantic authority inventory differs",
+        )
         production_semantic_before = _semantic_observations(
             actors, production_target_ids, helpers
         )
         require(
             all(
-                item["actor_hidden_in_game"] is True
+                hybrid._production_runtime_semantic_valid(
+                    item,
+                    expected_production_semantics[item["semantic_target_id"]],
+                )
                 for item in production_semantic_before
-            )
-            and all(
-                component["visible"] is False
-                for item in production_semantic_before
-                for component in item["components"]
             ),
-            "Production R2 hidden semantic visual contract differs",
+            "Production R3 semantic collision and affordance authority differs",
         )
 
         semantic_target_ids = sorted(
@@ -238,7 +243,7 @@ def run():
         require(
             len(semantic_target_ids) == hybrid.HSSD_SEMANTIC_PROXY_COUNT
             and not set(semantic_target_ids).intersection(production_target_ids),
-            "hybrid HSSD and Production R2 semantic authority slices overlap",
+            "hybrid HSSD and Production R3 semantic authority slices overlap",
         )
         for semantic_target_id in semantic_target_ids:
             tag = "VistaSemanticId=" + semantic_target_id
@@ -310,14 +315,14 @@ def run():
         )
         require(
             presentation_reloaded == presentation_before,
-            "Production R2 presentation bundles changed after hybrid save/reload",
+            "Production R3 presentation bundles changed after hybrid save/reload",
         )
         production_semantic_reloaded = _semantic_observations(
             reloaded, production_target_ids, helpers
         )
         require(
             production_semantic_reloaded == production_semantic_before,
-            "Production R2 hidden semantic authority changed after hybrid save/reload",
+            "Production R3 hidden semantic authority changed after hybrid save/reload",
         )
 
         for placement in placements:
@@ -418,10 +423,23 @@ def run():
             and presentation_before == presentation_reloaded
             and production_semantic_before == production_semantic_reloaded
         ),
-        "production_external_pbr_placements_preserved": (
+        "production_semantic_collision_authority_preserved": (
             succeeded
-            and execution["production_pbr_placement_count"]
-            == hybrid.PRODUCTION_PBR_PLACEMENT_COUNT
+            and len(production_semantic_before)
+            == hybrid.PRODUCTION_SEMANTIC_TARGET_COUNT
+            and production_semantic_before == production_semantic_reloaded
+            and all(
+                hybrid._production_runtime_semantic_valid(
+                    item,
+                    expected_production_semantics[item["semantic_target_id"]],
+                )
+                for item in production_semantic_before
+            )
+        ),
+        "production_pbr_backed_placements_preserved": (
+            succeeded
+            and execution["production_pbr_backed_placement_count"]
+            == hybrid.PRODUCTION_PBR_BACKED_PLACEMENT_COUNT
         ),
         "exact_hssd_namespace_loaded": namespace_loaded,
         "exact_30_hssd_placements_spawned": (
@@ -481,8 +499,8 @@ def run():
             },
             "content_namespace": execution["content_namespace"],
             "map_path": execution["map_path"],
-            "production_pbr_placement_count": (
-                execution["production_pbr_placement_count"]
+            "production_pbr_backed_placement_count": (
+                execution["production_pbr_backed_placement_count"]
             ),
             "production_presentation_before": presentation_before,
             "production_presentation_reloaded": presentation_reloaded,
