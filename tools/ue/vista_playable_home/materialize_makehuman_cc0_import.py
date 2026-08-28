@@ -6,8 +6,10 @@ acknowledgement, creates one absent append-only attempt outside Git, copies the
 sealed source into that attempt, and launches the pinned UE 5.7 commandlet with
 NullRHI and no visible GPU.  Success only proves an imported/saved/reloaded
 SkeletalMesh, its own Skeleton and PhysicsAsset, the 53-bone hierarchy, and the
-67 required face targets.  Runtime, Manny retargeting, animation, interaction,
-photorealism, and GTA-level quality remain explicitly unverified.
+67-control source face contract (65 active canonical morphs, one zero neutral
+baseline, and one auxiliary active tongue binding).  Runtime, Manny retargeting,
+animation, interaction, photorealism, and GTA-level quality remain explicitly
+unverified.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import argparse
 import dataclasses
 import hashlib
 import json
+import math
 import os
 import re
 import signal
@@ -268,6 +271,66 @@ REQUIRED_FACE_TARGETS = (
     "viseme_TH",
     "viseme_U",
 )
+ZERO_DELTA_CANONICAL_FACE_TARGETS = ("tongueOut", "viseme_sil")
+ACTIVE_CANONICAL_FACE_TARGETS = tuple(
+    name
+    for name in REQUIRED_FACE_TARGETS
+    if name not in ZERO_DELTA_CANONICAL_FACE_TARGETS
+)
+ACTIVE_AUXILIARY_TONGUE_TARGET = "vista_aux_m07_t012_tongueOut"
+EXPECTED_SEMANTIC_CONTROL_CONTRACT: Mapping[str, Any] = {
+    "source_semantic_control_count": 67,
+    "active_canonical_face_target_count": 65,
+    "active_canonical_face_targets": list(ACTIVE_CANONICAL_FACE_TARGETS),
+    "neutral_baseline": {
+        "mesh_index": 8,
+        "mesh_name": "base.002",
+        "target_index": 38,
+        "source_name": "viseme_sil",
+        "transformed_name": "viseme_sil",
+        "position_accessor_index": 335,
+        "vertex_count": 9247,
+        "sparse_count": 1,
+        "nonzero_vertex_count": 0,
+        "max_abs_component": 0.0,
+    },
+    "base_zero_tongue": {
+        "mesh_index": 8,
+        "mesh_name": "base.002",
+        "target_index": 93,
+        "source_name": "tongueOut",
+        "transformed_name": "tongueOut",
+        "position_accessor_index": 445,
+        "vertex_count": 9247,
+        "sparse_count": 1,
+        "nonzero_vertex_count": 0,
+        "max_abs_component": 0.0,
+    },
+    "auxiliary_active_tongue": {
+        "mesh_index": 7,
+        "mesh_name": "tongue01.001",
+        "target_index": 12,
+        "source_name": "tongueOut",
+        "transformed_name": ACTIVE_AUXILIARY_TONGUE_TARGET,
+        "position_accessor_index": 251,
+        "vertex_count": 253,
+        "sparse_count": 0,
+        "nonzero_vertex_count": 253,
+        "max_abs_component": 0.027199991047382355,
+    },
+    "active_positive_control": {
+        "mesh_index": 8,
+        "mesh_name": "base.002",
+        "target_index": 66,
+        "source_name": "jawOpen",
+        "transformed_name": "jawOpen",
+        "position_accessor_index": 391,
+        "vertex_count": 9247,
+        "sparse_count": 2329,
+        "nonzero_vertex_count": 2329,
+        "max_abs_component": 0.03429996967315674,
+    },
+}
 MATERIAL_ALPHA_MODES: Mapping[str, str] = {
     "VISTA_CC0_Hero_Body.body": "OPAQUE",
     "VISTA_CC0_Hero_Body.eyebrow001": "MASK",
@@ -568,6 +631,155 @@ def _validate_accessor(
     )
 
 
+def _position_accessor_activity(
+    document: Mapping[str, Any],
+    bin_chunk: bytes,
+    accessor_index: int,
+    label: str,
+) -> dict[str, Any]:
+    """Decode one sealed float32 VEC3 accessor and count exact nonzero deltas."""
+
+    _validate_accessor(document, accessor_index, len(bin_chunk), label)
+    accessors = document["accessors"]
+    views = document["bufferViews"]
+    accessor = accessors[accessor_index]
+    count = accessor["count"]
+    values: list[tuple[float, float, float]] = [(0.0, 0.0, 0.0)] * count
+    if "bufferView" in accessor:
+        view = views[accessor["bufferView"]]
+        start = view.get("byteOffset", 0) + accessor.get("byteOffset", 0)
+        stride = view.get("byteStride", 12)
+        values = [
+            struct.unpack_from("<fff", bin_chunk, start + index * stride)
+            for index in range(count)
+        ]
+
+    sparse = accessor.get("sparse")
+    sparse_count = 0
+    if sparse is not None:
+        sparse_count = sparse["count"]
+        indices = sparse["indices"]
+        index_view = views[indices["bufferView"]]
+        index_start = index_view.get("byteOffset", 0) + indices.get("byteOffset", 0)
+        index_format = {5121: "<B", 5123: "<H", 5125: "<I"}[indices["componentType"]]
+        index_size = struct.calcsize(index_format)
+        sparse_indices = [
+            struct.unpack_from(
+                index_format, bin_chunk, index_start + index * index_size
+            )[0]
+            for index in range(sparse_count)
+        ]
+        if (
+            sparse_indices != sorted(sparse_indices)
+            or len(set(sparse_indices)) != sparse_count
+            or any(index >= count for index in sparse_indices)
+        ):
+            raise ImportPlanError(label + " sparse accessor indices are invalid")
+        sparse_values = sparse["values"]
+        value_view = views[sparse_values["bufferView"]]
+        value_start = value_view.get("byteOffset", 0) + sparse_values.get(
+            "byteOffset", 0
+        )
+        for sparse_index, vertex_index in enumerate(sparse_indices):
+            values[vertex_index] = struct.unpack_from(
+                "<fff", bin_chunk, value_start + sparse_index * 12
+            )
+
+    if any(not math.isfinite(component) for value in values for component in value):
+        raise ImportPlanError(label + " accessor contains a non-finite delta")
+    nonzero_vertex_count = sum(
+        any(component != 0.0 for component in value) for value in values
+    )
+    max_abs_component = max(abs(component) for value in values for component in value)
+    return {
+        "position_accessor_index": accessor_index,
+        "vertex_count": count,
+        "sparse_count": sparse_count,
+        "nonzero_vertex_count": nonzero_vertex_count,
+        "max_abs_component": max_abs_component,
+    }
+
+
+def _semantic_control_contract(
+    document: Mapping[str, Any], bin_chunk: bytes
+) -> dict[str, Any]:
+    meshes = document["meshes"]
+
+    def evidence(
+        mesh_name: str,
+        target_name: str,
+        transformed_name: str,
+        *,
+        source_name: str | None = None,
+    ) -> dict[str, Any]:
+        matches = [
+            (index, mesh)
+            for index, mesh in enumerate(meshes)
+            if isinstance(mesh, Mapping) and mesh.get("name") == mesh_name
+        ]
+        if len(matches) != 1:
+            raise ImportPlanError(mesh_name + " semantic-control mesh differs")
+        mesh_index, mesh = matches[0]
+        extras = mesh.get("extras")
+        primitives = mesh.get("primitives")
+        if (
+            not isinstance(extras, Mapping)
+            or not isinstance(extras.get("targetNames"), list)
+            or extras["targetNames"].count(target_name) != 1
+            or not isinstance(primitives, list)
+            or len(primitives) != 1
+            or not isinstance(primitives[0], Mapping)
+            or not isinstance(primitives[0].get("targets"), list)
+        ):
+            raise ImportPlanError(target_name + " semantic-control target differs")
+        target_index = extras["targetNames"].index(target_name)
+        target = primitives[0]["targets"][target_index]
+        if not isinstance(target, Mapping) or "POSITION" not in target:
+            raise ImportPlanError(target_name + " semantic-control POSITION differs")
+        return {
+            "mesh_index": mesh_index,
+            "mesh_name": mesh_name,
+            "target_index": target_index,
+            "source_name": source_name or target_name,
+            "transformed_name": transformed_name,
+            **_position_accessor_activity(
+                document, bin_chunk, target["POSITION"], target_name
+            ),
+        }
+
+    tongue_meshes = [
+        mesh
+        for mesh in meshes
+        if isinstance(mesh, Mapping) and mesh.get("name") == "tongue01.001"
+    ]
+    tongue_names = (
+        tongue_meshes[0].get("extras", {}).get("targetNames", [])
+        if len(tongue_meshes) == 1
+        and isinstance(tongue_meshes[0].get("extras"), Mapping)
+        else []
+    )
+    auxiliary_lookup_name = (
+        "tongueOut" if "tongueOut" in tongue_names else ACTIVE_AUXILIARY_TONGUE_TARGET
+    )
+    observed = {
+        "source_semantic_control_count": len(REQUIRED_FACE_TARGETS),
+        "active_canonical_face_target_count": len(ACTIVE_CANONICAL_FACE_TARGETS),
+        "active_canonical_face_targets": list(ACTIVE_CANONICAL_FACE_TARGETS),
+        "neutral_baseline": evidence("base.002", "viseme_sil", "viseme_sil"),
+        "base_zero_tongue": evidence("base.002", "tongueOut", "tongueOut"),
+        "auxiliary_active_tongue": evidence(
+            "tongue01.001",
+            auxiliary_lookup_name,
+            ACTIVE_AUXILIARY_TONGUE_TARGET,
+            source_name="tongueOut",
+        ),
+        "active_positive_control": evidence("base.002", "jawOpen", "jawOpen"),
+    }
+    if observed != EXPECTED_SEMANTIC_CONTROL_CONTRACT:
+        raise ImportPlanError("source GLB semantic-control activity contract differs")
+    return observed
+
+
 def parse_glb(raw: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
     if len(raw) < 28:
         raise ImportPlanError("source GLB is truncated")
@@ -727,6 +939,7 @@ def parse_glb(raw: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
         required_accessors.append(accessor_index)
     if len(set(required_accessors)) != len(REQUIRED_FACE_TARGETS):
         raise ImportPlanError("required face targets reuse POSITION accessors")
+    semantic_control_contract = _semantic_control_contract(document, chunks[1][1])
     summary = {
         "bone_count": len(observed_bones),
         "bone_names": list(observed_bones),
@@ -741,6 +954,7 @@ def parse_glb(raw: bytes) -> tuple[dict[str, Any], dict[str, Any]]:
         "required_face_targets": list(REQUIRED_FACE_TARGETS),
         "required_face_target_indices": required_indices,
         "required_position_accessor_indices": required_accessors,
+        "semantic_control_contract": semantic_control_contract,
     }
     return document, summary
 
@@ -1480,7 +1694,10 @@ def _validate_terminal(
             "own_skeleton_imported",
             "exact_53_bones_verified",
             "lowercase_root_verified",
-            "required_67_face_targets_verified",
+            "active_65_canonical_face_morphs_verified",
+            "auxiliary_active_tongue_out_verified",
+            "zero_delta_neutral_and_base_tongue_source_contract_verified",
+            "semantic_67_control_contract_verified",
             "source_6_opaque_3_mask_verified",
             "physics_asset_imported",
             "packages_saved_reloaded",
@@ -1494,7 +1711,7 @@ def _validate_terminal(
             "source_cc0_contract_verified",
             "ue_skeletal_imported",
             "own_skeleton_imported",
-            "required_face_targets_present",
+            "semantic_67_control_contract_verified",
             "physics_asset_imported",
             *NEGATIVE_CLAIMS,
         },
@@ -1506,11 +1723,21 @@ def _validate_terminal(
         "bone_count",
         "bone_names",
         "root_bone",
-        "morph_target_count",
-        "morph_target_names",
-        "required_face_target_count",
-        "required_face_targets_present",
-        "missing_required_face_targets",
+        "active_morph_target_count",
+        "active_morph_target_names",
+        "source_semantic_control_count",
+        "active_canonical_face_target_count",
+        "active_canonical_face_targets",
+        "missing_active_canonical_face_targets",
+        "neutral_baseline_control",
+        "neutral_baseline_exact_zero_in_source",
+        "base_zero_tongue_control",
+        "base_tongue_exact_zero_in_source",
+        "unexpected_zero_delta_canonical_morphs",
+        "auxiliary_active_tongue_target",
+        "auxiliary_active_tongue_present",
+        "auxiliary_tongue_nonzero_in_source",
+        "semantic_67_control_contract_verified",
         "material_alpha_mode_counts",
         "skeletal_mesh_object_path",
         "skeleton_object_path",
@@ -1557,7 +1784,7 @@ def _validate_terminal(
                 "source_cc0_contract_verified",
                 "ue_skeletal_imported",
                 "own_skeleton_imported",
-                "required_face_targets_present",
+                "semantic_67_control_contract_verified",
                 "physics_asset_imported",
             )
         )
@@ -1566,13 +1793,39 @@ def _validate_terminal(
         or inspection["bone_count"] != 53
         or inspection["bone_names"] != list(BONE_NAMES)
         or inspection["root_bone"] != "root"
-        or not isinstance(inspection["morph_target_count"], int)
-        or inspection["morph_target_count"] < 67
-        or not isinstance(inspection["morph_target_names"], list)
-        or not set(REQUIRED_FACE_TARGETS).issubset(inspection["morph_target_names"])
-        or inspection["required_face_target_count"] != 67
-        or inspection["required_face_targets_present"] is not True
-        or inspection["missing_required_face_targets"] != []
+        or not isinstance(inspection["active_morph_target_count"], int)
+        or not isinstance(inspection["active_morph_target_names"], list)
+        or inspection["active_morph_target_count"]
+        != len(inspection["active_morph_target_names"])
+        or any(
+            not isinstance(name, str)
+            for name in inspection["active_morph_target_names"]
+        )
+        or inspection["active_morph_target_names"]
+        != sorted(set(inspection["active_morph_target_names"]))
+        or not set(ACTIVE_CANONICAL_FACE_TARGETS).issubset(
+            inspection["active_morph_target_names"]
+        )
+        or inspection["source_semantic_control_count"] != 67
+        or inspection["active_canonical_face_target_count"] != 65
+        or inspection["active_canonical_face_targets"]
+        != list(ACTIVE_CANONICAL_FACE_TARGETS)
+        or inspection["missing_active_canonical_face_targets"] != []
+        or inspection["neutral_baseline_control"] != "viseme_sil"
+        or inspection["neutral_baseline_exact_zero_in_source"] is not True
+        or inspection["base_zero_tongue_control"] != "tongueOut"
+        or inspection["base_tongue_exact_zero_in_source"] is not True
+        or inspection["unexpected_zero_delta_canonical_morphs"] != []
+        or inspection["auxiliary_active_tongue_target"]
+        != ACTIVE_AUXILIARY_TONGUE_TARGET
+        or inspection["auxiliary_active_tongue_present"] is not True
+        or inspection["auxiliary_tongue_nonzero_in_source"] is not True
+        or inspection["semantic_67_control_contract_verified"] is not True
+        or ACTIVE_AUXILIARY_TONGUE_TARGET not in inspection["active_morph_target_names"]
+        or any(
+            name in inspection["active_morph_target_names"]
+            for name in ZERO_DELTA_CANONICAL_FACE_TARGETS
+        )
         or inspection["material_alpha_mode_counts"]
         != {"OPAQUE": 6, "MASK": 3, "OTHER": 0}
         or inspection["package_reload_any"] is not True
@@ -1754,6 +2007,9 @@ def apply_plan(prepared: PreparedImport) -> dict[str, Any]:
                     "character_id": prepared.source.receipt["character_id"],
                     "bone_names": list(BONE_NAMES),
                     "required_face_targets": list(REQUIRED_FACE_TARGETS),
+                    "semantic_control_contract": prepared.source.glb_summary[
+                        "semantic_control_contract"
+                    ],
                     "material_alpha_modes": dict(MATERIAL_ALPHA_MODES),
                     "material_alpha_mode_counts": {"MASK": 3, "OPAQUE": 6},
                 },
@@ -1847,7 +2103,10 @@ def apply_plan(prepared: PreparedImport) -> dict[str, Any]:
                     "ue_skeletal_imported": True,
                     "own_skeleton_imported": True,
                     "exact_53_bones_verified": True,
-                    "required_67_face_targets_verified": True,
+                    "active_65_canonical_face_morphs_verified": True,
+                    "auxiliary_active_tongue_out_verified": True,
+                    "zero_delta_neutral_and_base_tongue_source_contract_verified": True,
+                    "semantic_67_control_contract_verified": True,
                     "physics_asset_imported": True,
                     "project_post_exit_sealed": True,
                     **NEGATIVE_CLAIMS,
