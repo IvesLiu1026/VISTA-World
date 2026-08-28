@@ -51,7 +51,9 @@ class PlayableHomeProfileFixture:
         self.output = self.workspace / "sunshine-profile-test_01.json"
         self.plan_sha256 = self.write_plan(self.plan)
 
-    def write_plan(self, value: object | None = None, *, raw: bytes | None = None) -> str:
+    def write_plan(
+        self, value: object | None = None, *, raw: bytes | None = None
+    ) -> str:
         if raw is None:
             raw = (
                 json.dumps(
@@ -75,7 +77,9 @@ class VistaPlayableHomeProfileTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def test_happy_plan_writes_canonical_private_profile_and_loads_arguments(self) -> None:
+    def test_happy_plan_writes_canonical_private_profile_and_loads_arguments(
+        self,
+    ) -> None:
         with mock.patch.object(
             runtime,
             "port_is_available",
@@ -196,10 +200,26 @@ class VistaPlayableHomeProfileTests(unittest.TestCase):
         arguments = profile_entrypoint.load_profile(self.fixture.output)
         self.assertIn("--runtime-profile", arguments)
         profile_index = arguments.index("--runtime-profile")
-        self.assertEqual(
-            arguments[profile_index + 1], runtime.R2_RUNTIME_PROFILE
-        )
+        self.assertEqual(arguments[profile_index + 1], runtime.R2_RUNTIME_PROFILE)
         self.assertNotIn("--camera-profile", arguments)
+
+    def test_isolated_review_plan_cannot_be_published_to_sunshine(self) -> None:
+        isolated = runtime.GameRuntimeConfig(
+            **{
+                **self.fixture.config.__dict__,
+                "runtime_profile": runtime.ISOLATED_REVIEW_RUNTIME_PROFILE,
+                "display": runtime.ISOLATED_REVIEW_DISPLAY,
+                "gpu": runtime.ISOLATED_REVIEW_GPU,
+                "vista_world_port": runtime.ISOLATED_REVIEW_VISTA_WORLD_PORT,
+                "width": runtime.ISOLATED_REVIEW_WIDTH,
+                "height": runtime.ISOLATED_REVIEW_HEIGHT,
+                "fps": runtime.ISOLATED_REVIEW_FPS,
+            }
+        )
+        digest = self.fixture.write_plan(runtime.redacted_plan(isolated))
+        with self.assertRaisesRegex(profile.ProfileError, "schema or mode"):
+            profile.validate_launch_plan(self.fixture.plan_path, digest)
+        self.assertFalse(self.fixture.output.exists())
 
     def test_profile_entrypoint_rejects_partial_or_unknown_r2_binding(self) -> None:
         base = {
@@ -223,6 +243,13 @@ class VistaPlayableHomeProfileTests(unittest.TestCase):
                 "wrong_runtime",
                 {
                     "runtime_profile": "realistic_interior_r3",
+                    "camera_profile": runtime.R2_CAMERA_PROFILE,
+                },
+            ),
+            (
+                "isolated_review_runtime",
+                {
+                    "runtime_profile": runtime.ISOLATED_REVIEW_RUNTIME_PROFILE,
                     "camera_profile": runtime.R2_CAMERA_PROFILE,
                 },
             ),
@@ -323,7 +350,9 @@ class VistaPlayableHomeProfileTests(unittest.TestCase):
                     )
                 self.assertFalse(self.fixture.output.exists())
 
-    def test_plan_resource_paths_refuse_symlink_missing_escape_and_non_executable(self) -> None:
+    def test_plan_resource_paths_refuse_symlink_missing_escape_and_non_executable(
+        self,
+    ) -> None:
         original_project = self.fixture.config.project
         original_editor = self.fixture.config.ue_editor
 
@@ -332,21 +361,14 @@ class VistaPlayableHomeProfileTests(unittest.TestCase):
         outside_project = self.root / "Outside.uproject"
         outside_project.write_text("{}\n", encoding="utf-8")
         non_executable_editor = (
-            self.root
-            / "UE-nonexec"
-            / "Engine"
-            / "Binaries"
-            / "Linux"
-            / "UnrealEditor"
+            self.root / "UE-nonexec" / "Engine" / "Binaries" / "Linux" / "UnrealEditor"
         )
         non_executable_editor.parent.mkdir(parents=True)
         non_executable_editor.write_text("#!/bin/sh\n", encoding="utf-8")
         non_executable_editor.chmod(0o600)
         linked_editor = self.root / "linked-editor"
         linked_editor.symlink_to(original_editor)
-        wrong_editor = (
-            self.root / "wrong" / "Binaries" / "Linux" / "UnrealEditor"
-        )
+        wrong_editor = self.root / "wrong" / "Binaries" / "Linux" / "UnrealEditor"
         wrong_editor.parent.mkdir(parents=True)
         wrong_editor.write_text("#!/bin/sh\n", encoding="utf-8")
         wrong_editor.chmod(0o755)
@@ -482,9 +504,9 @@ class VistaPlayableHomeProfileTests(unittest.TestCase):
             ("duplicate", duplicate),
             (
                 "nonfinite",
-                (json.dumps(nonfinite, separators=(",", ":"), allow_nan=True) + "\n").encode(
-                    "utf-8"
-                ),
+                (
+                    json.dumps(nonfinite, separators=(",", ":"), allow_nan=True) + "\n"
+                ).encode("utf-8"),
             ),
         ]
         for label, raw in cases:
@@ -548,7 +570,9 @@ class VistaPlayableHomeProfileTests(unittest.TestCase):
                 self.fixture.output,
             )
 
-    def test_entrypoint_rejects_mode_alias_unknown_duplicate_nonfinite_and_bad_types(self) -> None:
+    def test_entrypoint_rejects_mode_alias_unknown_duplicate_nonfinite_and_bad_types(
+        self,
+    ) -> None:
         profile.write_profile(
             self.fixture.plan_path,
             self.fixture.plan_sha256,
@@ -568,9 +592,7 @@ class VistaPlayableHomeProfileTests(unittest.TestCase):
 
         cases: list[tuple[str, bytes, str]] = []
         unknown = {**valid, "shell": "no"}
-        cases.append(
-            ("unknown", profile.canonical_json_bytes(unknown), "unknown")
-        )
+        cases.append(("unknown", profile.canonical_json_bytes(unknown), "unknown"))
         compact = json.dumps(valid, separators=(",", ":"))
         duplicate = (compact[0] + '"gpu":0,' + compact[1:]).encode("utf-8")
         cases.append(("duplicate", duplicate, "strict JSON"))

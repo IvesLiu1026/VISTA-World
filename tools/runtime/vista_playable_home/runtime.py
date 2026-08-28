@@ -18,6 +18,7 @@ from typing import Any, Mapping, Sequence
 
 SCHEMA = "simworld.vista.playable-home-runtime/v1"
 R2_SCHEMA = "simworld.vista.playable-home-runtime/v2"
+ISOLATED_REVIEW_SCHEMA = "simworld.vista.playable-home-runtime-isolated-review/v1"
 PREFLIGHT_SCHEMA = "simworld.vista.playable-home-preflight/v1"
 RUNTIME_POINTER_SCHEMA = "simworld.vista.playable-home-runtime-pointer/v1"
 DEFAULT_DISPLAY = ":117"
@@ -32,6 +33,14 @@ R2_VISTA_WORLD_PORT = 55620
 R2_WIDTH = 1920
 R2_HEIGHT = 1080
 R2_FPS = 60
+ISOLATED_REVIEW_RUNTIME_PROFILE = "realistic_interior_r2_isolated_review"
+ISOLATED_REVIEW_CAMERA_PROFILE = R2_CAMERA_PROFILE
+ISOLATED_REVIEW_DISPLAY = ":118"
+ISOLATED_REVIEW_GPU = 0
+ISOLATED_REVIEW_VISTA_WORLD_PORT = 55621
+ISOLATED_REVIEW_WIDTH = 1920
+ISOLATED_REVIEW_HEIGHT = 1080
+ISOLATED_REVIEW_FPS = 60
 TYPED_RESPONSE_MAX_BYTES = 64 * 1024
 RESERVED_GPU_INDICES = frozenset({1})
 RESERVED_PORTS = frozenset(
@@ -78,6 +87,16 @@ R2_RUNTIME_SPEC = RuntimeProfileSpec(
     height=R2_HEIGHT,
     fps=R2_FPS,
 )
+ISOLATED_REVIEW_RUNTIME_SPEC = RuntimeProfileSpec(
+    runtime_profile=ISOLATED_REVIEW_RUNTIME_PROFILE,
+    camera_profile=ISOLATED_REVIEW_CAMERA_PROFILE,
+    display=ISOLATED_REVIEW_DISPLAY,
+    gpu=ISOLATED_REVIEW_GPU,
+    vista_world_port=ISOLATED_REVIEW_VISTA_WORLD_PORT,
+    width=ISOLATED_REVIEW_WIDTH,
+    height=ISOLATED_REVIEW_HEIGHT,
+    fps=ISOLATED_REVIEW_FPS,
+)
 
 
 @dataclass(frozen=True)
@@ -103,6 +122,8 @@ def resolve_runtime_profile(value: str | None) -> RuntimeProfileSpec:
         return LEGACY_RUNTIME_SPEC
     if value == R2_RUNTIME_PROFILE:
         return R2_RUNTIME_SPEC
+    if value == ISOLATED_REVIEW_RUNTIME_PROFILE:
+        return ISOLATED_REVIEW_RUNTIME_SPEC
     raise RuntimeSafetyError("runtime profile is not one of the closed profiles")
 
 
@@ -124,8 +145,9 @@ def validate_runtime_profile_binding(config: GameRuntimeConfig) -> RuntimeProfil
         spec.fps,
     ):
         raise RuntimeSafetyError(
-            "realistic_interior_r2 runtime must use :117, GPU 0, port 55620, "
-            "1920x1080, and 60 fps"
+            f"{spec.runtime_profile} runtime must use {spec.display}, GPU "
+            f"{spec.gpu}, port {spec.vista_world_port}, {spec.width}x{spec.height}, "
+            f"and {spec.fps} fps"
         )
     return spec
 
@@ -171,16 +193,26 @@ def resolve_current_runtime_state(workspace: Path) -> tuple[Path, dict[str, Any]
         pointer = json.loads(pointer_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeSafetyError("runtime pointer is invalid") from exc
-    if not isinstance(pointer, dict) or set(pointer) != {"schema", "state"} \
-            or pointer.get("schema") != RUNTIME_POINTER_SCHEMA:
+    if (
+        not isinstance(pointer, dict)
+        or set(pointer) != {"schema", "state"}
+        or pointer.get("schema") != RUNTIME_POINTER_SCHEMA
+    ):
         raise RuntimeSafetyError("runtime pointer has an invalid shape")
     relative = Path(str(pointer.get("state", "")))
-    if relative.is_absolute() or len(relative.parts) != 2 \
-            or not ATTEMPT_RE.fullmatch(relative.parts[0]) \
-            or relative.parts[1] != "runtime-state.json":
+    if (
+        relative.is_absolute()
+        or len(relative.parts) != 2
+        or not ATTEMPT_RE.fullmatch(relative.parts[0])
+        or relative.parts[1] != "runtime-state.json"
+    ):
         raise RuntimeSafetyError("runtime pointer target is invalid")
     candidate = root / relative
-    if candidate.is_symlink() or candidate.parent.is_symlink() or not candidate.is_file():
+    if (
+        candidate.is_symlink()
+        or candidate.parent.is_symlink()
+        or not candidate.is_file()
+    ):
         raise RuntimeSafetyError("runtime state is missing or unsafe")
     state_path = candidate.resolve(strict=True)
     _ensure_contained(state_path, root.resolve(strict=True), "runtime state")
@@ -218,14 +250,20 @@ def publish_current_runtime(workspace: Path, state_path: Path) -> Path:
     state = state_path.resolve(strict=True)
     _ensure_contained(state, root, "runtime state")
     relative = state.relative_to(root)
-    if len(relative.parts) != 2 or not ATTEMPT_RE.fullmatch(relative.parts[0]) \
-            or relative.parts[1] != "runtime-state.json":
+    if (
+        len(relative.parts) != 2
+        or not ATTEMPT_RE.fullmatch(relative.parts[0])
+        or relative.parts[1] != "runtime-state.json"
+    ):
         raise RuntimeSafetyError("runtime state location is invalid")
     pointer = root / "current.json"
-    atomic_write_json(pointer, {
-        "schema": RUNTIME_POINTER_SCHEMA,
-        "state": relative.as_posix(),
-    })
+    atomic_write_json(
+        pointer,
+        {
+            "schema": RUNTIME_POINTER_SCHEMA,
+            "state": relative.as_posix(),
+        },
+    )
     return pointer
 
 
@@ -275,8 +313,14 @@ def validate_gpu(value: int) -> int:
 
 
 def validate_vista_world_port(value: int) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or not 1024 <= value <= 65535:
-        raise RuntimeSafetyError("VISTA World port must be an integer from 1024 through 65535")
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 1024 <= value <= 65535
+    ):
+        raise RuntimeSafetyError(
+            "VISTA World port must be an integer from 1024 through 65535"
+        )
     if value in RESERVED_PORTS:
         raise RuntimeSafetyError(f"port {value} is reserved by an existing runtime")
     if not port_is_available(value):
@@ -299,7 +343,9 @@ def _ensure_contained(candidate: Path, root: Path, label: str) -> None:
         raise RuntimeSafetyError(f"{label} must be contained by {root}") from exc
 
 
-def validate_config(config: GameRuntimeConfig, *, create_workspace: bool) -> GameRuntimeConfig:
+def validate_config(
+    config: GameRuntimeConfig, *, create_workspace: bool
+) -> GameRuntimeConfig:
     workspace_lexical = _absolute(config.workspace, "workspace")
     if workspace_lexical.is_symlink():
         raise RuntimeSafetyError("workspace must not be a symlink")
@@ -323,10 +369,14 @@ def validate_config(config: GameRuntimeConfig, *, create_workspace: bool) -> Gam
     ue_editor = _existing(config.ue_editor, "Unreal Editor")
     if not os.access(ue_editor, os.X_OK):
         raise RuntimeSafetyError("Unreal Editor is not executable")
-    if tuple(part.name for part in (ue_editor.parent, ue_editor.parent.parent)) != (
-        "Linux",
-        "Binaries",
-    ) or ue_editor.name != "UnrealEditor":
+    if (
+        tuple(part.name for part in (ue_editor.parent, ue_editor.parent.parent))
+        != (
+            "Linux",
+            "Binaries",
+        )
+        or ue_editor.name != "UnrealEditor"
+    ):
         raise RuntimeSafetyError(
             "Unreal Editor must be an exact Engine/Binaries/Linux/UnrealEditor"
         )
@@ -416,7 +466,9 @@ def sanitized_environment(config: GameRuntimeConfig) -> dict[str, str]:
     environment["DISPLAY"] = config.display
     environment["SDL_VIDEODRIVER"] = "x11"
     environment["VK_ICD_FILENAMES"] = (
-        str(config.nvidia_icd) if config.nvidia_icd else os.environ.get("VK_ICD_FILENAMES", "")
+        str(config.nvidia_icd)
+        if config.nvidia_icd
+        else os.environ.get("VK_ICD_FILENAMES", "")
     )
     environment["VISTA_RUNTIME_GPU"] = str(config.gpu)
     if spec.runtime_profile is not None:
@@ -490,22 +542,35 @@ def validate_typed_readiness_response(
     expected_revision: str = DEFAULT_WORLD_REVISION,
 ) -> dict[str, Any]:
     required = {
-        "command_id", "status", "code", "world_revision",
-        "session_generation", "event_status", "active_event",
+        "command_id",
+        "status",
+        "code",
+        "world_revision",
+        "session_generation",
+        "event_status",
+        "active_event",
     }
     if not isinstance(response, dict) or set(response) != required:
-        raise RuntimeSafetyError("typed runtime readiness response has an invalid shape")
-    if response.get("command_id") != command_id \
-            or response.get("status") != "success" \
-            or response.get("code") != "READY" \
-            or response.get("world_revision") != expected_revision \
-            or response.get("session_generation") != 0 \
-            or not isinstance(response.get("event_status"), str) \
-            or not 1 <= len(response["event_status"]) <= 80 \
-            or (response.get("active_event") is not None and (
+        raise RuntimeSafetyError(
+            "typed runtime readiness response has an invalid shape"
+        )
+    if (
+        response.get("command_id") != command_id
+        or response.get("status") != "success"
+        or response.get("code") != "READY"
+        or response.get("world_revision") != expected_revision
+        or response.get("session_generation") != 0
+        or not isinstance(response.get("event_status"), str)
+        or not 1 <= len(response["event_status"]) <= 80
+        or (
+            response.get("active_event") is not None
+            and (
                 not isinstance(response["active_event"], str)
-                or re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,79}", response["active_event"]) is None
-            )):
+                or re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,79}", response["active_event"])
+                is None
+            )
+        )
+    ):
         raise RuntimeSafetyError("typed runtime readiness identity does not match")
     return dict(response)
 
@@ -527,14 +592,21 @@ def probe_typed_runtime(
         "type": "vista_world_action",
         "params": {"operation": "status", "command_id": command_id},
     }
-    encoded = json.dumps(request, separators=(",", ":"), sort_keys=True).encode("utf-8") + b"\n"
+    encoded = (
+        json.dumps(request, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        + b"\n"
+    )
     chunks = bytearray()
     try:
-        with socket.create_connection(("127.0.0.1", port), timeout=timeout) as connection:
+        with socket.create_connection(
+            ("127.0.0.1", port), timeout=timeout
+        ) as connection:
             connection.settimeout(timeout)
             connection.sendall(encoded)
             while len(chunks) <= TYPED_RESPONSE_MAX_BYTES:
-                block = connection.recv(min(8192, TYPED_RESPONSE_MAX_BYTES + 1 - len(chunks)))
+                block = connection.recv(
+                    min(8192, TYPED_RESPONSE_MAX_BYTES + 1 - len(chunks))
+                )
                 if not block:
                     break
                 chunks.extend(block)
@@ -565,7 +637,12 @@ def inspect_toolchain(ue_editor: Path) -> dict[str, Any]:
     }
     alternatives = {
         "unreal_build_tool": (
-            root / "Engine" / "Binaries" / "DotNET" / "UnrealBuildTool" / "UnrealBuildTool",
+            root
+            / "Engine"
+            / "Binaries"
+            / "DotNET"
+            / "UnrealBuildTool"
+            / "UnrealBuildTool",
             root / "Engine" / "Binaries" / "DotNET" / "UnrealBuildTool",
         ),
         # Installed/source engines do not always retain a standalone UHT ELF.
@@ -579,7 +656,9 @@ def inspect_toolchain(ue_editor: Path) -> dict[str, Any]:
     }
     selected = dict(fixed_candidates)
     for name, choices in alternatives.items():
-        selected[name] = next((choice for choice in choices if choice.exists()), choices[0])
+        selected[name] = next(
+            (choice for choice in choices if choice.exists()), choices[0]
+        )
     present = {name: path.exists() for name, path in selected.items()}
     return {
         "engine_root": str(root),
@@ -601,7 +680,12 @@ def command_result(command: Sequence[str], timeout: float = 5.0) -> dict[str, An
             text=True,
             timeout=timeout,
             check=False,
-            env={key: value for key, value in os.environ.items() if key not in {"STUDIO_ACCESS_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"}},
+            env={
+                key: value
+                for key, value in os.environ.items()
+                if key
+                not in {"STUDIO_ACCESS_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"}
+            },
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return {
@@ -647,14 +731,19 @@ def redacted_plan(config: GameRuntimeConfig) -> dict[str, Any]:
                 "camera_profile_closed": True,
             }
         )
+    schema = SCHEMA
+    mode = "unreal-editor-game-preview"
+    if spec.runtime_profile == R2_RUNTIME_PROFILE:
+        schema = R2_SCHEMA
+        mode = "unreal-editor-game-preview-realistic"
+    elif spec.runtime_profile == ISOLATED_REVIEW_RUNTIME_PROFILE:
+        schema = ISOLATED_REVIEW_SCHEMA
+        mode = "unreal-editor-game-preview-realistic-isolated-review"
+        security["isolated_candidate_only"] = True
     return {
-        "schema": R2_SCHEMA if spec.runtime_profile is not None else SCHEMA,
+        "schema": schema,
         "created_at": utc_now(),
-        "mode": (
-            "unreal-editor-game-preview-realistic"
-            if spec.runtime_profile is not None
-            else "unreal-editor-game-preview"
-        ),
+        "mode": mode,
         "config": config_payload,
         "command": build_game_command(config),
         "command_shell_preview": shlex.join(build_game_command(config)),

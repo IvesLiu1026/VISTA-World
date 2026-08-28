@@ -39,6 +39,23 @@ Each launch is retained under `game-runtime/attempt-<UTC>-<pid>`. A private
 current process identity, so a stopped Sunshine application can be launched
 again without deleting or overwriting earlier evidence.
 
+For player-eye review without taking over the live `:117` window, the closed
+`realistic_interior_r2_isolated_review` profile fixes the same realistic camera
+and 1920x1080/60 settings to GPU 0, display `:118`, and loopback port `55621`:
+
+```bash
+uv run --offline --no-sync python \
+  tools/runtime/vista_playable_home/launch.py \
+  --workspace /absolute/new-run/ue/attempt-01 \
+  --project /absolute/new-run/ue/attempt-01/project/Home.uproject \
+  --ue-editor /absolute/Engine/Binaries/Linux/UnrealEditor \
+  --map /Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome \
+  --runtime-profile realistic_interior_r2_isolated_review
+```
+
+This lane is review-only. It does not create a Sunshine profile and it does not
+prove uncontended performance while another process is using GPU 0.
+
 `sunshine_app.py` prints a plan by default. `--apply` creates a timestamped
 backup before replacing `apps.json`; Sunshine must then be restarted by its
 runtime owner. Do not apply the entry until the referenced profile and map

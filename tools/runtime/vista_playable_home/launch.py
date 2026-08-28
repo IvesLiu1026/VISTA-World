@@ -17,14 +17,15 @@ from typing import Any
 
 DEFAULT_READY_TIMEOUT_S = 480.0
 R2_RUNTIME_STATE_SCHEMA = "simworld.vista.playable-home-runtime-state/v2"
+ISOLATED_REVIEW_RUNTIME_STATE_SCHEMA = (
+    "simworld.vista.playable-home-runtime-state-isolated-review/v1"
+)
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
     from tools.runtime.vista_playable_home.runtime import (  # type: ignore
-        DEFAULT_DISPLAY,
-        DEFAULT_GPU,
-        DEFAULT_VISTA_WORLD_PORT,
         DEFAULT_WORLD_REVISION,
+        ISOLATED_REVIEW_RUNTIME_PROFILE,
         R2_RUNTIME_PROFILE,
         GameRuntimeConfig,
         RuntimeSafetyError,
@@ -44,10 +45,8 @@ if __package__ in {None, ""}:
     )
 else:
     from .runtime import (
-        DEFAULT_DISPLAY,
-        DEFAULT_GPU,
-        DEFAULT_VISTA_WORLD_PORT,
         DEFAULT_WORLD_REVISION,
+        ISOLATED_REVIEW_RUNTIME_PROFILE,
         R2_RUNTIME_PROFILE,
         GameRuntimeConfig,
         RuntimeSafetyError,
@@ -75,7 +74,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--map", dest="map_path", required=True)
     result.add_argument(
         "--runtime-profile",
-        choices=[R2_RUNTIME_PROFILE],
+        choices=[R2_RUNTIME_PROFILE, ISOLATED_REVIEW_RUNTIME_PROFILE],
         default=None,
     )
     result.add_argument("--display", default=None)
@@ -127,7 +126,9 @@ def open_private_log(path: Path) -> Any:
     return os.fdopen(descriptor, "w", encoding="utf-8")
 
 
-def terminate_owned_process(process: subprocess.Popen[Any], timeout: float = 5.0) -> None:
+def terminate_owned_process(
+    process: subprocess.Popen[Any], timeout: float = 5.0
+) -> None:
     if process.poll() is not None:
         return
     try:
@@ -206,14 +207,19 @@ def main(argv: list[str] | None = None) -> int:
         ):
             target = user_root / relative
             if target.is_symlink():
-                raise RuntimeSafetyError("r2 runtime user directory must not be a symlink")
+                raise RuntimeSafetyError(
+                    "r2 runtime user directory must not be a symlink"
+                )
             target.mkdir(mode=0o700, parents=True, exist_ok=True)
             if target.resolve(strict=True) != target or not target.is_dir():
                 raise RuntimeSafetyError("r2 runtime user directory identity differs")
     runtime_root_path = runtime_root(config.workspace)
     lock_descriptor = os.open(
         runtime_root_path / ".launch.lock",
-        os.O_RDWR | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+        os.O_RDWR
+        | os.O_CREAT
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0),
         0o600,
     )
     try:
@@ -245,7 +251,9 @@ def main(argv: list[str] | None = None) -> int:
         state_path = runtime_dir / "runtime-state.json"
         state: dict[str, Any] = {
             "schema": (
-                R2_RUNTIME_STATE_SCHEMA
+                ISOLATED_REVIEW_RUNTIME_STATE_SCHEMA
+                if runtime_spec.runtime_profile == ISOLATED_REVIEW_RUNTIME_PROFILE
+                else R2_RUNTIME_STATE_SCHEMA
                 if runtime_spec.runtime_profile is not None
                 else "simworld.vista.playable-home-runtime-state/v1"
             ),
@@ -298,7 +306,9 @@ def main(argv: list[str] | None = None) -> int:
         return process.returncode or 1
     state.update(status="running", updated_at=utc_now(), readiness=readiness)
     atomic_write_json(state_path, state)
-    print(json.dumps({"status": "running", "state": str(state_path), "pid": process.pid}))
+    print(
+        json.dumps({"status": "running", "state": str(state_path), "pid": process.pid})
+    )
     while process.poll() is None and not stopping:
         time.sleep(0.5)
     if stopping and identity_is_live(identity):

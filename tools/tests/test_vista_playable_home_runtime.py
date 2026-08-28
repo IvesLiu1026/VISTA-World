@@ -13,9 +13,24 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from tools.runtime.vista_playable_home import launch, preflight, profile_entrypoint, stop, sunshine_app
+from tools.runtime.vista_playable_home import (
+    launch,
+    preflight,
+    profile_entrypoint,
+    stop,
+    sunshine_app,
+)
 from tools.runtime.vista_playable_home.runtime import (
     GameRuntimeConfig,
+    ISOLATED_REVIEW_CAMERA_PROFILE,
+    ISOLATED_REVIEW_DISPLAY,
+    ISOLATED_REVIEW_FPS,
+    ISOLATED_REVIEW_GPU,
+    ISOLATED_REVIEW_HEIGHT,
+    ISOLATED_REVIEW_RUNTIME_PROFILE,
+    ISOLATED_REVIEW_SCHEMA,
+    ISOLATED_REVIEW_VISTA_WORLD_PORT,
+    ISOLATED_REVIEW_WIDTH,
     R2_CAMERA_PROFILE,
     R2_DISPLAY,
     R2_FPS,
@@ -69,7 +84,9 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
             map_path="/Game/VISTA/PlayableHome/r1/Maps/VistaPlayableHome",
         )
 
-    def test_game_command_is_visible_game_mode_without_editor_or_offscreen(self) -> None:
+    def test_game_command_is_visible_game_mode_without_editor_or_offscreen(
+        self,
+    ) -> None:
         with mock.patch(
             "tools.runtime.vista_playable_home.runtime.port_is_available",
             return_value=True,
@@ -116,11 +133,17 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
         outside.write_text("{}\n", encoding="utf-8")
         config = self.make_config()
         with self.assertRaisesRegex(RuntimeSafetyError, "contained"):
-            validate_config(GameRuntimeConfig(**{**config.__dict__, "project": outside}), create_workspace=False)
+            validate_config(
+                GameRuntimeConfig(**{**config.__dict__, "project": outside}),
+                create_workspace=False,
+            )
         lexical_link = self.root / "linked-run"
         lexical_link.symlink_to(config.workspace, target_is_directory=True)
         with self.assertRaisesRegex(RuntimeSafetyError, "symlink"):
-            validate_config(GameRuntimeConfig(**{**config.__dict__, "workspace": lexical_link}), create_workspace=False)
+            validate_config(
+                GameRuntimeConfig(**{**config.__dict__, "workspace": lexical_link}),
+                create_workspace=False,
+            )
 
     def test_plan_contains_no_arbitrary_command_or_secret(self) -> None:
         with mock.patch(
@@ -202,8 +225,9 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
             ("height", 720),
             ("fps", 59),
         ):
-            with self.subTest(field=field), self.assertRaisesRegex(
-                RuntimeSafetyError, "1920x1080"
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(RuntimeSafetyError, "1920x1080"),
             ):
                 build_game_command(
                     GameRuntimeConfig(
@@ -215,7 +239,68 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
                     )
                 )
 
-    def test_launch_cli_selects_r2_defaults_without_changing_legacy_defaults(self) -> None:
+    def test_isolated_realistic_review_runtime_is_closed_and_distinct(self) -> None:
+        base = self.make_config()
+        isolated = GameRuntimeConfig(
+            **{
+                **base.__dict__,
+                "runtime_profile": ISOLATED_REVIEW_RUNTIME_PROFILE,
+                "display": ISOLATED_REVIEW_DISPLAY,
+                "gpu": ISOLATED_REVIEW_GPU,
+                "vista_world_port": ISOLATED_REVIEW_VISTA_WORLD_PORT,
+                "width": ISOLATED_REVIEW_WIDTH,
+                "height": ISOLATED_REVIEW_HEIGHT,
+                "fps": ISOLATED_REVIEW_FPS,
+            }
+        )
+        with mock.patch(
+            "tools.runtime.vista_playable_home.runtime.port_is_available",
+            return_value=True,
+        ):
+            config = validate_config(isolated, create_workspace=False)
+
+        command = build_game_command(config)
+        self.assertIn(f"-VistaCameraProfile={ISOLATED_REVIEW_CAMERA_PROFILE}", command)
+        self.assertIn(f"-VistaWorldPort={ISOLATED_REVIEW_VISTA_WORLD_PORT}", command)
+        self.assertIn(f"-ResX={ISOLATED_REVIEW_WIDTH}", command)
+        self.assertIn(f"-ResY={ISOLATED_REVIEW_HEIGHT}", command)
+        self.assertIn(f"-graphicsadapter={ISOLATED_REVIEW_GPU}", command)
+
+        plan = redacted_plan(config)
+        self.assertEqual(plan["schema"], ISOLATED_REVIEW_SCHEMA)
+        self.assertEqual(
+            plan["mode"],
+            "unreal-editor-game-preview-realistic-isolated-review",
+        )
+        self.assertEqual(
+            plan["config"]["runtime_profile"], ISOLATED_REVIEW_RUNTIME_PROFILE
+        )
+        self.assertEqual(
+            plan["config"]["camera_profile"], ISOLATED_REVIEW_CAMERA_PROFILE
+        )
+        self.assertTrue(plan["security"]["isolated_candidate_only"])
+
+        for field, wrong in (
+            ("display", R2_DISPLAY),
+            ("gpu", 2),
+            ("vista_world_port", R2_VISTA_WORLD_PORT),
+            ("width", 1280),
+            ("height", 720),
+            ("fps", 59),
+        ):
+            with self.subTest(field=field), self.assertRaises(RuntimeSafetyError):
+                build_game_command(
+                    GameRuntimeConfig(
+                        **{
+                            **isolated.__dict__,
+                            field: wrong,
+                        }
+                    )
+                )
+
+    def test_launch_cli_selects_r2_defaults_without_changing_legacy_defaults(
+        self,
+    ) -> None:
         base = self.make_config()
         required = [
             "--workspace",
@@ -265,15 +350,38 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
                 R2_FPS,
             ),
         )
+        isolated = launch.config_from_args(
+            launch.parser().parse_args(
+                [*required, "--runtime-profile", ISOLATED_REVIEW_RUNTIME_PROFILE]
+            )
+        )
+        self.assertEqual(
+            (
+                isolated.runtime_profile,
+                isolated.display,
+                isolated.gpu,
+                isolated.vista_world_port,
+                isolated.width,
+                isolated.height,
+                isolated.fps,
+            ),
+            (
+                ISOLATED_REVIEW_RUNTIME_PROFILE,
+                ISOLATED_REVIEW_DISPLAY,
+                ISOLATED_REVIEW_GPU,
+                ISOLATED_REVIEW_VISTA_WORLD_PORT,
+                ISOLATED_REVIEW_WIDTH,
+                ISOLATED_REVIEW_HEIGHT,
+                ISOLATED_REVIEW_FPS,
+            ),
+        )
 
     def test_legacy_runtime_plan_shape_does_not_gain_r2_fields(self) -> None:
         plan = redacted_plan(self.make_config())
         self.assertNotIn("runtime_profile", plan["config"])
         self.assertNotIn("camera_profile", plan["config"])
         self.assertNotIn("runtime_profile_closed", plan["security"])
-        self.assertFalse(
-            any("VistaCameraProfile" in item for item in plan["command"])
-        )
+        self.assertFalse(any("VistaCameraProfile" in item for item in plan["command"]))
 
     def test_toolchain_report_is_honest(self) -> None:
         config = self.make_config()
@@ -296,7 +404,11 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
         report = inspect_toolchain(config.ue_editor)
         self.assertTrue(report["cook_ready"])
         self.assertTrue(report["present"]["unreal_header_tool"])
-        self.assertTrue(report["paths"]["unreal_header_tool"].endswith("Source/Programs/UnrealHeaderTool"))
+        self.assertTrue(
+            report["paths"]["unreal_header_tool"].endswith(
+                "Source/Programs/UnrealHeaderTool"
+            )
+        )
 
     def test_atomic_state_is_private(self) -> None:
         target = self.root / "state.json"
@@ -304,14 +416,19 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
         self.assertEqual(json.loads(target.read_text()), {"ok": True})
         self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
 
-    def test_runtime_attempts_are_repeatable_and_current_pointer_is_contained(self) -> None:
+    def test_runtime_attempts_are_repeatable_and_current_pointer_is_contained(
+        self,
+    ) -> None:
         config = self.make_config()
         first = allocate_runtime_attempt(config.workspace)
         first_state = first / "runtime-state.json"
-        atomic_write_json(first_state, {
-            "status": "stopped",
-            "process": {"pid": 2147483647, "start_ticks": 1},
-        })
+        atomic_write_json(
+            first_state,
+            {
+                "status": "stopped",
+                "process": {"pid": 2147483647, "start_ticks": 1},
+            },
+        )
         pointer = publish_current_runtime(config.workspace, first_state)
         self.assertEqual(stat.S_IMODE(pointer.stat().st_mode), 0o600)
         resolved, state = resolve_current_runtime_state(config.workspace)
@@ -325,10 +442,13 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
         config = self.make_config()
         attempt = allocate_runtime_attempt(config.workspace)
         state_path = attempt / "runtime-state.json"
-        atomic_write_json(state_path, {
-            "status": "running",
-            "process": process_identity(os.getpid(), "test-runtime"),
-        })
+        atomic_write_json(
+            state_path,
+            {
+                "status": "running",
+                "process": process_identity(os.getpid(), "test-runtime"),
+            },
+        )
         publish_current_runtime(config.workspace, state_path)
         with self.assertRaisesRegex(RuntimeSafetyError, "already live"):
             allocate_runtime_attempt(config.workspace)
@@ -360,15 +480,19 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
                 payload = json.loads(request)
                 captured.update(payload)
                 command_id = payload["params"]["command_id"]
-                connection.sendall(json.dumps({
-                    "command_id": command_id,
-                    "status": "success",
-                    "code": "READY",
-                    "world_revision": "vista_playable_home_r1",
-                    "session_generation": 0,
-                    "event_status": "idle",
-                    "active_event": None,
-                }).encode("utf-8"))
+                connection.sendall(
+                    json.dumps(
+                        {
+                            "command_id": command_id,
+                            "status": "success",
+                            "code": "READY",
+                            "world_revision": "vista_playable_home_r1",
+                            "session_generation": 0,
+                            "event_status": "idle",
+                            "active_event": None,
+                        }
+                    ).encode("utf-8")
+                )
             listener.close()
 
         thread = threading.Thread(target=serve, daemon=True)
@@ -397,7 +521,10 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
             )
 
     def test_sunshine_entry_replaces_only_named_app(self) -> None:
-        payload = {"env": {"PATH": "x"}, "apps": [{"name": "Desktop"}, {"name": "VISTA World", "cmd": "old"}]}
+        payload = {
+            "env": {"PATH": "x"},
+            "apps": [{"name": "Desktop"}, {"name": "VISTA World", "cmd": "old"}],
+        }
         entry = sunshine_app.build_entry(
             python=Path("/usr/bin/python3"),
             launcher=Path("/repo/profile_entrypoint.py"),
@@ -405,7 +532,9 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
             working_dir=Path("/repo"),
         )
         merged = sunshine_app.merge_entry(payload, entry)
-        self.assertEqual([app["name"] for app in merged["apps"]], ["Desktop", "VISTA World"])
+        self.assertEqual(
+            [app["name"] for app in merged["apps"]], ["Desktop", "VISTA World"]
+        )
         self.assertEqual(merged["env"], payload["env"])
         self.assertIn("--profile", merged["apps"][-1]["cmd"])
 
@@ -419,32 +548,60 @@ class VistaPlayableHomeRuntimeTests(unittest.TestCase):
     def test_profile_rejects_unknown_fields_and_maps_closed_fields(self) -> None:
         profile = self.root / "profile.json"
         profile.write_text(
-            json.dumps({
-                "workspace": "/run/home",
-                "project": "/run/home/Home.uproject",
-                "ue_editor": "/ue/Engine/Binaries/Linux/UnrealEditor",
-                "map": "/Game/VISTA/Home",
-                "gpu": 0,
-            }),
+            json.dumps(
+                {
+                    "workspace": "/run/home",
+                    "project": "/run/home/Home.uproject",
+                    "ue_editor": "/ue/Engine/Binaries/Linux/UnrealEditor",
+                    "map": "/Game/VISTA/Home",
+                    "gpu": 0,
+                }
+            ),
             encoding="utf-8",
         )
         profile.chmod(0o600)
         arguments = profile_entrypoint.load_profile(profile)
         self.assertIn("--workspace", arguments)
         self.assertIn("--gpu", arguments)
-        profile.write_text(json.dumps({"workspace": "/x", "shell": "rm -rf /"}), encoding="utf-8")
+        profile.write_text(
+            json.dumps({"workspace": "/x", "shell": "rm -rf /"}), encoding="utf-8"
+        )
         with self.assertRaisesRegex(ValueError, "unknown"):
             profile_entrypoint.load_profile(profile)
 
     def test_preflight_classifies_view_only_without_input_devices(self) -> None:
         editor = self.make_config().ue_editor
         with (
-            mock.patch.object(preflight, "device_access", side_effect=lambda path: {"path": str(path), "exists": True, "readable": False, "writable": False, "ready": False}),
-            mock.patch.object(preflight, "display_access", return_value={"connectable": True}),
-            mock.patch.object(preflight, "sunshine_inspection", return_value={"binary": "/bin/sunshine"}),
+            mock.patch.object(
+                preflight,
+                "device_access",
+                side_effect=lambda path: {
+                    "path": str(path),
+                    "exists": True,
+                    "readable": False,
+                    "writable": False,
+                    "ready": False,
+                },
+            ),
+            mock.patch.object(
+                preflight, "display_access", return_value={"connectable": True}
+            ),
+            mock.patch.object(
+                preflight,
+                "sunshine_inspection",
+                return_value={"binary": "/bin/sunshine"},
+            ),
             mock.patch.object(preflight, "listener", return_value=True),
-            mock.patch.object(preflight, "tailscale_inspection", return_value={"backend_state": "Running"}),
-            mock.patch.object(preflight, "nvidia_inspection", return_value={"gpus": [{"index": 0, "reserved": False}]}),
+            mock.patch.object(
+                preflight,
+                "tailscale_inspection",
+                return_value={"backend_state": "Running"},
+            ),
+            mock.patch.object(
+                preflight,
+                "nvidia_inspection",
+                return_value={"gpus": [{"index": 0, "reserved": False}]},
+            ),
         ):
             report = preflight.build_report(
                 ue_editor=editor,
