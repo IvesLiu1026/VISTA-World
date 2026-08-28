@@ -57,11 +57,15 @@ def test_exact_contracts_derive_sixty_visual_only_world_placements() -> None:
         "generate_overlap_events": False,
         "can_ever_affect_navigation": False,
         "mobility": "Static",
-        "interaction_authority": "hidden_r1_proxy",
+        "interaction_authority": runner.SEMANTIC_PROXY_AUTHORITY,
     }
     assert "VistaHssdDiagnosticOnly=true" in first["tags"]
     assert "VistaHssdFullMaterialFidelity=false" in first["tags"]
     assert "VistaHssdPromotable=false" in first["tags"]
+    assert (
+        "VistaHssdInteractionAuthority=" + runner.SEMANTIC_PROXY_AUTHORITY
+        in first["tags"]
+    )
     dressing = next(
         item for item in contracts.placements if item["semantic_target_id"] is None
     )
@@ -139,6 +143,13 @@ def test_dry_run_is_zero_write_and_keeps_nonacceptance_claims(
         "interaction_proven": False,
     }
     assert plan["policy"] == runner.PHASE2_POLICY
+    assert plan["policy"]["semantic_proxy_collision_seed_profile"] == "BlockAllDynamic"
+    assert plan["policy"]["semantic_proxy_collision_profile"] == "Custom"
+    assert plan["policy"]["semantic_proxy_collision_mode"] == "QueryOnly"
+    assert plan["policy"]["semantic_proxy_collision_responses"] == {
+        "Pawn": "Block",
+        "Visibility": "Block",
+    }
     assert plan["content_digest"] == runner._content_digest(plan)
     assert not attempt.exists()
 
@@ -211,7 +222,9 @@ def _terminal_fixture(
         "static_mesh_paths_derived_from_phase1_namespace": True,
         "visual_shell_collision_disabled": True,
         "visual_shell_navigation_disabled": True,
-        "semantic_proxies_remain_authoritative": True,
+        "semantic_proxy_query_authority_repaired_and_reloaded": True,
+        "semantic_proxy_component_count_exact": True,
+        "semantic_proxy_physics_disabled": True,
         "semantic_proxy_visuals_hidden": True,
         "diagnostic_nonpromotable_disposition_recorded": True,
         "map_saved": True,
@@ -255,7 +268,9 @@ def _terminal_fixture(
             "semantic_target_id": semantic_target_id,
             "actor_path": "/Game/Map." + actor_suffix,
             "actor_label": "VISTA_PROXY_" + actor_suffix,
-            "actor_class_path": "/Script/VistaPlayableHome.VistaEntityActor",
+            "actor_class_path": (
+                "/Script/VistaPlayableHome.VistaStatefulApplianceActor"
+            ),
             "actor_hidden_in_game": False,
             "actor_collision_enabled": True,
             "world_transform_cm": {
@@ -264,12 +279,25 @@ def _terminal_fixture(
                 "scale": [1.0, 1.0, 1.0],
             },
             "tags": ["VistaSemanticId=" + semantic_target_id],
+            "semantic_state": {
+                "semantic_id": semantic_target_id,
+                "world_revision": "vista_playable_home_r1",
+                "allowed_affordances": ["Inspect", "Toggle"],
+                "initial_state_values": {"active": "false"},
+                "appliance_kind": "fixture",
+                "initially_on": False,
+            },
             "components": [
                 {
                     "component_path": component_path,
                     "mesh_path": "/Game/Map/ProxyMesh.ProxyMesh",
-                    "collision_profile": "BlockAll",
-                    "collision_enabled": True,
+                    "collision_profile": "NoCollision",
+                    "collision_mode": "NoCollision",
+                    "collision_responses": {
+                        "Pawn": "Ignore",
+                        "Visibility": "Ignore",
+                    },
+                    "collision_enabled": False,
                     "simulate_physics": False,
                     "generate_overlap_events": False,
                     "can_ever_affect_navigation": True,
@@ -278,23 +306,39 @@ def _terminal_fixture(
                 }
             ],
         }
-        after_hide = json.loads(json.dumps(baseline))
-        after_hide["actor_hidden_in_game"] = True
-        after_hide["components"][0]["visible"] = False
-        reloaded = json.loads(json.dumps(after_hide))
+        repaired = json.loads(json.dumps(baseline))
+        repaired["actor_hidden_in_game"] = True
+        repaired["components"][0].update(
+            {
+                "collision_profile": runner.SEMANTIC_PROXY_COLLISION_PROFILE,
+                "collision_mode": runner.SEMANTIC_PROXY_COLLISION_MODE,
+                "collision_responses": runner.SEMANTIC_PROXY_COLLISION_RESPONSES,
+                "collision_enabled": True,
+                "simulate_physics": False,
+                "visible": False,
+            }
+        )
+        reloaded = json.loads(json.dumps(repaired))
         receipt["semantic_proxies"].append(
             {
                 "semantic_target_id": semantic_target_id,
                 "baseline": baseline,
-                "after_hide": after_hide,
+                "after_authority_repair_and_hide": repaired,
                 "reloaded": reloaded,
-                "authority": "hidden_r1_proxy",
+                "authority": runner.SEMANTIC_PROXY_AUTHORITY,
                 "authority_evidence": {
-                    "actor_identity_preserved": True,
+                    "actor_path_preserved": True,
+                    "actor_class_preserved": True,
                     "actor_label_preserved": True,
                     "actor_transform_preserved": True,
-                    "actor_collision_preserved": True,
-                    "component_collision_preserved": True,
+                    "actor_collision_enabled_throughout": True,
+                    "semantic_state_preserved": True,
+                    "component_paths_preserved": True,
+                    "component_query_authority_repaired": True,
+                    "component_collision_profile_exact": True,
+                    "component_collision_mode_exact": True,
+                    "component_collision_responses_exact": True,
+                    "component_physics_disabled": True,
                     "component_mesh_binding_preserved": True,
                     "component_mobility_preserved": True,
                     "semantic_proxy_visuals_hidden": True,
@@ -347,6 +391,19 @@ def test_terminal_validation_requires_all_sixty_safe_reloaded_shells(
 
     receipt = runner.validate_terminal(attempt, execution, stdout)
     assert len(receipt["actors"]) == 60
+    assert all(
+        proxy["baseline"]["components"][0]["collision_profile"] == "NoCollision"
+        and proxy["baseline"]["components"][0]["collision_mode"] == "NoCollision"
+        and proxy["baseline"]["components"][0]["collision_enabled"] is False
+        and proxy["after_authority_repair_and_hide"]["components"][0][
+            "collision_profile"
+        ]
+        == "Custom"
+        and proxy["reloaded"]["components"][0]["collision_mode"] == "QueryOnly"
+        and proxy["reloaded"]["components"][0]["collision_responses"]
+        == {"Pawn": "Block", "Visibility": "Block"}
+        for proxy in receipt["semantic_proxies"]
+    )
 
     receipt["actors"][0]["collision_enabled"] = True
     _rewrite_terminal_receipt(attempt, receipt_path, stdout, receipt)
@@ -365,10 +422,23 @@ def test_terminal_validation_requires_all_sixty_safe_reloaded_shells(
         lambda receipt: receipt["semantic_proxies"][0].__setitem__("authority", "none"),
         lambda receipt: receipt["semantic_proxies"][0][
             "authority_evidence"
-        ].__setitem__("component_collision_preserved", False),
+        ].__setitem__("component_query_authority_repaired", False),
         lambda receipt: receipt["semantic_proxies"][0]["reloaded"]["components"][
             0
         ].__setitem__("collision_enabled", False),
+        lambda receipt: receipt["semantic_proxies"][0][
+            "after_authority_repair_and_hide"
+        ]["components"][0].__setitem__("collision_profile", "NoCollision"),
+        lambda receipt: receipt["semantic_proxies"][0]["reloaded"]["components"][
+            0
+        ].__setitem__("collision_mode", "NoCollision"),
+        lambda receipt: receipt["semantic_proxies"][0]["reloaded"]["components"][0][
+            "collision_responses"
+        ].__setitem__("Visibility", "Ignore"),
+        lambda receipt: receipt["semantic_proxies"][0]["reloaded"].__setitem__(
+            "semantic_state", {"semantic_id": "changed"}
+        ),
+        lambda receipt: receipt["semantic_proxies"][0].__setitem__("reloaded", None),
     ],
     ids=[
         "shell-actor-collision",
@@ -377,6 +447,11 @@ def test_terminal_validation_requires_all_sixty_safe_reloaded_shells(
         "proxy-authority",
         "proxy-authority-evidence",
         "proxy-component-collision",
+        "proxy-no-collision-profile-regression",
+        "proxy-no-collision-mode-regression",
+        "proxy-visibility-response-regression",
+        "proxy-semantic-state",
+        "proxy-malformed-reloaded-snapshot",
     ],
 )
 def test_terminal_validation_fails_closed_for_actor_or_proxy_evidence_drift(

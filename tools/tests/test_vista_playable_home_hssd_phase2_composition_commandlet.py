@@ -63,6 +63,7 @@ class FakeComponent:
         collision_profile: str = "BlockAll",
         visible: bool = True,
         navigation: bool = True,
+        collision_responses: dict[str, str] | None = None,
     ) -> None:
         self.path = path
         self.properties = {
@@ -75,6 +76,11 @@ class FakeComponent:
         }
         self.collision_enabled = collision_enabled
         self.collision_profile = collision_profile
+        default_response = "Ignore" if collision_profile == "NoCollision" else "Block"
+        self.collision_responses = collision_responses or {
+            "Pawn": default_response,
+            "Visibility": default_response,
+        }
 
     def get_path_name(self) -> str:
         return self.path
@@ -92,8 +98,16 @@ class FakeComponent:
 
     def set_collision_profile_name(self, name: str) -> None:
         self.collision_profile = str(name)
+        if self.collision_profile == "NoCollision":
+            self.collision_enabled = "NoCollision"
+            self.collision_responses = {"Pawn": "Ignore", "Visibility": "Ignore"}
+        elif self.collision_profile in {"BlockAll", "BlockAllDynamic"}:
+            self.collision_enabled = "QueryAndPhysics"
+            self.collision_responses = {"Pawn": "Block", "Visibility": "Block"}
 
     def set_collision_enabled(self, value: str) -> None:
+        if self.collision_enabled != value:
+            self.collision_profile = "Custom"
         self.collision_enabled = value
 
     def get_collision_enabled(self) -> str:
@@ -101,6 +115,14 @@ class FakeComponent:
 
     def get_collision_profile_name(self) -> str:
         return self.collision_profile
+
+    def set_collision_response_to_all_channels(self, value: str) -> None:
+        if any(response != value for response in self.collision_responses.values()):
+            self.collision_profile = "Custom"
+        self.collision_responses = {"Pawn": value, "Visibility": value}
+
+    def get_collision_response_to_channel(self, channel: str) -> str:
+        return self.collision_responses[channel]
 
     def set_simulate_physics(self, value: bool) -> None:
         self.properties["simulate_physics"] = value
@@ -140,6 +162,12 @@ class FakeActor:
                 else []
             ),
             "hidden": False,
+            "semantic_id": semantic_target_id,
+            "world_revision": FakeName("vista_playable_home_r1"),
+            "allowed_affordances": ["Inspect", "Toggle"],
+            "initial_state_values": {"active": "false"},
+            "appliance_kind": FakeName("fixture"),
+            "initially_on": False,
         }
         self.collision_enabled = True
 
@@ -147,7 +175,9 @@ class FakeActor:
         return self.path
 
     def get_class(self) -> FakeReflectedClass:
-        return FakeReflectedClass("/Script/VistaPlayableHome.VistaEntityActor")
+        return FakeReflectedClass(
+            "/Script/VistaPlayableHome.VistaStatefulApplianceActor"
+        )
 
     def get_actor_label(self) -> str:
         return self.label
@@ -196,7 +226,23 @@ def commandlet(monkeypatch: pytest.MonkeyPatch):
     unreal.Rotator = FakeRotator
     unreal.StaticMeshComponent = FakeComponent
     unreal.StaticMesh = FakeMesh
-    unreal.CollisionEnabled = types.SimpleNamespace(NO_COLLISION="NoCollision")
+    unreal.CollisionEnabled = types.SimpleNamespace(
+        NO_COLLISION="NoCollision",
+        QUERY_ONLY="QueryOnly",
+        PHYSICS_ONLY="PhysicsOnly",
+        QUERY_AND_PHYSICS="QueryAndPhysics",
+        PROBE_ONLY="ProbeOnly",
+        QUERY_AND_PROBE="QueryAndProbe",
+    )
+    unreal.CollisionChannel = types.SimpleNamespace(
+        PAWN="Pawn",
+        VISIBILITY="Visibility",
+    )
+    unreal.CollisionResponseType = types.SimpleNamespace(
+        IGNORE="Ignore",
+        OVERLAP="Overlap",
+        BLOCK="Block",
+    )
     unreal.ComponentMobility = types.SimpleNamespace(STATIC="Static")
     monkeypatch.setitem(sys.modules, "unreal", unreal)
 
@@ -237,55 +283,98 @@ def test_visual_shell_configuration_disables_collision_navigation_and_physics(
     assert commandlet.sorted_tags(actor) == placement["tags"]
 
 
-def test_hiding_semantic_proxy_changes_only_visual_state(commandlet) -> None:
+def test_semantic_proxy_no_collision_is_repaired_to_query_authority_before_hide(
+    commandlet,
+) -> None:
     target = "home.r1/room.living_room/entity.sofa.01"
     component = FakeComponent(
         "/Game/Map.Proxy.Component",
         mesh=FakeMesh("/Game/Map/ProxyMesh.ProxyMesh"),
+        collision_enabled="NoCollision",
+        collision_profile="NoCollision",
     )
     actor = FakeActor("/Game/Map.Proxy", component, semantic_target_id=target)
     baseline = commandlet.semantic_proxy_observation(actor, target)
 
-    commandlet.hide_semantic_proxy_visuals(actor)
+    commandlet.repair_semantic_proxy_query_authority_and_hide(actor)
     observed = commandlet.semantic_proxy_observation(actor, target)
 
+    assert baseline["components"][0]["collision_mode"] == "NoCollision"
+    assert baseline["components"][0]["collision_enabled"] is False
     assert observed["actor_hidden_in_game"] is True
     assert observed["components"][0]["visible"] is False
-    assert observed["components"][0]["collision_profile"] == "BlockAll"
+    assert observed["components"][0]["collision_profile"] == "Custom"
+    assert observed["components"][0]["collision_mode"] == "QueryOnly"
+    assert observed["components"][0]["collision_responses"] == {
+        "Pawn": "Block",
+        "Visibility": "Block",
+    }
     assert observed["components"][0]["collision_enabled"] is True
     assert observed["components"][0]["can_ever_affect_navigation"] is True
-    assert commandlet._proxy_preserved(baseline, observed) is True
+    assert observed["components"][0]["simulate_physics"] is False
+    assert observed["semantic_state"] == baseline["semantic_state"]
+    assert commandlet._proxy_authority_repaired_and_hidden(baseline, observed) is True
 
 
 @pytest.mark.parametrize(
     "mutation",
     [
         lambda value: value.__setitem__("actor_label", "Changed"),
+        lambda value: value.__setitem__(
+            "actor_class_path", "/Script/Changed.OtherActor"
+        ),
         lambda value: value.__setitem__("actor_collision_enabled", False),
         lambda value: value["world_transform_cm"]["location_cm"].__setitem__(0, 10),
+        lambda value: value["semantic_state"].__setitem__("semantic_id", "changed"),
         lambda value: value["components"][0].__setitem__(
             "mesh_path", "/Game/Changed.Changed"
         ),
         lambda value: value["components"][0].__setitem__("mobility", "Static"),
+        lambda value: value["components"][0].__setitem__(
+            "collision_profile", "NoCollision"
+        ),
+        lambda value: value["components"][0].__setitem__(
+            "collision_mode", "NoCollision"
+        ),
+        lambda value: value["components"][0].__setitem__("collision_enabled", False),
+        lambda value: value["components"][0].__setitem__("simulate_physics", True),
+        lambda value: value["components"][0]["collision_responses"].__setitem__(
+            "Visibility", "Ignore"
+        ),
     ],
-    ids=["label", "actor-collision", "transform", "mesh", "mobility"],
+    ids=[
+        "label",
+        "class",
+        "actor-collision",
+        "transform",
+        "semantic-state",
+        "mesh",
+        "mobility",
+        "no-collision-profile-regression",
+        "no-collision-mode-regression",
+        "collision-disabled-regression",
+        "physics-regression",
+        "visibility-response-regression",
+    ],
 )
-def test_proxy_preservation_fails_closed_for_authority_drift(
+def test_proxy_authority_repair_fails_closed_for_state_or_collision_drift(
     commandlet, mutation
 ) -> None:
     target = "home.r1/room.living_room/entity.sofa.01"
     component = FakeComponent(
         "/Game/Map.Proxy.Component",
         mesh=FakeMesh("/Game/Map/ProxyMesh.ProxyMesh"),
+        collision_enabled="NoCollision",
+        collision_profile="NoCollision",
     )
     actor = FakeActor("/Game/Map.Proxy", component, semantic_target_id=target)
     baseline = commandlet.semantic_proxy_observation(actor, target)
-    commandlet.hide_semantic_proxy_visuals(actor)
+    commandlet.repair_semantic_proxy_query_authority_and_hide(actor)
     observed = commandlet.semantic_proxy_observation(actor, target)
     mutated = copy.deepcopy(observed)
     mutation(mutated)
 
-    assert commandlet._proxy_preserved(baseline, mutated) is False
+    assert commandlet._proxy_authority_repaired_and_hidden(baseline, mutated) is False
 
 
 def test_visual_shell_reload_requires_actor_collision_off_and_component_visible(
@@ -330,6 +419,14 @@ def test_commandlet_source_requires_exact_reload_and_keeps_honest_claims() -> No
     assert "len(proxy_observations) == phase2.SEMANTIC_PROXY_COUNT" in source
     assert "EditorLoadingAndSavingUtils.save_map" in source
     assert '"NoCollision"' in source
+    assert "SEMANTIC_PROXY_COLLISION_PROFILE" in source
+    assert runner.SEMANTIC_PROXY_COLLISION_SEED_PROFILE == "BlockAllDynamic"
+    assert runner.SEMANTIC_PROXY_COLLISION_PROFILE == "Custom"
+    assert "CollisionEnabled.QUERY_ONLY" in source
+    assert "set_collision_response_to_all_channels" in source
+    assert '"after_authority_repair_and_hide"' in source
+    assert '"component_query_authority_repaired": True' in source
+    assert "component_collision_preserved" not in source
     assert "actor_collision_enabled(actor) is False" in source
     assert 'component_state["visible"] is True' in source
     assert '"can_ever_affect_navigation", False' in source

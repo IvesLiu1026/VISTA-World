@@ -4,9 +4,10 @@
 The default mode is a zero-write preflight.  ``--apply`` is deliberately
 refused unless the caller also acknowledges the known non-promotable material
 conflict.  Even with that acknowledgement this runner creates only a private,
-diagnostic Phase-2 candidate: the 60 HSSD actors are visual shells, the existing
-R1 semantic actors remain authoritative, and no visual, interaction, character,
-or "GTA-quality" acceptance is claimed.
+diagnostic Phase-2 candidate: the 60 HSSD actors are visual shells, while each
+existing R1 semantic proxy is explicitly repaired to query-only collision before
+it is hidden.  No visual, interaction, character, or "GTA-quality" acceptance is
+claimed.
 
 The Phase-1 input is intentionally not caller-selectable.  It is the one exact
 successful diagnostic import pinned below.  All project, receipt, profile,
@@ -37,15 +38,15 @@ import hssd_ue57_glb_compatibility as compatibility
 import run_hssd_private_research_import as phase1
 
 
-RUNNER_SCHEMA = "simworld.vista.playable-home-hssd-private-research-phase2-runner/v1"
+RUNNER_SCHEMA = "simworld.vista.playable-home-hssd-private-research-phase2-runner/v2"
 EXECUTION_SCHEMA = (
-    "simworld.vista.playable-home-hssd-private-research-phase2-execution/v1"
+    "simworld.vista.playable-home-hssd-private-research-phase2-execution/v2"
 )
 SCENE_RECEIPT_SCHEMA = (
-    "simworld.vista.playable-home-hssd-private-research-phase2-scene-receipt/v1"
+    "simworld.vista.playable-home-hssd-private-research-phase2-scene-receipt/v2"
 )
 HOST_RECEIPT_SCHEMA = (
-    "simworld.vista.playable-home-hssd-private-research-phase2-host-receipt/v1"
+    "simworld.vista.playable-home-hssd-private-research-phase2-host-receipt/v2"
 )
 EXECUTION_ENV = "VISTA_PLAYABLE_HOME_HSSD_PHASE2_EXECUTION"
 EXECUTION_SHA_ENV = "VISTA_PLAYABLE_HOME_HSSD_PHASE2_EXECUTION_SHA256"
@@ -53,7 +54,9 @@ PROJECT_ENV = "VISTA_PLAYABLE_HOME_PROJECT"
 SCENE_MARKER = "VISTA_PLAYABLE_HOME_HSSD_PRIVATE_RESEARCH_PHASE2_RESULT:"
 SCENE_RESULT_FILE = "hssd-private-research-phase2-result.json"
 SCENE_RECEIPT_FILE = "hssd-phase2-scene-receipt.json"
-SUCCESS_STATUS = "diagnostic_nonpromotable_scene_composed_reloaded"
+SUCCESS_STATUS = (
+    "diagnostic_nonpromotable_scene_composed_proxy_authority_repaired_reloaded"
+)
 FAILURE_STATUS = "diagnostic_nonpromotable_scene_quarantined"
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -117,6 +120,39 @@ ROOM_IDS = (
 )
 ROOM_COUNTS = {room_id: 10 for room_id in ROOM_IDS}
 SEMANTIC_PROXY_COUNT = 19
+SEMANTIC_PROXY_COMPONENT_COUNT = 19
+SEMANTIC_PROXY_COLLISION_SEED_PROFILE = "BlockAllDynamic"
+SEMANTIC_PROXY_COLLISION_PROFILE = "Custom"
+SEMANTIC_PROXY_COLLISION_MODE = "QueryOnly"
+SEMANTIC_PROXY_COLLISION_RESPONSES = {
+    "Pawn": "Block",
+    "Visibility": "Block",
+}
+SEMANTIC_PROXY_AUTHORITY = "hidden_r1_proxy_query_authority_repaired"
+KNOWN_COLLISION_MODES = {
+    "NoCollision",
+    "QueryOnly",
+    "PhysicsOnly",
+    "QueryAndPhysics",
+    "ProbeOnly",
+    "QueryAndProbe",
+}
+REQUIRED_SEMANTIC_STATE_PROPERTIES = {
+    "semantic_id",
+    "world_revision",
+    "allowed_affordances",
+    "initial_state_values",
+}
+SEMANTIC_STATE_PROPERTY_NAMES = (
+    "semantic_id",
+    "world_revision",
+    "allowed_affordances",
+    "initial_state_values",
+    "appliance_kind",
+    "initially_on",
+    "initially_open",
+    "portable",
+)
 SAFE_LABEL_RE = re.compile(r"[^A-Za-z0-9_]")
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_FILE_MODE = 0o600
@@ -131,7 +167,14 @@ PHASE2_POLICY = {
     "accepted_as_visual_evidence": False,
     "visual_shell_collision_profile": "NoCollision",
     "visual_shell_navigation": False,
-    "semantic_authority": "hidden_r1_proxy",
+    "semantic_authority": SEMANTIC_PROXY_AUTHORITY,
+    "semantic_proxy_authority_repair_required": True,
+    "semantic_proxy_collision_seed_profile": SEMANTIC_PROXY_COLLISION_SEED_PROFILE,
+    "semantic_proxy_collision_profile": SEMANTIC_PROXY_COLLISION_PROFILE,
+    "semantic_proxy_collision_mode": SEMANTIC_PROXY_COLLISION_MODE,
+    "semantic_proxy_collision_responses": SEMANTIC_PROXY_COLLISION_RESPONSES,
+    "semantic_proxy_collision_response_source": "set_all_channels_block",
+    "semantic_proxy_simulate_physics": False,
     "articulation": "blocked_until_validated",
     "license_scope": "private_noncommercial_research_only",
     "public_payload_distribution": "prohibited",
@@ -149,12 +192,15 @@ PROXY_SNAPSHOT_KEYS = {
     "actor_collision_enabled",
     "world_transform_cm",
     "tags",
+    "semantic_state",
     "components",
 }
 PROXY_COMPONENT_KEYS = {
     "component_path",
     "mesh_path",
     "collision_profile",
+    "collision_mode",
+    "collision_responses",
     "collision_enabled",
     "simulate_physics",
     "generate_overlap_events",
@@ -163,11 +209,18 @@ PROXY_COMPONENT_KEYS = {
     "visible",
 }
 PROXY_AUTHORITY_EVIDENCE_KEYS = {
-    "actor_identity_preserved",
+    "actor_path_preserved",
+    "actor_class_preserved",
     "actor_label_preserved",
     "actor_transform_preserved",
-    "actor_collision_preserved",
-    "component_collision_preserved",
+    "actor_collision_enabled_throughout",
+    "semantic_state_preserved",
+    "component_paths_preserved",
+    "component_query_authority_repaired",
+    "component_collision_profile_exact",
+    "component_collision_mode_exact",
+    "component_collision_responses_exact",
+    "component_physics_disabled",
     "component_mesh_binding_preserved",
     "component_mobility_preserved",
     "semantic_proxy_visuals_hidden",
@@ -538,7 +591,9 @@ def safe_label(instance_id: str) -> str:
 def placement_tags(placement: Mapping[str, Any]) -> list[str]:
     semantic_target = placement.get("semantic_target_id")
     interaction_authority = (
-        "hidden_r1_proxy" if semantic_target is not None else "none_visual_dressing"
+        SEMANTIC_PROXY_AUTHORITY
+        if semantic_target is not None
+        else "none_visual_dressing"
     )
     tags = [
         "VistaRole=hssd_visual_shell",
@@ -667,7 +722,7 @@ def derive_placements(
             hssd.DIAGNOSTIC_NAMESPACE, source_asset_id
         )
         interaction_authority = (
-            "hidden_r1_proxy"
+            SEMANTIC_PROXY_AUTHORITY
             if semantic_target_id is not None
             else "none_visual_dressing"
         )
@@ -1283,14 +1338,39 @@ def _marker_payloads(stdout_path: pathlib.Path) -> list[Any]:
     return payloads
 
 
-def _proxy_component_triplet_preserved(
+def _proxy_component_triplet_repaired(
     baseline: Mapping[str, Any],
-    after_hide: Mapping[str, Any],
+    repaired: Mapping[str, Any],
     reloaded: Mapping[str, Any],
 ) -> bool:
     if not all(
         isinstance(value, dict) and set(value) == PROXY_COMPONENT_KEYS
-        for value in (baseline, after_hide, reloaded)
+        for value in (baseline, repaired, reloaded)
+    ):
+        return False
+    boolean_fields = {
+        "collision_enabled",
+        "simulate_physics",
+        "generate_overlap_events",
+        "can_ever_affect_navigation",
+        "visible",
+    }
+    if not all(
+        type(component.get(field)) is bool
+        for component in (baseline, repaired, reloaded)
+        for field in boolean_fields
+    ):
+        return False
+    baseline_mode = baseline.get("collision_mode")
+    response_keys = set(SEMANTIC_PROXY_COLLISION_RESPONSES)
+    if not all(
+        isinstance(component.get("collision_responses"), dict)
+        and set(component["collision_responses"]) == response_keys
+        and all(
+            response in {"Ignore", "Overlap", "Block"}
+            for response in component["collision_responses"].values()
+        )
+        for component in (baseline, repaired, reloaded)
     ):
         return False
     return (
@@ -1300,34 +1380,40 @@ def _proxy_component_triplet_preserved(
         and bool(baseline["mesh_path"])
         and isinstance(baseline.get("collision_profile"), str)
         and bool(baseline["collision_profile"])
+        and baseline_mode in KNOWN_COLLISION_MODES
+        and baseline.get("collision_enabled") is (baseline_mode != "NoCollision")
         and isinstance(baseline.get("mobility"), str)
         and bool(baseline["mobility"])
-        and after_hide.get("component_path")
+        and repaired.get("component_path")
         == reloaded.get("component_path")
         == baseline.get("component_path")
-        and after_hide.get("mesh_path")
+        and repaired.get("mesh_path")
         == reloaded.get("mesh_path")
         == baseline.get("mesh_path")
-        and after_hide.get("collision_profile")
+        and repaired.get("collision_profile")
         == reloaded.get("collision_profile")
-        == baseline.get("collision_profile")
-        and baseline.get("collision_enabled") is True
-        and after_hide.get("collision_enabled") is True
+        == SEMANTIC_PROXY_COLLISION_PROFILE
+        and repaired.get("collision_mode")
+        == reloaded.get("collision_mode")
+        == SEMANTIC_PROXY_COLLISION_MODE
+        and repaired.get("collision_responses")
+        == reloaded.get("collision_responses")
+        == SEMANTIC_PROXY_COLLISION_RESPONSES
+        and repaired.get("collision_enabled") is True
         and reloaded.get("collision_enabled") is True
-        and after_hide.get("simulate_physics")
-        == reloaded.get("simulate_physics")
-        == baseline.get("simulate_physics")
-        and after_hide.get("generate_overlap_events")
+        and repaired.get("simulate_physics") is False
+        and reloaded.get("simulate_physics") is False
+        and repaired.get("generate_overlap_events")
         == reloaded.get("generate_overlap_events")
         == baseline.get("generate_overlap_events")
-        and after_hide.get("can_ever_affect_navigation")
+        and repaired.get("can_ever_affect_navigation")
         == reloaded.get("can_ever_affect_navigation")
         == baseline.get("can_ever_affect_navigation")
-        and after_hide.get("mobility")
+        and repaired.get("mobility")
         == reloaded.get("mobility")
         == baseline.get("mobility")
         and baseline.get("visible") is True
-        and after_hide.get("visible") is False
+        and repaired.get("visible") is False
         and reloaded.get("visible") is False
     )
 
@@ -1384,21 +1470,48 @@ def _proxy_receipt_valid(proxy: Any) -> bool:
     if not isinstance(proxy, dict) or set(proxy) != {
         "semantic_target_id",
         "baseline",
-        "after_hide",
+        "after_authority_repair_and_hide",
         "reloaded",
         "authority",
         "authority_evidence",
     }:
         return False
     baseline = proxy.get("baseline")
-    after_hide = proxy.get("after_hide")
+    repaired = proxy.get("after_authority_repair_and_hide")
     reloaded = proxy.get("reloaded")
     if not all(
         isinstance(value, dict) and set(value) == PROXY_SNAPSHOT_KEYS
-        for value in (baseline, after_hide, reloaded)
+        for value in (baseline, repaired, reloaded)
     ):
         return False
     semantic_target_id = proxy.get("semantic_target_id")
+    semantic_states = (
+        baseline.get("semantic_state"),
+        repaired.get("semantic_state"),
+        reloaded.get("semantic_state"),
+    )
+    if not all(
+        isinstance(state, dict)
+        and REQUIRED_SEMANTIC_STATE_PROPERTIES.issubset(state)
+        and set(state).issubset(SEMANTIC_STATE_PROPERTY_NAMES)
+        and state.get("semantic_id") == semantic_target_id
+        and isinstance(state.get("world_revision"), str)
+        and bool(state["world_revision"])
+        and isinstance(state.get("allowed_affordances"), list)
+        and all(isinstance(item, str) for item in state["allowed_affordances"])
+        and isinstance(state.get("initial_state_values"), dict)
+        and all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in state["initial_state_values"].items()
+        )
+        and ("appliance_kind" not in state or isinstance(state["appliance_kind"], str))
+        and all(
+            field not in state or type(state[field]) is bool
+            for field in ("initially_on", "initially_open", "portable")
+        )
+        for state in semantic_states
+    ):
+        return False
     if not (
         isinstance(semantic_target_id, str)
         and semantic_target_id
@@ -1414,50 +1527,54 @@ def _proxy_receipt_valid(proxy: Any) -> bool:
             baseline.get("world_transform_cm"), baseline.get("world_transform_cm")
         )
         and baseline.get("semantic_target_id")
-        == after_hide.get("semantic_target_id")
+        == repaired.get("semantic_target_id")
         == reloaded.get("semantic_target_id")
         == semantic_target_id
         and baseline.get("actor_path")
-        == after_hide.get("actor_path")
+        == repaired.get("actor_path")
         == reloaded.get("actor_path")
         and baseline.get("actor_class_path")
-        == after_hide.get("actor_class_path")
+        == repaired.get("actor_class_path")
         == reloaded.get("actor_class_path")
         and baseline.get("actor_label")
-        == after_hide.get("actor_label")
+        == repaired.get("actor_label")
         == reloaded.get("actor_label")
         and _observed_transforms_match(
-            after_hide.get("world_transform_cm"),
+            repaired.get("world_transform_cm"),
             baseline.get("world_transform_cm"),
         )
         and _observed_transforms_match(
             reloaded.get("world_transform_cm"),
             baseline.get("world_transform_cm"),
         )
-        and baseline.get("tags") == after_hide.get("tags") == reloaded.get("tags")
+        and baseline.get("tags") == repaired.get("tags") == reloaded.get("tags")
+        and semantic_states[0] == semantic_states[1] == semantic_states[2]
         and baseline.get("actor_hidden_in_game") is False
-        and after_hide.get("actor_hidden_in_game") is True
+        and repaired.get("actor_hidden_in_game") is True
         and reloaded.get("actor_hidden_in_game") is True
         and baseline.get("actor_collision_enabled") is True
-        and after_hide.get("actor_collision_enabled") is True
+        and repaired.get("actor_collision_enabled") is True
         and reloaded.get("actor_collision_enabled") is True
     ):
         return False
     component_sets = (
         baseline.get("components"),
-        after_hide.get("components"),
+        repaired.get("components"),
         reloaded.get("components"),
     )
     if not all(isinstance(value, list) and value for value in component_sets):
         return False
-    baseline_components, after_components, reloaded_components = component_sets
+    baseline_components, repaired_components, reloaded_components = component_sets
     if not (
-        len(baseline_components) == len(after_components) == len(reloaded_components)
+        len(baseline_components)
+        == len(repaired_components)
+        == len(reloaded_components)
+        == 1
         and all(
-            _proxy_component_triplet_preserved(*triplet)
+            _proxy_component_triplet_repaired(*triplet)
             for triplet in zip(
                 baseline_components,
-                after_components,
+                repaired_components,
                 reloaded_components,
             )
         )
@@ -1465,22 +1582,46 @@ def _proxy_receipt_valid(proxy: Any) -> bool:
         return False
     evidence = proxy.get("authority_evidence")
     return (
-        proxy.get("authority") == "hidden_r1_proxy"
+        proxy.get("authority") == SEMANTIC_PROXY_AUTHORITY
         and isinstance(evidence, dict)
         and set(evidence) == PROXY_AUTHORITY_EVIDENCE_KEYS
         and evidence
         == {
-            "actor_identity_preserved": True,
+            "actor_path_preserved": True,
+            "actor_class_preserved": True,
             "actor_label_preserved": True,
             "actor_transform_preserved": True,
-            "actor_collision_preserved": True,
-            "component_collision_preserved": True,
+            "actor_collision_enabled_throughout": True,
+            "semantic_state_preserved": True,
+            "component_paths_preserved": True,
+            "component_query_authority_repaired": True,
+            "component_collision_profile_exact": True,
+            "component_collision_mode_exact": True,
+            "component_collision_responses_exact": True,
+            "component_physics_disabled": True,
             "component_mesh_binding_preserved": True,
             "component_mobility_preserved": True,
             "semantic_proxy_visuals_hidden": True,
             "component_count": len(baseline_components),
         }
     )
+
+
+def _semantic_proxy_component_total(proxies: Any) -> int:
+    if not isinstance(proxies, list):
+        return -1
+    total = 0
+    for proxy in proxies:
+        if not isinstance(proxy, dict):
+            return -1
+        reloaded = proxy.get("reloaded")
+        if not isinstance(reloaded, dict):
+            return -1
+        components = reloaded.get("components")
+        if not isinstance(components, list):
+            return -1
+        total += len(components)
+    return total
 
 
 def validate_terminal(
@@ -1502,7 +1643,9 @@ def validate_terminal(
         "static_mesh_paths_derived_from_phase1_namespace",
         "visual_shell_collision_disabled",
         "visual_shell_navigation_disabled",
-        "semantic_proxies_remain_authoritative",
+        "semantic_proxy_query_authority_repaired_and_reloaded",
+        "semantic_proxy_component_count_exact",
+        "semantic_proxy_physics_disabled",
         "semantic_proxy_visuals_hidden",
         "diagnostic_nonpromotable_disposition_recorded",
         "map_saved",
@@ -1563,6 +1706,7 @@ def validate_terminal(
         and dict(room_counts) == ROOM_COUNTS
         and isinstance(proxies, list)
         and len(proxies) == SEMANTIC_PROXY_COUNT
+        and _semantic_proxy_component_total(proxies) == SEMANTIC_PROXY_COMPONENT_COUNT
         and observed_semantic_targets == expected_semantic_targets
         and all(_proxy_receipt_valid(proxy) for proxy in proxies)
         and isinstance(gates, dict)
@@ -1712,6 +1856,20 @@ def apply_plan(plan: Mapping[str, Any], source: Phase1Source) -> dict[str, Any]:
                 "placement_count": len(receipt["actors"]),
                 "room_counts": dict(ROOM_COUNTS),
                 "semantic_proxy_count": len(receipt["semantic_proxies"]),
+                "semantic_proxy_authority": {
+                    "authority": SEMANTIC_PROXY_AUTHORITY,
+                    "actor_count": len(receipt["semantic_proxies"]),
+                    "component_count": sum(
+                        len(proxy["reloaded"]["components"])
+                        for proxy in receipt["semantic_proxies"]
+                    ),
+                    "collision_profile": SEMANTIC_PROXY_COLLISION_PROFILE,
+                    "collision_mode": SEMANTIC_PROXY_COLLISION_MODE,
+                    "collision_responses": SEMANTIC_PROXY_COLLISION_RESPONSES,
+                    "simulate_physics": False,
+                    "hidden_in_game": True,
+                    "scene_receipt_independently_revalidated": True,
+                },
                 "claims": {
                     "placements_composed": True,
                     "player_eye_reviewed": False,
