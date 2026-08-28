@@ -8,11 +8,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 PLUGIN_SOURCE = (
-    ROOT
-    / "unreal_plugins"
-    / "VistaPlayableHome"
-    / "Source"
-    / "VistaPlayableHome"
+    ROOT / "unreal_plugins" / "VistaPlayableHome" / "Source" / "VistaPlayableHome"
 )
 CHARACTER_HEADER = PLUGIN_SOURCE / "Public" / "VistaPlayableHomeCharacter.h"
 CHARACTER_SOURCE = PLUGIN_SOURCE / "Private" / "VistaPlayableHomeCharacter.cpp"
@@ -73,7 +69,9 @@ class RealisticIndoorCameraSourceTests(unittest.TestCase):
         cls.spring = SPRING_ARM_SOURCE.read_text(encoding="utf-8")
         cls.profile = json.loads(VISUAL_PROFILE.read_text(encoding="utf-8"))
 
-    def test_r2_profile_is_measured_and_bound_to_the_closed_visual_profile_id(self) -> None:
+    def test_r2_profile_is_measured_and_bound_to_the_closed_visual_profile_id(
+        self,
+    ) -> None:
         self.assertEqual(self.profile["visual_profile_id"], "realistic_interior_r2")
         self.assertIn(
             'RealisticInteriorR2CameraProfileId(TEXT("realistic_interior_r2"))',
@@ -131,6 +129,60 @@ class RealisticIndoorCameraSourceTests(unittest.TestCase):
             selection.index("ApplyIndoorCameraProfile("),
         )
 
+    def test_indoor_view_pitch_and_roll_are_bounded_after_possession(self) -> None:
+        limits = _function_body(
+            self.character,
+            "void AVistaPlayableHomeCharacter::ConfigureIndoorViewLimits()",
+            "void AVistaPlayableHomeCharacter::ApplyRequestedCameraProfile()",
+        )
+        self.assertIn(
+            "ActiveCameraProfileId != RealisticInteriorR2CameraProfileId", limits
+        )
+        self.assertIn(
+            "CameraManager->ViewPitchMin = IndoorViewPitchMinDegrees;", limits
+        )
+        self.assertIn(
+            "CameraManager->ViewPitchMax = IndoorViewPitchMaxDegrees;", limits
+        )
+        self.assertIn("CameraManager->ViewRollMin = 0.0f;", limits)
+        self.assertIn("CameraManager->ViewRollMax = 0.0f;", limits)
+        self.assertIn("IndoorViewPitchMinDegrees = -60.0f", self.character)
+        self.assertIn("IndoorViewPitchMaxDegrees = 45.0f", self.character)
+        self.assertGreaterEqual(self.character.count("ConfigureIndoorViewLimits();"), 2)
+
+    def test_indoor_view_limits_restore_through_saved_camera_manager(self) -> None:
+        header = CHARACTER_HEADER.read_text(encoding="utf-8")
+        restore = _function_body(
+            self.character,
+            "void AVistaPlayableHomeCharacter::RestoreIndoorViewLimits()",
+            "void AVistaPlayableHomeCharacter::ApplyRequestedCameraProfile()",
+        )
+        end_play = _function_body(
+            self.character,
+            "void AVistaPlayableHomeCharacter::EndPlay(",
+            "void AVistaPlayableHomeCharacter::SetupPlayerInputComponent(",
+        )
+        self.assertIn(
+            "TWeakObjectPtr<APlayerCameraManager> IndoorViewCameraManager", header
+        )
+        self.assertIn("IndoorViewCameraManager.Get()", restore)
+        self.assertIn("IndoorViewCameraManager.Reset()", restore)
+        self.assertIn("RestoreIndoorViewLimits();", end_play)
+        self.assertLess(
+            end_play.index("RestoreIndoorViewLimits();"),
+            end_play.index("Super::EndPlay(EndPlayReason);"),
+        )
+        unpossessed = _function_body(
+            self.character,
+            "void AVistaPlayableHomeCharacter::UnPossessed()",
+            "void AVistaPlayableHomeCharacter::SetupPlayerInputComponent(",
+        )
+        self.assertIn("RestoreIndoorViewLimits();", unpossessed)
+        self.assertLess(
+            unpossessed.index("RestoreIndoorViewLimits();"),
+            unpossessed.index("Super::UnPossessed();"),
+        )
+
     def test_invalid_settings_are_rejected_before_any_camera_mutation(self) -> None:
         validation = _function_body(
             self.character,
@@ -157,10 +209,14 @@ class RealisticIndoorCameraSourceTests(unittest.TestCase):
         self.assertLess(guard, component_guard)
         self.assertLess(component_guard, first_mutation)
         self.assertIn("ProbeChannel = ECC_Camera;", apply_profile)
-        self.assertIn("bDoCollisionTest = Profile.bEnableCameraCollision;", apply_profile)
+        self.assertIn(
+            "bDoCollisionTest = Profile.bEnableCameraCollision;", apply_profile
+        )
         self.assertIn("CameraLagMaxTimeStep = 1.0f / 60.0f;", apply_profile)
 
-    def test_wall_hit_snaps_inward_and_clear_path_recovers_without_overshoot(self) -> None:
+    def test_wall_hit_snaps_inward_and_clear_path_recovers_without_overshoot(
+        self,
+    ) -> None:
         self.assertIn("TargetFraction <= RecoveryArmFraction", self.spring)
         self.assertIn("RecoveryArmFraction = TargetFraction;", self.spring)
         self.assertIn("RecoveryArmFraction = FMath::FInterpTo(", self.spring)
@@ -184,10 +240,14 @@ class RealisticIndoorCameraSourceTests(unittest.TestCase):
         for _ in range(90):
             fraction = _recovery_step(fraction, None, 1.0 / 60.0, 8.0)
             samples.append(fraction)
-        self.assertTrue(all(left <= right <= 1.0 for left, right in zip(samples, samples[1:])))
+        self.assertTrue(
+            all(left <= right <= 1.0 for left, right in zip(samples, samples[1:]))
+        )
         self.assertGreater(samples[-1], 0.999)
 
-    def test_recovery_component_contract_has_no_tick_or_visibility_side_effects(self) -> None:
+    def test_recovery_component_contract_has_no_tick_or_visibility_side_effects(
+        self,
+    ) -> None:
         # Recovery is isolated to the spring-arm collision blend.  It neither
         # hides scene actors nor adds a second per-frame camera trace.
         self.assertIn("virtual FVector BlendLocations(", self.spring_header)

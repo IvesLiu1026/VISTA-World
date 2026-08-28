@@ -48,14 +48,81 @@ def material_specs() -> tuple[MaterialSpec, ...]:
     """Return the pinned, project-authored architectural material palette."""
 
     return (
-        MaterialSpec("r2.plaster_warm", "Warm lime plaster", (0.72, 0.68, 0.59), 0.82, 0.0, "plaster", 0.18),
-        MaterialSpec("r2.ceiling_matte", "Matte ceiling", (0.84, 0.84, 0.79), 0.91, 0.0, "plaster", 0.08),
-        MaterialSpec("r2.trim_satin", "Warm satin trim", (0.78, 0.77, 0.70), 0.48, 0.0, "paint", 0.06),
-        MaterialSpec("r2.slate_honed", "Honed entry slate", (0.12, 0.15, 0.16), 0.43, 0.05, "stone", 0.24),
-        MaterialSpec("r2.oak_natural", "Natural oak floor", (0.42, 0.23, 0.09), 0.56, 0.0, "wood", 0.32),
-        MaterialSpec("r2.terrazzo_warm", "Warm terrazzo", (0.52, 0.50, 0.44), 0.34, 0.02, "terrazzo", 0.20),
-        MaterialSpec("r2.threshold_brass", "Brushed brass threshold", (0.48, 0.27, 0.055), 0.27, 0.88, "brushed", 0.11),
-        MaterialSpec("r2.window_frame", "Powder-coated window frame", (0.035, 0.045, 0.047), 0.33, 0.72, "paint", 0.04),
+        # These values are linear reflectance, not display-space sRGB.  Keep the
+        # architectural whites below the high-albedo range that made the UE
+        # player-eye view read as a flat white box under the physical day rig.
+        MaterialSpec(
+            "r2.plaster_warm",
+            "Warm lime plaster",
+            (0.50, 0.46, 0.39),
+            0.82,
+            0.0,
+            "plaster",
+            0.18,
+        ),
+        MaterialSpec(
+            "r2.ceiling_matte",
+            "Matte ceiling",
+            (0.62, 0.62, 0.57),
+            0.91,
+            0.0,
+            "plaster",
+            0.08,
+        ),
+        MaterialSpec(
+            "r2.trim_satin",
+            "Warm satin trim",
+            (0.58, 0.57, 0.51),
+            0.48,
+            0.0,
+            "paint",
+            0.06,
+        ),
+        MaterialSpec(
+            "r2.slate_honed",
+            "Honed entry slate",
+            (0.12, 0.15, 0.16),
+            0.43,
+            0.05,
+            "stone",
+            0.24,
+        ),
+        MaterialSpec(
+            "r2.oak_natural",
+            "Natural oak floor",
+            (0.42, 0.23, 0.09),
+            0.56,
+            0.0,
+            "wood",
+            0.32,
+        ),
+        MaterialSpec(
+            "r2.terrazzo_warm",
+            "Warm terrazzo",
+            (0.52, 0.50, 0.44),
+            0.34,
+            0.02,
+            "terrazzo",
+            0.20,
+        ),
+        MaterialSpec(
+            "r2.threshold_brass",
+            "Brushed brass threshold",
+            (0.48, 0.27, 0.055),
+            0.27,
+            0.88,
+            "brushed",
+            0.11,
+        ),
+        MaterialSpec(
+            "r2.window_frame",
+            "Powder-coated window frame",
+            (0.035, 0.045, 0.047),
+            0.33,
+            0.72,
+            "paint",
+            0.04,
+        ),
         MaterialSpec(
             "r2.window_glass",
             "Architectural glass",
@@ -68,12 +135,60 @@ def material_specs() -> tuple[MaterialSpec, ...]:
             transmission=0.92,
             ior=1.45,
         ),
-        MaterialSpec("r2.exterior_scrim", "Exterior daylight scrim", (0.16, 0.27, 0.34), 0.68, 0.0, "paint", 0.03),
-        MaterialSpec("r2.cabinet_sage", "Satin sage cabinetry", (0.20, 0.31, 0.23), 0.42, 0.0, "paint", 0.07),
-        MaterialSpec("r2.cabinet_walnut", "Walnut cabinet interior", (0.20, 0.075, 0.025), 0.48, 0.0, "wood", 0.24),
-        MaterialSpec("r2.counter_quartz", "Honed quartz counter", (0.66, 0.64, 0.57), 0.29, 0.01, "stone", 0.17),
-        MaterialSpec("r2.backsplash_tile", "Handmade backsplash tile", (0.34, 0.44, 0.39), 0.24, 0.0, "tile", 0.22),
-        MaterialSpec("r2.hardware_brass", "Cabinet hardware brass", (0.51, 0.30, 0.06), 0.23, 0.90, "brushed", 0.08),
+        MaterialSpec(
+            "r2.exterior_scrim",
+            "Exterior daylight scrim",
+            (0.16, 0.27, 0.34),
+            0.68,
+            0.0,
+            "paint",
+            0.03,
+        ),
+        MaterialSpec(
+            "r2.cabinet_sage",
+            "Satin sage cabinetry",
+            (0.20, 0.31, 0.23),
+            0.42,
+            0.0,
+            "paint",
+            0.07,
+        ),
+        MaterialSpec(
+            "r2.cabinet_walnut",
+            "Walnut cabinet interior",
+            (0.20, 0.075, 0.025),
+            0.48,
+            0.0,
+            "wood",
+            0.24,
+        ),
+        MaterialSpec(
+            "r2.counter_quartz",
+            "Honed quartz counter",
+            (0.66, 0.64, 0.57),
+            0.29,
+            0.01,
+            "stone",
+            0.17,
+        ),
+        MaterialSpec(
+            "r2.backsplash_tile",
+            "Handmade backsplash tile",
+            (0.34, 0.44, 0.39),
+            0.24,
+            0.0,
+            "tile",
+            0.22,
+        ),
+        MaterialSpec(
+            "r2.hardware_brass",
+            "Cabinet hardware brass",
+            (0.51, 0.30, 0.06),
+            0.23,
+            0.90,
+            "brushed",
+            0.08,
+        ),
     )
 
 
@@ -94,14 +209,61 @@ def _noise(material_id: str, x: int, y: int, channel: str) -> float:
     return int.from_bytes(hashlib.sha256(payload).digest()[:4], "big") / 0xFFFFFFFF
 
 
+def _value_noise_1d_python(
+    spec: MaterialSpec, coordinate: float, channel: str
+) -> float:
+    """Return smooth deterministic value noise in ``[-0.5, 0.5]``."""
+
+    left = math.floor(coordinate)
+    fraction = coordinate - left
+    smooth = fraction * fraction * (3.0 - 2.0 * fraction)
+    left_value = _noise(spec.material_id, left, 0, channel) - 0.5
+    right_value = _noise(spec.material_id, left + 1, 0, channel) - 0.5
+    return left_value + (right_value - left_value) * smooth
+
+
+def _directional_wood_height_python(
+    spec: MaterialSpec,
+    nx: float,
+    ny: float,
+    micrograin: float,
+) -> float:
+    """Build non-periodic grain whose dominant variation runs across texture X.
+
+    Metric box UV maps a vertical wall's height to texture Y.  The former
+    single Y-axis sine therefore became broad horizontal bands.  These
+    independently seeded value-noise octaves vary primarily across X, with a
+    low-frequency Y flow that bends rather than stripes the grain.
+    """
+
+    flow = _value_noise_1d_python(spec, ny * 3.0, "wood_flow") * 1.6
+    coarse = _value_noise_1d_python(spec, nx * 13.0 + flow, "wood_coarse")
+    medium = _value_noise_1d_python(spec, nx * 43.0 + flow * 2.1, "wood_medium")
+    fine = _value_noise_1d_python(spec, nx * 137.0 + flow * 4.3, "wood_fine")
+    longitudinal = _value_noise_1d_python(
+        spec,
+        ny * 5.0 + nx * 0.8,
+        "wood_longitudinal",
+    )
+    return (
+        coarse * 0.42
+        + medium * 0.30
+        + fine * 0.18
+        + longitudinal * 0.05
+        + micrograin * 0.05
+    )
+
+
 def _height(spec: MaterialSpec, x: int, y: int, size: int) -> float:
     nx = x / max(1, size - 1)
     ny = y / max(1, size - 1)
     grain = _noise(spec.material_id, x, y, "height") - 0.5
     if spec.pattern == "wood":
-        return 0.55 * math.sin((ny * 9.0 + 0.18 * math.sin(nx * 7.0)) * math.tau) + grain * 0.22
+        return _directional_wood_height_python(spec, nx, ny, grain)
     if spec.pattern == "terrazzo":
-        return (1.0 if _noise(spec.material_id, x // 3, y // 3, "chip") > 0.91 else 0.0) + grain * 0.08
+        return (
+            1.0 if _noise(spec.material_id, x // 3, y // 3, "chip") > 0.91 else 0.0
+        ) + grain * 0.08
     if spec.pattern == "tile":
         grout_x = min(nx % 0.25, 0.25 - (nx % 0.25)) < 0.012
         grout_y = min(ny % 0.25, 0.25 - (ny % 0.25)) < 0.012
@@ -122,7 +284,7 @@ def _clamp(value: float) -> float:
 
 
 def _height_field_python(spec: MaterialSpec, size: int) -> list[list[float]]:
-    """Return the legacy SHA-backed field used by deterministic small smokes."""
+    """Return the SHA-backed field used by deterministic small smokes."""
 
     return [[_height(spec, x, y, size) for x in range(size)] for y in range(size)]
 
@@ -143,7 +305,9 @@ def _texture_pixels_from_height_python(
                 if spec.pattern == "wood":
                     variation += height * 0.045
                 elif spec.pattern == "terrazzo" and height > 0.5:
-                    variation += 0.16 * (_noise(spec.material_id, x // 3, y // 3, "chip-color") - 0.5)
+                    variation += 0.16 * (
+                        _noise(spec.material_id, x // 3, y // 3, "chip-color") - 0.5
+                    )
                 rgb = tuple(_clamp(channel + variation) for channel in spec.base_color)
             elif semantic == "roughness":
                 value = _clamp(spec.roughness + noise * 0.10 + height * 0.025)
@@ -156,7 +320,11 @@ def _texture_pixels_from_height_python(
                 dx = (left - right) * spec.normal_strength
                 dy = (down - up) * spec.normal_strength
                 length = math.sqrt(dx * dx + dy * dy + 1.0)
-                rgb = (0.5 + dx / length * 0.5, 0.5 + dy / length * 0.5, 0.5 + 0.5 / length)
+                rgb = (
+                    0.5 + dx / length * 0.5,
+                    0.5 + dy / length * 0.5,
+                    0.5 + 0.5 / length,
+                )
             else:
                 raise ValueError(f"unsupported material semantic: {semantic}")
             pixels.extend((*rgb, 1.0))
@@ -164,11 +332,11 @@ def _texture_pixels_from_height_python(
 
 
 def _texture_pixels(spec: MaterialSpec, semantic: str, size: int) -> list[float]:
-    """Return the original pure-Python texture for tests and small smokes.
+    """Return the deterministic pure-Python texture for tests and small smokes.
 
-    The public forge uses this exact path for the explicit 64 px smoke, keeping
-    its generated pixels stable.  Production textures use the bounded-memory
-    NumPy path below because per-pixel SHA-256 is not practical at 2K.
+    The public forge uses this exact path for the explicit 64 px smoke.
+    Production textures use the bounded-memory NumPy path below because
+    per-pixel SHA-256 is not practical at 2K.
     """
 
     return _texture_pixels_from_height_python(
@@ -195,6 +363,36 @@ def _require_numpy() -> Any:
 def _numpy_seed(material_id: str, channel: str) -> int:
     payload = f"vista-numpy-texture-v1:{material_id}:{channel}".encode("utf-8")
     return int.from_bytes(hashlib.sha256(payload).digest()[:4], "big")
+
+
+def _value_noise_1d_numpy(
+    np: Any,
+    spec: MaterialSpec,
+    coordinate: Any,
+    channel: str,
+) -> Any:
+    """Vectorized counterpart of the smooth directional value-noise sampler."""
+
+    left_float = np.floor(coordinate).astype(np.float32, copy=False)
+    fraction = (coordinate - left_float).astype(np.float32, copy=False)
+    smooth = fraction * fraction * (np.float32(3.0) - np.float32(2.0) * fraction)
+
+    def lattice_value(lattice: Any) -> Any:
+        values = lattice.astype(np.uint32, copy=False) * np.uint32(
+            0x9E3779B1
+        ) ^ np.uint32(_numpy_seed(spec.material_id, channel))
+        values ^= values >> np.uint32(16)
+        values *= np.uint32(0x7FEB352D)
+        values ^= values >> np.uint32(15)
+        values *= np.uint32(0x846CA68B)
+        values ^= values >> np.uint32(16)
+        return values.astype(np.float32) * np.float32(1.0 / 0xFFFFFFFF) - np.float32(
+            0.5
+        )
+
+    left = lattice_value(left_float)
+    right = lattice_value(left_float + np.float32(1.0))
+    return left + (right - left) * smooth
 
 
 def _noise_field_numpy(
@@ -233,10 +431,42 @@ def _height_field_numpy(np: Any, spec: MaterialSpec, size: int) -> Any:
     grain = _noise_field_numpy(np, spec, size, "height") - np.float32(0.5)
     tau = np.float32(math.tau)
     if spec.pattern == "wood":
+        flow = _value_noise_1d_numpy(
+            np,
+            spec,
+            ny * np.float32(3.0),
+            "wood_flow",
+        ) * np.float32(1.6)
+        coarse = _value_noise_1d_numpy(
+            np,
+            spec,
+            nx * np.float32(13.0) + flow,
+            "wood_coarse",
+        )
+        medium = _value_noise_1d_numpy(
+            np,
+            spec,
+            nx * np.float32(43.0) + flow * np.float32(2.1),
+            "wood_medium",
+        )
+        fine = _value_noise_1d_numpy(
+            np,
+            spec,
+            nx * np.float32(137.0) + flow * np.float32(4.3),
+            "wood_fine",
+        )
+        longitudinal = _value_noise_1d_numpy(
+            np,
+            spec,
+            ny * np.float32(5.0) + nx * np.float32(0.8),
+            "wood_longitudinal",
+        )
         return (
-            np.float32(0.55)
-            * np.sin((ny * np.float32(9.0) + np.float32(0.18) * np.sin(nx * np.float32(7.0))) * tau)
-            + grain * np.float32(0.22)
+            coarse * np.float32(0.42)
+            + medium * np.float32(0.30)
+            + fine * np.float32(0.18)
+            + longitudinal * np.float32(0.05)
+            + grain * np.float32(0.05)
         ).astype(np.float32, copy=False)
     if spec.pattern == "terrazzo":
         chips = _noise_field_numpy(
@@ -340,7 +570,9 @@ def texture_filename(material_id: str, semantic: str) -> str:
     return f"{safe}_{semantic}.png"
 
 
-def material_plan_manifest(texture_size_px: int = DEFAULT_TEXTURE_SIZE_PX) -> list[dict[str, Any]]:
+def material_plan_manifest(
+    texture_size_px: int = DEFAULT_TEXTURE_SIZE_PX,
+) -> list[dict[str, Any]]:
     texel_density_px_per_m = int(
         round(texture_size_px / PROJECT_METRIC_UV_METERS_PER_TILE)
     )
@@ -377,11 +609,21 @@ def material_plan_manifest(texture_size_px: int = DEFAULT_TEXTURE_SIZE_PX) -> li
     return result
 
 
-def _save_image(bpy: Any, path: pathlib.Path, name: str, pixels: Iterable[float], size: int, *, color_space: str) -> Any:
+def _save_image(
+    bpy: Any,
+    path: pathlib.Path,
+    name: str,
+    pixels: Iterable[float],
+    size: int,
+    *,
+    color_space: str,
+) -> Any:
     # Blender 4.5's headless PNG writer can flush byte-backed generated images
     # as black.  A float-backed image preserves the authored pixels and still
     # writes ordinary 8-bit PNGs under the selected color-space policy.
-    image = bpy.data.images.new(name=name, width=size, height=size, alpha=True, float_buffer=True)
+    image = bpy.data.images.new(
+        name=name, width=size, height=size, alpha=True, float_buffer=True
+    )
     # Blender invalidates a generated image's pixel buffer when this property
     # changes, even when assigning the apparent default.  Set it before pixels.
     image.colorspace_settings.name = color_space
@@ -417,8 +659,8 @@ def realize_blender_materials(
     for spec in material_specs():
         images: dict[str, Any] = {}
         if texture_size_px <= 64:
-            # Preserve the historical explicit smoke pixels byte-for-byte while
-            # still calculating their shared height field only once.
+            # Keep explicit small smokes on the deterministic pure-Python path
+            # while calculating their shared height field only once.
             height_field = _height_field_python(spec, texture_size_px)
             np = None
         else:
@@ -435,7 +677,9 @@ def realize_blender_materials(
                     height_field,
                 )
                 if np is None
-                else _texture_pixels_numpy(np, spec, semantic, texture_size_px, height_field)
+                else _texture_pixels_numpy(
+                    np, spec, semantic, texture_size_px, height_field
+                )
             )
             images[semantic] = _save_image(
                 bpy,
@@ -445,12 +689,19 @@ def realize_blender_materials(
                 texture_size_px,
                 color_space=color_space,
             )
-            receipt_by_id[spec.material_id]["channels"][semantic]["sha256"] = sha256_file(path)
+            receipt_by_id[spec.material_id]["channels"][semantic]["sha256"] = (
+                sha256_file(path)
+            )
             path.chmod(0o600)
 
-        material = bpy.data.materials.new(name=project_material_export_name(spec.material_id))
+        material = bpy.data.materials.new(
+            name=project_material_export_name(spec.material_id)
+        )
         material.use_nodes = True
-        material.diffuse_color = (*spec.base_color, 0.35 if spec.blend_mode == "BLEND" else 1.0)
+        material.diffuse_color = (
+            *spec.base_color,
+            0.35 if spec.blend_mode == "BLEND" else 1.0,
+        )
         material[PROJECT_MATERIAL_ID_PROPERTY] = spec.material_id
         material[PROJECT_MATERIAL_SEMANTICS_PROPERTY] = PROJECT_MATERIAL_PBR_SEMANTICS
         material[PROJECT_MATERIAL_RECEIPT_PROPERTY] = f"materials/{spec.material_id}"
@@ -470,7 +721,9 @@ def realize_blender_materials(
         if principled.inputs.get("Transmission Weight") is not None:
             principled.inputs["Transmission Weight"].default_value = spec.transmission
         if principled.inputs.get("Alpha") is not None:
-            principled.inputs["Alpha"].default_value = 0.35 if spec.blend_mode == "BLEND" else 1.0
+            principled.inputs["Alpha"].default_value = (
+                0.35 if spec.blend_mode == "BLEND" else 1.0
+            )
         links.new(principled.outputs["BSDF"], output.inputs["Surface"])
 
         tex_nodes: dict[str, Any] = {}
@@ -483,8 +736,12 @@ def realize_blender_materials(
             tex.interpolation = "Linear"
             tex.extension = "REPEAT"
             tex_nodes[semantic] = tex
-        links.new(tex_nodes["base_color"].outputs["Color"], principled.inputs["Base Color"])
-        links.new(tex_nodes["roughness"].outputs["Color"], principled.inputs["Roughness"])
+        links.new(
+            tex_nodes["base_color"].outputs["Color"], principled.inputs["Base Color"]
+        )
+        links.new(
+            tex_nodes["roughness"].outputs["Color"], principled.inputs["Roughness"]
+        )
         normal_map = nodes.new("ShaderNodeNormalMap")
         normal_map.name = "VISTA_Normal_Semantic"
         normal_map.inputs["Strength"].default_value = 1.0

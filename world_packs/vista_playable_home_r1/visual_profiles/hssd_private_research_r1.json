@@ -3,7 +3,7 @@
   "profile_id": "hssd_private_research_r1",
   "house_id": "home.r1",
   "house_revision": "vista_playable_home_r1",
-  "source_house_content_digest": "51208e0ecc1ad1450ca6d9b14a4fb46989bff90fd8dc15422a0a47df6827c8c3",
+  "source_house_content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7",
   "source_binding_plan": {
     "schema_version": "simworld.vista.playable-home-hssd-binding-plan/v1",
     "content_digest": "07ba1221aac1bfd39651953cdf932bbb7d43e39f94d4107020aa96d1b43db44b",
@@ -186,5 +186,5 @@
     "unaccounted_source_asset_ids": [],
     "unaccounted_placement_ids": []
   },
-  "content_digest": "4b76e178ab1a3043d6adda6fe5786a5111f58523f4f8a23eb9cc2c82d883e8d3"
+  "content_digest": "f4d761968ba38582888e52ea208c6c38bb404cda749fd05e54cf90d5d32eda03"
 }

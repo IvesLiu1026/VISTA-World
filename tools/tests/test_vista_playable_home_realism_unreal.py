@@ -23,7 +23,33 @@ FINISHED_KINDS = {"entry_hall", "living_room", "kitchen_dining"}
 
 def build_plan() -> dict:
     house = world_contract.load_json(PACK / "house.json")
-    return world_contract.compile_build_plan(house, world_contract.load_events(PACK / "events"))
+    return world_contract.compile_build_plan(
+        house, world_contract.load_events(PACK / "events")
+    )
+
+
+def test_exploration_baseline_hides_event_resident_and_composer_applies_it() -> None:
+    plan = build_plan()
+    resident = next(
+        entity
+        for entity in plan["entities"]
+        if entity["entity_id"] == "home.r1/room.entry_hall/entity.resident.01"
+    )
+    assert resident["baseline_state"]["visible"] is False
+    assert plan["runtime_profile"]["player_start"]["world_transform_cm"][
+        "location_cm"
+    ] == [0, -130, 10]
+
+    commandlet = (
+        ROOT / "tools/ue/vista_playable_home/compose_home_commandlet.py"
+    ).read_text(encoding="utf-8")
+    apply_entity = commandlet.split("def apply_entity_properties", 1)[1].split(
+        "LEGACY_AXIS_MAPPINGS", 1
+    )[0]
+    assert (
+        'actor.set_actor_hidden_in_game(not bool(baseline.get("visible", True)))'
+        in apply_entity
+    )
 
 
 def renderer_profile() -> dict:
@@ -68,13 +94,13 @@ def visual_profile(plan: dict) -> dict:
         room_id = room["room_id"]
         bounds = room["world_bounds_cm"]
         center = [
-            (bounds["min_cm"][axis] + bounds["max_cm"][axis]) / 2.0
-            for axis in range(3)
+            (bounds["min_cm"][axis] + bounds["max_cm"][axis]) / 2.0 for axis in range(3)
         ]
         for purpose, x_fraction in (("overview", 0.15), ("hero", 0.75)):
-            eye_x = bounds["min_cm"][0] + (
-                bounds["max_cm"][0] - bounds["min_cm"][0]
-            ) * x_fraction
+            eye_x = (
+                bounds["min_cm"][0]
+                + (bounds["max_cm"][0] - bounds["min_cm"][0]) * x_fraction
+            )
             target_x = bounds["min_cm"][0] + (
                 bounds["max_cm"][0] - bounds["min_cm"][0]
             ) * (0.75 if purpose == "overview" else 0.25)
@@ -201,11 +227,17 @@ def test_review_shot_preflight_fails_closed_on_eye_and_clearance() -> None:
         )
     outside = copy.deepcopy(shot)
     outside["eye_location_cm"] = [9999.0, 9999.0, 9999.0]
-    with pytest.raises(planning.VistaPlayableHomePlanError, match="OUTSIDE_ALLOWED_BOUNDS"):
-        planning.compile_look_at_review_shot(outside, room_bounds=room["world_bounds_cm"])
+    with pytest.raises(
+        planning.VistaPlayableHomePlanError, match="OUTSIDE_ALLOWED_BOUNDS"
+    ):
+        planning.compile_look_at_review_shot(
+            outside, room_bounds=room["world_bounds_cm"]
+        )
     caller_euler = copy.deepcopy(shot)
     caller_euler["rotation_deg"] = [-10.0, 0.0, 90.0]
-    with pytest.raises(planning.VistaPlayableHomePlanError, match="CALLER_EULER_REFUSED"):
+    with pytest.raises(
+        planning.VistaPlayableHomePlanError, match="CALLER_EULER_REFUSED"
+    ):
         planning.compile_look_at_review_shot(caller_euler)
 
 
@@ -236,13 +268,14 @@ def test_r2_composition_is_additive_and_r1_default_is_byte_stable() -> None:
 
     profile = visual_profile(plan)
     r2 = planning.build_composition_spec(plan, profile)
-    cameras = [op for op in r2.value["operations"] if op["kind"] == "place_review_camera"]
+    cameras = [
+        op for op in r2.value["operations"] if op["kind"] == "place_review_camera"
+    ]
     assert len(cameras) == 6
     assert all(op["transform"]["rotation_deg"][0] == 0.0 for op in cameras)
     assert not any(op["kind"] == "place_lighting" for op in r2.value["operations"])
     lighting = [
-        op for op in r2.value["operations"]
-        if op["kind"] == "place_realistic_lighting"
+        op for op in r2.value["operations"] if op["kind"] == "place_realistic_lighting"
     ]
     assert len(lighting) == 1
     assert lighting[0]["sky"] == {
@@ -305,7 +338,10 @@ def test_renderer_config_and_observation_contract_are_explicit() -> None:
     ).decode()
     assert "[/Script/LinuxTargetPlatform.LinuxTargetSettings]" in generated_ini
     assert "+TargetedRHIs=SF_VULKAN_SM6" in generated_ini
-    assert "[/Script/AndroidFileServerEditor.AndroidFileServerRuntimeSettings]" in generated_ini
+    assert (
+        "[/Script/AndroidFileServerEditor.AndroidFileServerRuntimeSettings]"
+        in generated_ini
+    )
     assert "bEnablePlugin=False" in generated_ini
     assert "SecurityToken" not in generated_ini
     assert {"Name": "AndroidFileServer", "Enabled": False} in (
@@ -323,7 +359,10 @@ def test_renderer_config_and_observation_contract_are_explicit() -> None:
         item["name"]: item["expected"]
         for item in first.observation_contract["required_runtime_observations"]
     }
-    assert build_home.evaluate_renderer_observations(first, observations)["runtime_proof"] is True
+    assert (
+        build_home.evaluate_renderer_observations(first, observations)["runtime_proof"]
+        is True
+    )
     observations["feature_level"] = "SM5"
     rejected = build_home.evaluate_renderer_observations(first, observations)
     assert rejected["runtime_proof"] is False
@@ -363,8 +402,12 @@ def test_capture_contract_is_1080p_zero_roll_and_observation_gated() -> None:
         profile, capture_review_views.EXPECTED_MAP_PATH, room_bounds_by_id=bounds
     )
     assert len(cameras) == 6
-    assert all((camera["width"], camera["height"]) == (1920, 1080) for camera in cameras)
-    assert all(camera["expected_transform"]["rotation_deg"][0] == 0.0 for camera in cameras)
+    assert all(
+        (camera["width"], camera["height"]) == (1920, 1080) for camera in cameras
+    )
+    assert all(
+        camera["expected_transform"]["rotation_deg"][0] == 0.0 for camera in cameras
+    )
     camera = next(item for item in cameras if item["purpose"] == "overview")
     accepted = capture_review_views.validate_realistic_camera_observation(
         camera,
@@ -410,9 +453,9 @@ def test_build_wires_pinned_r2_profile_and_stages_truthful_renderer_receipt(
     tmp_path: pathlib.Path,
 ) -> None:
     fixture = BuildFixture(tmp_path)
-    profile_path = (
-        PACK / "visual_profiles" / "realistic_interior_r2.json"
-    ).resolve(strict=True)
+    profile_path = (PACK / "visual_profiles" / "realistic_interior_r2.json").resolve(
+        strict=True
+    )
     profile_sha = build_home.sha256_file(profile_path)
     config = dataclasses.replace(
         fixture.config(),
@@ -429,14 +472,13 @@ def test_build_wires_pinned_r2_profile_and_stages_truthful_renderer_receipt(
         fixture.attempt / "contracts" / build_home.VISUAL_PROFILE_ATTEMPT_FILE
     )
     assert planned.execution["visual_profile_sha256"] == profile_sha
-    assert planned.execution["visual_profile_content_digest"] == planned.visual_profile[
-        "content_digest"
-    ]
+    assert (
+        planned.execution["visual_profile_content_digest"]
+        == planned.visual_profile["content_digest"]
+    )
     assert planned.execution["renderer_profile_request"] == {
         "path": str(
-            fixture.attempt
-            / "contracts"
-            / build_home.RENDERER_REQUEST_ATTEMPT_FILE
+            fixture.attempt / "contracts" / build_home.RENDERER_REQUEST_ATTEMPT_FILE
         ),
         "sha256": build_home.sha256_bytes(planned.renderer_request_raw),
         "content_digest": planned.renderer_request["content_digest"],
@@ -450,26 +492,30 @@ def test_build_wires_pinned_r2_profile_and_stages_truthful_renderer_receipt(
     assert planned.dry_run_report["inputs"]["visual_profile"]["path"] == str(
         profile_path
     )
-    assert planned.dry_run_report["project"]["renderer_profile_request"][
-        "runtime_proof"
-    ] is False
+    assert (
+        planned.dry_run_report["project"]["renderer_profile_request"]["runtime_proof"]
+        is False
+    )
     assert "+TargetedRHIs=SF_VULKAN_SM6" in planned.engine_ini_raw.decode()
     assert "VulkanTargetedShaderFormats" not in planned.engine_ini_raw.decode()
     operations = planned.execution["composition_spec"]["operations"]
-    assert sum(operation["kind"] == "place_review_camera" for operation in operations) == 6
-    assert sum(
-        operation["kind"] == "place_realistic_lighting" for operation in operations
-    ) == 1
+    assert (
+        sum(operation["kind"] == "place_review_camera" for operation in operations) == 6
+    )
+    assert (
+        sum(operation["kind"] == "place_realistic_lighting" for operation in operations)
+        == 1
+    )
     assert not any(operation["kind"] == "place_lighting" for operation in operations)
 
     attempt, _copy_counts = build_home._materialize_inputs(planned)
 
-    assert (attempt / "contracts" / build_home.VISUAL_PROFILE_ATTEMPT_FILE).read_bytes() == (
-        profile_path.read_bytes()
-    )
-    assert (attempt / "contracts" / build_home.RENDERER_REQUEST_ATTEMPT_FILE).read_bytes() == (
-        planned.renderer_request_raw
-    )
+    assert (
+        attempt / "contracts" / build_home.VISUAL_PROFILE_ATTEMPT_FILE
+    ).read_bytes() == (profile_path.read_bytes())
+    assert (
+        attempt / "contracts" / build_home.RENDERER_REQUEST_ATTEMPT_FILE
+    ).read_bytes() == (planned.renderer_request_raw)
     materialized_execution = json.loads((attempt / "execution.json").read_text())
     assert materialized_execution == planned.execution
     preparation = json.loads((attempt / "preparation-receipt.json").read_text())
@@ -485,7 +531,7 @@ def test_r1_build_path_remains_byte_stable_without_visual_profile(
     planned = build_home.plan_build(fixture.config())
 
     assert planning.build_composition_spec(fixture.plan).sha256 == (
-        "342d8262470fedbce4ce9be8125bf1d181b5291c0d18e50787d68015c394e72e"
+        "3878a29ca946a90ea67e50e0b52ecc119c4a940f45c0ef8e69cdacbee8e4c552"
     )
     assert build_home.sha256_bytes(planned.engine_ini_raw) == (
         "8d417e9e9a75f8b4904979a86da0a1d1d57b4451d632848a2fc44dbc857c68fc"
@@ -536,7 +582,9 @@ def test_visual_profile_pin_and_contract_fail_closed(
     original = json.loads(source.read_text())
     invalid_cases: list[tuple[str, dict, str]] = []
     unknown_schema = copy.deepcopy(original)
-    unknown_schema["schema_version"] = "simworld.vista.playable-home-visual-profile/v999"
+    unknown_schema["schema_version"] = (
+        "simworld.vista.playable-home-visual-profile/v999"
+    )
     invalid_cases.append(("unknown-schema", unknown_schema, "SCHEMA_INVALID"))
     digest_drift = copy.deepcopy(original)
     digest_drift["content_digest"] = "0" * 64

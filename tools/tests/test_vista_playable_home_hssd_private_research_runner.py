@@ -317,7 +317,7 @@ def test_terminal_validation_requires_exact_gates_and_stdout_marker(
     execution_path = attempt / "hssd-execution.json"
     execution_path.write_text(json.dumps(execution), encoding="utf-8")
     gates = {
-        "exact_r5_source_inventory_verified": True,
+        "exact_r7_source_inventory_verified": True,
         "compatibility_derivatives_revalidated": True,
         "diagnostic_nonpromotable_disposition_recorded": True,
         "namespace_fresh": True,

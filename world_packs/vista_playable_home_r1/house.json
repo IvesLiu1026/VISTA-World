@@ -155,7 +155,7 @@
     {"entity_id": "home.r1/room.entry_hall/entity.interior_door.03", "room_id": "home.r1/room.entry_hall", "category": "interior_door", "asset_ref": "asset.door.interior", "transform": {"location_m": [-1.5, 2, 0], "rotation_deg": [0, 0, 90], "scale": [1, 1, 1]}, "tags": ["door", "interactable"], "component_role": "door", "mobility": "movable", "collision_policy": "door_dynamic", "nav_obstacle": true, "affordances": ["open", "close", "inspect"], "initial_state": {"open": false, "visible": true}, "placement_anchors": []},
     {"entity_id": "home.r1/room.entry_hall/entity.interior_door.04", "room_id": "home.r1/room.entry_hall", "category": "interior_door", "asset_ref": "asset.door.interior", "transform": {"location_m": [1.5, 2, 0], "rotation_deg": [0, 0, 90], "scale": [1, 1, 1]}, "tags": ["door", "interactable"], "component_role": "door", "mobility": "movable", "collision_policy": "door_dynamic", "nav_obstacle": true, "affordances": ["open", "close", "inspect"], "initial_state": {"open": true, "visible": true}, "placement_anchors": []},
     {"entity_id": "home.r1/room.entry_hall/entity.interior_door.05", "room_id": "home.r1/room.entry_hall", "category": "interior_door", "asset_ref": "asset.door.interior", "transform": {"location_m": [0, 4, 0], "rotation_deg": [0, 0, 0], "scale": [1, 1, 1]}, "tags": ["door", "interactable"], "component_role": "door", "mobility": "movable", "collision_policy": "door_dynamic", "nav_obstacle": true, "affordances": ["open", "close", "inspect"], "initial_state": {"open": false, "visible": true}, "placement_anchors": []},
-    {"entity_id": "home.r1/room.entry_hall/entity.resident.01", "room_id": "home.r1/room.entry_hall", "category": "resident", "asset_ref": "asset.runtime.npc", "transform": {"location_m": [0, 0, 0], "rotation_deg": [0, 0, 0], "scale": [1, 1, 1]}, "tags": ["autonomous", "humanoid", "npc"], "component_role": "npc", "mobility": "movable", "collision_policy": "pawn", "nav_obstacle": false, "affordances": ["inspect"], "initial_state": {"visible": true, "status": "idle"}, "placement_anchors": []},
+    {"entity_id": "home.r1/room.entry_hall/entity.resident.01", "room_id": "home.r1/room.entry_hall", "category": "resident", "asset_ref": "asset.runtime.npc", "transform": {"location_m": [0, 0, 0], "rotation_deg": [0, 0, 0], "scale": [1, 1, 1]}, "tags": ["autonomous", "humanoid", "npc"], "component_role": "npc", "mobility": "movable", "collision_policy": "pawn", "nav_obstacle": false, "affordances": ["inspect"], "initial_state": {"visible": false, "status": "idle"}, "placement_anchors": []},
     {"entity_id": "home.r1/room.entry_hall/entity.shoe_bench.01", "room_id": "home.r1/room.entry_hall", "category": "shoe_bench", "asset_ref": "asset.prop.shoe_bench", "transform": {"location_m": [1, -3.1, 0], "rotation_deg": [0, 0, 180], "scale": [1, 1, 1]}, "tags": ["furniture", "seating"], "component_role": "static_furniture", "mobility": "static", "collision_policy": "furniture", "nav_obstacle": true, "affordances": ["sit", "inspect"], "initial_state": {"visible": true, "occupied": false}, "placement_anchors": []},
 
     {"entity_id": "home.r1/room.living_room/entity.sofa.01", "room_id": "home.r1/room.living_room", "category": "sofa", "asset_ref": "asset.prop.sofa", "transform": {"location_m": [-1.6, 1.2, 0], "rotation_deg": [0, 0, -90], "scale": [1, 1, 1]}, "tags": ["furniture", "seating"], "component_role": "static_furniture", "mobility": "static", "collision_policy": "furniture", "nav_obstacle": true, "affordances": ["sit", "inspect"], "initial_state": {"visible": true, "occupied": false}, "placement_anchors": []},
@@ -203,7 +203,7 @@
     {"relation_id": "relation.contains_item.01", "predicate": "contains", "subject_id": "home.r1/room.bathroom_laundry/entity.washer.01", "object_id": "home.r1/room.bathroom_laundry/entity.clothes.01"}
   ],
   "runtime_profile": {
-    "player_start": {"room_id": "home.r1/room.entry_hall", "transform": {"location_m": [0, -2.5, 0.1], "rotation_deg": [0, 0, 90], "scale": [1, 1, 1]}},
+    "player_start": {"room_id": "home.r1/room.entry_hall", "transform": {"location_m": [0, -1.3, 0.1], "rotation_deg": [0, 0, 90], "scale": [1, 1, 1]}},
     "pawn_asset_ref": "asset.runtime.player",
     "game_mode_asset_ref": "asset.runtime.game_mode",
     "controls": {"move": true, "look": true, "jump": true, "sprint": true, "crouch": true, "interact": true},
@@ -219,5 +219,5 @@
     "source_refs": ["spec://vista-playable-home/approved-2026-08-15", "vista://assist-step/verified-indoor-events"],
     "license": "research-fixture-only"
   },
-  "content_digest": "51208e0ecc1ad1450ca6d9b14a4fb46989bff90fd8dc15422a0a47df6827c8c3"
+  "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
 }

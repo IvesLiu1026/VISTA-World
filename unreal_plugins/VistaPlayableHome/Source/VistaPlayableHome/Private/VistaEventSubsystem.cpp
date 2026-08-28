@@ -522,6 +522,11 @@ bool UVistaEventSubsystem::ApplyOperation(
             }
             return false;
         }
+        // Exploration keeps the resident hidden and non-colliding.  A typed
+        // NPC queue is the explicit event boundary that makes the resident
+        // present; RestoreBaseline reapplies the hidden snapshot on reset.
+        Npc->SetActorHiddenInGame(false);
+        Npc->SetActorEnableCollision(true);
         ModifiedNpcControllers.AddUnique(Controller);
         return true;
     }
