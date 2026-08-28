@@ -92,6 +92,35 @@ void UVistaCharacterProviderComponent::BeginPlay()
     ActivateAllowlistedMetaHuman(*OwnerCharacter);
 }
 
+void UVistaCharacterProviderComponent::SetOwnerNoSeeForNearCamera(bool bHidden)
+{
+    bOwnerNoSeeForNearCamera = bHidden;
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+    if (IsValid(OwnerCharacter) && IsValid(OwnerCharacter->GetMesh()))
+    {
+        OwnerCharacter->GetMesh()->SetOwnerNoSee(bHidden);
+    }
+
+    if (!IsValid(ProviderChildActorComponent))
+    {
+        return;
+    }
+    AActor* VisualActor = ProviderChildActorComponent->GetChildActor();
+    if (!IsValid(VisualActor))
+    {
+        return;
+    }
+    TInlineComponentArray<UPrimitiveComponent*> VisualPrimitives;
+    VisualActor->GetComponents(VisualPrimitives);
+    for (UPrimitiveComponent* Primitive : VisualPrimitives)
+    {
+        if (IsValid(Primitive))
+        {
+            Primitive->SetOwnerNoSee(bHidden);
+        }
+    }
+}
+
 FName UVistaCharacterProviderComponent::ResolveRequestedProviderId() const
 {
     FString ProviderValue = RequestedProviderId.ToString();
@@ -161,31 +190,44 @@ bool UVistaCharacterProviderComponent::ActivateAllowlistedMetaHuman(
     }
     else
     {
-        // The assembled Blueprint is a visual shell. Canonical movement,
-        // navigation and interaction collision stay on ACharacter.
-        VisualActor->SetActorEnableCollision(false);
-        VisualActor->SetCanBeDamaged(false);
-        DisableVisualCollision(*VisualActor);
-        if (ValidateMetaHumanVisualShell(*VisualActor, FailureCode) &&
-            ConfigureMetaHumanRetarget(
-                OwnerCharacter,
-                *VisualActor,
-                *LoadedRetargetAsset,
-                FailureCode) &&
-            ValidateMetaHumanVisual(*VisualActor, FailureCode))
+        // OwnerNoSee resolves visibility through the AActor ownership chain,
+        // not through UChildActorComponent::GetParentComponent(). Establish
+        // that chain explicitly before applying the current camera state.
+        VisualActor->SetOwner(&OwnerCharacter);
+        if (VisualActor->GetOwner() != &OwnerCharacter)
         {
-            // This is intentionally the only path that hides Manny.
-            SetMannyFallbackVisible(OwnerCharacter, false);
-            ActiveProviderId = MetaHumanVivianProviderId;
-            ProviderStatus = PhotorealReadyStatus;
-            ProviderFailureCode = NAME_None;
-            bPhotorealCharacterReady = true;
-            UE_LOG(
-                LogVistaCharacterProvider,
-                Display,
-                TEXT("VISTA_CHARACTER_PROVIDER_READY provider=%s"),
-                *MetaHumanVivianProviderId.ToString());
-            return true;
+            FailureCode = TEXT("character_provider_visual_owner_invalid");
+        }
+        else
+        {
+            SetOwnerNoSeeForNearCamera(bOwnerNoSeeForNearCamera);
+
+            // The assembled Blueprint is a visual shell. Canonical movement,
+            // navigation and interaction collision stay on ACharacter.
+            VisualActor->SetActorEnableCollision(false);
+            VisualActor->SetCanBeDamaged(false);
+            DisableVisualCollision(*VisualActor);
+            if (ValidateMetaHumanVisualShell(*VisualActor, FailureCode) &&
+                ConfigureMetaHumanRetarget(
+                    OwnerCharacter,
+                    *VisualActor,
+                    *LoadedRetargetAsset,
+                    FailureCode) &&
+                ValidateMetaHumanVisual(*VisualActor, FailureCode))
+            {
+                // This is intentionally the only path that hides Manny.
+                SetMannyFallbackVisible(OwnerCharacter, false);
+                ActiveProviderId = MetaHumanVivianProviderId;
+                ProviderStatus = PhotorealReadyStatus;
+                ProviderFailureCode = NAME_None;
+                bPhotorealCharacterReady = true;
+                UE_LOG(
+                    LogVistaCharacterProvider,
+                    Display,
+                    TEXT("VISTA_CHARACTER_PROVIDER_READY provider=%s"),
+                    *MetaHumanVivianProviderId.ToString());
+                return true;
+            }
         }
     }
 
