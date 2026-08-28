@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Materialize and run one isolated HSSD R5 Unreal import candidate.
 
-The default mode is a zero-write dry run.  ``--apply`` copies only the clean
-authoring projection into a fresh append-only attempt, pins attempt-local
-commandlet scripts, runs UE 5.7.3 with NullRHI, and validates the terminal
-import receipt.  It never starts or modifies the live game/Sunshine runtime.
+The default mode is a zero-write dry run.  Normal ``--apply`` refuses because
+the exact R5 corpus contains one active transmission/clear-coat conflict.  The
+explicit ``--allow-nonpromotable-material-conflict`` override creates only a
+diagnostic candidate: it pins attempt-local compatibility derivatives before
+copying the clean project, runs UE 5.7.3 with NullRHI, and never promotes visual
+or full-material-fidelity evidence.  It never modifies the live runtime.
 """
 
 from __future__ import annotations
@@ -22,11 +24,12 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 import hssd_private_research_commandlet_common as hssd
+import hssd_ue57_glb_compatibility as compatibility
 
 
-SCHEMA = "simworld.vista.playable-home-hssd-private-research-ue-runner/v1"
+SCHEMA = "simworld.vista.playable-home-hssd-private-research-ue-runner/v2"
 HOST_RECEIPT_SCHEMA = (
-    "simworld.vista.playable-home-hssd-private-research-ue-host-receipt/v1"
+    "simworld.vista.playable-home-hssd-private-research-ue-host-receipt/v2"
 )
 SOURCE_PROJECT_ROOT = pathlib.Path(
     "/mnt/NAS2/yhliu/VISTA-World/runs/playable-runtime-extraction-r1/"
@@ -65,6 +68,7 @@ BUILD_VERSION_SHA256 = (
 DEFAULT_NAMESPACE = (
     "/Game/VISTA/PlayableHome/hssd_private_research_r5_phase1/HSSDPrivateResearch"
 )
+DIAGNOSTIC_NAMESPACE = hssd.DIAGNOSTIC_NAMESPACE
 DEFAULT_OUTPUT_PARENT = pathlib.Path(
     "/data/sysx/vista-world/runs/vista-action-world-r1"
 )
@@ -98,6 +102,23 @@ class ProjectSnapshot:
     files: tuple[FileRecord, ...]
     tree_sha256: str
     total_bytes: int
+
+
+@dataclass(frozen=True)
+class CompatibilityAsset:
+    source_binding: dict[str, Any]
+    derivative: bytes
+    receipt: dict[str, Any]
+    receipt_raw: bytes
+    receipt_sha256: str
+
+
+@dataclass(frozen=True)
+class CompatibilityBundle:
+    assets: tuple[CompatibilityAsset, ...]
+    aggregate: dict[str, Any]
+    aggregate_raw: bytes
+    aggregate_sha256: str
 
 
 def _canonical_json(value: Any, *, newline: bool = True) -> bytes:
@@ -341,10 +362,182 @@ def _script_sources() -> dict[str, pathlib.Path]:
         "common": (root / "hssd_private_research_commandlet_common.py").resolve(
             strict=True
         ),
+        "compatibility": (root / "hssd_ue57_glb_compatibility.py").resolve(strict=True),
         "import": (root / "import_hssd_private_research_commandlet.py").resolve(
             strict=True
         ),
     }
+
+
+def _read_pinned_regular_file(
+    path: pathlib.Path, *, expected_bytes: int, expected_sha256: str, label: str
+) -> bytes:
+    descriptor = os.open(
+        path,
+        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+    )
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_size != expected_bytes:
+            raise RunnerError(f"{label} byte identity differs")
+        digest = hashlib.sha256()
+        chunks = []
+        while True:
+            block = os.read(descriptor, 1024 * 1024)
+            if not block:
+                break
+            chunks.append(block)
+            digest.update(block)
+        after = os.fstat(descriptor)
+        if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns) != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+        ) or digest.hexdigest() != expected_sha256:
+            raise RunnerError(f"{label} changed or digest differs")
+        raw = b"".join(chunks)
+        if len(raw) != expected_bytes:
+            raise RunnerError(f"{label} byte count differs")
+        return raw
+    finally:
+        os.close(descriptor)
+
+
+def _source_glb_path(binding: Mapping[str, Any]) -> pathlib.Path:
+    relative = binding.get("glb_relative_path")
+    if not isinstance(relative, str) or not relative:
+        raise RunnerError("R5 source binding GLB path is invalid")
+    pure = pathlib.PurePosixPath(relative)
+    if (
+        pure.is_absolute()
+        or pure.as_posix() != relative
+        or any(part in {"", ".", ".."} for part in pure.parts)
+    ):
+        raise RunnerError("R5 source binding GLB path is unsafe")
+    root = SOURCE_HSSD_RUN.resolve(strict=True)
+    lexical = pathlib.Path(os.path.normpath(root.joinpath(*pure.parts)))
+    try:
+        resolved = lexical.resolve(strict=True)
+    except OSError as exc:
+        raise RunnerError("R5 source binding GLB is missing") from exc
+    if resolved != lexical or resolved.parent != root / "assets":
+        raise RunnerError("R5 source binding GLB uses a symlink or escapes assets")
+    return resolved
+
+
+def _derive_compatibility_bundle(
+    source_bindings: Sequence[dict[str, Any]], transform_script_sha256: str
+) -> CompatibilityBundle:
+    if len(source_bindings) != 26 or [
+        item.get("source_asset_id") for item in source_bindings
+    ] != list(hssd.EXPECTED_ASSET_IDS):
+        raise RunnerError("compatibility derivation requires the exact 26 R5 assets")
+    assets: list[CompatibilityAsset] = []
+    aggregate_assets: list[dict[str, Any]] = []
+    for source_binding in source_bindings:
+        asset_id = source_binding["source_asset_id"]
+        source_raw = _read_pinned_regular_file(
+            _source_glb_path(source_binding),
+            expected_bytes=source_binding["glb_bytes"],
+            expected_sha256=source_binding["glb_sha256"],
+            label="R5 GLB " + asset_id,
+        )
+        try:
+            derivative, receipt = compatibility.derive_glb(
+                source_raw,
+                source_asset_id=asset_id,
+                transform_script_sha256=transform_script_sha256,
+            )
+            compatibility.validate_derivation(
+                source_raw,
+                derivative,
+                receipt,
+                source_asset_id=asset_id,
+                transform_script_sha256=transform_script_sha256,
+            )
+        except compatibility.CompatibilityError as exc:
+            raise RunnerError(
+                "HSSD compatibility derivation refused: " + asset_id
+            ) from exc
+        receipt_raw = _canonical_json(receipt)
+        receipt_sha256 = hashlib.sha256(receipt_raw).hexdigest()
+        aggregate_asset = {
+            "source_asset_id": asset_id,
+            "source_sha256": source_binding["glb_sha256"],
+            "source_bytes": source_binding["glb_bytes"],
+            "derivative_relative_path": "assets/" + asset_id + ".glb",
+            "derivative_sha256": receipt["output_sha256"],
+            "derivative_bytes": receipt["output_bytes"],
+            "receipt_relative_path": "receipts/" + asset_id + ".json",
+            "receipt_sha256": receipt_sha256,
+            "receipt_content_digest": receipt["content_digest"],
+            "compatibility_status": receipt["status"],
+            "blocks_full_material_fidelity": receipt["blocks_full_material_fidelity"],
+        }
+        aggregate_assets.append(aggregate_asset)
+        assets.append(
+            CompatibilityAsset(
+                source_binding=copy.deepcopy(source_binding),
+                derivative=derivative,
+                receipt=receipt,
+                receipt_raw=receipt_raw,
+                receipt_sha256=receipt_sha256,
+            )
+        )
+    counts = {
+        "asset_count": len(assets),
+        "removed_noop_transmission": sum(
+            len(item.receipt["removed_noop_transmission"]) for item in assets
+        ),
+        "retained_active_transmission": sum(
+            len(item.receipt["retained_active_transmission"]) for item in assets
+        ),
+        "retained_active_dual_conflicts": sum(
+            len(item.receipt["retained_active_dual_conflicts"]) for item in assets
+        ),
+        "blocking_asset_count": sum(
+            item.receipt["blocks_full_material_fidelity"] for item in assets
+        ),
+    }
+    blocking_asset_ids = [
+        item.receipt["source_asset_id"]
+        for item in assets
+        if item.receipt["blocks_full_material_fidelity"]
+    ]
+    if counts != hssd.EXPECTED_COMPATIBILITY_COUNTS or blocking_asset_ids != [
+        "hssd.static.washer"
+    ]:
+        raise RunnerError(
+            "HSSD compatibility corpus differs from 26/82 removed/2 active/1 dual"
+        )
+    aggregate = _seal(
+        {
+            "schema_version": hssd.COMPATIBILITY_AGGREGATE_SCHEMA,
+            "status": hssd.COMPATIBILITY_STATUS,
+            "accepted_as_visual_evidence": False,
+            "full_material_fidelity": False,
+            "promotable": False,
+            "diagnostic_only": True,
+            "asset_count": len(assets),
+            "source_asset_ids": list(hssd.EXPECTED_ASSET_IDS),
+            "transform": {
+                "rule_id": compatibility.RULE_ID,
+                "script_sha256": transform_script_sha256,
+            },
+            "counts": counts,
+            "blocking_asset_ids": blocking_asset_ids,
+            "assets": aggregate_assets,
+            "source_license_scope": hssd.SOURCE_LICENSE_SCOPE,
+        }
+    )
+    aggregate_raw = _canonical_json(aggregate)
+    return CompatibilityBundle(
+        assets=tuple(assets),
+        aggregate=aggregate,
+        aggregate_raw=aggregate_raw,
+        aggregate_sha256=hashlib.sha256(aggregate_raw).hexdigest(),
+    )
 
 
 def build_plan(
@@ -352,16 +545,14 @@ def build_plan(
     namespace: str,
     *,
     apply: bool,
+    allow_nonpromotable_material_conflict: bool = False,
 ) -> tuple[dict[str, Any], ProjectSnapshot]:
     _validate_toolchain()
     _validate_source_acceptance()
-    snapshot = _snapshot_project(SOURCE_PROJECT_ROOT)
-    if snapshot.tree_sha256 != SOURCE_PROJECT_PROJECTION_SHA256:
-        raise RunnerError("source authoring project projection changed")
-    if _sha256(SOURCE_PROJECT_ROOT / SOURCE_PROJECT_NAME) != SOURCE_PROJECT_SHA256:
-        raise RunnerError("source project descriptor changed")
     if not isinstance(namespace, str) or hssd.NAMESPACE_RE.fullmatch(namespace) is None:
         raise RunnerError("candidate content namespace is invalid")
+    if allow_nonpromotable_material_conflict and namespace != DIAGNOSTIC_NAMESPACE:
+        raise RunnerError("diagnostic override requires the fixed diagnostic namespace")
     attempt = attempt_root.resolve(strict=False)
     parent = attempt.parent.resolve(strict=True)
     if (
@@ -378,11 +569,25 @@ def build_plan(
         raise RunnerError("attempt parent cannot be inside a Git worktree")
     scripts = _script_sources()
     bindings = hssd.validate_source_run(str(SOURCE_HSSD_RUN), namespace)
+    bundle = _derive_compatibility_bundle(bindings, _sha256(scripts["compatibility"]))
+    if apply and not allow_nonpromotable_material_conflict:
+        raise RunnerError(
+            "HSSD R5 compatibility aggregate is nonpromotable; normal --apply "
+            "is blocked before attempt creation (diagnostic override required)"
+        )
+    snapshot = _snapshot_project(SOURCE_PROJECT_ROOT)
+    if snapshot.tree_sha256 != SOURCE_PROJECT_PROJECTION_SHA256:
+        raise RunnerError("source authoring project projection changed")
+    if _sha256(SOURCE_PROJECT_ROOT / SOURCE_PROJECT_NAME) != SOURCE_PROJECT_SHA256:
+        raise RunnerError("source project descriptor changed")
     plan = _seal(
         {
             "schema_version": SCHEMA,
-            "mode": "apply" if apply else "dry_run",
+            "mode": "diagnostic_apply" if apply else "dry_run",
             "accepted_as_visual_evidence": False,
+            "full_material_fidelity": False,
+            "promotable": False,
+            "diagnostic_only": bool(allow_nonpromotable_material_conflict),
             "will_write": apply,
             "will_run_unreal": apply,
             "attempt_root": str(attempt),
@@ -407,6 +612,21 @@ def build_plan(
                 ],
                 "scene_plan_sha256": hssd.EXPECTED_DOCUMENT_SHA256["scene-plan.json"],
             },
+            "compatibility": {
+                "schema_version": hssd.COMPATIBILITY_AGGREGATE_SCHEMA,
+                "rule_id": compatibility.RULE_ID,
+                "status": hssd.COMPATIBILITY_STATUS,
+                "counts": bundle.aggregate["counts"],
+                "blocking_asset_ids": bundle.aggregate["blocking_asset_ids"],
+                "aggregate_receipt_sha256": bundle.aggregate_sha256,
+                "aggregate_receipt_content_digest": bundle.aggregate["content_digest"],
+                "promotable": False,
+                "full_material_fidelity": False,
+                "diagnostic_only": True,
+                "diagnostic_override_authorized": (
+                    allow_nonpromotable_material_conflict
+                ),
+            },
             "scripts": {
                 label: {"source_path": str(path), "sha256": _sha256(path)}
                 for label, path in scripts.items()
@@ -423,6 +643,7 @@ def build_plan(
             "execution_policy": {
                 "append_only_attempt": True,
                 "attempt_local_scripts": True,
+                "attempt_local_compatibility_derivatives": True,
                 "clean_project_projection_copy": True,
                 "network_required": False,
                 "live_runtime_mutation": False,
@@ -457,6 +678,81 @@ def _write_exclusive(
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+
+
+def _materialize_compatibility(
+    attempt: pathlib.Path,
+    bundle: CompatibilityBundle,
+    plan: Mapping[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    expected = plan["compatibility"]
+    if (
+        bundle.aggregate_sha256 != expected["aggregate_receipt_sha256"]
+        or bundle.aggregate["content_digest"]
+        != expected["aggregate_receipt_content_digest"]
+        or bundle.aggregate["counts"] != hssd.EXPECTED_COMPATIBILITY_COUNTS
+        or bundle.aggregate["blocking_asset_ids"] != ["hssd.static.washer"]
+    ):
+        raise RunnerError("compatibility bundle changed after apply preflight")
+    root = attempt / "compatibility"
+    assets_root = root / "assets"
+    receipts_root = root / "receipts"
+    root.mkdir(mode=PRIVATE_DIRECTORY_MODE)
+    assets_root.mkdir(mode=PRIVATE_DIRECTORY_MODE)
+    receipts_root.mkdir(mode=PRIVATE_DIRECTORY_MODE)
+    execution_bindings: list[dict[str, Any]] = []
+    for item in bundle.assets:
+        source = item.source_binding
+        asset_id = source["source_asset_id"]
+        derivative_path = assets_root / f"{asset_id}.glb"
+        receipt_path = receipts_root / f"{asset_id}.json"
+        _write_exclusive(derivative_path, item.derivative)
+        _write_exclusive(receipt_path, item.receipt_raw)
+        if (
+            _sha256(derivative_path) != item.receipt["output_sha256"]
+            or derivative_path.stat(follow_symlinks=False).st_size
+            != item.receipt["output_bytes"]
+            or _sha256(receipt_path) != item.receipt_sha256
+        ):
+            raise RunnerError(
+                "attempt-local compatibility artifact differs: " + asset_id
+            )
+        execution_bindings.append(
+            {
+                "source": copy.deepcopy(source),
+                "derivative": {
+                    "source_asset_id": asset_id,
+                    "glb_path": str(derivative_path),
+                    "glb_sha256": item.receipt["output_sha256"],
+                    "glb_bytes": item.receipt["output_bytes"],
+                    "receipt_path": str(receipt_path),
+                    "receipt_sha256": item.receipt_sha256,
+                    "receipt_content_digest": item.receipt["content_digest"],
+                    "compatibility_status": item.receipt["status"],
+                    "blocks_full_material_fidelity": item.receipt[
+                        "blocks_full_material_fidelity"
+                    ],
+                },
+            }
+        )
+    aggregate_path = root / "aggregate-receipt.json"
+    _write_exclusive(aggregate_path, bundle.aggregate_raw)
+    if _sha256(aggregate_path) != bundle.aggregate_sha256:
+        raise RunnerError("attempt-local compatibility aggregate differs")
+    compatibility_execution = {
+        "schema_version": hssd.COMPATIBILITY_AGGREGATE_SCHEMA,
+        "rule_id": compatibility.RULE_ID,
+        "aggregate_receipt": str(aggregate_path),
+        "aggregate_receipt_sha256": bundle.aggregate_sha256,
+        "aggregate_receipt_content_digest": bundle.aggregate["content_digest"],
+        "status": hssd.COMPATIBILITY_STATUS,
+        "counts": bundle.aggregate["counts"],
+        "blocking_asset_ids": bundle.aggregate["blocking_asset_ids"],
+        "promotable": False,
+        "full_material_fidelity": False,
+        "diagnostic_only": True,
+    }
+    return compatibility_execution, execution_bindings
 
 
 def _copy_project(snapshot: ProjectSnapshot, destination: pathlib.Path) -> None:
@@ -572,6 +868,8 @@ def _validate_terminal(
     result = _strict_json_file(result_path, "HSSD import result")
     expected_gates = {
         "exact_r5_source_inventory_verified",
+        "compatibility_derivatives_revalidated",
+        "diagnostic_nonpromotable_disposition_recorded",
         "namespace_fresh",
         "namespace_created",
         "exact_26_assets_imported",
@@ -601,13 +899,24 @@ def _validate_terminal(
         "scene_plan_sha256": hssd.EXPECTED_DOCUMENT_SHA256["scene-plan.json"],
         "scene_plan_content_digest": hssd.EXPECTED_CONTENT_DIGESTS["scene-plan.json"],
         "profile_content_digest": hssd.PROFILE_CONTENT_DIGEST,
+        "compatibility_aggregate_receipt_sha256": execution["compatibility"][
+            "aggregate_receipt_sha256"
+        ],
+        "compatibility_aggregate_content_digest": execution["compatibility"][
+            "aggregate_receipt_content_digest"
+        ],
     }
     expected_receipt_keys = {
         "schema_version",
         "status",
         "accepted_as_visual_evidence",
+        "full_material_fidelity",
+        "promotable",
+        "diagnostic_only",
+        "promotion_status",
         "error",
         "bindings",
+        "compatibility",
         "license_scope",
         "interaction_authority",
         "content_namespace",
@@ -618,9 +927,14 @@ def _validate_terminal(
     expected_asset_keys = {
         "source_asset_id",
         "semantic_category",
-        "glb_sha256",
-        "receipt_sha256",
-        "receipt_content_digest",
+        "source_glb_sha256",
+        "source_receipt_sha256",
+        "source_receipt_content_digest",
+        "derivative_glb_sha256",
+        "derivative_receipt_sha256",
+        "derivative_receipt_content_digest",
+        "compatibility_status",
+        "blocks_full_material_fidelity",
         "object_path",
         "raw_returned_object_paths",
         "returned_object_paths",
@@ -652,18 +966,28 @@ def _validate_terminal(
     assets_exact = isinstance(assets, list) and len(assets) == len(asset_bindings) == 26
     if assets_exact:
         for asset, binding in zip(assets, asset_bindings):
+            source = binding["source"]
+            derivative = binding["derivative"]
             inspection = asset.get("inspection") if isinstance(asset, dict) else None
             if (
                 not isinstance(asset, dict)
                 or set(asset) != expected_asset_keys
                 or not isinstance(inspection, dict)
                 or set(inspection) != expected_inspection_keys
-                or asset["source_asset_id"] != binding["source_asset_id"]
-                or asset["semantic_category"] != binding["semantic_category"]
-                or asset["glb_sha256"] != binding["glb_sha256"]
-                or asset["receipt_sha256"] != binding["receipt_sha256"]
-                or asset["receipt_content_digest"] != binding["receipt_content_digest"]
-                or asset["object_path"] != binding["target_object_path"]
+                or asset["source_asset_id"] != source["source_asset_id"]
+                or asset["semantic_category"] != source["semantic_category"]
+                or asset["source_glb_sha256"] != source["glb_sha256"]
+                or asset["source_receipt_sha256"] != source["receipt_sha256"]
+                or asset["source_receipt_content_digest"]
+                != source["receipt_content_digest"]
+                or asset["derivative_glb_sha256"] != derivative["glb_sha256"]
+                or asset["derivative_receipt_sha256"] != derivative["receipt_sha256"]
+                or asset["derivative_receipt_content_digest"]
+                != derivative["receipt_content_digest"]
+                or asset["compatibility_status"] != derivative["compatibility_status"]
+                or asset["blocks_full_material_fidelity"]
+                is not derivative["blocks_full_material_fidelity"]
+                or asset["object_path"] != source["target_object_path"]
                 or not asset["raw_returned_object_paths"]
                 or not all(
                     str(path).startswith(execution["content_namespace"] + "/")
@@ -675,14 +999,14 @@ def _validate_terminal(
                     for path in asset["returned_object_paths"]
                 )
                 or inspection["static_mesh_count"] != 1
-                or inspection["expected_material_count"] != binding["material_count"]
+                or inspection["expected_material_count"] != source["material_count"]
                 or inspection["expected_pbr_material_count"]
-                != binding["pbr_material_count"]
-                or inspection["expected_texture2d_count"] != binding["texture_count"]
+                != source["pbr_material_count"]
+                or inspection["expected_texture2d_count"] != source["texture_count"]
                 or inspection["source_pbr_texture_slot_count"]
-                != binding["pbr_texture_slot_count"]
+                != source["pbr_texture_slot_count"]
                 or inspection["source_base_normal_orm_texture_slot_count"]
-                != binding["base_normal_orm_texture_slot_count"]
+                != source["base_normal_orm_texture_slot_count"]
                 or not str(inspection["class_path"]).endswith(".StaticMesh")
                 or not inspection["material_paths"]
                 or not inspection["returned_material_interface_paths"]
@@ -715,16 +1039,27 @@ def _validate_terminal(
             continue
     if (
         set(result) != {"status", "receipt", "sha256"}
-        or result.get("status") != "imported_candidate"
+        or result.get("status") != hssd.DIAGNOSTIC_IMPORT_STATUS
         or result.get("receipt") != str(receipt_path)
         or result.get("sha256") != _sha256(receipt_path)
         or result not in marker_payloads
         or set(receipt) != expected_receipt_keys
         or receipt.get("schema_version") != hssd.IMPORT_RECEIPT_SCHEMA
-        or receipt.get("status") != "imported_candidate"
+        or receipt.get("status") != hssd.DIAGNOSTIC_IMPORT_STATUS
         or receipt.get("accepted_as_visual_evidence") is not False
+        or receipt.get("full_material_fidelity") is not False
+        or receipt.get("promotable") is not False
+        or receipt.get("diagnostic_only") is not True
+        or receipt.get("promotion_status") != hssd.PROMOTION_STATUS
         or receipt.get("error") is not None
         or receipt.get("bindings") != expected_bindings
+        or receipt.get("compatibility") != execution["compatibility"]
+        or execution.get("import_mode") != hssd.DIAGNOSTIC_IMPORT_MODE
+        or execution.get("content_namespace") != DIAGNOSTIC_NAMESPACE
+        or execution["compatibility"].get("status") != hssd.COMPATIBILITY_STATUS
+        or execution["compatibility"].get("promotable") is not False
+        or execution["compatibility"].get("full_material_fidelity") is not False
+        or execution["compatibility"].get("diagnostic_only") is not True
         or receipt.get("license_scope") != hssd.SOURCE_LICENSE_SCOPE
         or receipt.get("interaction_authority") != "none_static_joined_glb"
         or receipt.get("content_namespace") != execution["content_namespace"]
@@ -791,30 +1126,48 @@ def _wait_contained(process: subprocess.Popen[Any], *, timeout: int) -> int:
 
 def apply_plan(plan: Mapping[str, Any], snapshot: ProjectSnapshot) -> dict[str, Any]:
     if (
-        plan.get("mode") != "apply"
+        plan.get("mode") != "diagnostic_apply"
         or plan.get("will_write") is not True
         or plan.get("will_run_unreal") is not True
+        or plan.get("diagnostic_only") is not True
+        or plan.get("full_material_fidelity") is not False
+        or plan.get("content_namespace") != DIAGNOSTIC_NAMESPACE
+        or plan.get("compatibility", {}).get("diagnostic_override_authorized")
+        is not True
+        or plan.get("compatibility", {}).get("promotable") is not False
         or plan.get("content_digest") != _content_digest(plan)
     ):
-        raise RunnerError("intact apply plan is required")
+        raise RunnerError("intact diagnostic-only apply plan is required")
     attempt = pathlib.Path(plan["attempt_root"])
     attempt.mkdir(mode=PRIVATE_DIRECTORY_MODE)
     try:
-        _copy_project(snapshot, attempt / "project")
         scripts_dir = attempt / "scripts"
         scripts_dir.mkdir(mode=PRIVATE_DIRECTORY_MODE)
         script_records: dict[str, dict[str, str]] = {}
         for label, source in _script_sources().items():
             target = scripts_dir / source.name
-            raw = source.read_bytes()
+            source_metadata = source.stat(follow_symlinks=False)
+            raw = _read_pinned_regular_file(
+                source,
+                expected_bytes=source_metadata.st_size,
+                expected_sha256=plan["scripts"][label]["sha256"],
+                label="commandlet script " + label,
+            )
             _write_exclusive(target, raw)
             if _sha256(target) != plan["scripts"][label]["sha256"]:
                 raise RunnerError(f"attempt-local script copy differs: {label}")
             script_records[label] = {"path": str(target), "sha256": _sha256(target)}
 
-        project = attempt / "project" / SOURCE_PROJECT_NAME
         namespace = plan["content_namespace"]
-        bindings = hssd.validate_source_run(str(SOURCE_HSSD_RUN), namespace)
+        source_bindings = hssd.validate_source_run(str(SOURCE_HSSD_RUN), namespace)
+        bundle = _derive_compatibility_bundle(
+            source_bindings, script_records["compatibility"]["sha256"]
+        )
+        compatibility_execution, bindings = _materialize_compatibility(
+            attempt, bundle, plan
+        )
+        _copy_project(snapshot, attempt / "project")
+        project = attempt / "project" / SOURCE_PROJECT_NAME
         execution = {
             "schema_version": hssd.EXECUTION_SCHEMA,
             "attempt_root": str(attempt),
@@ -830,6 +1183,8 @@ def apply_plan(plan: Mapping[str, Any], snapshot: ProjectSnapshot) -> dict[str, 
                 "scene_plan_sha256": hssd.EXPECTED_DOCUMENT_SHA256["scene-plan.json"],
             },
             "asset_bindings": bindings,
+            "compatibility": compatibility_execution,
+            "import_mode": hssd.DIAGNOSTIC_IMPORT_MODE,
             "scripts": script_records,
             "import_receipt": str(attempt / "hssd-import-receipt.json"),
             "policy": hssd.EXECUTION_POLICY,
@@ -882,8 +1237,12 @@ def apply_plan(plan: Mapping[str, Any], snapshot: ProjectSnapshot) -> dict[str, 
         host_receipt = _seal(
             {
                 "schema_version": HOST_RECEIPT_SCHEMA,
-                "status": "imported_candidate",
+                "status": hssd.DIAGNOSTIC_IMPORT_STATUS,
                 "accepted_as_visual_evidence": False,
+                "full_material_fidelity": False,
+                "promotable": False,
+                "diagnostic_only": True,
+                "promotion_status": hssd.PROMOTION_STATUS,
                 "interactive": False,
                 "attempt_root": str(attempt),
                 "content_namespace": namespace,
@@ -891,6 +1250,12 @@ def apply_plan(plan: Mapping[str, Any], snapshot: ProjectSnapshot) -> dict[str, 
                 "execution_manifest_sha256": _sha256(execution_path),
                 "import_receipt_sha256": _sha256(
                     pathlib.Path(execution["import_receipt"])
+                ),
+                "compatibility_aggregate_receipt_sha256": (
+                    compatibility_execution["aggregate_receipt_sha256"]
+                ),
+                "compatibility_aggregate_content_digest": (
+                    compatibility_execution["aggregate_receipt_content_digest"]
                 ),
                 "stdout_log_sha256": _sha256(stdout_path),
                 "engine_log_sha256": _sha256(engine_log),
@@ -912,8 +1277,12 @@ def apply_plan(plan: Mapping[str, Any], snapshot: ProjectSnapshot) -> dict[str, 
         failure = _seal(
             {
                 "schema_version": HOST_RECEIPT_SCHEMA,
-                "status": "quarantined",
+                "status": "diagnostic_nonpromotable_quarantined",
                 "accepted_as_visual_evidence": False,
+                "full_material_fidelity": False,
+                "promotable": False,
+                "diagnostic_only": True,
+                "promotion_status": hssd.PROMOTION_STATUS,
                 "attempt_root": str(attempt),
                 "error": {"type": type(exc).__name__, "message": str(exc)[:512]},
             }
@@ -930,17 +1299,33 @@ def apply_plan(plan: Mapping[str, Any], snapshot: ProjectSnapshot) -> dict[str, 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--attempt-root", required=True, type=pathlib.Path)
-    parser.add_argument("--content-namespace", default=DEFAULT_NAMESPACE)
+    parser.add_argument("--content-namespace")
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument(
+        "--allow-nonpromotable-material-conflict",
+        action="store_true",
+        help=(
+            "run one diagnostic-only import in the fixed diagnostic namespace; "
+            "never promotes full material fidelity or visual evidence"
+        ),
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = parse_args(argv)
+    namespace = arguments.content_namespace or (
+        DIAGNOSTIC_NAMESPACE
+        if arguments.allow_nonpromotable_material_conflict
+        else DEFAULT_NAMESPACE
+    )
     plan, snapshot = build_plan(
         arguments.attempt_root,
-        arguments.content_namespace,
+        namespace,
         apply=arguments.apply,
+        allow_nonpromotable_material_conflict=(
+            arguments.allow_nonpromotable_material_conflict
+        ),
     )
     result: Mapping[str, Any] = apply_plan(plan, snapshot) if arguments.apply else plan
     print(_canonical_json(result).decode("utf-8"), end="")
