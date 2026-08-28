@@ -31,6 +31,7 @@ EXECUTION_SHA_ENV = "VISTA_PLAYABLE_HOME_HSSD_EXECUTION_SHA256"
 PROJECT_ENV = "VISTA_PLAYABLE_HOME_PROJECT"
 IMPORT_MARKER = "VISTA_PLAYABLE_HOME_HSSD_PRIVATE_RESEARCH_IMPORT_RESULT:"
 IMPORT_RESULT_FILE = "hssd-private-research-import-result.json"
+EXPECTED_ENGINE_VERSION = "5.7.3-50162420+++UE5+Release-5.7"
 
 BUILD_PLAN_SCHEMA = "simworld.vista.hssd-private-research-forge-plan/v1"
 BUILD_RESULT_SCHEMA = "simworld.vista.hssd-private-research-forge-result/v1"
@@ -1030,10 +1031,16 @@ def load_hssd_execution(
     )
 
     scripts = execution.get("scripts")
-    _exact_keys(scripts, {"common", "import"}, "HSSD scripts")
+    _exact_keys(scripts, {"base", "common", "import"}, "HSSD scripts")
     for label, record in scripts.items():
         _exact_keys(record, SCRIPT_KEYS, "HSSD " + label + " script")
         base.require_sha(record["sha256"], "HSSD " + label + " script")
+    base_pin = scripts["base"]
+    base.require(
+        base.canonical_path(base.__file__) == base.canonical_path(base_pin["path"])
+        and base.sha256_file(base.__file__) == base_pin["sha256"],
+        "HSSD base helper identity or digest differs",
+    )
     common_pin = scripts["common"]
     base.require(
         base.canonical_path(__file__) == base.canonical_path(common_pin["path"])

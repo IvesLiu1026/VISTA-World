@@ -319,6 +319,7 @@ def test_execution_revalidates_scripts_project_source_and_derived_bindings(
     importer = tmp_path / "fixed-importer.py"
     importer.write_bytes(b"# fixed importer\n")
     common_path = pathlib.Path(common.__file__).resolve()
+    base_path = common_path.with_name("commandlet_common.py")
     execution = {
         "schema_version": common.EXECUTION_SCHEMA,
         "attempt_root": str(attempt),
@@ -333,6 +334,10 @@ def test_execution_revalidates_scripts_project_source_and_derived_bindings(
         },
         "asset_bindings": bindings,
         "scripts": {
+            "base": {
+                "path": str(base_path),
+                "sha256": hashlib.sha256(base_path.read_bytes()).hexdigest(),
+            },
             "common": {
                 "path": str(common_path),
                 "sha256": hashlib.sha256(common_path.read_bytes()).hexdigest(),
@@ -376,6 +381,7 @@ def test_strict_json_rejects_duplicate_and_nonfinite_values() -> None:
 
 
 def test_checked_in_r5_pin_table_is_complete_and_non_placeholder() -> None:
+    assert common.EXPECTED_ENGINE_VERSION == "5.7.3-50162420+++UE5+Release-5.7"
     assert len(common.EXPECTED_ASSET_PINS) == 26
     assert tuple(sorted(common.EXPECTED_ASSET_PINS)) == common.EXPECTED_ASSET_IDS
     for pin in common.EXPECTED_ASSET_PINS.values():

@@ -19,6 +19,7 @@ from hssd_private_research_commandlet_common import (  # noqa: E402
     EXPECTED_ASSET_IDS,
     EXPECTED_CONTENT_DIGESTS,
     EXPECTED_DOCUMENT_SHA256,
+    EXPECTED_ENGINE_VERSION,
     EXECUTION_POLICY,
     IMPORT_MARKER,
     IMPORT_RECEIPT_SCHEMA,
@@ -346,7 +347,7 @@ def import_one(execution, binding, namespace):
 
 def verify_runtime(execution):
     engine = str(unreal.SystemLibrary.get_engine_version())
-    require(engine.startswith("5."), "Unreal Engine major version mismatch")
+    require(engine == EXPECTED_ENGINE_VERSION, "Unreal Engine version mismatch")
     project = base.canonical_path(unreal.Paths.get_project_file_path())
     require(
         project == base.canonical_path(execution["project_file"]),
@@ -408,7 +409,9 @@ def run():
     except Exception as exc:
         error = {"type": type(exc).__name__, "message": str(exc)[:512]}
         status = (
-            "partial_import_quarantined" if imported else "failed_clean_quarantined"
+            "partial_import_quarantined"
+            if namespace_created
+            else "failed_clean_quarantined"
         )
 
     complete = status == "imported_candidate"
@@ -471,7 +474,7 @@ def run():
             and all(
                 item["inspection"]["has_navigation_data"] is False for item in imported
             ),
-            "component_no_collision_and_no_navigation_policy": complete,
+            "component_instantiation_deferred_to_phase2": complete,
             "nanite_disabled": complete
             and all(item["inspection"]["nanite_enabled"] is False for item in imported),
             "quarantined": not complete,

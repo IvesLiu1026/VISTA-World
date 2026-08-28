@@ -209,7 +209,9 @@ def commandlet(monkeypatch: pytest.MonkeyPatch):
     unreal.MaterialEditingLibrary = MaterialEditingLibrary
     unreal.load_asset = lambda path: state.registry.get(path)
     unreal.log = state.logs.append
-    unreal.SystemLibrary = types.SimpleNamespace(get_engine_version=lambda: "5.7.0")
+    unreal.SystemLibrary = types.SimpleNamespace(
+        get_engine_version=lambda: common.EXPECTED_ENGINE_VERSION
+    )
     unreal.Paths = types.SimpleNamespace(get_project_file_path=lambda: "")
     monkeypatch.setitem(sys.modules, "unreal", unreal)
 
@@ -364,7 +366,7 @@ def test_terminal_receipt_records_exact_26_and_visual_only_gates(
     monkeypatch.setattr(
         module,
         "verify_runtime",
-        lambda _execution: ("5.7.0", str(project), NAMESPACE),
+        lambda _execution: (common.EXPECTED_ENGINE_VERSION, str(project), NAMESPACE),
     )
     monkeypatch.setattr(module, "import_one", fake_import)
     monkeypatch.setattr(module, "_verify_mesh_safety", lambda _mesh: dict(safety))
@@ -389,7 +391,7 @@ def test_terminal_receipt_records_exact_26_and_visual_only_gates(
         "simple_collision_absent": True,
         "complex_collision_disabled": True,
         "asset_navigation_disabled": True,
-        "component_no_collision_and_no_navigation_policy": True,
+        "component_instantiation_deferred_to_phase2": True,
         "nanite_disabled": True,
         "quarantined": False,
     }
@@ -399,6 +401,56 @@ def test_terminal_receipt_records_exact_26_and_visual_only_gates(
     assert result["receipt"] == str(receipt_path)
     assert len(result["sha256"]) == 64
     assert state.logs[-1].startswith(common.IMPORT_MARKER)
+
+
+def test_failure_after_namespace_creation_is_never_reported_clean(
+    commandlet,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module, _unreal, _state = commandlet
+    attempt = tmp_path / "candidate-attempt"
+    attempt.mkdir()
+    project = attempt / "Candidate.uproject"
+    project.write_bytes(b"{}\n")
+    receipt_path = attempt / "hssd-import-receipt.json"
+    execution = {
+        "attempt_root": str(attempt),
+        "project_file": str(project),
+        "project_sha256": hashlib.sha256(project.read_bytes()).hexdigest(),
+        "content_namespace": NAMESPACE,
+        "source_run": {"path": str(tmp_path / "source")},
+        "import_receipt": str(receipt_path),
+    }
+    monkeypatch.setattr(
+        module,
+        "load_hssd_execution",
+        lambda *_args: (
+            execution,
+            str(attempt / "execution.json"),
+            "a" * 64,
+            [_binding()],
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "verify_runtime",
+        lambda _execution: (common.EXPECTED_ENGINE_VERSION, str(project), NAMESPACE),
+    )
+    monkeypatch.setattr(
+        module,
+        "import_one",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("interchange failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="fresh namespace quarantined"):
+        module.run()
+
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert receipt["status"] == "partial_import_quarantined"
+    assert receipt["gates"]["namespace_created"] is True
+    assert receipt["gates"]["quarantined"] is True
+    assert receipt["gates"]["component_instantiation_deferred_to_phase2"] is False
 
 
 def test_commandlet_source_is_commandlet_safe_and_has_terminal_handshake() -> None:
@@ -420,5 +472,7 @@ def test_commandlet_source_is_commandlet_safe_and_has_terminal_handshake() -> No
     assert "returned_material_interface_paths" in source
     assert "write_exclusive_receipt" in source
     assert "IMPORT_RESULT_FILE" in source
+    assert "engine == EXPECTED_ENGINE_VERSION" in source
+    assert "if namespace_created" in source
     assert ".remove_collisions" not in source
     assert "remove_collisions(" not in source
