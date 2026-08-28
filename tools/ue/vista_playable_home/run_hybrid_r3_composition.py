@@ -1982,19 +1982,29 @@ def _pinned_attempt_file(
     return resolved
 
 
+def _load_execution_manifest_from_environment() -> tuple[
+    pathlib.Path, str, dict[str, Any]
+]:
+    manifest_path = pathlib.Path(os.environ.get(EXECUTION_ENV, ""))
+    execution_manifest_sha = os.environ.get(EXECUTION_SHA_ENV, "")
+    _require(
+        manifest_path.is_absolute()
+        and SHA256_RE.fullmatch(execution_manifest_sha) is not None,
+        "hybrid execution manifest is missing, symlinked, or changed",
+    )
+    execution = _read_pinned_json(
+        manifest_path, execution_manifest_sha, "hybrid execution manifest"
+    )
+    return manifest_path, execution_manifest_sha, execution
+
+
 def load_execution_for_commandlet(
     script_file: str,
 ) -> tuple[dict[str, Any], str, str, tuple[dict[str, Any], ...], dict[str, Any]]:
     """Independently close the hybrid execution from inside Unreal."""
 
-    manifest_path = pathlib.Path(os.environ.get(EXECUTION_ENV, ""))
-    expected_sha = os.environ.get(EXECUTION_SHA_ENV, "")
-    _require(
-        manifest_path.is_absolute() and SHA256_RE.fullmatch(expected_sha) is not None,
-        "hybrid execution manifest is missing, symlinked, or changed",
-    )
-    execution = _read_pinned_json(
-        manifest_path, expected_sha, "hybrid execution manifest"
+    manifest_path, execution_manifest_sha, execution = (
+        _load_execution_manifest_from_environment()
     )
     expected_keys = {
         "schema_version",
@@ -2169,7 +2179,7 @@ def load_execution_for_commandlet(
         "hybrid contract inventory differs",
     )
     contract_values = {}
-    for label, expected_name, expected_sha in (
+    for label, expected_name, expected_contract_sha in (
         (
             "profile",
             "hssd_private_research_r1.json",
@@ -2182,11 +2192,11 @@ def load_execution_for_commandlet(
             contracts[label],
             root=attempt / "contracts",
             expected_name=expected_name,
-            expected_sha=expected_sha,
+            expected_sha=expected_contract_sha,
             label="hybrid contract " + label,
         )
         contract_values[label] = _read_pinned_json(
-            path, expected_sha, "hybrid contract " + label
+            path, expected_contract_sha, "hybrid contract " + label
         )
     all_placements = _derive_historical_placements(
         contract_values["profile"],
@@ -2227,7 +2237,13 @@ def load_execution_for_commandlet(
         and len(expected_bindings) == HSSD_ASSET_COUNT,
         "hybrid HSSD asset bindings differ from the exact imported namespace",
     )
-    return execution, str(manifest_path), expected_sha, placements, imported
+    return (
+        execution,
+        str(manifest_path),
+        execution_manifest_sha,
+        placements,
+        imported,
+    )
 
 
 def load_upstream_commandlet_helpers(
