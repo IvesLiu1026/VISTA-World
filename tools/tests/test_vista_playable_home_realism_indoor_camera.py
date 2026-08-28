@@ -88,6 +88,12 @@ class RealisticIndoorCameraSourceTests(unittest.TestCase):
         self.assertEqual(field_of_view, 80.0)
         self.assertEqual(_assigned_float(self.character, "CollisionProbeSizeCm"), 18.0)
         self.assertEqual(_assigned_float(self.character, "CollisionRecoverySpeed"), 8.0)
+        self.assertEqual(
+            _assigned_float(self.character, "NearCameraHideDistanceCm"), 82.0
+        )
+        self.assertEqual(
+            _assigned_float(self.character, "NearCameraShowDistanceCm"), 108.0
+        )
 
     def test_r1_constructor_values_remain_the_no_profile_default(self) -> None:
         constructor = _function_body(
@@ -259,6 +265,72 @@ class RealisticIndoorCameraSourceTests(unittest.TestCase):
             "SweepSingle",
         ):
             self.assertNotIn(prohibited, self.spring + self.spring_header)
+
+    def test_near_wall_visual_occlusion_is_local_hysteretic_and_provider_safe(
+        self,
+    ) -> None:
+        update = _function_body(
+            self.character,
+            "void AVistaPlayableHomeCharacter::UpdateNearCameraVisualOcclusion(",
+            "void AVistaPlayableHomeCharacter::SetNearCameraVisualHidden(",
+        )
+        calc_camera = _function_body(
+            self.character,
+            "void AVistaPlayableHomeCharacter::CalcCamera(",
+            "void AVistaPlayableHomeCharacter::UpdateNearCameraVisualOcclusion(",
+        )
+        self.assertIn("Super::CalcCamera(DeltaTime, OutResult);", calc_camera)
+        self.assertIn(
+            "UpdateNearCameraVisualOcclusion(OutResult.Location);", calc_camera
+        )
+        self.assertIn("FVector::Distance(ArmOrigin, CameraLocation)", update)
+        self.assertNotIn("AVistaPlayableHomeCharacter::Tick(", self.character)
+        self.assertNotIn("SetActorTickEnabled", self.character)
+        hide = _function_body(
+            self.character,
+            "void AVistaPlayableHomeCharacter::SetNearCameraVisualHidden(",
+            "void AVistaPlayableHomeCharacter::RestoreNearCameraVisualOcclusion()",
+        )
+        self.assertIn("IsLocallyControlled()", update)
+        self.assertIn("CameraDistanceCm <= NearCameraHideDistanceCm", update)
+        self.assertIn("CameraDistanceCm >= NearCameraShowDistanceCm", update)
+        self.assertIn("GetMesh()->SetOwnerNoSee(bHidden);", hide)
+        self.assertIn(
+            "CharacterProviderComponent->SetOwnerNoSeeForNearCamera(bHidden);", hide
+        )
+        self.assertNotIn("SetVisibility", update + hide)
+        self.assertNotIn("SetActorHiddenInGame", update + hide)
+
+        provider_header = (
+            PLUGIN_SOURCE / "Public" / "VistaCharacterProviderComponent.h"
+        ).read_text(encoding="utf-8")
+        provider_source = (
+            PLUGIN_SOURCE / "Private" / "VistaCharacterProviderComponent.cpp"
+        ).read_text(encoding="utf-8")
+        self.assertIn("SetOwnerNoSeeForNearCamera(bool bHidden)", provider_header)
+        self.assertIn("Primitive->SetOwnerNoSee(bHidden);", provider_source)
+        activation = _function_body(
+            provider_source,
+            "bool UVistaCharacterProviderComponent::ActivateAllowlistedMetaHuman(",
+            "bool UVistaCharacterProviderComponent::ValidateMetaHumanVisualShell(",
+        )
+        self.assertIn("VisualActor->SetOwner(&OwnerCharacter);", activation)
+        self.assertIn("VisualActor->GetOwner() != &OwnerCharacter", activation)
+        self.assertIn("character_provider_visual_owner_invalid", activation)
+        self.assertLess(
+            activation.index("VisualActor->SetOwner(&OwnerCharacter);"),
+            activation.index(
+                "SetOwnerNoSeeForNearCamera(bOwnerNoSeeForNearCamera);"
+            ),
+        )
+        self.assertNotIn(
+            "SetActorHiddenInGame",
+            _function_body(
+                provider_source,
+                "void UVistaCharacterProviderComponent::SetOwnerNoSeeForNearCamera(",
+                "FName UVistaCharacterProviderComponent::ResolveRequestedProviderId()",
+            ),
+        )
 
 
 if __name__ == "__main__":
