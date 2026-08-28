@@ -978,9 +978,20 @@ def test_post_project_projection_allows_only_map_and_exact_namespace(
     runner._copy_tree(production, project)
     runner._copy_tree(namespace, project / pathlib.Path(runner.HSSD_NAMESPACE_RELATIVE))
     (project / pathlib.Path(runner.MAP_RELATIVE_FILE)).write_bytes(b"hybrid-map")
+    for relative in runner.POST_COMMANDLET_EMPTY_CACHE_DIRECTORIES:
+        (project / relative).mkdir(parents=True, exist_ok=True)
 
     observed = runner._validate_post_project_projection(project, production, namespace)
     assert len(observed.snapshot.files) == len(production.files) + len(namespace.files)
+    assert not any(
+        record.relative_path.startswith("DerivedDataCache/")
+        for record in observed.snapshot.files
+    )
+
+    (project / "DerivedDataCache/VT/unexpected-cache.bin").write_bytes(b"cache")
+    with pytest.raises(runner.RunnerError, match="gained or lost"):
+        runner._validate_post_project_projection(project, production, namespace)
+    (project / "DerivedDataCache/VT/unexpected-cache.bin").unlink()
 
     (project / "Content/unexpected.uasset").write_bytes(b"unexpected")
     with pytest.raises(runner.RunnerError, match="gained or lost"):

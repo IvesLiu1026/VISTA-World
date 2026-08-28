@@ -73,6 +73,10 @@ PRODUCTION_PROJECT_DIRECTORY_COUNT = 190
 PRODUCTION_PROJECT_TOTAL_BYTES = 2_497_876_659
 PRODUCTION_COPY_ROOTS = ("Config", "Content", "Plugins")
 PRODUCTION_EXCLUDED_ROOTS = ("DerivedDataCache",)
+POST_COMMANDLET_EMPTY_CACHE_DIRECTORIES = (
+    "DerivedDataCache",
+    "DerivedDataCache/VT",
+)
 PRODUCTION_EVIDENCE_PINS = {
     "result-receipt.json": (
         "5e2f511f5b42b99066b1f1ab5293f78d9dde25490ecf1f3cf48a888e800abe43"
@@ -1783,7 +1787,7 @@ def _validate_post_project_projection(
     production: phase1.ProjectSnapshot,
     namespace: phase1.ProjectSnapshot,
 ) -> TreeSource:
-    """Prove that only the copied map and exact HSSD namespace may differ."""
+    """Prove only the map, HSSD namespace and sealed empty cache dirs differ."""
 
     observed = _snapshot_tree(project)
     namespace_prefix = HSSD_NAMESPACE_RELATIVE.as_posix()
@@ -1794,6 +1798,7 @@ def _validate_post_project_projection(
         for relative in namespace.directories
         if relative != "."
     )
+    expected_directories.update(POST_COMMANDLET_EMPTY_CACHE_DIRECTORIES)
     production_files = {record.relative_path: record for record in production.files}
     namespace_files = {
         namespace_prefix + "/" + record.relative_path: record
@@ -1807,6 +1812,13 @@ def _validate_post_project_projection(
         set(observed.snapshot.directories) == expected_directories
         and set(observed_files) == expected_paths,
         "post-composition project projection gained or lost files or directories",
+    )
+    _require(
+        not any(
+            relative == "DerivedDataCache" or relative.startswith("DerivedDataCache/")
+            for relative in observed_files
+        ),
+        "post-composition project cache directories are not empty",
     )
     map_relative = MAP_RELATIVE_FILE.as_posix()
     _require(
