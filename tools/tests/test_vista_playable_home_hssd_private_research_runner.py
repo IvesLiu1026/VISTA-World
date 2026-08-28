@@ -17,6 +17,22 @@ import hssd_private_research_commandlet_common as common  # noqa: E402
 import run_hssd_private_research_import as runner  # noqa: E402
 
 
+def _compatibility_bundle() -> runner.CompatibilityBundle:
+    aggregate = runner._seal(
+        {
+            "counts": dict(common.EXPECTED_COMPATIBILITY_COUNTS),
+            "blocking_asset_ids": ["hssd.static.washer"],
+        }
+    )
+    raw = runner._canonical_json(aggregate)
+    return runner.CompatibilityBundle(
+        assets=(),
+        aggregate=aggregate,
+        aggregate_raw=raw,
+        aggregate_sha256=hashlib.sha256(raw).hexdigest(),
+    )
+
+
 def _source_project(root: pathlib.Path) -> pathlib.Path:
     root.mkdir()
     for name in (*runner.COPY_ROOTS, *runner.EXCLUDED_ROOTS):
@@ -107,7 +123,12 @@ def test_dry_run_is_zero_write_and_pins_clean_candidate(
     monkeypatch.setattr(
         runner.hssd,
         "validate_source_run",
-        lambda *_args: [{"source_asset_id": f"asset.{index}"} for index in range(26)],
+        lambda *_args: [
+            {"source_asset_id": asset_id} for asset_id in common.EXPECTED_ASSET_IDS
+        ],
+    )
+    monkeypatch.setattr(
+        runner, "_derive_compatibility_bundle", lambda *_args: _compatibility_bundle()
     )
 
     plan, observed = runner.build_plan(
@@ -122,9 +143,58 @@ def test_dry_run_is_zero_write_and_pins_clean_candidate(
     assert plan["toolchain"]["rendering"] == "NullRHI"
     assert plan["toolchain"]["gpu_assignment"] == "none"
     assert plan["source_project"]["projection_sha256"] == snapshot.tree_sha256
+    assert plan["compatibility"]["counts"] == common.EXPECTED_COMPATIBILITY_COUNTS
+    assert plan["compatibility"]["promotable"] is False
+    assert plan["compatibility"]["diagnostic_override_authorized"] is False
+    assert "compatibility" in plan["scripts"]
     assert observed.tree_sha256 == snapshot.tree_sha256
     assert not attempt.exists()
     assert plan["content_digest"] == runner._content_digest(plan)
+
+
+def test_normal_apply_refuses_nonpromotable_before_attempt_project_or_popen(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = tmp_path / "runs"
+    parent.mkdir()
+    attempt = parent / "normal-apply"
+    monkeypatch.setattr(runner, "DEFAULT_OUTPUT_PARENT", parent)
+    monkeypatch.setattr(runner, "_validate_toolchain", lambda: None)
+    monkeypatch.setattr(runner, "_validate_source_acceptance", lambda: None)
+    monkeypatch.setattr(
+        runner.hssd,
+        "validate_source_run",
+        lambda *_args: [
+            {"source_asset_id": asset_id} for asset_id in common.EXPECTED_ASSET_IDS
+        ],
+    )
+    monkeypatch.setattr(
+        runner, "_derive_compatibility_bundle", lambda *_args: _compatibility_bundle()
+    )
+    monkeypatch.setattr(
+        runner,
+        "_snapshot_project",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("project snapshot must not run")
+        ),
+    )
+    monkeypatch.setattr(
+        runner.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("Popen must not run")
+        ),
+    )
+
+    with pytest.raises(runner.RunnerError, match="normal --apply is blocked"):
+        runner.build_plan(
+            attempt,
+            runner.DEFAULT_NAMESPACE,
+            apply=True,
+        )
+
+    assert not attempt.exists()
 
 
 def test_terminal_validation_requires_exact_gates_and_stdout_marker(
@@ -140,8 +210,8 @@ def test_terminal_validation_requires_exact_gates_and_stdout_marker(
     assets = []
     for asset_id in common.EXPECTED_ASSET_IDS:
         pin = common.EXPECTED_ASSET_PINS[asset_id]
-        target = common.derived_hssd_asset_path(runner.DEFAULT_NAMESPACE, asset_id)
-        binding = {
+        target = common.derived_hssd_asset_path(runner.DIAGNOSTIC_NAMESPACE, asset_id)
+        source_binding = {
             "source_asset_id": asset_id,
             "semantic_category": asset_id.rsplit(".", 1)[-1],
             "glb_relative_path": f"assets/{asset_id}.glb",
@@ -159,15 +229,38 @@ def test_terminal_validation_requires_exact_gates_and_stdout_marker(
             ],
             "target_object_path": target,
         }
+        derivative = {
+            "source_asset_id": asset_id,
+            "glb_path": str(attempt / "compatibility" / "assets" / f"{asset_id}.glb"),
+            "glb_sha256": "a" * 64,
+            "glb_bytes": 64,
+            "receipt_path": str(
+                attempt / "compatibility" / "receipts" / f"{asset_id}.json"
+            ),
+            "receipt_sha256": "b" * 64,
+            "receipt_content_digest": "c" * 64,
+            "compatibility_status": "derived_ue57_compatible_candidate",
+            "blocks_full_material_fidelity": asset_id == "hssd.static.washer",
+        }
+        binding = {"source": source_binding, "derivative": derivative}
         asset_bindings.append(binding)
-        private = runner.DEFAULT_NAMESPACE + "/Imports/" + asset_id.replace(".", "_")
+        private = runner.DIAGNOSTIC_NAMESPACE + "/Imports/" + asset_id.replace(".", "_")
         assets.append(
             {
                 "source_asset_id": asset_id,
-                "semantic_category": binding["semantic_category"],
-                "glb_sha256": pin["glb_sha256"],
-                "receipt_sha256": pin["receipt_sha256"],
-                "receipt_content_digest": pin["receipt_content_digest"],
+                "semantic_category": source_binding["semantic_category"],
+                "source_glb_sha256": pin["glb_sha256"],
+                "source_receipt_sha256": pin["receipt_sha256"],
+                "source_receipt_content_digest": pin["receipt_content_digest"],
+                "derivative_glb_sha256": derivative["glb_sha256"],
+                "derivative_receipt_sha256": derivative["receipt_sha256"],
+                "derivative_receipt_content_digest": derivative[
+                    "receipt_content_digest"
+                ],
+                "compatibility_status": derivative["compatibility_status"],
+                "blocks_full_material_fidelity": derivative[
+                    "blocks_full_material_fidelity"
+                ],
                 "object_path": target,
                 "raw_returned_object_paths": [private + "/Raw.Raw"],
                 "returned_object_paths": [target],
@@ -202,15 +295,31 @@ def test_terminal_validation_requires_exact_gates_and_stdout_marker(
         )
     execution = {
         "project_file": str(project),
-        "content_namespace": runner.DEFAULT_NAMESPACE,
+        "content_namespace": runner.DIAGNOSTIC_NAMESPACE,
         "source_run": {"path": str(runner.SOURCE_HSSD_RUN)},
         "asset_bindings": asset_bindings,
+        "import_mode": common.DIAGNOSTIC_IMPORT_MODE,
+        "compatibility": {
+            "schema_version": common.COMPATIBILITY_AGGREGATE_SCHEMA,
+            "rule_id": "remove_noop_khr_materials_transmission_v1",
+            "aggregate_receipt": str(attempt / "compatibility/aggregate-receipt.json"),
+            "aggregate_receipt_sha256": "d" * 64,
+            "aggregate_receipt_content_digest": "e" * 64,
+            "status": common.COMPATIBILITY_STATUS,
+            "counts": dict(common.EXPECTED_COMPATIBILITY_COUNTS),
+            "blocking_asset_ids": ["hssd.static.washer"],
+            "promotable": False,
+            "full_material_fidelity": False,
+            "diagnostic_only": True,
+        },
         "import_receipt": str(receipt_path),
     }
     execution_path = attempt / "hssd-execution.json"
     execution_path.write_text(json.dumps(execution), encoding="utf-8")
     gates = {
         "exact_r5_source_inventory_verified": True,
+        "compatibility_derivatives_revalidated": True,
+        "diagnostic_nonpromotable_disposition_recorded": True,
         "namespace_fresh": True,
         "namespace_created": True,
         "exact_26_assets_imported": True,
@@ -226,8 +335,12 @@ def test_terminal_validation_requires_exact_gates_and_stdout_marker(
     }
     receipt = {
         "schema_version": common.IMPORT_RECEIPT_SCHEMA,
-        "status": "imported_candidate",
+        "status": common.DIAGNOSTIC_IMPORT_STATUS,
         "accepted_as_visual_evidence": False,
+        "full_material_fidelity": False,
+        "promotable": False,
+        "diagnostic_only": True,
+        "promotion_status": common.PROMOTION_STATUS,
         "error": None,
         "bindings": {
             "engine": common.EXPECTED_ENGINE_VERSION,
@@ -248,17 +361,20 @@ def test_terminal_validation_requires_exact_gates_and_stdout_marker(
                 "scene-plan.json"
             ],
             "profile_content_digest": common.PROFILE_CONTENT_DIGEST,
+            "compatibility_aggregate_receipt_sha256": "d" * 64,
+            "compatibility_aggregate_content_digest": "e" * 64,
         },
+        "compatibility": execution["compatibility"],
         "license_scope": common.SOURCE_LICENSE_SCOPE,
         "interaction_authority": "none_static_joined_glb",
-        "content_namespace": runner.DEFAULT_NAMESPACE,
+        "content_namespace": runner.DIAGNOSTIC_NAMESPACE,
         "assets": assets,
         "policy": common.EXECUTION_POLICY,
         "gates": gates,
     }
     receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
     result = {
-        "status": "imported_candidate",
+        "status": common.DIAGNOSTIC_IMPORT_STATUS,
         "receipt": str(receipt_path),
         "sha256": hashlib.sha256(receipt_path.read_bytes()).hexdigest(),
     }
@@ -331,6 +447,7 @@ def test_wait_sighup_terminates_detached_process_group(
 
 def test_runner_source_disables_gpu_and_live_runtime_mutation() -> None:
     source = pathlib.Path(runner.__file__).read_text(encoding="utf-8")
+    apply_source = source[source.index("def apply_plan") :]
 
     assert '"-nullrhi"' in source
     assert '"CUDA_VISIBLE_DEVICES": ""' in source
@@ -338,3 +455,8 @@ def test_runner_source_disables_gpu_and_live_runtime_mutation() -> None:
     assert '"gpu1_use": False' in source
     assert "start_new_session=True" in source
     assert "os.killpg(process.pid" in source
+    assert "O_NOFOLLOW" in source
+    assert "O_EXCL" in source
+    assert apply_source.index("_materialize_compatibility(") < apply_source.index(
+        "_copy_project("
+    )

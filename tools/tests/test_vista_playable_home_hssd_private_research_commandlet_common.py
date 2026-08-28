@@ -13,6 +13,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMMANDLET_ROOT = ROOT / "tools/ue/vista_playable_home"
 sys.path.insert(0, str(COMMANDLET_ROOT))
 import hssd_private_research_commandlet_common as common  # noqa: E402
+import run_hssd_private_research_import as runner  # noqa: E402
 
 
 NAMESPACE = "/Game/VISTA/PlayableHome/hssd_private_research_test/HSSDPrivateResearch"
@@ -32,9 +33,47 @@ def _write_json(path: pathlib.Path, value: dict) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _fixture_materials(asset_id: str) -> list[dict]:
+    index = common.EXPECTED_ASSET_IDS.index(asset_id)
+    noop_count = 4 if index < 4 else 3
+    materials = [
+        {
+            "name": f"Noop_{material_index}",
+            "pbrMetallicRoughness": {"baseColorTexture": {"index": 0}},
+            "extensions": {"KHR_materials_transmission": {"transmissionFactor": 0.0}},
+        }
+        for material_index in range(noop_count)
+    ]
+    if asset_id in {"hssd.static.rolling_chair", "hssd.static.washer"}:
+        extensions = {"KHR_materials_transmission": {"transmissionFactor": 0.5}}
+        if asset_id == "hssd.static.washer":
+            extensions["KHR_materials_clearcoat"] = {"clearcoatFactor": 0.5}
+        materials.append(
+            {
+                "name": "ActiveTransmission",
+                "pbrMetallicRoughness": {"baseColorTexture": {"index": 0}},
+                "extensions": extensions,
+            }
+        )
+    return materials
+
+
 def _glb(asset_id: str) -> bytes:
+    materials = _fixture_materials(asset_id)
+    extensions_used = ["KHR_materials_transmission"]
+    if asset_id == "hssd.static.washer":
+        extensions_used.append("KHR_materials_clearcoat")
     body = json.dumps(
-        {"asset": asset_id}, sort_keys=True, separators=(",", ":")
+        {
+            "asset": {"version": "2.0", "generator": asset_id},
+            "extensionsUsed": extensions_used,
+            "extensionsRequired": [],
+            "images": [{"uri": "data:image/png;base64,AA=="}],
+            "textures": [{"source": 0}],
+            "materials": materials,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
     ).encode("utf-8")
     body += b" " * ((4 - len(body) % 4) % 4)
     chunk = struct.pack("<II", len(body), 0x4E4F534A) + body
@@ -42,7 +81,9 @@ def _glb(asset_id: str) -> bytes:
 
 
 def _source_fixture(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    namespace: str = NAMESPACE,
 ) -> tuple[pathlib.Path, list[dict]]:
     source = tmp_path / "hssd-r5-fixture"
     assets = source / "assets"
@@ -173,8 +214,8 @@ def _source_fixture(
                 "output_bytes": len(glb_raw),
                 "inspection": {
                     "mesh_count": 1,
-                    "material_count": 1,
-                    "pbr_material_count": 1,
+                    "material_count": len(_fixture_materials(asset_id)),
+                    "pbr_material_count": len(_fixture_materials(asset_id)),
                     "texture_count": 1,
                     "pbr_texture_slot_count": 1,
                     "base_normal_orm_texture_slot_count": 1,
@@ -197,8 +238,8 @@ def _source_fixture(
             "receipt_content_digest": receipt["content_digest"],
             "glb_sha256": glb_sha,
             "glb_bytes": len(glb_raw),
-            "material_count": 1,
-            "pbr_material_count": 1,
+            "material_count": len(_fixture_materials(asset_id)),
+            "pbr_material_count": len(_fixture_materials(asset_id)),
             "texture_count": 1,
             "pbr_texture_slot_count": 1,
             "base_normal_orm_texture_slot_count": 1,
@@ -242,7 +283,7 @@ def _source_fixture(
     monkeypatch.setattr(common, "EXPECTED_ASSET_PINS", pins)
     monkeypatch.setattr(common, "EXPECTED_DOCUMENT_SHA256", document_sha)
     monkeypatch.setattr(common, "EXPECTED_CONTENT_DIGESTS", content_digests)
-    bindings = common.validate_source_run(str(source), NAMESPACE)
+    bindings = common.validate_source_run(str(source), namespace)
     return source, bindings
 
 
@@ -262,7 +303,7 @@ def test_exact_26_receipts_and_glbs_derive_closed_ue_paths(
         NAMESPACE + "/Assets/hssd_static_accent_chair/"
         "hssd_static_accent_chair.hssd_static_accent_chair"
     )
-    assert all(item["material_count"] == 1 for item in bindings)
+    assert sum(item["material_count"] for item in bindings) == 84
     assert all(item["texture_count"] == 1 for item in bindings)
 
 
@@ -311,21 +352,50 @@ def test_execution_revalidates_scripts_project_source_and_derived_bindings(
     tmp_path: pathlib.Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source, bindings = _source_fixture(tmp_path, monkeypatch)
+    source, source_bindings = _source_fixture(
+        tmp_path, monkeypatch, common.DIAGNOSTIC_NAMESPACE
+    )
     attempt = tmp_path / "candidate-attempt"
     attempt.mkdir()
     project = attempt / "Candidate.uproject"
     project.write_bytes(b'{"FileVersion":3}\n')
-    importer = tmp_path / "fixed-importer.py"
+    source_common_path = pathlib.Path(common.__file__).resolve()
+    source_base_path = source_common_path.with_name("commandlet_common.py")
+    source_compatibility_path = source_common_path.with_name(
+        "hssd_ue57_glb_compatibility.py"
+    )
+    scripts = attempt / "scripts"
+    scripts.mkdir()
+    base_path = scripts / "commandlet_common.py"
+    common_path = scripts / "hssd_private_research_commandlet_common.py"
+    compatibility_path = scripts / "hssd_ue57_glb_compatibility.py"
+    importer = scripts / "import_hssd_private_research_commandlet.py"
+    base_path.write_bytes(source_base_path.read_bytes())
+    common_path.write_bytes(source_common_path.read_bytes())
+    compatibility_path.write_bytes(source_compatibility_path.read_bytes())
     importer.write_bytes(b"# fixed importer\n")
-    common_path = pathlib.Path(common.__file__).resolve()
-    base_path = common_path.with_name("commandlet_common.py")
+    transform_sha = hashlib.sha256(compatibility_path.read_bytes()).hexdigest()
+    monkeypatch.setattr(runner, "SOURCE_HSSD_RUN", source)
+    bundle = runner._derive_compatibility_bundle(source_bindings, transform_sha)
+    compatibility_execution, bindings = runner._materialize_compatibility(
+        attempt,
+        bundle,
+        {
+            "compatibility": {
+                "aggregate_receipt_sha256": bundle.aggregate_sha256,
+                "aggregate_receipt_content_digest": bundle.aggregate["content_digest"],
+            }
+        },
+    )
+    monkeypatch.setattr(common.base, "__file__", str(base_path))
+    monkeypatch.setattr(common, "__file__", str(common_path))
+    monkeypatch.setattr(common.compatibility, "__file__", str(compatibility_path))
     execution = {
         "schema_version": common.EXECUTION_SCHEMA,
         "attempt_root": str(attempt),
         "project_file": str(project),
         "project_sha256": hashlib.sha256(project.read_bytes()).hexdigest(),
-        "content_namespace": NAMESPACE,
+        "content_namespace": common.DIAGNOSTIC_NAMESPACE,
         "source_run": {
             "path": str(source),
             "build_plan_sha256": common.EXPECTED_DOCUMENT_SHA256["build-plan.json"],
@@ -333,6 +403,8 @@ def test_execution_revalidates_scripts_project_source_and_derived_bindings(
             "scene_plan_sha256": common.EXPECTED_DOCUMENT_SHA256["scene-plan.json"],
         },
         "asset_bindings": bindings,
+        "compatibility": compatibility_execution,
+        "import_mode": common.DIAGNOSTIC_IMPORT_MODE,
         "scripts": {
             "base": {
                 "path": str(base_path),
@@ -341,6 +413,10 @@ def test_execution_revalidates_scripts_project_source_and_derived_bindings(
             "common": {
                 "path": str(common_path),
                 "sha256": hashlib.sha256(common_path.read_bytes()).hexdigest(),
+            },
+            "compatibility": {
+                "path": str(compatibility_path),
+                "sha256": transform_sha,
             },
             "import": {
                 "path": str(importer),
@@ -364,12 +440,68 @@ def test_execution_revalidates_scripts_project_source_and_derived_bindings(
     assert loaded_path == str(manifest)
     assert loaded_sha == manifest_sha
     assert loaded_bindings == bindings
+    original_compatibility = json.loads(json.dumps(compatibility_execution))
 
-    execution["asset_bindings"][0]["target_object_path"] = "/Game/Caller/Chosen"
-    manifest.unlink()
-    manifest_sha = _write_json(manifest, execution)
-    monkeypatch.setenv(common.EXECUTION_SHA_ENV, manifest_sha)
-    with pytest.raises(RuntimeError, match="derived R5 inventory"):
+    def rewrite_manifest() -> None:
+        manifest.unlink(missing_ok=True)
+        digest = _write_json(manifest, execution)
+        monkeypatch.setenv(common.EXECUTION_SHA_ENV, digest)
+
+    execution["scripts"]["compatibility"]["sha256"] = "0" * 64
+    rewrite_manifest()
+    with pytest.raises(RuntimeError, match="compatibility script"):
+        common.load_hssd_execution("import", str(importer))
+    execution["scripts"]["compatibility"]["sha256"] = transform_sha
+    rewrite_manifest()
+
+    derivative_path = pathlib.Path(bindings[0]["derivative"]["glb_path"])
+    derivative_raw = derivative_path.read_bytes()
+    derivative_path.write_bytes(derivative_raw[:-1] + bytes([derivative_raw[-1] ^ 1]))
+    with pytest.raises(RuntimeError, match="output bytes differ"):
+        common.load_hssd_execution("import", str(importer))
+    derivative_path.write_bytes(derivative_raw)
+
+    outside = tmp_path / "outside-derivative.glb"
+    outside.write_bytes(derivative_raw)
+    derivative_path.unlink()
+    derivative_path.symlink_to(outside)
+    with pytest.raises(RuntimeError, match="symlink"):
+        common.load_hssd_execution("import", str(importer))
+    derivative_path.unlink()
+    derivative_path.write_bytes(derivative_raw)
+
+    aggregate_path = pathlib.Path(compatibility_execution["aggregate_receipt"])
+    aggregate_raw = aggregate_path.read_bytes()
+    aggregate = json.loads(aggregate_raw)
+    aggregate["schema_version"] = "invalid.aggregate/schema"
+    aggregate = _seal(aggregate)
+    aggregate_path.write_bytes(common.canonical_json(aggregate))
+    execution["compatibility"]["aggregate_receipt_sha256"] = hashlib.sha256(
+        aggregate_path.read_bytes()
+    ).hexdigest()
+    execution["compatibility"]["aggregate_receipt_content_digest"] = aggregate[
+        "content_digest"
+    ]
+    rewrite_manifest()
+    with pytest.raises(RuntimeError, match="aggregate identity"):
+        common.load_hssd_execution("import", str(importer))
+    aggregate_path.write_bytes(aggregate_raw)
+    execution["compatibility"] = json.loads(json.dumps(original_compatibility))
+    rewrite_manifest()
+
+    execution["compatibility"]["aggregate_receipt"] = str(
+        tmp_path / "outside-aggregate.json"
+    )
+    rewrite_manifest()
+    with pytest.raises(RuntimeError, match="escapes attempt root"):
+        common.load_hssd_execution("import", str(importer))
+    execution["compatibility"] = json.loads(json.dumps(original_compatibility))
+
+    execution["asset_bindings"][0]["source"]["target_object_path"] = (
+        "/Game/Caller/Chosen"
+    )
+    rewrite_manifest()
+    with pytest.raises(RuntimeError, match="source/derivative inventory"):
         common.load_hssd_execution("import", str(importer))
 
 

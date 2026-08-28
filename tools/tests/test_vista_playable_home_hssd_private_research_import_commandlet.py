@@ -19,7 +19,7 @@ sys.path.insert(0, str(COMMANDLET_ROOT))
 import hssd_private_research_commandlet_common as common  # noqa: E402
 
 
-NAMESPACE = "/Game/VISTA/PlayableHome/hssd_private_research_test/HSSDPrivateResearch"
+NAMESPACE = common.DIAGNOSTIC_NAMESPACE
 ASSET_ID = common.EXPECTED_ASSET_IDS[0]
 
 
@@ -233,20 +233,33 @@ def commandlet(monkeypatch: pytest.MonkeyPatch):
 def _binding() -> dict:
     pin = common.EXPECTED_ASSET_PINS[ASSET_ID]
     return {
-        "source_asset_id": ASSET_ID,
-        "semantic_category": "accent_chair",
-        "glb_relative_path": f"assets/{ASSET_ID}.glb",
-        "glb_sha256": pin["glb_sha256"],
-        "glb_bytes": pin["glb_bytes"],
-        "receipt_relative_path": f"receipts/{ASSET_ID}.json",
-        "receipt_sha256": pin["receipt_sha256"],
-        "receipt_content_digest": pin["receipt_content_digest"],
-        "material_count": 1,
-        "pbr_material_count": 1,
-        "texture_count": 1,
-        "pbr_texture_slot_count": 1,
-        "base_normal_orm_texture_slot_count": 1,
-        "target_object_path": common.derived_hssd_asset_path(NAMESPACE, ASSET_ID),
+        "source": {
+            "source_asset_id": ASSET_ID,
+            "semantic_category": "accent_chair",
+            "glb_relative_path": f"assets/{ASSET_ID}.glb",
+            "glb_sha256": pin["glb_sha256"],
+            "glb_bytes": pin["glb_bytes"],
+            "receipt_relative_path": f"receipts/{ASSET_ID}.json",
+            "receipt_sha256": pin["receipt_sha256"],
+            "receipt_content_digest": pin["receipt_content_digest"],
+            "material_count": 1,
+            "pbr_material_count": 1,
+            "texture_count": 1,
+            "pbr_texture_slot_count": 1,
+            "base_normal_orm_texture_slot_count": 1,
+            "target_object_path": common.derived_hssd_asset_path(NAMESPACE, ASSET_ID),
+        },
+        "derivative": {
+            "source_asset_id": ASSET_ID,
+            "glb_path": "/tmp/derivative.glb",
+            "glb_sha256": "a" * 64,
+            "glb_bytes": 64,
+            "receipt_path": "/tmp/derivative.json",
+            "receipt_sha256": "b" * 64,
+            "receipt_content_digest": "c" * 64,
+            "compatibility_status": "derived_ue57_compatible_candidate",
+            "blocks_full_material_fidelity": False,
+        },
     }
 
 
@@ -324,12 +337,21 @@ def test_terminal_receipt_records_exact_26_and_visual_only_gates(
         "project_sha256": hashlib.sha256(project.read_bytes()).hexdigest(),
         "content_namespace": NAMESPACE,
         "source_run": {"path": str(tmp_path / "source")},
+        "import_mode": common.DIAGNOSTIC_IMPORT_MODE,
+        "compatibility": {
+            "aggregate_receipt_sha256": "d" * 64,
+            "aggregate_receipt_content_digest": "e" * 64,
+            "promotable": False,
+            "full_material_fidelity": False,
+            "diagnostic_only": True,
+        },
         "import_receipt": str(receipt_path),
     }
     bindings = []
     for asset_id in common.EXPECTED_ASSET_IDS:
         binding = _binding()
-        binding["source_asset_id"] = asset_id
+        binding["source"]["source_asset_id"] = asset_id
+        binding["derivative"]["source_asset_id"] = asset_id
         bindings.append(binding)
 
     safety = {
@@ -344,10 +366,11 @@ def test_terminal_receipt_records_exact_26_and_visual_only_gates(
     }
 
     def fake_import(_execution, binding, _namespace):
-        object_path = NAMESPACE + "/Assets/" + binding["source_asset_id"]
+        asset_id = binding["source"]["source_asset_id"]
+        object_path = NAMESPACE + "/Assets/" + asset_id
         state.registry[object_path] = FakeStaticMesh(object_path)
         return {
-            "source_asset_id": binding["source_asset_id"],
+            "source_asset_id": asset_id,
             "object_path": object_path,
             "inspection": {
                 "static_mesh_count": 1,
@@ -376,12 +399,18 @@ def test_terminal_receipt_records_exact_26_and_visual_only_gates(
 
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     assert receipt["schema_version"] == common.IMPORT_RECEIPT_SCHEMA
-    assert receipt["status"] == "imported_candidate"
+    assert receipt["status"] == common.DIAGNOSTIC_IMPORT_STATUS
     assert receipt["accepted_as_visual_evidence"] is False
+    assert receipt["full_material_fidelity"] is False
+    assert receipt["promotable"] is False
+    assert receipt["diagnostic_only"] is True
+    assert receipt["promotion_status"] == common.PROMOTION_STATUS
     assert receipt["interaction_authority"] == "none_static_joined_glb"
     assert len(receipt["assets"]) == 26
     assert receipt["gates"] == {
         "exact_r5_source_inventory_verified": True,
+        "compatibility_derivatives_revalidated": True,
+        "diagnostic_nonpromotable_disposition_recorded": True,
         "namespace_fresh": True,
         "namespace_created": True,
         "exact_26_assets_imported": True,
@@ -397,7 +426,7 @@ def test_terminal_receipt_records_exact_26_and_visual_only_gates(
     }
     result_path = attempt / common.IMPORT_RESULT_FILE
     result = json.loads(result_path.read_text(encoding="utf-8"))
-    assert result["status"] == "imported_candidate"
+    assert result["status"] == common.DIAGNOSTIC_IMPORT_STATUS
     assert result["receipt"] == str(receipt_path)
     assert len(result["sha256"]) == 64
     assert state.logs[-1].startswith(common.IMPORT_MARKER)
@@ -420,6 +449,14 @@ def test_failure_after_namespace_creation_is_never_reported_clean(
         "project_sha256": hashlib.sha256(project.read_bytes()).hexdigest(),
         "content_namespace": NAMESPACE,
         "source_run": {"path": str(tmp_path / "source")},
+        "import_mode": common.DIAGNOSTIC_IMPORT_MODE,
+        "compatibility": {
+            "aggregate_receipt_sha256": "d" * 64,
+            "aggregate_receipt_content_digest": "e" * 64,
+            "promotable": False,
+            "full_material_fidelity": False,
+            "diagnostic_only": True,
+        },
         "import_receipt": str(receipt_path),
     }
     monkeypatch.setattr(
@@ -470,6 +507,8 @@ def test_commandlet_source_is_commandlet_safe_and_has_terminal_handshake() -> No
     assert 'mesh.set_editor_property("has_navigation_data", False)' in source
     assert "returned_texture2d_paths" in source
     assert "returned_material_interface_paths" in source
+    assert "set(returned_texture2d_paths).issubset" in source
+    assert "set(material_texture2d_paths)" in source
     assert "write_exclusive_receipt" in source
     assert "IMPORT_RESULT_FILE" in source
     assert "engine == EXPECTED_ENGINE_VERSION" in source
