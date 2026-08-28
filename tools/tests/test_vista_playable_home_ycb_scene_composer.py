@@ -5,6 +5,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import pathlib
 import stat
@@ -329,14 +330,18 @@ def test_exact_18_visual_placements_and_surface_coordinates() -> None:
         item[0] for item in runner._PLACEMENT_ROOM_LOCAL_METRES[:12]
     ]
     assert selected[0]["room_local_transform_m"]["location_m"] == [
-        -2.05,
-        1.78,
-        0.935,
+        -1.5,
+        -0.45,
+        0.76,
     ]
-    assert selected[0]["world_transform_cm"]["location_cm"] == [195.0, -22.0, 93.5]
+    assert selected[0]["world_transform_cm"]["location_cm"] == [
+        250.0,
+        -155.0,
+        76.0,
+    ]
     assert selected[12]["world_transform_cm"]["location_cm"] == [65.0, 720.0, 92.0]
     assert selected[14]["world_transform_cm"]["location_cm"] == [475.0, 260.0, 78.74]
-    assert selected[3]["world_transform_cm"]["rotation_deg"] == [0.0, 0.0, 90.0]
+    assert selected[3]["world_transform_cm"]["rotation_deg"] == [0.0, 0.0, -90.0]
     assert selected[14]["sealed_source_bounds"] == {
         "coordinate_frame": "asset_local_m",
         "origin_policy": "footprint_center_bottom_z_zero",
@@ -361,6 +366,114 @@ def test_exact_18_visual_placements_and_surface_coordinates() -> None:
     )
 
 
+def test_kitchen_kit_is_spaced_in_intentional_dining_table_clusters() -> None:
+    selected = runner.placements(_assets())
+    kitchen = list(selected[:12])
+    support = runner.KITCHEN_DINING_TABLE_SUPPORT
+
+    assert {item["surface_binding"]["kind"] for item in kitchen} == {
+        "kitchen_dining_table_top"
+    }
+    assert {item["surface_binding"]["support_entity_id"] for item in kitchen} == {
+        "home.r1/room.kitchen_dining/entity.dining_table.01"
+    }
+    assert all(
+        "support_plan_instance_id" not in item["surface_binding"] for item in kitchen
+    )
+    assert {item["surface_binding"]["visible_artifact_id"] for item in kitchen} == {
+        "ue_bundle.room.kitchen_dining"
+    }
+    assert {item["surface_binding"]["visible_presentation_id"] for item in kitchen} == {
+        "home.r1/room.kitchen_dining/presentation.realistic_interior_r2"
+    }
+    assert {
+        item["surface_binding"]["visible_support_placement_id"] for item in kitchen
+    } == {"hero.kitchen.dining_table"}
+    assert {
+        item["surface_binding"]["visible_support_geometry_recipe"] for item in kitchen
+    } == {"contemporary_dining_table_v1"}
+    assert {
+        item["surface_binding"]["visible_support_source_kind"] for item in kitchen
+    } == {"project_authored"}
+    assert {
+        item["surface_binding"]["evidence_manifest_sha256"] for item in kitchen
+    } == {runner.PRESENTATION_SUPPORT_MANIFEST_SHA256}
+    assert {
+        item["surface_binding"]["external_placement_content_digest"] for item in kitchen
+    } == {runner.PRESENTATION_EXTERNAL_PLACEMENT_DIGEST}
+    assert {
+        tuple(item["surface_binding"]["room_local_to_ue_axis_sign"]) for item in kitchen
+    } == {runner.KITCHEN_PRESENTATION_AXIS_SIGN}
+    assert {
+        item["surface_binding"]["room_local_to_ue_yaw_sign"] for item in kitchen
+    } == {runner.KITCHEN_PRESENTATION_YAW_SIGN}
+    assert {
+        tuple(item["surface_binding"]["reserved_dressing_placement_ids"])
+        for item in kitchen
+    } == {
+        tuple(
+            sorted(
+                item["placement_id"] for item in runner.KITCHEN_RESERVED_DRESSING_AABBS
+            )
+        )
+    }
+    assert all(
+        item["world_transform_cm"]["location_cm"][2]
+        == pytest.approx(support["top_z_cm"])
+        for item in kitchen
+    )
+    assert sum(item["world_transform_cm"]["location_cm"][1] for item in kitchen) / len(
+        kitchen
+    ) == pytest.approx(-178.7083333333)
+    assert len({item["world_transform_cm"]["location_cm"][1] for item in kitchen}) >= 8
+    assert {item["surface_binding"]["cluster_id"] for item in kitchen} == set(
+        runner.KITCHEN_TABLETOP_CLUSTER_BY_ASSET.values()
+    )
+
+    bounds = []
+    for item in kitchen:
+        corners = runner._transformed_bounds_corners_cm(item)
+        xy_bounds = (
+            min(corner[0] for corner in corners),
+            max(corner[0] for corner in corners),
+            min(corner[1] for corner in corners),
+            max(corner[1] for corner in corners),
+        )
+        bounds.append((item["asset_id"], xy_bounds))
+        assert xy_bounds[0] >= (
+            support["footprint_min_xy_cm"][0] + support["minimum_edge_clearance_cm"]
+        )
+        assert xy_bounds[1] <= (
+            support["footprint_max_xy_cm"][0] - support["minimum_edge_clearance_cm"]
+        )
+        assert xy_bounds[2] >= (
+            support["footprint_min_xy_cm"][1] + support["minimum_edge_clearance_cm"]
+        )
+        assert xy_bounds[3] <= (
+            support["footprint_max_xy_cm"][1] - support["minimum_edge_clearance_cm"]
+        )
+
+    pair_spacings = []
+    for index, (_, first) in enumerate(bounds):
+        for _, second in bounds[index + 1 :]:
+            gap_x = max(second[0] - first[1], first[0] - second[1], 0.0)
+            gap_y = max(second[2] - first[3], first[2] - second[3], 0.0)
+            pair_spacings.append(math.hypot(gap_x, gap_y))
+    assert min(pair_spacings) >= support["minimum_pair_spacing_cm"]
+    for asset_id, first in bounds:
+        for reserved in runner.KITCHEN_RESERVED_DRESSING_AABBS:
+            second = (
+                reserved["min_xy_cm"][0],
+                reserved["max_xy_cm"][0],
+                reserved["min_xy_cm"][1],
+                reserved["max_xy_cm"][1],
+            )
+            assert (
+                runner._xy_aabb_spacing_cm(first, second)
+                >= support["minimum_reserved_dressing_spacing_cm"]
+            ), (asset_id, reserved["placement_id"])
+
+
 def test_visual_policy_is_movable_nonphysical_noncolliding_and_nonnavigable() -> None:
     selected = runner.placements(_assets())
 
@@ -383,7 +496,7 @@ def test_screenshot_routes_cover_exact_kitchen_bathroom_and_office_slice() -> No
     routes = runner.screenshot_routes(selected)
 
     assert [route["route_id"] for route in routes] == [
-        "ycb.kitchen.countertop",
+        "ycb.kitchen.dining_table",
         "ycb.bathroom.washer_top",
         "ycb.office.desk_top",
     ]
@@ -393,6 +506,13 @@ def test_screenshot_routes_cover_exact_kitchen_bathroom_and_office_slice() -> No
     )
     assert all(route["camera_tag"].startswith("VistaSemanticId=") for route in routes)
     assert all("closeup" in route["camera_semantic_id"] for route in routes)
+    assert all(
+        route["exposure"]["mode"] == "pinned_physical_camera"
+        and route["exposure"]["shutter_speed_s"] == 0.008333
+        and route["exposure"]["iso"] == 400.0
+        for route in routes
+    )
+    assert routes[1]["exposure"]["exposure_compensation_ev"] == -0.5
     assert all(
         all(item["within_frustum_with_margin"] for item in route["frustum_evidence"])
         for route in routes
@@ -422,6 +542,25 @@ def test_screenshot_routes_cover_exact_kitchen_bathroom_and_office_slice() -> No
         )
         >= runner.REVIEW_CAMERA_FRUSTUM_MARGIN_DEG
     )
+
+
+def test_review_cameras_leave_known_occluded_r2_poses() -> None:
+    selected = runner.placements(_assets())
+    routes = runner.screenshot_routes(selected)
+    locations = [route["world_transform_cm"]["location_cm"] for route in routes]
+
+    assert locations[0] == [205.0, -360.0, 165.0]
+    assert routes[0]["camera_semantic_id"].endswith("/camera.ycb_dining_table_closeup")
+    assert locations[0] != [320.0, -240.0, 165.0]
+    assert routes[0]["fov_deg"] == 60.0
+    assert routes[0]["world_transform_cm"]["rotation_deg"] == [0.0, -20.0, 57.0]
+    assert locations[1] == [75.0, 620.0, 155.0]
+    assert locations[1] != [85.0, 600.0, 145.0]
+    assert routes[1]["fov_deg"] == 43.0
+    assert locations[2] == [630.0, 150.0, 170.0]
+    assert locations[2] != [525.0, 100.0, 145.0]
+    assert locations[2][0] >= 620.0
+    assert math.dist(locations[2][:2], [450.0, 220.0]) > 180.0
 
 
 def test_legacy_bathroom_overview_cannot_claim_ycb_closeup_readiness() -> None:
@@ -562,6 +701,23 @@ def test_dry_run_is_deterministic_and_zero_write(
     run_parent.mkdir(mode=0o700)
     monkeypatch.setattr(runner, "RUN_PARENT", run_parent)
     monkeypatch.setattr(runner, "_validate_toolchain", lambda: None)
+    monkeypatch.setattr(
+        runner,
+        "_validate_presentation_support_evidence",
+        lambda: {
+            "manifest": str(runner.PRESENTATION_SUPPORT_MANIFEST),
+            "manifest_sha256": runner.PRESENTATION_SUPPORT_MANIFEST_SHA256,
+            "external_placement_content_digest": (
+                runner.PRESENTATION_EXTERNAL_PLACEMENT_DIGEST
+            ),
+            "room_local_to_ue_axis_sign": list(runner.KITCHEN_PRESENTATION_AXIS_SIGN),
+            "room_local_to_ue_yaw_sign": runner.KITCHEN_PRESENTATION_YAW_SIGN,
+            "support_placement_id": "hero.kitchen.dining_table",
+            "reserved_dressing_placement_ids": sorted(
+                item["placement_id"] for item in runner.KITCHEN_RESERVED_DRESSING_AABBS
+            ),
+        },
+    )
     imported = _candidate(tmp_path, monkeypatch)
     monkeypatch.setattr(
         runner,
@@ -659,6 +815,22 @@ def _camera_observation(route: dict, serial: int) -> dict:
         "fov_deg": route["fov_deg"],
         "aspect_ratio": route["aspect_ratio"],
         "constrain_aspect_ratio": True,
+        "exposure": {
+            "mode": route["exposure"]["mode"],
+            "post_process_blend_weight": 1.0,
+            "auto_exposure_method": "manual",
+            "auto_exposure_apply_physical_camera_exposure": True,
+            "override_auto_exposure_method": True,
+            "override_auto_exposure_apply_physical_camera_exposure": True,
+            "override_camera_iso": True,
+            "override_camera_shutter_speed": True,
+            "override_depth_of_field_fstop": True,
+            "override_auto_exposure_bias": True,
+            "iso": route["exposure"]["iso"],
+            "shutter_speed_s": route["exposure"]["shutter_speed_s"],
+            "aperture_fstop": route["exposure"]["aperture_fstop"],
+            "exposure_compensation_ev": route["exposure"]["exposure_compensation_ev"],
+        },
         "frustum_evidence": copy.deepcopy(route["frustum_evidence"]),
     }
 
@@ -676,6 +848,9 @@ def _float32_drifted_camera_observation(
         float(route["aspect_ratio"]) + direction * 0.000000013245477
     )
     observation["world_transform_cm"]["location_cm"][0] += direction * 0.0000305
+    observation["world_transform_cm"]["rotation_deg"][0] += (
+        direction * 0.000001907348633
+    )
     observation["world_transform_cm"]["rotation_deg"][1] += (
         direction * 0.000001907348633
     )
@@ -717,6 +892,29 @@ def test_review_camera_accepts_float32_drift_but_retains_raw_observation() -> No
     assert observation["frustum_evidence"] != route["frustum_evidence"]
     assert runner._review_camera_observation_difference(observation, route) is None
     assert runner._review_camera_observation_valid(observation, route)
+
+
+def test_review_camera_rejects_physical_exposure_drift() -> None:
+    selected = list(runner.placements(_assets()))
+    route = runner.screenshot_routes(selected)[1]
+    observation = _camera_observation(route, 2)
+    observation["exposure"]["iso"] += 1.0
+
+    difference = runner._review_camera_observation_difference(observation, route)
+
+    assert difference is not None
+    assert "exposure.iso" in difference
+    assert not runner._review_camera_observation_valid(observation, route)
+
+
+def test_frustum_evidence_rejects_non_quantization_camera_roll() -> None:
+    selected = list(runner.placements(_assets()))
+    route = runner.screenshot_routes(selected)[2]
+    drifted = copy.deepcopy(route)
+    drifted["world_transform_cm"]["rotation_deg"][0] = 0.001
+
+    with pytest.raises(runner.YcbSceneError, match="camera policy differs"):
+        runner._frustum_evidence(drifted, selected)
 
 
 def test_review_camera_difference_identifies_nested_frustum_field() -> None:
@@ -837,6 +1035,9 @@ def test_terminal_receipt_requires_cold_reload_and_defers_screenshots(
                 "ycb_import_receipt_sha256": execution["ycb_import_receipt_sha256"],
                 "source_camera_host_receipt_sha256": (
                     runner.CAMERA_HOST_RECEIPT_SHA256
+                ),
+                "source_presentation_manifest_sha256": (
+                    runner.PRESENTATION_SUPPORT_MANIFEST_SHA256
                 ),
             },
             "placements": selected,
@@ -1098,9 +1299,8 @@ def test_commandlet_observation_requires_visual_only_policy(commandlet) -> None:
 
 
 def test_runner_and_commandlet_never_claim_gta_pbr_gameplay_or_human() -> None:
-    combined = pathlib.Path(runner.__file__).read_text(
-        encoding="utf-8"
-    ) + COMMANDLET.read_text(encoding="utf-8")
+    runner_source = pathlib.Path(runner.__file__).read_text(encoding="utf-8")
+    combined = runner_source + COMMANDLET.read_text(encoding="utf-8")
 
     assert '"full_pbr_verified": False' in combined
     assert '"gameplay_interaction_proven": False' in combined
@@ -1108,6 +1308,7 @@ def test_runner_and_commandlet_never_claim_gta_pbr_gameplay_or_human() -> None:
     assert '"gta_level": False' in combined
     assert "PixelStreaming" not in combined
     assert "Sunshine" not in combined
+    assert '"-notraceserver"' in runner_source
 
 
 def test_commandlet_is_syntax_loadable_without_running_unreal(

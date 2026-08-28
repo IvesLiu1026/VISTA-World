@@ -254,6 +254,30 @@ def configure_review_camera(actor, route):
     component.set_editor_property("field_of_view", float(route["fov_deg"]))
     component.set_editor_property("aspect_ratio", float(route["aspect_ratio"]))
     component.set_editor_property("constrain_aspect_ratio", True)
+    component.set_editor_property("post_process_blend_weight", 1.0)
+    exposure = route["exposure"]
+    require(
+        exposure.get("mode") == "pinned_physical_camera",
+        "YCB review camera exposure is not pinned physical camera",
+    )
+    settings = component.get_editor_property("post_process_settings")
+    required_settings = {
+        "override_auto_exposure_method": True,
+        "auto_exposure_method": unreal.AutoExposureMethod.AEM_MANUAL,
+        "override_auto_exposure_apply_physical_camera_exposure": True,
+        "auto_exposure_apply_physical_camera_exposure": True,
+        "override_camera_iso": True,
+        "camera_iso": float(exposure["iso"]),
+        "override_camera_shutter_speed": True,
+        "camera_shutter_speed": 1.0 / float(exposure["shutter_speed_s"]),
+        "override_depth_of_field_fstop": True,
+        "depth_of_field_fstop": float(exposure["aperture_fstop"]),
+        "override_auto_exposure_bias": True,
+        "auto_exposure_bias": float(exposure["exposure_compensation_ev"]),
+    }
+    for name, setting in required_settings.items():
+        settings.set_editor_property(name, setting)
+    component.set_editor_property("post_process_settings", settings)
 
 
 def review_camera_observation(actors, route, placements):
@@ -268,11 +292,61 @@ def review_camera_observation(actors, route, placements):
     fov = property_or_none(component, "field_of_view")
     aspect_ratio = property_or_none(component, "aspect_ratio")
     constrained = property_or_none(component, "constrain_aspect_ratio")
+    blend_weight = property_or_none(component, "post_process_blend_weight")
+    settings = property_or_none(component, "post_process_settings")
     require(
         isinstance(fov, (int, float))
         and isinstance(aspect_ratio, (int, float))
         and isinstance(constrained, bool),
         "review camera projection state is unavailable",
+    )
+    require(
+        isinstance(blend_weight, (int, float)) and settings is not None,
+        "review camera post-process state is unavailable",
+    )
+    exposure_values = {
+        "override_auto_exposure_method": property_or_none(
+            settings, "override_auto_exposure_method"
+        ),
+        "auto_exposure_method": property_or_none(settings, "auto_exposure_method"),
+        "override_auto_exposure_apply_physical_camera_exposure": property_or_none(
+            settings, "override_auto_exposure_apply_physical_camera_exposure"
+        ),
+        "auto_exposure_apply_physical_camera_exposure": property_or_none(
+            settings, "auto_exposure_apply_physical_camera_exposure"
+        ),
+        "override_camera_iso": property_or_none(settings, "override_camera_iso"),
+        "camera_iso": property_or_none(settings, "camera_iso"),
+        "override_camera_shutter_speed": property_or_none(
+            settings, "override_camera_shutter_speed"
+        ),
+        "camera_shutter_speed": property_or_none(settings, "camera_shutter_speed"),
+        "override_depth_of_field_fstop": property_or_none(
+            settings, "override_depth_of_field_fstop"
+        ),
+        "depth_of_field_fstop": property_or_none(settings, "depth_of_field_fstop"),
+        "override_auto_exposure_bias": property_or_none(
+            settings, "override_auto_exposure_bias"
+        ),
+        "auto_exposure_bias": property_or_none(settings, "auto_exposure_bias"),
+    }
+    override_fields = [name for name in exposure_values if name.startswith("override_")]
+    require(
+        all(exposure_values[name] is True for name in override_fields)
+        and exposure_values["auto_exposure_method"]
+        == unreal.AutoExposureMethod.AEM_MANUAL
+        and exposure_values["auto_exposure_apply_physical_camera_exposure"] is True
+        and all(
+            isinstance(exposure_values[name], (int, float))
+            for name in (
+                "camera_iso",
+                "camera_shutter_speed",
+                "depth_of_field_fstop",
+                "auto_exposure_bias",
+            )
+        )
+        and float(exposure_values["camera_shutter_speed"]) > 0.0,
+        "review camera physical exposure state is unavailable",
     )
     observation = {
         "route_id": route["route_id"],
@@ -285,6 +359,22 @@ def review_camera_observation(actors, route, placements):
         "fov_deg": float(fov),
         "aspect_ratio": float(aspect_ratio),
         "constrain_aspect_ratio": constrained,
+        "exposure": {
+            "mode": "pinned_physical_camera",
+            "post_process_blend_weight": float(blend_weight),
+            "auto_exposure_method": "manual",
+            "auto_exposure_apply_physical_camera_exposure": True,
+            "override_auto_exposure_method": True,
+            "override_auto_exposure_apply_physical_camera_exposure": True,
+            "override_camera_iso": True,
+            "override_camera_shutter_speed": True,
+            "override_depth_of_field_fstop": True,
+            "override_auto_exposure_bias": True,
+            "iso": float(exposure_values["camera_iso"]),
+            "shutter_speed_s": 1.0 / float(exposure_values["camera_shutter_speed"]),
+            "aperture_fstop": float(exposure_values["depth_of_field_fstop"]),
+            "exposure_compensation_ev": float(exposure_values["auto_exposure_bias"]),
+        },
     }
     observed_route = dict(route)
     observed_route["world_transform_cm"] = observation["world_transform_cm"]
@@ -566,6 +656,9 @@ def run():
                 ),
                 "ycb_import_receipt_sha256": execution["ycb_import_receipt_sha256"],
                 "source_camera_host_receipt_sha256": (ycb.CAMERA_HOST_RECEIPT_SHA256),
+                "source_presentation_manifest_sha256": (
+                    execution["presentation_support_evidence"]["manifest_sha256"]
+                ),
             },
             "placements": execution["placements"],
             "actors_before_save": before_save,

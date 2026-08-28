@@ -455,6 +455,99 @@ INITIAL_INTERACTION_CANDIDATES = (
     "ycb.040_large_marker",
 )
 
+# The visible table is the project-authored ``contemporary_dining_table_v1``
+# inside the sealed R3 production presentation bundle.  Its exact placement and
+# three existing tabletop dressing AABBs are pinned from the production
+# presentation manifest below.  HSSD is not the rendered support in this lane,
+# so it must not be cited as visible geometry or used as the surface authority.
+PRESENTATION_SUPPORT_MANIFEST = pathlib.Path(
+    "/data/sysx/vista-world/runs/vista-action-world-r1/"
+    "hybrid-r3-production-r3-20260828/production-evidence/"
+    "presentation-manifest.json"
+)
+PRESENTATION_SUPPORT_MANIFEST_SHA256 = (
+    "b5c6b0dd2d172255cb5f7bb494657b8c1ed7f2f7a214557b08d7642590e0a71e"
+)
+PRESENTATION_EXTERNAL_PLACEMENT_DIGEST = (
+    "6f13455faf22205aa36f7ea055ad9405c936a4747602bc44d784ed4ced964c0d"
+)
+# The room bundle is authored in Blender and imported through glTF/Interchange.
+# Unreal keeps X/Z but reflects the room-local Y axis and yaw.  The bundle actor
+# itself remains at the canonical room origin, so all presentation-local support
+# evidence must cross this explicit frame boundary before it can authorize a UE
+# placement.  Bathroom/office objects are bound to the native R1 frame and do
+# not use this conversion.
+KITCHEN_PRESENTATION_AXIS_SIGN = (1.0, -1.0, 1.0)
+KITCHEN_PRESENTATION_YAW_SIGN = -1.0
+KITCHEN_DINING_TABLE_SUPPORT = {
+    "support_entity_id": "home.r1/room.kitchen_dining/entity.dining_table.01",
+    "visible_artifact_id": "ue_bundle.room.kitchen_dining",
+    "visible_presentation_id": (
+        "home.r1/room.kitchen_dining/presentation.realistic_interior_r2"
+    ),
+    "visible_support_placement_id": "hero.kitchen.dining_table",
+    "visible_support_geometry_recipe": "contemporary_dining_table_v1",
+    "visible_support_source_kind": "project_authored",
+    "evidence_manifest_sha256": PRESENTATION_SUPPORT_MANIFEST_SHA256,
+    "external_placement_content_digest": PRESENTATION_EXTERNAL_PLACEMENT_DIGEST,
+    "room_local_to_ue_axis_sign": list(KITCHEN_PRESENTATION_AXIS_SIGN),
+    "room_local_to_ue_yaw_sign": KITCHEN_PRESENTATION_YAW_SIGN,
+    "world_center_xy_cm": [320.0, -180.0],
+    "footprint_min_xy_cm": [240.0, -225.0],
+    "footprint_max_xy_cm": [400.0, -135.0],
+    "top_z_cm": 76.0,
+    "minimum_edge_clearance_cm": 5.0,
+    "minimum_pair_spacing_cm": 2.5,
+    "minimum_reserved_dressing_spacing_cm": 2.5,
+}
+# These are the world-space XY projections of the three dressing objects
+# already baked into the visible kitchen bundle.  New YCB actors must not
+# overlap them; otherwise a mathematically valid table placement still produces
+# a visibly duplicated bowl/plate/apple pile.
+KITCHEN_RESERVED_DRESSING_AABBS = (
+    {
+        "placement_id": "dress.kitchen.wooden_plate",
+        "source_logical_asset_id": "visual.dressing.kitchen.wooden_plate",
+        "source_tree_sha256": (
+            "d963bc0402232c124c0c996dd46df1d79bd2cf88b73ba3755c8747c6de892279"
+        ),
+        "min_xy_cm": [269.3597, -193.5212],
+        "max_xy_cm": [296.6403, -166.4788],
+    },
+    {
+        "placement_id": "dress.kitchen.wooden_bowl",
+        "source_logical_asset_id": "visual.dressing.kitchen.wooden_bowl",
+        "source_tree_sha256": (
+            "cf2db4b371e9aa675bbca0e7fdf98df31bb55f00a5893ebc0264d337f3e45949"
+        ),
+        "min_xy_cm": [307.0163, -190.8462],
+        "max_xy_cm": [328.9837, -169.1538],
+    },
+    {
+        "placement_id": "dress.kitchen.apple",
+        "source_logical_asset_id": "visual.dressing.kitchen.apple",
+        "source_tree_sha256": (
+            "b029e7c703b9c11977ae48174df3fb1fda6fd95dbe4cd6bc154c3dd43a38436d"
+        ),
+        "min_xy_cm": [348.1105, -199.8068],
+        "max_xy_cm": [357.8895, -190.1932],
+    },
+)
+KITCHEN_TABLETOP_CLUSTER_BY_ASSET = {
+    "ycb.003_cracker_box": "pantry_cluster",
+    "ycb.005_tomato_soup_can": "pantry_cluster",
+    "ycb.006_mustard_bottle": "pantry_cluster",
+    "ycb.011_banana": "fruit_cluster",
+    "ycb.013_apple": "fruit_cluster",
+    "ycb.024_bowl": "right_place_setting",
+    "ycb.025_mug": "right_place_setting",
+    "ycb.029_plate": "center_place_setting",
+    "ycb.030_fork": "center_place_setting",
+    "ycb.031_spoon": "center_place_setting",
+    "ycb.032_knife": "center_place_setting",
+    "ycb.033_spatula": "prep_utensil_cluster",
+}
+
 # The support-surface audit is authored in the canonical house's room-local
 # frame.  These exact, pinned room transforms are therefore applied before the
 # final conversion to Unreal centimetres.  All three rooms currently have zero
@@ -479,20 +572,24 @@ ROOM_WORLD_TRANSFORMS_METRES = {
 }
 
 # Exact room-local metres from the reviewed R1 support-surface audit.  Blender
-# exports use a footprint-centred origin with bottom Z=0.
+# exports use a footprint-centred origin with bottom Z=0.  Kitchen locations
+# are expressed in the visible presentation bundle's Blender-local frame and
+# cross the pinned Y-reflection boundary above when converted to UE.  Kitchen
+# assets form five deliberately irregular tabletop clusters; they are neither
+# a wall row nor a point-only placement approximation.
 _PLACEMENT_ROOM_LOCAL_METRES = (
-    ("ycb.003_cracker_box", KITCHEN_ROOM, (-2.05, 1.78, 0.935), 0.0),
-    ("ycb.005_tomato_soup_can", KITCHEN_ROOM, (-1.80, 1.78, 0.935), 0.0),
-    ("ycb.006_mustard_bottle", KITCHEN_ROOM, (-1.56, 1.78, 0.935), 0.0),
-    ("ycb.011_banana", KITCHEN_ROOM, (-1.30, 1.78, 0.935), 90.0),
-    ("ycb.013_apple", KITCHEN_ROOM, (-1.08, 1.78, 0.935), 0.0),
-    ("ycb.024_bowl", KITCHEN_ROOM, (-0.86, 1.78, 0.935), 0.0),
-    ("ycb.025_mug", KITCHEN_ROOM, (-0.64, 1.78, 0.935), 0.0),
-    ("ycb.029_plate", KITCHEN_ROOM, (-0.42, 1.78, 0.935), 0.0),
-    ("ycb.030_fork", KITCHEN_ROOM, (-0.12, 1.78, 0.935), 90.0),
-    ("ycb.031_spoon", KITCHEN_ROOM, (0.04, 1.78, 0.935), 90.0),
-    ("ycb.032_knife", KITCHEN_ROOM, (0.20, 1.78, 0.935), 90.0),
-    ("ycb.033_spatula", KITCHEN_ROOM, (0.44, 1.78, 0.935), 90.0),
+    ("ycb.003_cracker_box", KITCHEN_ROOM, (-1.50, -0.45, 0.76), 0.0),
+    ("ycb.005_tomato_soup_can", KITCHEN_ROOM, (-1.36, -0.50, 0.76), 0.0),
+    ("ycb.006_mustard_bottle", KITCHEN_ROOM, (-1.18, -0.50, 0.76), 0.0),
+    ("ycb.011_banana", KITCHEN_ROOM, (-0.90, -0.48, 0.76), 90.0),
+    ("ycb.013_apple", KITCHEN_ROOM, (-0.65, -0.47, 0.76), 0.0),
+    ("ycb.024_bowl", KITCHEN_ROOM, (-0.30, -0.45, 0.76), 0.0),
+    ("ycb.025_mug", KITCHEN_ROOM, (-0.14, -0.20, 0.76), 0.0),
+    ("ycb.029_plate", KITCHEN_ROOM, (-0.20, 0.065, 0.76), 0.0),
+    ("ycb.030_fork", KITCHEN_ROOM, (-0.60, 0.10, 0.76), 90.0),
+    ("ycb.031_spoon", KITCHEN_ROOM, (-0.75, 0.10, 0.76), 90.0),
+    ("ycb.032_knife", KITCHEN_ROOM, (-1.00, 0.10, 0.76), 0.0),
+    ("ycb.033_spatula", KITCHEN_ROOM, (-1.30, 0.13, 0.76), 0.0),
     ("ycb.021_bleach_cleanser", BATHROOM_ROOM, (0.65, 1.20, 0.92), 0.0),
     ("ycb.026_sponge", BATHROOM_ROOM, (1.05, 1.20, 0.92), 0.0),
     ("ycb.035_power_drill", OFFICE_ROOM, (0.75, 0.60, 0.7874), 0.0),
@@ -505,22 +602,29 @@ REVIEW_CAMERA_ASPECT_RATIO = 16.0 / 9.0
 REVIEW_CAMERA_FRUSTUM_MARGIN_DEG = 4.0
 SCREENSHOT_ROUTES = (
     {
-        "route_id": "ycb.kitchen.countertop",
+        "route_id": "ycb.kitchen.dining_table",
         "room_id": KITCHEN_ROOM,
-        "camera_semantic_id": KITCHEN_ROOM + "/camera.ycb_countertop_closeup",
+        "camera_semantic_id": KITCHEN_ROOM + "/camera.ycb_dining_table_closeup",
         "camera_tag": (
-            "VistaSemanticId=" + KITCHEN_ROOM + "/camera.ycb_countertop_closeup"
+            "VistaSemanticId=" + KITCHEN_ROOM + "/camera.ycb_dining_table_closeup"
         ),
-        "actor_label": "VISTA_YCB_CAMERA_KITCHEN_COUNTERTOP",
+        "actor_label": "VISTA_YCB_CAMERA_KITCHEN_DINING_TABLE",
         "world_transform_cm": {
-            "location_cm": [320.0, -240.0, 165.0],
-            "rotation_deg": [0.0, -18.0, 90.0],
+            "location_cm": [205.0, -360.0, 165.0],
+            "rotation_deg": [0.0, -20.0, 57.0],
             "scale": [1.0, 1.0, 1.0],
         },
-        "fov_deg": 75.0,
+        "fov_deg": 60.0,
+        "exposure": {
+            "mode": "pinned_physical_camera",
+            "aperture_fstop": 4.0,
+            "shutter_speed_s": 0.008333,
+            "iso": 400.0,
+            "exposure_compensation_ev": 0.0,
+        },
         "aspect_ratio": REVIEW_CAMERA_ASPECT_RATIO,
         "frustum_margin_deg": REVIEW_CAMERA_FRUSTUM_MARGIN_DEG,
-        "relative_path": "review-routes/01-kitchen-ycb-countertop.png",
+        "relative_path": "review-routes/01-kitchen-ycb-dining-table.png",
         "expected_asset_ids": [item[0] for item in _PLACEMENT_ROOM_LOCAL_METRES[:12]],
     },
     {
@@ -532,11 +636,18 @@ SCREENSHOT_ROUTES = (
         ),
         "actor_label": "VISTA_YCB_CAMERA_BATHROOM_WASHER_TOP",
         "world_transform_cm": {
-            "location_cm": [85.0, 600.0, 145.0],
-            "rotation_deg": [0.0, -21.0, 90.0],
+            "location_cm": [75.0, 620.0, 155.0],
+            "rotation_deg": [0.0, -27.0, 90.0],
             "scale": [1.0, 1.0, 1.0],
         },
-        "fov_deg": 55.0,
+        "fov_deg": 43.0,
+        "exposure": {
+            "mode": "pinned_physical_camera",
+            "aperture_fstop": 4.0,
+            "shutter_speed_s": 0.008333,
+            "iso": 400.0,
+            "exposure_compensation_ev": -0.5,
+        },
         "aspect_ratio": REVIEW_CAMERA_ASPECT_RATIO,
         "frustum_margin_deg": REVIEW_CAMERA_FRUSTUM_MARGIN_DEG,
         "relative_path": "review-routes/02-bathroom-ycb-washer-top.png",
@@ -549,11 +660,18 @@ SCREENSHOT_ROUTES = (
         "camera_tag": "VistaSemanticId=" + OFFICE_ROOM + "/camera.ycb_desk_top_closeup",
         "actor_label": "VISTA_YCB_CAMERA_OFFICE_DESK_TOP",
         "world_transform_cm": {
-            "location_cm": [525.0, 100.0, 145.0],
-            "rotation_deg": [0.0, -22.0, 90.0],
+            "location_cm": [630.0, 150.0, 170.0],
+            "rotation_deg": [0.0, -28.0, 129.0],
             "scale": [1.0, 1.0, 1.0],
         },
-        "fov_deg": 55.0,
+        "fov_deg": 65.0,
+        "exposure": {
+            "mode": "pinned_physical_camera",
+            "aperture_fstop": 4.0,
+            "shutter_speed_s": 0.008333,
+            "iso": 400.0,
+            "exposure_compensation_ev": 0.0,
+        },
         "aspect_ratio": REVIEW_CAMERA_ASPECT_RATIO,
         "frustum_margin_deg": REVIEW_CAMERA_FRUSTUM_MARGIN_DEG,
         "relative_path": "review-routes/03-office-ycb-desk-top.png",
@@ -673,6 +791,7 @@ EXECUTION_KEYS = {
     "source_map_sha256",
     "engine_version",
     "source_camera_host_receipt_sha256",
+    "presentation_support_evidence",
     "ycb_import_host_receipt",
     "ycb_import_host_receipt_sha256",
     "ycb_import_receipt",
@@ -726,7 +845,26 @@ REVIEW_CAMERA_OBSERVATION_KEYS = {
     "fov_deg",
     "aspect_ratio",
     "constrain_aspect_ratio",
+    "exposure",
     "frustum_evidence",
+}
+REVIEW_CAMERA_EXPOSURE_KEYS = {
+    "mode",
+    "aperture_fstop",
+    "shutter_speed_s",
+    "iso",
+    "exposure_compensation_ev",
+}
+REVIEW_CAMERA_EXPOSURE_OBSERVATION_KEYS = REVIEW_CAMERA_EXPOSURE_KEYS | {
+    "post_process_blend_weight",
+    "auto_exposure_method",
+    "auto_exposure_apply_physical_camera_exposure",
+    "override_auto_exposure_method",
+    "override_auto_exposure_apply_physical_camera_exposure",
+    "override_camera_iso",
+    "override_camera_shutter_speed",
+    "override_depth_of_field_fstop",
+    "override_auto_exposure_bias",
 }
 FRUSTUM_EVIDENCE_ITEM_KEYS = {
     "asset_id",
@@ -759,6 +897,7 @@ SCENE_RECEIPT_BINDING_KEYS = {
     "execution_manifest_sha256",
     "ycb_import_receipt_sha256",
     "source_camera_host_receipt_sha256",
+    "source_presentation_manifest_sha256",
 }
 
 
@@ -1594,12 +1733,21 @@ def _world_transform_from_room_local(
         and len(location_m) == 3,
         "YCB room transform is outside the exact translation-only contract",
     )
+    axis_sign = (
+        KITCHEN_PRESENTATION_AXIS_SIGN if room_id == KITCHEN_ROOM else (1.0, 1.0, 1.0)
+    )
+    yaw_sign = KITCHEN_PRESENTATION_YAW_SIGN if room_id == KITCHEN_ROOM else 1.0
     world_m = [
-        float(parent["location_m"][axis]) + float(location_m[axis]) for axis in range(3)
+        float(parent["location_m"][axis])
+        + float(location_m[axis]) * float(axis_sign[axis])
+        for axis in range(3)
     ]
+    world_yaw = float(yaw_deg) * yaw_sign
+    if abs(world_yaw) < 1e-12:
+        world_yaw = 0.0
     return {
         "location_cm": [round(value * 100.0, 4) for value in world_m],
-        "rotation_deg": [0.0, 0.0, float(yaw_deg)],
+        "rotation_deg": [0.0, 0.0, world_yaw],
         "scale": [1.0, 1.0, 1.0],
     }
 
@@ -1613,6 +1761,59 @@ def placements(assets: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], ...
     ):
         slug = YCB_SLUGS[YCB_ASSET_IDS.index(asset_id)]
         inspection = by_id[asset_id]["inspection"]
+        if room_id == KITCHEN_ROOM:
+            surface_binding = {
+                "kind": "kitchen_dining_table_top",
+                "support_entity_id": KITCHEN_DINING_TABLE_SUPPORT["support_entity_id"],
+                "visible_artifact_id": KITCHEN_DINING_TABLE_SUPPORT[
+                    "visible_artifact_id"
+                ],
+                "visible_presentation_id": KITCHEN_DINING_TABLE_SUPPORT[
+                    "visible_presentation_id"
+                ],
+                "visible_support_placement_id": KITCHEN_DINING_TABLE_SUPPORT[
+                    "visible_support_placement_id"
+                ],
+                "visible_support_geometry_recipe": KITCHEN_DINING_TABLE_SUPPORT[
+                    "visible_support_geometry_recipe"
+                ],
+                "visible_support_source_kind": KITCHEN_DINING_TABLE_SUPPORT[
+                    "visible_support_source_kind"
+                ],
+                "evidence_manifest_sha256": KITCHEN_DINING_TABLE_SUPPORT[
+                    "evidence_manifest_sha256"
+                ],
+                "external_placement_content_digest": KITCHEN_DINING_TABLE_SUPPORT[
+                    "external_placement_content_digest"
+                ],
+                "room_local_to_ue_axis_sign": copy.deepcopy(
+                    KITCHEN_DINING_TABLE_SUPPORT["room_local_to_ue_axis_sign"]
+                ),
+                "room_local_to_ue_yaw_sign": KITCHEN_DINING_TABLE_SUPPORT[
+                    "room_local_to_ue_yaw_sign"
+                ],
+                "reserved_dressing_placement_ids": sorted(
+                    item["placement_id"] for item in KITCHEN_RESERVED_DRESSING_AABBS
+                ),
+                "cluster_id": KITCHEN_TABLETOP_CLUSTER_BY_ASSET[asset_id],
+                "top_z_cm": KITCHEN_DINING_TABLE_SUPPORT["top_z_cm"],
+                "footprint_min_xy_cm": copy.deepcopy(
+                    KITCHEN_DINING_TABLE_SUPPORT["footprint_min_xy_cm"]
+                ),
+                "footprint_max_xy_cm": copy.deepcopy(
+                    KITCHEN_DINING_TABLE_SUPPORT["footprint_max_xy_cm"]
+                ),
+                "bottom_origin_z_zero": True,
+            }
+        else:
+            surface_binding = {
+                "kind": (
+                    "bathroom_washer_top"
+                    if room_id == BATHROOM_ROOM
+                    else "office_desk_top"
+                ),
+                "bottom_origin_z_zero": True,
+            }
         result.append(
             {
                 "ordinal": ordinal,
@@ -1645,18 +1846,7 @@ def placements(assets: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], ...
                 "world_transform_cm": _world_transform_from_room_local(
                     room_id, location_m, yaw
                 ),
-                "surface_binding": {
-                    "kind": (
-                        "kitchen_countertop"
-                        if room_id == KITCHEN_ROOM
-                        else (
-                            "bathroom_washer_top"
-                            if room_id == BATHROOM_ROOM
-                            else "office_desk_top"
-                        )
-                    ),
-                    "bottom_origin_z_zero": True,
-                },
+                "surface_binding": surface_binding,
                 "initial_interaction_candidate": (
                     asset_id in INITIAL_INTERACTION_CANDIDATES
                 ),
@@ -1670,6 +1860,7 @@ def placements(assets: Sequence[Mapping[str, Any]]) -> tuple[dict[str, Any], ...
         and dict(observed_counts) == ROOM_COUNTS,
         "YCB exact placement slice differs",
     )
+    _validate_kitchen_tabletop_layout(result)
     return tuple(result)
 
 
@@ -1741,6 +1932,124 @@ def _transformed_bounds_corners_cm(
     return corners
 
 
+def _xy_aabb_cm(placement: Mapping[str, Any]) -> tuple[float, float, float, float]:
+    corners = _transformed_bounds_corners_cm(placement)
+    return (
+        min(float(corner[0]) for corner in corners),
+        max(float(corner[0]) for corner in corners),
+        min(float(corner[1]) for corner in corners),
+        max(float(corner[1]) for corner in corners),
+    )
+
+
+def _xy_aabb_spacing_cm(first: Sequence[float], second: Sequence[float]) -> float:
+    _require(
+        len(first) == len(second) == 4,
+        "tabletop AABB spacing requires two closed XY bounds",
+    )
+    gap_x = max(
+        float(second[0]) - float(first[1]),
+        float(first[0]) - float(second[1]),
+        0.0,
+    )
+    gap_y = max(
+        float(second[2]) - float(first[3]),
+        float(first[2]) - float(second[3]),
+        0.0,
+    )
+    return math.hypot(gap_x, gap_y)
+
+
+def _validate_kitchen_tabletop_layout(
+    selected: Sequence[Mapping[str, Any]],
+) -> None:
+    kitchen = [item for item in selected if item.get("room_id") == KITCHEN_ROOM]
+    _require(
+        len(kitchen) == ROOM_COUNTS[KITCHEN_ROOM],
+        "YCB kitchen tabletop inventory differs",
+    )
+    support = KITCHEN_DINING_TABLE_SUPPORT
+    edge = float(support["minimum_edge_clearance_cm"])
+    pair_spacing = float(support["minimum_pair_spacing_cm"])
+    reserved_spacing = float(support["minimum_reserved_dressing_spacing_cm"])
+    min_x, min_y = (float(value) for value in support["footprint_min_xy_cm"])
+    max_x, max_y = (float(value) for value in support["footprint_max_xy_cm"])
+    bounds_by_asset: dict[str, tuple[float, float, float, float]] = {}
+    for placement in kitchen:
+        location = placement["world_transform_cm"]["location_cm"]
+        _require(
+            abs(float(location[2]) - float(support["top_z_cm"])) <= 1e-6,
+            "YCB kitchen actor bottom does not contact the visible table top",
+        )
+        bounds = _xy_aabb_cm(placement)
+        _require(
+            bounds[0] >= min_x + edge
+            and bounds[1] <= max_x - edge
+            and bounds[2] >= min_y + edge
+            and bounds[3] <= max_y - edge,
+            "YCB kitchen actor leaves the visible table footprint",
+        )
+        bounds_by_asset[str(placement["asset_id"])] = bounds
+    _require(
+        len(bounds_by_asset) == len(kitchen),
+        "YCB kitchen tabletop asset identities differ",
+    )
+    pairs = list(bounds_by_asset.items())
+    for index, (first_id, first_bounds) in enumerate(pairs):
+        for second_id, second_bounds in pairs[index + 1 :]:
+            _require(
+                _xy_aabb_spacing_cm(first_bounds, second_bounds) >= pair_spacing,
+                "YCB kitchen actors overlap: " + first_id + " / " + second_id,
+            )
+        for reserved in KITCHEN_RESERVED_DRESSING_AABBS:
+            reserved_bounds = (
+                float(reserved["min_xy_cm"][0]),
+                float(reserved["max_xy_cm"][0]),
+                float(reserved["min_xy_cm"][1]),
+                float(reserved["max_xy_cm"][1]),
+            )
+            _require(
+                _xy_aabb_spacing_cm(first_bounds, reserved_bounds) >= reserved_spacing,
+                "YCB kitchen actor overlaps sealed presentation dressing: "
+                + first_id
+                + " / "
+                + str(reserved["placement_id"]),
+            )
+
+
+def _camera_space_angles_deg(
+    delta_cm: Sequence[float], camera_rotation_deg: Sequence[float]
+) -> tuple[float, float]:
+    _require(
+        len(delta_cm) == len(camera_rotation_deg) == 3,
+        "YCB camera-space projection requires closed three-axis vectors",
+    )
+    pitch = math.radians(float(camera_rotation_deg[1]))
+    yaw = math.radians(float(camera_rotation_deg[2]))
+    cos_pitch = math.cos(pitch)
+    sin_pitch = math.sin(pitch)
+    cos_yaw = math.cos(yaw)
+    sin_yaw = math.sin(yaw)
+    forward = (
+        cos_pitch * cos_yaw,
+        cos_pitch * sin_yaw,
+        sin_pitch,
+    )
+    right = (-sin_yaw, cos_yaw, 0.0)
+    up = (-sin_pitch * cos_yaw, -sin_pitch * sin_yaw, cos_pitch)
+    forward_depth = sum(float(delta_cm[index]) * forward[index] for index in range(3))
+    _require(
+        forward_depth > 1.0,
+        "YCB review camera places an asset at or behind the near plane",
+    )
+    right_offset = sum(float(delta_cm[index]) * right[index] for index in range(3))
+    up_offset = sum(float(delta_cm[index]) * up[index] for index in range(3))
+    return (
+        math.degrees(math.atan2(right_offset, forward_depth)),
+        math.degrees(math.atan2(up_offset, forward_depth)),
+    )
+
+
 def _frustum_evidence(
     route: Mapping[str, Any], selected: Sequence[Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -1764,7 +2073,7 @@ def _frustum_evidence(
         and len(camera_location) == 3
         and isinstance(camera_rotation, list)
         and len(camera_rotation) == 3
-        and float(camera_rotation[0]) == 0.0
+        and abs(float(camera_rotation[0])) <= FRUSTUM_EVIDENCE_NUMERIC_TOLERANCE
         and isinstance(fov, (int, float))
         and 10.0 <= float(fov) <= 120.0
         and isinstance(aspect_ratio, (int, float))
@@ -1789,28 +2098,15 @@ def _frustum_evidence(
         dx = float(target[0]) - float(camera_location[0])
         dy = float(target[1]) - float(camera_location[1])
         dz = float(target[2]) - float(camera_location[2])
-        horizontal_distance = math.hypot(dx, dy)
-        _require(horizontal_distance > 0.0, "YCB review camera intersects an asset")
-        target_yaw = math.degrees(math.atan2(dy, dx))
-        target_pitch = math.degrees(math.atan2(dz, horizontal_distance))
-        yaw_delta = _angle_delta_deg(target_yaw, float(camera_rotation[2]))
-        pitch_delta = target_pitch - float(camera_rotation[1])
+        yaw_delta, pitch_delta = _camera_space_angles_deg((dx, dy, dz), camera_rotation)
         corner_evidence = []
         for corner in _transformed_bounds_corners_cm(placement):
             corner_dx = float(corner[0]) - float(camera_location[0])
             corner_dy = float(corner[1]) - float(camera_location[1])
             corner_dz = float(corner[2]) - float(camera_location[2])
-            corner_horizontal_distance = math.hypot(corner_dx, corner_dy)
-            _require(
-                corner_horizontal_distance > 0.0,
-                "YCB review camera intersects an asset-bounds corner",
+            corner_yaw_delta, corner_pitch_delta = _camera_space_angles_deg(
+                (corner_dx, corner_dy, corner_dz), camera_rotation
             )
-            corner_yaw = math.degrees(math.atan2(corner_dy, corner_dx))
-            corner_pitch = math.degrees(
-                math.atan2(corner_dz, corner_horizontal_distance)
-            )
-            corner_yaw_delta = _angle_delta_deg(corner_yaw, float(camera_rotation[2]))
-            corner_pitch_delta = corner_pitch - float(camera_rotation[1])
             corner_horizontal_clearance = horizontal_half - abs(corner_yaw_delta)
             corner_vertical_clearance = vertical_half - abs(corner_pitch_delta)
             corner_evidence.append(
@@ -1855,6 +2151,29 @@ def _frustum_evidence(
     return result
 
 
+def _validate_review_camera_exposure(value: Any) -> Mapping[str, Any]:
+    exposure = _exact_mapping(
+        value, REVIEW_CAMERA_EXPOSURE_KEYS, "YCB review camera exposure"
+    )
+    numeric_fields = (
+        "aperture_fstop",
+        "shutter_speed_s",
+        "iso",
+        "exposure_compensation_ev",
+    )
+    _require(
+        exposure.get("mode") == "pinned_physical_camera"
+        and all(type(exposure.get(field)) in (int, float) for field in numeric_fields)
+        and all(math.isfinite(float(exposure[field])) for field in numeric_fields)
+        and 1.0 <= float(exposure["aperture_fstop"]) <= 32.0
+        and 0.0001 <= float(exposure["shutter_speed_s"]) <= 1.0
+        and 1.0 <= float(exposure["iso"]) <= 102400.0
+        and -16.0 <= float(exposure["exposure_compensation_ev"]) <= 16.0,
+        "YCB review camera exposure policy differs",
+    )
+    return exposure
+
+
 def screenshot_routes(
     selected: Sequence[Mapping[str, Any]],
 ) -> tuple[dict[str, Any], ...]:
@@ -1862,6 +2181,7 @@ def screenshot_routes(
     covered: list[str] = []
     for route_source in SCREENSHOT_ROUTES:
         route = copy.deepcopy(route_source)
+        _validate_review_camera_exposure(route.get("exposure"))
         route["frustum_evidence"] = _frustum_evidence(route, selected)
         routes.append(route)
         covered.extend(route["expected_asset_ids"])
@@ -1928,6 +2248,197 @@ def _script_sources() -> dict[str, pathlib.Path]:
     }
 
 
+def _validate_presentation_support_evidence(
+    manifest_path: pathlib.Path = PRESENTATION_SUPPORT_MANIFEST,
+    expected_sha256: str = PRESENTATION_SUPPORT_MANIFEST_SHA256,
+) -> dict[str, Any]:
+    manifest = _normalized_absolute(manifest_path, "presentation support manifest")
+    document, _ = _read_pinned_json(
+        manifest, expected_sha256, "presentation support manifest"
+    )
+    export_contract = document.get("export_contract")
+    bundles = document.get("ue_import_bundles")
+    kitchen_bundles = (
+        [
+            row
+            for row in bundles
+            if type(row) is dict
+            and row.get("artifact_id")
+            == KITCHEN_DINING_TABLE_SUPPORT["visible_artifact_id"]
+        ]
+        if type(bundles) is list
+        else []
+    )
+    _require(
+        type(export_contract) is dict
+        and export_contract.get("coordinate_system")
+        == "Blender metric metres, glTF Y-up export"
+        and len(kitchen_bundles) == 1
+        and kitchen_bundles[0].get("root_transform_policy")
+        == "room_local_geometry_identity_root"
+        and kitchen_bundles[0].get("expected_world_transform_cm")
+        == {
+            "location_cm": [400, -200, 0],
+            "rotation_deg": [0, 0, 0],
+            "scale": [1, 1, 1],
+        },
+        "presentation kitchen bundle coordinate-frame evidence differs",
+    )
+    external = _exact_mapping(
+        document.get("external_placement"),
+        {
+            "schema_version",
+            "placement_id",
+            "placement_manifest_sha256",
+            "acquisition_receipt",
+            "normalization_policy",
+            "placements",
+            "semantic_target_ids",
+            "dressing_ids",
+            "asset_sources",
+            "content_digest",
+        },
+        "presentation external-placement evidence",
+    )
+    placement_rows = external.get("placements")
+    _require(
+        type(placement_rows) is list
+        and external.get("content_digest") == PRESENTATION_EXTERNAL_PLACEMENT_DIGEST,
+        "presentation external-placement digest differs",
+    )
+    by_id = {
+        row.get("placement_id"): row
+        for row in placement_rows
+        if type(row) is dict and type(row.get("placement_id")) is str
+    }
+    required_ids = {
+        KITCHEN_DINING_TABLE_SUPPORT["visible_support_placement_id"],
+        *(row["placement_id"] for row in KITCHEN_RESERVED_DRESSING_AABBS),
+    }
+    _require(required_ids <= set(by_id), "presentation tabletop evidence is absent")
+    placement_keys = {
+        "anchor_id",
+        "category",
+        "geometry_recipe",
+        "location_m",
+        "material_logical_asset_ids",
+        "placement_id",
+        "placement_kind",
+        "realization_mode",
+        "room_id",
+        "room_kind",
+        "room_local_aabb",
+        "rotation_deg",
+        "semantic_target_id",
+        "source_dimensions_m",
+        "source_logical_asset_id",
+        "source_tree_sha256",
+        "support_placement_id",
+        "uniform_scale",
+    }
+    table = _exact_mapping(
+        by_id[KITCHEN_DINING_TABLE_SUPPORT["visible_support_placement_id"]],
+        placement_keys,
+        "visible kitchen table evidence",
+    )
+    table_aabb = table.get("room_local_aabb")
+    _require(
+        table.get("room_id") == KITCHEN_ROOM
+        and table.get("semantic_target_id")
+        == KITCHEN_DINING_TABLE_SUPPORT["support_entity_id"]
+        and table.get("realization_mode")
+        == KITCHEN_DINING_TABLE_SUPPORT["visible_support_source_kind"]
+        and table.get("geometry_recipe")
+        == KITCHEN_DINING_TABLE_SUPPORT["visible_support_geometry_recipe"]
+        and table.get("source_dimensions_m") == [1.6, 0.9, 0.76]
+        and type(table_aabb) is dict
+        and table_aabb.get("min_m") == [-1.6, -0.65, 0.0]
+        and table_aabb.get("max_m") == [0.0, 0.25, 0.76],
+        "visible kitchen table geometry evidence differs",
+    )
+    room_origin = ROOM_WORLD_TRANSFORMS_METRES[KITCHEN_ROOM]["location_m"]
+    axis_sign = KITCHEN_PRESENTATION_AXIS_SIGN
+
+    def presentation_aabb_world_xy(
+        local_min: Sequence[float], local_max: Sequence[float]
+    ) -> tuple[list[float], list[float]]:
+        endpoints = [
+            [
+                (
+                    float(room_origin[index])
+                    + float(local[index]) * float(axis_sign[index])
+                )
+                * 100.0
+                for index in range(2)
+            ]
+            for local in (local_min, local_max)
+        ]
+        return (
+            [round(min(row[index] for row in endpoints), 4) for index in range(2)],
+            [round(max(row[index] for row in endpoints), 4) for index in range(2)],
+        )
+
+    table_world_min, table_world_max = presentation_aabb_world_xy(
+        table_aabb["min_m"], table_aabb["max_m"]
+    )
+    _require(
+        table_world_min == KITCHEN_DINING_TABLE_SUPPORT["footprint_min_xy_cm"]
+        and table_world_max == KITCHEN_DINING_TABLE_SUPPORT["footprint_max_xy_cm"]
+        and [
+            round((table_world_min[index] + table_world_max[index]) / 2.0, 4)
+            for index in range(2)
+        ]
+        == KITCHEN_DINING_TABLE_SUPPORT["world_center_xy_cm"],
+        "visible kitchen table UE footprint differs",
+    )
+    for expected in KITCHEN_RESERVED_DRESSING_AABBS:
+        observed = _exact_mapping(
+            by_id[expected["placement_id"]],
+            placement_keys,
+            "reserved kitchen dressing evidence",
+        )
+        observed_aabb = observed.get("room_local_aabb")
+        _require(
+            observed.get("room_id") == KITCHEN_ROOM
+            and observed.get("source_logical_asset_id")
+            == expected["source_logical_asset_id"]
+            and observed.get("source_tree_sha256") == expected["source_tree_sha256"]
+            and observed.get("support_placement_id")
+            == KITCHEN_DINING_TABLE_SUPPORT["visible_support_placement_id"]
+            and type(observed_aabb) is dict,
+            "reserved kitchen dressing identity differs",
+        )
+        observed_min = observed_aabb.get("min_m")
+        observed_max = observed_aabb.get("max_m")
+        _require(
+            type(observed_min) is list
+            and type(observed_max) is list
+            and len(observed_min) == len(observed_max) == 3,
+            "reserved kitchen dressing AABB differs",
+        )
+        world_min_xy, world_max_xy = presentation_aabb_world_xy(
+            observed_min, observed_max
+        )
+        _require(
+            world_min_xy == expected["min_xy_cm"]
+            and world_max_xy == expected["max_xy_cm"],
+            "reserved kitchen dressing world AABB differs",
+        )
+    return {
+        "manifest": str(manifest),
+        "manifest_sha256": expected_sha256,
+        "external_placement_content_digest": (PRESENTATION_EXTERNAL_PLACEMENT_DIGEST),
+        "room_local_to_ue_axis_sign": list(KITCHEN_PRESENTATION_AXIS_SIGN),
+        "room_local_to_ue_yaw_sign": KITCHEN_PRESENTATION_YAW_SIGN,
+        "support_placement_id": KITCHEN_DINING_TABLE_SUPPORT[
+            "visible_support_placement_id"
+        ],
+        "reserved_dressing_placement_ids": sorted(
+            row["placement_id"] for row in KITCHEN_RESERVED_DRESSING_AABBS
+        ),
+    }
+
+
 def build_plan(
     attempt_root: pathlib.Path,
     import_host_receipt: pathlib.Path,
@@ -1945,6 +2456,7 @@ def build_plan(
         )
     attempt, parent_identity = _validate_attempt_path(attempt_root)
     _validate_toolchain()
+    support_evidence = _validate_presentation_support_evidence()
     camera_project = _validate_camera_source()
     imported = _validate_import_candidate(
         _normalized_absolute(import_host_receipt, "YCB import host receipt"),
@@ -1969,6 +2481,7 @@ def build_plan(
             "will_execute_unreal": apply,
             "accepted": False,
             "attempt_root": str(attempt),
+            "presentation_support_evidence": support_evidence,
             "source_camera": {
                 "attempt_root": str(CAMERA_ATTEMPT_ROOT),
                 "host_receipt": str(CAMERA_HOST_RECEIPT),
@@ -2155,10 +2668,18 @@ def _materialize_inputs(
     import_sha = _copy_file_exclusive(
         prepared.import_candidate.receipt_path, import_copy
     )
+    presentation_copy = evidence_root / "presentation-manifest.json"
+    presentation_sha = _copy_file_exclusive(
+        PRESENTATION_SUPPORT_MANIFEST, presentation_copy
+    )
     _require(
         host_sha == prepared.import_candidate.host_receipt_sha256
         and import_sha == prepared.import_candidate.receipt_sha256,
         "copied YCB evidence receipt differs",
+    )
+    _require(
+        presentation_sha == PRESENTATION_SUPPORT_MANIFEST_SHA256,
+        "copied presentation support evidence differs",
     )
     return {
         "project_root": str(project_root),
@@ -2167,6 +2688,8 @@ def _materialize_inputs(
         "import_host_receipt_sha256": host_sha,
         "import_receipt": str(import_copy),
         "import_receipt_sha256": import_sha,
+        "presentation_manifest": str(presentation_copy),
+        "presentation_manifest_sha256": presentation_sha,
     }
 
 
@@ -2190,6 +2713,21 @@ def _build_execution(
             "source_map_sha256": CAMERA_MAP_SHA256,
             "engine_version": ENGINE_VERSION,
             "source_camera_host_receipt_sha256": CAMERA_HOST_RECEIPT_SHA256,
+            "presentation_support_evidence": {
+                "manifest": materialized["presentation_manifest"],
+                "manifest_sha256": materialized["presentation_manifest_sha256"],
+                "external_placement_content_digest": (
+                    PRESENTATION_EXTERNAL_PLACEMENT_DIGEST
+                ),
+                "room_local_to_ue_axis_sign": list(KITCHEN_PRESENTATION_AXIS_SIGN),
+                "room_local_to_ue_yaw_sign": KITCHEN_PRESENTATION_YAW_SIGN,
+                "support_placement_id": KITCHEN_DINING_TABLE_SUPPORT[
+                    "visible_support_placement_id"
+                ],
+                "reserved_dressing_placement_ids": sorted(
+                    row["placement_id"] for row in KITCHEN_RESERVED_DRESSING_AABBS
+                ),
+            },
             "ycb_import_host_receipt": materialized["import_host_receipt"],
             "ycb_import_host_receipt_sha256": materialized[
                 "import_host_receipt_sha256"
@@ -2308,6 +2846,34 @@ def load_execution_for_commandlet(
         and execution.get("screenshot_routes") == expected_routes
         and execution.get("claims") == CLAIMS,
         "YCB scene execution identity differs",
+    )
+    support_evidence = _exact_mapping(
+        execution.get("presentation_support_evidence"),
+        {
+            "manifest",
+            "manifest_sha256",
+            "external_placement_content_digest",
+            "room_local_to_ue_axis_sign",
+            "room_local_to_ue_yaw_sign",
+            "support_placement_id",
+            "reserved_dressing_placement_ids",
+        },
+        "YCB presentation support evidence",
+    )
+    manifest_value = support_evidence.get("manifest")
+    manifest_sha = support_evidence.get("manifest_sha256")
+    _require(
+        isinstance(manifest_value, str)
+        and pathlib.Path(manifest_value).is_absolute()
+        and manifest_sha == PRESENTATION_SUPPORT_MANIFEST_SHA256,
+        "YCB presentation support evidence binding differs",
+    )
+    _require(
+        support_evidence
+        == _validate_presentation_support_evidence(
+            pathlib.Path(manifest_value), str(manifest_sha)
+        ),
+        "YCB copied presentation support evidence differs",
     )
     project_value = execution.get("project_file")
     _require(
@@ -2629,6 +3195,48 @@ def _review_camera_observation_difference(
         return difference
     if value["constrain_aspect_ratio"] is not True:
         return "constrain_aspect_ratio differs"
+    exposure = value["exposure"]
+    planned_exposure = route["exposure"]
+    if (
+        type(exposure) is not dict
+        or set(exposure) != REVIEW_CAMERA_EXPOSURE_OBSERVATION_KEYS
+    ):
+        return "exposure.fields differ from the closed contract"
+    if (
+        exposure["mode"] != planned_exposure["mode"]
+        or exposure["auto_exposure_method"] != "manual"
+        or exposure["auto_exposure_apply_physical_camera_exposure"] is not True
+    ):
+        return "exposure physical-camera policy differs"
+    for field in (
+        "override_auto_exposure_method",
+        "override_auto_exposure_apply_physical_camera_exposure",
+        "override_camera_iso",
+        "override_camera_shutter_speed",
+        "override_depth_of_field_fstop",
+        "override_auto_exposure_bias",
+    ):
+        if exposure[field] is not True:
+            return "exposure." + field + " differs"
+    difference = _numeric_evidence_difference(
+        exposure["post_process_blend_weight"],
+        1.0,
+        "exposure.post_process_blend_weight",
+        tolerance=0.0001,
+    )
+    if difference is not None:
+        return difference
+    for field in (
+        "aperture_fstop",
+        "shutter_speed_s",
+        "iso",
+        "exposure_compensation_ev",
+    ):
+        difference = _numeric_evidence_difference(
+            exposure[field], planned_exposure[field], "exposure." + field
+        )
+        if difference is not None:
+            return difference
     return _frustum_evidence_difference(
         value["frustum_evidence"], route["frustum_evidence"]
     )
@@ -2762,6 +3370,8 @@ def validate_terminal(
         == execution["ycb_import_receipt_sha256"]
         and bindings.get("source_camera_host_receipt_sha256")
         == CAMERA_HOST_RECEIPT_SHA256
+        and bindings.get("source_presentation_manifest_sha256")
+        == PRESENTATION_SUPPORT_MANIFEST_SHA256
         and isinstance(before, list)
         and isinstance(reloaded, list)
         and len(before) == YCB_ASSET_COUNT
@@ -2975,6 +3585,7 @@ def apply_plan(prepared: PreparedPlan) -> dict[str, Any]:
             "-NoAnalytics",
             "-UDPMESSAGING_TRANSPORT_ENABLE=0",
             "-ini:Engine:[/Script/TcpMessaging.TcpMessagingSettings]:EnableTransport=False",
+            "-notraceserver",
             "-ddc=InstalledNoZenLocalFallback",
             "-SaveToUserDir",
             f"-UserDir={user_dir}",
@@ -3028,6 +3639,9 @@ def apply_plan(prepared: PreparedPlan) -> dict[str, Any]:
                 "promotable": False,
                 "diagnostic_only": True,
                 "source_camera_host_receipt_sha256": CAMERA_HOST_RECEIPT_SHA256,
+                "source_presentation_manifest_sha256": (
+                    PRESENTATION_SUPPORT_MANIFEST_SHA256
+                ),
                 "ycb_import_host_receipt_sha256": (
                     prepared.import_candidate.host_receipt_sha256
                 ),
