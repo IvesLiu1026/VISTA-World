@@ -36,6 +36,11 @@ public:
     static FName GetMannyProviderId();
     static FName GetMetaHumanVivianProviderId();
     static FName GetCitySampleCrowdVisualDemoProviderId();
+    static FName GetMakeHumanCc0R8ProviderId();
+
+    /** True only after the exact R6 mesh and R8 AnimBP pass runtime binding. */
+    UFUNCTION(BlueprintPure, Category = "VISTA|Character Provider")
+    bool IsMakeHumanCc0R8Active() const;
 
     /**
      * Closed provider identifier. Supported values are "manny", the reviewed
@@ -90,6 +95,10 @@ private:
     bool bOwnerNoSeeForNearCamera = false;
 
     FName ResolveRequestedProviderId() const;
+    bool ActivateMakeHumanCc0R8(ACharacter& OwnerCharacter);
+    bool ValidateMakeHumanCc0R8(
+        const ACharacter& OwnerCharacter,
+        FName& OutFailureCode) const;
     bool ActivateAllowlistedMetaHuman(ACharacter& OwnerCharacter);
     bool ActivateAllowlistedCitySampleVisualDemo(ACharacter& OwnerCharacter);
     bool IsCitySampleHumanVisualDemoCommandLineAllowed(

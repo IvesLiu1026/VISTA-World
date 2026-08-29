@@ -27,7 +27,10 @@ const FName MannyProviderId(TEXT("manny"));
 const FName MetaHumanVivianProviderId(TEXT("metahuman_vivian_ue57_v1"));
 const FName CitySampleCrowdVisualDemoProviderId(
     TEXT("citysample_crowd_visual_demo_v1"));
+const FName MakeHumanCc0R8ProviderId(TEXT("makehuman_cc0_r8"));
 const FName MannyActiveStatus(TEXT("manny_active"));
+const FName MakeHumanCc0R8ActiveStatus(TEXT("makehuman_cc0_r8_active"));
+const FName MakeHumanCc0R8UnavailableStatus(TEXT("makehuman_cc0_r8_unavailable"));
 const FName PhotorealReadyStatus(TEXT("photoreal_character_ready"));
 const FName PhotorealUnavailableStatus(TEXT("photoreal_character_unavailable"));
 const FName CitySampleVisualDemoActiveUnverifiedStatus(
@@ -55,6 +58,18 @@ const TCHAR* MetaHumanRetargetAssetPath =
     TEXT("/Game/Characters/Mannequins/Rigs/"
          "RTG_Mannequin.RTG_Mannequin");
 
+// Publicly redistributable CC0 lane.  These paths never reference Manny,
+// MetaHuman, City Sample, Human_Avatar, or SimWorld animation content.
+const TCHAR* MakeHumanCc0R6MeshPath =
+    TEXT("/Game/VISTA/MakeHumanCC0/R6/"
+         "SK_VISTA_CC0_Hero_R6.SK_VISTA_CC0_Hero_R6");
+const TCHAR* MakeHumanCc0R6SkeletonPath =
+    TEXT("/Game/VISTA/MakeHumanCC0/R6/"
+         "SK_VISTA_CC0_Hero_R6_Skeleton.SK_VISTA_CC0_Hero_R6_Skeleton");
+const TCHAR* MakeHumanCc0R8AnimBlueprintClassPath =
+    TEXT("/Game/VISTA/MakeHumanCC0/R8/Animations/"
+         "ABP_VistaCC0Hero_R8.ABP_VistaCC0Hero_R8_C");
+
 const FName BodyComponentName(TEXT("Body"));
 const FName FaceComponentName(TEXT("Face"));
 }
@@ -77,6 +92,23 @@ FName UVistaCharacterProviderComponent::GetMetaHumanVivianProviderId()
 FName UVistaCharacterProviderComponent::GetCitySampleCrowdVisualDemoProviderId()
 {
     return CitySampleCrowdVisualDemoProviderId;
+}
+
+FName UVistaCharacterProviderComponent::GetMakeHumanCc0R8ProviderId()
+{
+    return MakeHumanCc0R8ProviderId;
+}
+
+bool UVistaCharacterProviderComponent::IsMakeHumanCc0R8Active() const
+{
+    const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+    FName FailureCode = NAME_None;
+    return IsValid(OwnerCharacter) &&
+        ActiveProviderId == MakeHumanCc0R8ProviderId &&
+        ProviderStatus == MakeHumanCc0R8ActiveStatus &&
+        ProviderFailureCode.IsNone() && !bPhotorealCharacterReady &&
+        ValidateMakeHumanCc0R8(*OwnerCharacter, FailureCode) &&
+        FailureCode.IsNone();
 }
 
 void UVistaCharacterProviderComponent::BeginPlay()
@@ -104,6 +136,11 @@ void UVistaCharacterProviderComponent::BeginPlay()
     {
         return;
     }
+    if (ProviderId == MakeHumanCc0R8ProviderId)
+    {
+        ActivateMakeHumanCc0R8(*OwnerCharacter);
+        return;
+    }
     if (ProviderId == MetaHumanVivianProviderId)
     {
         ActivateAllowlistedMetaHuman(*OwnerCharacter);
@@ -119,6 +156,127 @@ void UVistaCharacterProviderComponent::BeginPlay()
         *OwnerCharacter,
         ProviderId,
         TEXT("character_provider_not_allowlisted"));
+}
+
+bool UVistaCharacterProviderComponent::ActivateMakeHumanCc0R8(
+    ACharacter& OwnerCharacter)
+{
+    USkeletalMeshComponent* MeshComponent = OwnerCharacter.GetMesh();
+    if (!IsValid(MeshComponent))
+    {
+        SetProviderUnavailable(
+            OwnerCharacter,
+            MakeHumanCc0R8ProviderId,
+            TEXT("makehuman_cc0_mesh_component_unavailable"));
+        return false;
+    }
+
+    const TSoftObjectPtr<USkeletalMesh> MeshReference{
+        FSoftObjectPath(MakeHumanCc0R6MeshPath)};
+    USkeletalMesh* LoadedMesh = MeshReference.LoadSynchronous();
+    const TSoftClassPtr<UAnimInstance> AnimClassReference{
+        FSoftObjectPath(MakeHumanCc0R8AnimBlueprintClassPath)};
+    UClass* LoadedAnimClass = AnimClassReference.LoadSynchronous();
+    if (!IsValid(LoadedMesh) ||
+        LoadedMesh->GetPathName() != MakeHumanCc0R6MeshPath ||
+        !IsValid(LoadedAnimClass) ||
+        !LoadedAnimClass->IsChildOf(UAnimInstance::StaticClass()) ||
+        LoadedAnimClass->GetPathName() != MakeHumanCc0R8AnimBlueprintClassPath)
+    {
+        SetProviderUnavailable(
+            OwnerCharacter,
+            MakeHumanCc0R8ProviderId,
+            TEXT("makehuman_cc0_runtime_assets_unavailable"));
+        return false;
+    }
+
+    USkeletalMesh* OriginalMesh = MeshComponent->GetSkeletalMeshAsset();
+    UClass* OriginalAnimClass = MeshComponent->GetAnimClass();
+    const FVector OriginalRelativeLocation = MeshComponent->GetRelativeLocation();
+    const FRotator OriginalRelativeRotation = MeshComponent->GetRelativeRotation();
+    const ECollisionEnabled::Type OriginalCollision =
+        MeshComponent->GetCollisionEnabled();
+    const bool bOriginalOverlapEvents = MeshComponent->GetGenerateOverlapEvents();
+
+    MeshComponent->SetSkeletalMesh(LoadedMesh, false);
+    MeshComponent->SetAnimInstanceClass(LoadedAnimClass);
+    MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    MeshComponent->SetGenerateOverlapEvents(false);
+    MeshComponent->SetVisibility(true, false);
+    MeshComponent->SetHiddenInGame(false, false);
+    MeshComponent->InitAnim(true);
+
+    FName FailureCode = NAME_None;
+    if (!ValidateMakeHumanCc0R8(OwnerCharacter, FailureCode))
+    {
+        MeshComponent->SetSkeletalMesh(OriginalMesh, false);
+        MeshComponent->SetAnimInstanceClass(OriginalAnimClass);
+        MeshComponent->SetRelativeLocation(OriginalRelativeLocation);
+        MeshComponent->SetRelativeRotation(OriginalRelativeRotation);
+        MeshComponent->SetCollisionEnabled(OriginalCollision);
+        MeshComponent->SetGenerateOverlapEvents(bOriginalOverlapEvents);
+        MeshComponent->InitAnim(true);
+        SetProviderUnavailable(
+            OwnerCharacter,
+            MakeHumanCc0R8ProviderId,
+            FailureCode);
+        return false;
+    }
+
+    ActiveProviderId = MakeHumanCc0R8ProviderId;
+    ProviderStatus = MakeHumanCc0R8ActiveStatus;
+    ProviderFailureCode = NAME_None;
+    bPhotorealCharacterReady = false;
+    UE_LOG(
+        LogVistaCharacterProvider,
+        Display,
+        TEXT("VISTA_CHARACTER_PROVIDER_READY provider=%s quality_claim=none"),
+        *MakeHumanCc0R8ProviderId.ToString());
+    return true;
+}
+
+bool UVistaCharacterProviderComponent::ValidateMakeHumanCc0R8(
+    const ACharacter& OwnerCharacter,
+    FName& OutFailureCode) const
+{
+    USkeletalMeshComponent* MeshComponent = OwnerCharacter.GetMesh();
+    USkeletalMesh* Mesh = IsValid(MeshComponent)
+        ? MeshComponent->GetSkeletalMeshAsset()
+        : nullptr;
+    if (!IsValid(MeshComponent) || !MeshComponent->IsRegistered() ||
+        !IsValid(Mesh) || Mesh->GetPathName() != MakeHumanCc0R6MeshPath)
+    {
+        OutFailureCode = TEXT("makehuman_cc0_mesh_binding_invalid");
+        return false;
+    }
+    if (!IsValid(Mesh->GetSkeleton()) ||
+        Mesh->GetSkeleton()->GetPathName() != MakeHumanCc0R6SkeletonPath ||
+        Mesh->GetRefSkeleton().GetNum() != 53 ||
+        Mesh->GetRefSkeleton().GetBoneName(0) != FName(TEXT("root")) ||
+        Mesh->GetRefSkeleton().FindBoneIndex(FName(TEXT("hand_r"))) == INDEX_NONE)
+    {
+        OutFailureCode = TEXT("makehuman_cc0_skeleton_contract_invalid");
+        return false;
+    }
+    if (MeshComponent->GetAnimClass() == nullptr ||
+        MeshComponent->GetAnimClass()->GetPathName() !=
+            MakeHumanCc0R8AnimBlueprintClassPath ||
+        !IsValid(MeshComponent->GetAnimInstance()))
+    {
+        OutFailureCode = TEXT("makehuman_cc0_anim_instance_invalid");
+        return false;
+    }
+    if (MeshComponent->GetCollisionEnabled() != ECollisionEnabled::NoCollision ||
+        MeshComponent->GetGenerateOverlapEvents() ||
+        !IsValid(OwnerCharacter.GetCapsuleComponent()) ||
+        OwnerCharacter.GetCapsuleComponent()->GetCollisionEnabled() ==
+            ECollisionEnabled::NoCollision)
+    {
+        OutFailureCode = TEXT("makehuman_cc0_capsule_authority_invalid");
+        return false;
+    }
+    OutFailureCode = NAME_None;
+    return true;
 }
 
 bool UVistaCharacterProviderComponent::IsCitySampleHumanVisualDemoCommandLineAllowed(
@@ -887,6 +1045,10 @@ void UVistaCharacterProviderComponent::SetProviderUnavailable(
     if (RequestedProvider == CitySampleCrowdVisualDemoProviderId)
     {
         ProviderStatus = CitySampleVisualDemoUnavailableStatus;
+    }
+    else if (RequestedProvider == MakeHumanCc0R8ProviderId)
+    {
+        ProviderStatus = MakeHumanCc0R8UnavailableStatus;
     }
     else
     {
