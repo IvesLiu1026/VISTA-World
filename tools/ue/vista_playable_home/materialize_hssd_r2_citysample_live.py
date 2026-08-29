@@ -100,13 +100,16 @@ PROFILE_PATH = (
     "hssd_r2_citysample_live_r1.json"
 )
 PROFILE_SCHEMA = "simworld.vista.playable-home-hssd-r2-citysample-live-profile/v1"
-PROFILE_SHA256 = "7de515303934928162ff20d56c52c1276ccc051694994ac32b4c9d2d15e0fe1a"
-PROFILE_BYTES = 70_250
+PROFILE_SHA256 = "7805bb21089373991f94c025dde59e843bba76856c1ad2908da14e47e2f79ab9"
+PROFILE_BYTES = 70_265
 PROFILE_CONTENT_DIGEST = (
-    "5e42641a128c66225a02362328fef50b026c05c012009b42135a99ed173b366e"
+    "f90659d60384edfaabdc34cdfd4a5b3aa0cd8d0226b59fe694e018a86874b314"
 )
 FIXTURE_INVENTORY_PATH = RUN_PARENT / "vista-r9-fixture-forge-r1/fixture-inventory.json"
-FIXTURE_INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v1"
+FIXTURE_INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v2"
+FIXTURE_INVENTORY_STATUS = (
+    "fixture_inventory_sealed_snapshot_provenance_not_ue_imported"
+)
 MATERIALIZER_NAME = "materialize_hssd_r2_citysample_live.py"
 COMMANDLET_NAME = "compose_hssd_r2_citysample_live_commandlet.py"
 MATERIALIZER_SOURCE = pathlib.Path(__file__).resolve()
@@ -216,8 +219,9 @@ FIXTURE_INVENTORY_KEYS = frozenset(
         "schema_version",
         "profile",
         "recipe",
-        "forge_plan_content_digest",
-        "worker_result_content_digest",
+        "forge_plan",
+        "worker_result",
+        "source_snapshot",
         "toolchain",
         "artifact_count",
         "artifacts",
@@ -786,6 +790,12 @@ def _fixture_state(config: Config) -> FixtureState:
         )
         == 3
         and profile.get("fixture_imports", {}).get("expected_package_count") == 9
+        and profile.get("fixture_forge", {}).get("inventory_schema_version")
+        == FIXTURE_INVENTORY_SCHEMA
+        and profile.get("fixture_forge", {}).get("inventory_status")
+        == FIXTURE_INVENTORY_STATUS
+        and profile.get("fixture_forge", {}).get("inventory_top_level_keys")
+        == sorted(FIXTURE_INVENTORY_KEYS)
         and inventory.get("schema_version") == FIXTURE_INVENTORY_SCHEMA
         and inventory.get("artifact_count") == 3
         and inventory.get("ue_package_inventory")
@@ -795,12 +805,17 @@ def _fixture_state(config: Config) -> FixtureState:
             "expected_package_count": 9,
         }
         and inventory.get("binary_payload_in_git") is False
-        and inventory.get("status") == "fixture_inventory_sealed_not_ue_imported"
+        and inventory.get("status") == FIXTURE_INVENTORY_STATUS
         and inventory.get("profile", {}).get("sha256") == profile_artifact.sha256,
         "R9 finish profile or fixture inventory differs",
     )
     forge = importlib.import_module(
         "tools.blender.vista_playable_home_r9_fixtures.forge"
+    )
+    _require(
+        getattr(forge, "PROFILE_SCHEMA", None) == PROFILE_SCHEMA
+        and getattr(forge, "INVENTORY_SCHEMA", None) == FIXTURE_INVENTORY_SCHEMA,
+        "R9 fixture forge validator contract differs",
     )
     validated_profile = forge.load_profile(config.profile_path)
     validated_inventory = forge.validate_fixture_inventory_file(
