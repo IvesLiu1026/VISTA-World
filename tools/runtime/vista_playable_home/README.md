@@ -56,6 +56,43 @@ uv run --offline --no-sync python \
 This lane is review-only. It does not create a Sunshine profile and it does not
 prove uncontended performance while another process is using GPU 0.
 
+## Human-operated City Sample visual demo
+
+The current private, non-commercial City Sample/MetaHuman visual-demo lane uses
+GPU 0 and X11 display `:118`. Sunshine and the virtual-input-to-XTEST relay must
+both target that same display. Their host-local unit files, credentials,
+pairings, Tailnet address, and all external Unreal assets stay outside Git.
+
+Launch only from a sealed combined receipt:
+
+```bash
+PYTHONPATH=. uv run python \
+  tools/runtime/vista_playable_home/human_visual_demo_launch.py \
+  --combined-receipt /absolute/attempt/human-visual-demo-combined-receipt.json \
+  --launch
+```
+
+The launcher fixes display `:118`, GPU 0, the map, provider, resolution, and
+network-isolation arguments. It does not accept caller overrides for display,
+GPU, map, provider, or arbitrary UE arguments. The editor runs in a private
+network namespace so its development-only listeners do not reach the host or
+Tailnet.
+
+Readiness requires all of the following text/process checks before manual
+review:
+
+- the UE process survives the startup grace period;
+- a 1920x1080 `VistaPlayableHome` window exists on `:118`;
+- the UE log contains `VISTA_CITYSAMPLE_VISUAL_DEMO_ACTIVE` for the sealed
+  provider; and
+- Sunshine and the XTEST relay are active with `DISPLAY=:118`.
+
+Those checks prove only that the candidate is available for a human-operated
+visual demo. They do not accept photorealism, animation quality, controls, or
+dataset suitability. A human must review the Moonlight stream and controls.
+City Sample/MetaHuman content is excluded from VISTA datasets, databases,
+AI/VLM training, testing, evaluation, and review.
+
 `sunshine_app.py` prints a plan by default. `--apply` creates a timestamped
 backup before replacing `apps.json`; Sunshine must then be restarted by its
 runtime owner. Do not apply the entry until the referenced profile and map
@@ -144,10 +181,12 @@ uv run --offline --project tools python \
   --exit-timeout 90 --working-dir "$PWD"
 ```
 
-The host's Sunshine process should be a user service with `DISPLAY=:117` and
-linger enabled. Moonlight video and NVENC can be ready while control remains
-blocked: keyboard/mouse require writable `/dev/uinput`, and gamepads also
-require writable `/dev/uhid`. Treat root-only devices as view-only, never as a
+The historical packaged profile in this section uses `DISPLAY=:117`. The
+human-operated City Sample lane above instead uses `DISPLAY=:118`; Sunshine and
+the XTEST relay must always agree with the selected lane. Linger must be
+enabled. Moonlight video and NVENC can be ready while control remains blocked:
+keyboard/mouse require writable `/dev/uinput`, and gamepads also require
+writable `/dev/uhid`. Treat root-only devices as view-only, never as a
 successful remote-control setup.
 
 On the accepted host the service name is `vista-sunshine.service`. Stop only
