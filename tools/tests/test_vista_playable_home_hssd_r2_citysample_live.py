@@ -62,6 +62,73 @@ def _dynamic_observation(semantic_id: str, z: float, relative_z: float) -> dict:
     }
 
 
+def _v2_fixture_inventory(
+    profile: dict,
+    *,
+    profile_sha256: str = materializer.PROFILE_SHA256,
+    profile_bytes: int = materializer.PROFILE_BYTES,
+    profile_content_digest: str = materializer.PROFILE_CONTENT_DIGEST,
+) -> dict:
+    value = {
+        "schema_version": materializer.FIXTURE_INVENTORY_SCHEMA,
+        "profile": {
+            "relative_path": "world_packs/profile.json",
+            "sha256": profile_sha256,
+            "size_bytes": profile_bytes,
+            "content_digest": profile_content_digest,
+        },
+        "recipe": {
+            "relative_path": "world_packs/recipe.json",
+            "sha256": "a" * 64,
+            "size_bytes": 1,
+            "content_digest": "b" * 64,
+        },
+        "forge_plan": {
+            "path": "forge-plan.json",
+            "sha256": "c" * 64,
+            "size_bytes": 1,
+            "content_digest": "d" * 64,
+        },
+        "worker_result": {
+            "path": "worker-result.json",
+            "sha256": "e" * 64,
+            "size_bytes": 1,
+            "content_digest": "f" * 64,
+        },
+        "source_snapshot": {
+            "manifest": {
+                "path": "source-snapshot/manifest.json",
+                "sha256": "1" * 64,
+                "size_bytes": 1,
+                "content_digest": "2" * 64,
+            },
+            "source_count": 5,
+            "sources": [],
+            "tree_content_digest": "2" * 64,
+            "status": "exact_source_snapshot_current_bytes_validated",
+        },
+        "toolchain": {},
+        "artifact_count": 3,
+        "artifacts": [],
+        "ue_package_inventory": {
+            "package_root": profile["fixture_imports"]["package_root"],
+            "exact_package_names": profile["fixture_imports"]["exact_package_names"],
+            "expected_package_count": 9,
+        },
+        "binary_payload_in_git": False,
+        "claims": {
+            "ue_imported": False,
+            "visual_acceptance": False,
+            "gta_quality_accepted": False,
+        },
+        "status": materializer.FIXTURE_INVENTORY_STATUS,
+    }
+    value["content_digest"] = materializer._content_digest(
+        value, trailing_newline=False
+    )
+    return value
+
+
 def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureState]:
     dynamic_ids = list(materializer.DYNAMIC_SLOT_BINDINGS)
     existing_static = [f"hssd.r1/test.existing.{index:02d}" for index in range(41)]
@@ -187,13 +254,7 @@ def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureSta
             "expected_package_count": 9,
         }
     }
-    inventory = {
-        "ue_package_inventory": {
-            "package_root": profile["fixture_imports"]["package_root"],
-            "exact_package_names": profile["fixture_imports"]["exact_package_names"],
-            "expected_package_count": 9,
-        }
-    }
+    inventory = _v2_fixture_inventory(profile)
     fixtures = materializer.FixtureState(
         profile, profile_artifact, inventory, inventory_artifact
     )
@@ -233,7 +294,32 @@ def test_production_lineage_constants_are_exact() -> None:
         "tree_sha256": "449a2556cbcc011ec5074acbbb489507674f110e1051e8a02139eda8f3afa11b",
     }
     assert materializer.PROFILE_SCHEMA.endswith("-profile/v1")
-    assert materializer.PROFILE_SHA256.startswith("7de51530")
+    assert materializer.PROFILE_SHA256 == (
+        "7805bb21089373991f94c025dde59e843bba76856c1ad2908da14e47e2f79ab9"
+    )
+    assert materializer.PROFILE_BYTES == 70_265
+    assert materializer.PROFILE_CONTENT_DIGEST == (
+        "f90659d60384edfaabdc34cdfd4a5b3aa0cd8d0226b59fe694e018a86874b314"
+    )
+    assert materializer.FIXTURE_INVENTORY_SCHEMA.endswith("inventory/v2")
+    assert materializer.FIXTURE_INVENTORY_KEYS == frozenset(
+        {
+            "artifact_count",
+            "artifacts",
+            "binary_payload_in_git",
+            "claims",
+            "content_digest",
+            "forge_plan",
+            "profile",
+            "recipe",
+            "schema_version",
+            "source_snapshot",
+            "status",
+            "toolchain",
+            "ue_package_inventory",
+            "worker_result",
+        }
+    )
 
 
 def test_migration_contract_is_exact_minimal_mutation() -> None:
@@ -452,6 +538,119 @@ def test_checked_in_profile_digest_allows_pretty_bytes_but_closes_content(
     )
 
     assert observed == value
+
+
+def test_fixture_state_requires_v2_provenance_and_delegates_deep_validation(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    package_names = [f"/Game/VISTA/R9Fixtures/P{index}" for index in range(9)]
+    profile = {
+        "schema_version": materializer.PROFILE_SCHEMA,
+        "profile_id": "hssd_r2_citysample_live_r1",
+        "source_lineage": {},
+        "rooms": [{"room_id": f"room-{index}"} for index in range(6)],
+        "fixture_forge": {
+            "inventory_schema_version": materializer.FIXTURE_INVENTORY_SCHEMA,
+            "inventory_status": materializer.FIXTURE_INVENTORY_STATUS,
+            "inventory_top_level_keys": sorted(materializer.FIXTURE_INVENTORY_KEYS),
+        },
+        "fixture_imports": {
+            "package_root": "/Game/VISTA/R9Fixtures",
+            "exact_package_names": package_names,
+            "expected_package_count": 9,
+        },
+        "hssd_r2_inventory": {
+            "visual_slot_count": 60,
+            "static_shell_count": 57,
+            "dynamic_presentation_instance_ids": sorted(
+                materializer.DYNAMIC_SLOT_BINDINGS
+            ),
+        },
+        "collision_policy": {},
+        "claims": {},
+    }
+    profile["content_digest"] = materializer._content_digest(
+        profile, trailing_newline=False
+    )
+    profile_path = (tmp_path / "profile.json").resolve()
+    profile_path.write_bytes(materializer._canonical_json(profile))
+    profile_raw = profile_path.read_bytes()
+    profile_sha256 = hashlib.sha256(profile_raw).hexdigest()
+
+    inventory = _v2_fixture_inventory(
+        profile,
+        profile_sha256=profile_sha256,
+        profile_bytes=len(profile_raw),
+        profile_content_digest=profile["content_digest"],
+    )
+    inventory_path = (tmp_path / "fixture-inventory.json").resolve()
+    inventory_path.write_bytes(materializer._canonical_json(inventory))
+
+    validator_calls: list[pathlib.Path] = []
+
+    def load_profile(path: pathlib.Path) -> dict:
+        assert path == profile_path
+        return copy.deepcopy(profile)
+
+    def validate_inventory(path: pathlib.Path) -> dict:
+        assert path == inventory_path
+        validator_calls.append(path)
+        observed = materializer._strict_json(path.read_bytes(), "test inventory")
+        assert set(observed) == set(materializer.FIXTURE_INVENTORY_KEYS)
+        assert set(observed["forge_plan"]) == {
+            "path",
+            "sha256",
+            "size_bytes",
+            "content_digest",
+        }
+        assert set(observed["worker_result"]) == {
+            "path",
+            "sha256",
+            "size_bytes",
+            "content_digest",
+        }
+        assert set(observed["source_snapshot"]) == {
+            "manifest",
+            "source_count",
+            "sources",
+            "tree_content_digest",
+            "status",
+        }
+        if (
+            observed["source_snapshot"]["status"]
+            != "exact_source_snapshot_current_bytes_validated"
+        ):
+            raise materializer.R9PreflightError("deep fixture provenance drift")
+        return observed
+
+    forge = SimpleNamespace(
+        PROFILE_SCHEMA=materializer.PROFILE_SCHEMA,
+        INVENTORY_SCHEMA=materializer.FIXTURE_INVENTORY_SCHEMA,
+        load_profile=load_profile,
+        validate_fixture_inventory_file=validate_inventory,
+    )
+    monkeypatch.setattr(materializer.importlib, "import_module", lambda _name: forge)
+    monkeypatch.setattr(materializer, "PROFILE_SHA256", profile_sha256)
+    monkeypatch.setattr(materializer, "PROFILE_BYTES", len(profile_raw))
+    monkeypatch.setattr(
+        materializer, "PROFILE_CONTENT_DIGEST", profile["content_digest"]
+    )
+    config = materializer.Config(
+        profile_path=profile_path, fixture_inventory_path=inventory_path
+    )
+
+    observed = materializer._fixture_state(config)
+    assert observed.profile == profile
+    assert observed.inventory == inventory
+    assert validator_calls == [inventory_path]
+
+    inventory["source_snapshot"]["status"] = "unvalidated"
+    inventory["content_digest"] = materializer._content_digest(
+        inventory, trailing_newline=False
+    )
+    inventory_path.write_bytes(materializer._canonical_json(inventory))
+    with pytest.raises(materializer.R9PreflightError, match="deep fixture provenance"):
+        materializer._fixture_state(config)
 
 
 def test_hssd_build_plan_uses_canonical_bytes_with_no_newline_content_digest(
