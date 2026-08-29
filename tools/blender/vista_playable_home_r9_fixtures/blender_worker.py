@@ -424,8 +424,8 @@ def _build_one(
         {
             "schema_version": forge.ARTIFACT_RECEIPT_SCHEMA,
             "plan_content_digest": request["plan_content_digest"],
-            "profile_content_digest": request["profile_content_digest"],
-            "recipe_content_digest": request["recipe_content_digest"],
+            "profile": request["profile"],
+            "recipe": request["recipe"],
             "archetype_id": archetype["archetype_id"],
             "glb": {"path": paths["glb"], **glb},
             "preview": {"path": paths["preview"], **preview},
@@ -498,18 +498,18 @@ def run(argv: Sequence[str] | None = None) -> pathlib.Path:
     if request["output_root"] != str(output_root):
         forge._fail("FIXTURE_WORKER_REQUEST_INVALID", "output root pin drifted")
     recipe = forge.load_recipe()
-    profile = forge.load_profile()
-    if (
-        request["recipe_content_digest"] != recipe["content_digest"]
-        or request["profile_content_digest"] != profile["content_digest"]
-    ):
-        forge._fail("FIXTURE_WORKER_REQUEST_INVALID", "checked-in contract pin drifted")
+    forge.load_profile()
     expected_plan = forge.load_json(output_root / "forge-plan.json")
     forge.validate_plan(expected_plan, expected_mode="apply")
     if request["plan_content_digest"] != expected_plan["content_digest"]:
         forge._fail("FIXTURE_WORKER_REQUEST_INVALID", "forge plan pin drifted")
     if request["archetypes"] != expected_plan["archetypes"]:
         forge._fail("FIXTURE_WORKER_REQUEST_INVALID", "archetype plan drifted")
+    if (
+        request["profile"] != expected_plan["profile"]
+        or request["recipe"] != expected_plan["recipe"]
+    ):
+        forge._fail("FIXTURE_WORKER_REQUEST_INVALID", "source identity pin drifted")
 
     artifact_rows = []
     for archetype in recipe["archetypes"]:
@@ -520,8 +520,8 @@ def run(argv: Sequence[str] | None = None) -> pathlib.Path:
         {
             "schema_version": forge.WORKER_RESULT_SCHEMA,
             "plan_content_digest": request["plan_content_digest"],
-            "profile_content_digest": request["profile_content_digest"],
-            "recipe_content_digest": request["recipe_content_digest"],
+            "profile": request["profile"],
+            "recipe": request["recipe"],
             "artifact_count": 3,
             "artifacts": artifact_rows,
             "execution": {
