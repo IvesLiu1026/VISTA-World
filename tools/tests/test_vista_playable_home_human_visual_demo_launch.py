@@ -118,7 +118,8 @@ def test_command_and_environment_are_human_only_closed_and_non_networked(
     receipt_path, _receipt = _write_receipt(tmp_path)
     inputs = launcher.load_combined_receipt(receipt_path)
     command = launcher.build_command(inputs)
-    environment = launcher.sanitized_environment(tmp_path / "private")
+    cache_root = launcher.runtime_cache_root(inputs)
+    environment = launcher.sanitized_environment(tmp_path / "private", cache_root)
     rendered = " ".join(command).lower()
 
     assert command[:7] == [
@@ -135,6 +136,13 @@ def test_command_and_environment_are_human_only_closed_and_non_networked(
     assert "-VistaHumanOperatedVisualDemo" in command
     assert f"-VistaCharacterProvider={launcher.PROVIDER_ID}" in command
     assert "-graphicsadapter=0" in command
+    assert f"-UserDir={cache_root / 'user'}" in command
+    assert f"-VistaCameraProfile={launcher.CAMERA_PROFILE}" in command
+    assert "-NoVSync" in command
+    assert (
+        f"-ExecCmds=t.MaxFPS {launcher.TARGET_FPS},"
+        f"r.ScreenPercentage {launcher.SCREEN_PERCENTAGE}"
+    ) in command
     assert "-ddc=InstalledNoZenLocalFallback" in command
     assert "-SaveToUserDir" in command
     assert "-NOSOUND" in command
@@ -149,6 +157,7 @@ def test_command_and_environment_are_human_only_closed_and_non_networked(
     assert "model" not in rendered
     assert environment["DISPLAY"] == ":118"
     assert environment["CUDA_VISIBLE_DEVICES"] == "0"
+    assert environment["UE_LocalDataCachePath"] == str(cache_root / "ddc")
     assert environment["VISTA_CHARACTER_PROVIDER"] == launcher.PROVIDER_ID
     assert all(
         prohibited not in key.upper()
@@ -167,6 +176,7 @@ def test_command_and_environment_are_human_only_closed_and_non_networked(
         "XDG_CACHE_HOME",
         "XDG_CONFIG_HOME",
         "XDG_DATA_HOME",
+        "UE_LocalDataCachePath",
         "VISTA_CHARACTER_PROVIDER",
         "VISTA_HUMAN_OPERATED_VISUAL_DEMO",
     }
@@ -204,6 +214,9 @@ def test_default_cli_is_zero_write_dry_run_and_has_no_launch_side_effect(
         "local_zen_autolaunch_disabled": True,
         "apple_arkit_livelink_disabled": True,
         "private_network_namespace": True,
+        "receipt_bound_private_runtime_cache": True,
+        "target_fps_cap_request_bound": True,
+        "screen_percentage_request_bound": True,
         "agent_runtime_invoked": False,
         "human_operated_visual_demo_only": True,
         "prohibited_agent_adapter": True,
@@ -224,7 +237,11 @@ def test_launch_uses_no_shell_listener_probe_or_runtime_readiness(
     process.wait.return_value = 0
     popen = mock.Mock(return_value=process)
 
-    with mock.patch.object(launcher, "LOCK_ROOT", tmp_path / "locks"):
+    with (
+        mock.patch.object(launcher, "LOCK_ROOT", tmp_path / "locks"),
+        mock.patch.object(launcher, "CACHE_PARENT", tmp_path / "cache/human"),
+    ):
+        expected_command = launcher.build_command(inputs)
         assert (
             launcher.run_human_visual_demo(
                 inputs, popen_factory=popen, startup_grace_seconds=0
@@ -234,11 +251,14 @@ def test_launch_uses_no_shell_listener_probe_or_runtime_readiness(
 
     popen.assert_called_once()
     args, kwargs = popen.call_args
-    assert args == (launcher.build_command(inputs),)
+    assert args == (expected_command,)
     assert kwargs["shell"] is False
     assert kwargs["start_new_session"] is True
     assert kwargs["stdout"] is launcher.subprocess.DEVNULL
     assert kwargs["stderr"] is launcher.subprocess.STDOUT
+    assert kwargs["env"]["UE_LocalDataCachePath"] == str(
+        tmp_path / "cache/human" / inputs.receipt_sha256 / "ddc"
+    )
     statuses = [
         json.loads(line)["status"] for line in capsys.readouterr().out.splitlines()
     ]
@@ -261,6 +281,7 @@ def test_launch_revalidates_all_pins_before_popen(tmp_path: Path) -> None:
 
     with (
         mock.patch.object(launcher, "LOCK_ROOT", tmp_path / "locks"),
+        mock.patch.object(launcher, "CACHE_PARENT", tmp_path / "cache/human"),
         pytest.raises(launcher.HumanVisualDemoError, match="static tree"),
     ):
         launcher.run_human_visual_demo(
@@ -283,6 +304,7 @@ def test_launch_rejects_network_namespace_wrapper_drift_before_popen(
 
     with (
         mock.patch.object(launcher, "LOCK_ROOT", tmp_path / "locks"),
+        mock.patch.object(launcher, "CACHE_PARENT", tmp_path / "cache/human"),
         pytest.raises(
             launcher.HumanVisualDemoError,
             match="private network namespace wrapper differs",
@@ -426,6 +448,44 @@ def test_display_gpu_launch_lock_is_exclusive_across_receipts(tmp_path: Path) ->
             assert (tmp_path / "locks/display-118-gpu-0.lock").is_file()
         finally:
             launcher._release_launch_lock(first)
+
+
+def test_runtime_cache_is_receipt_bound_private_and_reused(tmp_path: Path) -> None:
+    receipt_path, _receipt = _write_receipt(tmp_path / "receipt")
+    inputs = launcher.load_combined_receipt(receipt_path)
+
+    with mock.patch.object(launcher, "CACHE_PARENT", tmp_path / "cache/human"):
+        expected = tmp_path / "cache/human" / inputs.receipt_sha256
+        assert launcher.runtime_cache_root(inputs) == expected
+        assert launcher.ensure_runtime_cache(inputs) == expected
+        assert launcher.ensure_runtime_cache(inputs) == expected
+
+    for directory in (
+        tmp_path / "cache",
+        tmp_path / "cache/human",
+        expected,
+        expected / "ddc",
+        expected / "user",
+    ):
+        assert directory.is_dir()
+        assert directory.stat().st_mode & 0o777 == 0o700
+
+
+def test_runtime_cache_rejects_symlinked_namespace(tmp_path: Path) -> None:
+    receipt_path, _receipt = _write_receipt(tmp_path / "receipt")
+    inputs = launcher.load_combined_receipt(receipt_path)
+    real = tmp_path / "real"
+    real.mkdir()
+    cache = tmp_path / "cache"
+    cache.mkdir(mode=0o700)
+    namespace = cache / "human"
+    namespace.symlink_to(real, target_is_directory=True)
+
+    with (
+        mock.patch.object(launcher, "CACHE_PARENT", namespace),
+        pytest.raises(launcher.HumanVisualDemoError, match="private real directory"),
+    ):
+        launcher.ensure_runtime_cache(inputs)
 
 
 def test_process_group_cleanup_escalates_after_timeout() -> None:
