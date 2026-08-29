@@ -41,8 +41,13 @@ the existing material, collision, proxy or acceptance gates.
 
 The host and commandlet SHALL validate the fixed R2 plan SHA-256, byte count,
 schema, canonical content digest, source profile/scene digests, 17 transform
-overrides and exact before/after blocker ledgers. Missing, extra, resealed or
-caller-selected plan bytes SHALL fail before UE execution or publication.
+overrides, all 17 exact target transforms and canonical support, proxy, portal,
+portal-clearance and contact ledger projections. Missing, extra, merely
+shape-valid, resealed or caller-selected plan bytes SHALL fail before UE
+execution or publication.
+Pinned JSON SHALL be hashed and parsed from the same `O_NOFOLLOW` file
+descriptor; attempt-local inputs SHALL be revalidated immediately before UE and
+again before terminal publication.
 
 ### R2 — Closed placement projection
 
@@ -56,7 +61,10 @@ actors per room and exactly 19 semantic targets.
 Every HSSD actor SHALL remain a visual shell with `NoCollision`, no physics,
 no overlap events and no navigation contribution. The existing R1 semantic
 proxy SHALL remain the sole query authority and SHALL retain the Phase-2 repair,
-save and cold-reload gates.
+save and cold-reload gates. Each visual-shell actor receipt SHALL use a closed
+field set and bind the deterministic persistent-level actor path plus the exact
+`/Script/Engine.StaticMeshActor` class; additional positive or negative claim
+fields are forbidden.
 
 ### R4 — Honest unresolved blockers
 
@@ -71,6 +79,12 @@ Apply SHALL require the existing explicit non-promotable material-conflict
 acknowledgement, copy the sealed Phase-1 project to one fresh direct child,
 execute UE 5.7.3 with NullRHI/no network, save/reload the map and never mutate
 the live runtime or any prior attempt.
+
+No network SHALL mean a pinned Bubblewrap `--unshare-net` OS namespace in
+addition to UE transport flags. The final scene and host receipts SHALL bind
+that isolation contract. Concurrent transient mutation by another process with
+the same Unix UID is outside this lane's threat model; persistent drift is
+detected by the pre/post execution revalidation.
 
 ### R6 — Pure reviewability
 

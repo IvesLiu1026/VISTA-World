@@ -43,12 +43,26 @@ def test_exact_contracts_derive_sixty_visual_only_world_placements() -> None:
         == runner.SEMANTIC_PROXY_COUNT
     )
     first = contracts.placements[0]
-    assert first["instance_id"] == "hssd.r1/entry_hall.shoe_bench.01"
+    assert first["instance_id"] == "hssd.r1/bathroom_laundry.bathtub.01"
     assert first["world_transform_cm"] == {
-        "location_cm": [80, -310, 0],
-        "rotation_deg": [0, 0, 180],
+        "location_cm": [-65, 670, 0],
+        "rotation_deg": [0, 0, -90],
         "scale": [1, 1, 1],
     }
+    shoe_bench = next(
+        item
+        for item in contracts.placements
+        if item["instance_id"] == "hssd.r1/entry_hall.shoe_bench.01"
+    )
+    assert shoe_bench["world_transform_cm"] == {
+        "location_cm": [90, -310, 0],
+        "rotation_deg": [0, 0, 180],
+        "scale": [0.95, 1, 1],
+    }
+    assert contracts.r2_remediation["transform_override_count"] == 17
+    assert contracts.r2_remediation["blocker_counts_after"] == (
+        runner.R2_EXPECTED_BLOCKERS_AFTER
+    )
     assert first["object_path"].startswith(runner.hssd.DIAGNOSTIC_NAMESPACE + "/")
     assert first["visual_policy"] == {
         "collision_profile": "NoCollision",
@@ -133,8 +147,15 @@ def test_dry_run_is_zero_write_and_keeps_nonacceptance_claims(
     assert plan["mode"] == "dry_run"
     assert plan["will_write"] is False
     assert plan["will_run_unreal"] is False
+    assert plan["accepted_as_playable_collision"] is False
+    assert plan["accepted_as_ue_runtime"] is False
     assert plan["placement_count"] == 60
     assert plan["semantic_proxy_count"] == 19
+    assert plan["contracts"]["r2_build_plan_sha256"] == runner.R2_BUILD_PLAN_SHA256
+    assert plan["contracts"]["r2_build_plan_bytes"] == runner.R2_BUILD_PLAN_BYTES
+    assert plan["r2_placement_authority"]["transform_override_count"] == 17
+    assert plan["r2_placement_authority"]["secondary_collision_candidate_count"] == 20
+    assert plan["r2_placement_authority"]["accepted_as_playable_collision"] is False
     assert plan["claims"] == {
         "placements_composed": False,
         "player_eye_reviewed": False,
@@ -143,6 +164,8 @@ def test_dry_run_is_zero_write_and_keeps_nonacceptance_claims(
         "interaction_proven": False,
     }
     assert plan["policy"] == runner.PHASE2_POLICY
+    assert plan["policy"]["network_isolation"] == "bubblewrap_unshare_net"
+    assert plan["toolchain"]["execution_isolation"] == runner.EXECUTION_ISOLATION
     assert plan["policy"]["semantic_proxy_collision_seed_profile"] == "BlockAllDynamic"
     assert plan["policy"]["semantic_proxy_collision_profile"] == "Custom"
     assert plan["policy"]["semantic_proxy_collision_mode"] == "QueryOnly"
@@ -152,6 +175,168 @@ def test_dry_run_is_zero_write_and_keeps_nonacceptance_claims(
     }
     assert plan["content_digest"] == runner._content_digest(plan)
     assert not attempt.exists()
+
+
+def _remove_faucet_support_blocker(plan: dict) -> None:
+    faucet_id = "hssd.r1/bathroom_laundry.faucet.01"
+    for placement in plan["placements"]:
+        if placement["instance_id"] == faucet_id:
+            placement["support_policy"].update(
+                {
+                    "status": "surface_support_derived_and_verified",
+                    "support_instance_id": "hssd.r1/bathroom_laundry.bathtub.01",
+                }
+            )
+            break
+    for support in plan["ledgers"]["support"]:
+        if support["instance_id"] == faucet_id:
+            support.update(
+                {
+                    "status": "surface_support_derived_and_verified",
+                    "support_instance_id": "hssd.r1/bathroom_laundry.bathtub.01",
+                }
+            )
+            break
+
+
+def _make_first_override_noop(plan: dict) -> None:
+    override = plan["placement_remediation"]["transform_overrides"][0]
+    override["remediated_transform"] = copy.deepcopy(override["source_transform"])
+    for placement in plan["placements"]:
+        if placement["instance_id"] == override["instance_id"]:
+            placement["transform"] = copy.deepcopy(override["source_transform"])
+            break
+
+
+def _move_first_override_target_123m(plan: dict) -> None:
+    override = plan["placement_remediation"]["transform_overrides"][0]
+    override["remediated_transform"]["location_m"][0] += 123
+    for placement in plan["placements"]:
+        if placement["instance_id"] == override["instance_id"]:
+            placement["transform"] = copy.deepcopy(override["remediated_transform"])
+            break
+
+
+def _forge_contact_gap(plan: dict) -> None:
+    instance_id = "hssd.r1/bathroom_laundry.bathtub.01"
+    for placement in plan["placements"]:
+        if placement["instance_id"] == instance_id:
+            placement["support_policy"]["contact_gap_m"] = 999999
+            break
+    for support in plan["ledgers"]["support"]:
+        if support["instance_id"] == instance_id:
+            support["contact_gap_m"] = 999999
+            break
+
+
+def _forge_portal_identity(plan: dict) -> None:
+    forged = "home.r1/portal.forged-canonical-looking.01"
+    original = plan["portals"][0]["portal_id"]
+    plan["portals"][0]["portal_id"] = forged
+    for clearance in plan["ledgers"]["portal_clearance"]:
+        if clearance["portal_id"] == original:
+            clearance["portal_id"] = forged
+            break
+
+
+def _substitute_arbitrary_same_room_contact_pair(plan: dict) -> None:
+    contact = plan["ledgers"]["contact"][0]
+    contact["first_instance_id"] = "hssd.r1/bathroom_laundry.bathtub.01"
+    contact["second_instance_id"] = "hssd.r1/bathroom_laundry.washer.01"
+
+
+@pytest.mark.parametrize(
+    "mutation,match",
+    [
+        (
+            lambda plan: plan["placements"][0].__setitem__(
+                "source_asset_id", "hssd.static.changed"
+            ),
+            "non-transform placement field",
+        ),
+        (
+            lambda plan: plan["placements"][0]["transform"]["location_m"].__setitem__(
+                0, 123.0
+            ),
+            "undeclared transform",
+        ),
+        (
+            lambda plan: plan["placement_remediation"][
+                "blocker_counts_after"
+            ].__setitem__("protected_portal_conflict_assignments", 1),
+            "remediation identity or blocker ledger",
+        ),
+        (
+            lambda plan: plan["placement_remediation"][
+                "remaining_review_pending"
+            ].__setitem__("wall_fixture_instance_ids", ["bogus"] * 18),
+            "support blocker inventory",
+        ),
+        (
+            lambda plan: plan["placements"][0]["portal_policy"].update(
+                {
+                    "conflicting_portal_ids": ["forged.portal"],
+                    "status": "conflict",
+                }
+            ),
+            "portal clearance ledger",
+        ),
+        (_remove_faucet_support_blocker, "surface review blocker"),
+        (
+            lambda plan: plan["ledgers"]["collision"][1].__setitem__(
+                "instance_id", plan["ledgers"]["collision"][0]["instance_id"]
+            ),
+            "collision coverage",
+        ),
+        (_make_first_override_noop, "does not bind source and target"),
+        (_move_first_override_target_123m, "canonical semantic projection"),
+        (_forge_contact_gap, "canonical semantic projection"),
+        (_forge_portal_identity, "canonical semantic projection"),
+        (_substitute_arbitrary_same_room_contact_pair, "canonical semantic projection"),
+    ],
+    ids=[
+        "identity",
+        "undeclared-transform",
+        "blocker-ledger",
+        "bogus-wall-ids",
+        "portal-conflict",
+        "removed-support-blocker",
+        "duplicate-collision-coverage",
+        "noop-override",
+        "forged-target-plus-123m",
+        "forged-contact-gap",
+        "forged-portal-ids",
+        "arbitrary-contact-pair",
+    ],
+)
+def test_r2_plan_resealed_semantic_drift_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, mutation, match: str
+) -> None:
+    contracts = runner.load_pinned_contracts()
+    changed = copy.deepcopy(contracts.r2_build_plan)
+    mutation(changed)
+    changed["content_digest"] = runner._r2_content_digest(changed)
+    monkeypatch.setattr(
+        runner, "R2_BUILD_PLAN_CONTENT_DIGEST", changed["content_digest"]
+    )
+
+    with pytest.raises(runner.RunnerError, match=match):
+        runner._validate_r2_build_plan(
+            contracts.profile,
+            contracts.scene_plan,
+            changed,
+        )
+
+
+def test_r2_plan_path_byte_drift_fails_before_derivation(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    changed = tmp_path / "build-plan.json"
+    changed.write_bytes(runner.R2_BUILD_PLAN_SOURCE_PATH.read_bytes() + b"\n")
+    monkeypatch.setattr(runner, "R2_BUILD_PLAN_SOURCE_PATH", changed)
+
+    with pytest.raises(runner.RunnerError, match="changed or digest differs"):
+        runner.load_pinned_contracts()
 
 
 def test_apply_requires_explicit_nonpromotable_override_before_any_write_or_popen(
@@ -177,6 +362,48 @@ def test_apply_requires_explicit_nonpromotable_override_before_any_write_or_pope
     assert not attempt.exists()
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda plan: plan["claims"].__setitem__("gta_level", True),
+        lambda plan: plan["toolchain"].__setitem__("rendering", "GPU"),
+        lambda plan: plan.__setitem__("map_path", "/Game/Forged"),
+        lambda plan: plan.__setitem__("accepted_as_playable_collision", True),
+        lambda plan: plan.__setitem__("extra_claim", True),
+    ],
+    ids=["gta-claim", "gpu", "map", "collision-claim", "extra-key"],
+)
+def test_apply_rebuilds_and_requires_the_entire_closed_plan_before_write(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, mutation
+) -> None:
+    parent = tmp_path / "runs"
+    parent.mkdir()
+    attempt = parent / "phase2-apply-closed"
+    source = _source()
+    monkeypatch.setattr(runner, "DEFAULT_OUTPUT_PARENT", parent)
+    monkeypatch.setattr(runner, "_validate_toolchain", lambda: None)
+    monkeypatch.setattr(runner, "validate_phase1_source", lambda: source)
+    plan, _ = runner.build_plan(
+        attempt,
+        apply=True,
+        allow_nonpromotable_material_conflict=True,
+    )
+    mutation(plan)
+    plan["content_digest"] = runner._content_digest(plan)
+    monkeypatch.setattr(
+        runner,
+        "_materialize_inputs",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("materialization must not begin")
+        ),
+    )
+
+    with pytest.raises(runner.RunnerError, match="intact diagnostic-only"):
+        runner.apply_plan(plan, source)
+
+    assert not attempt.exists()
+
+
 def _terminal_fixture(
     tmp_path: pathlib.Path,
     *,
@@ -185,11 +412,70 @@ def _terminal_fixture(
     attempt = tmp_path / "phase2"
     attempt.mkdir()
     contracts = runner.load_pinned_contracts()
+    contracts_dir = attempt / "contracts"
+    contracts_dir.mkdir()
+    contract_records = {}
+    for label, source, expected_sha in (
+        ("profile", runner.PROFILE_SOURCE_PATH, runner.PROFILE_SHA256),
+        ("house", runner.HOUSE_SOURCE_PATH, runner.HOUSE_SHA256),
+        ("scene_plan", runner.SCENE_PLAN_SOURCE_PATH, runner.SCENE_PLAN_SHA256),
+        (
+            "r2_build_plan",
+            runner.R2_BUILD_PLAN_SOURCE_PATH,
+            runner.R2_BUILD_PLAN_SHA256,
+        ),
+    ):
+        target = contracts_dir / source.name
+        target.write_bytes(source.read_bytes())
+        contract_records[label] = {"path": str(target), "sha256": expected_sha}
     receipt_path = attempt / runner.SCENE_RECEIPT_FILE
+    project_dir = attempt / "project"
+    project_dir.mkdir()
+    project_file = project_dir / runner.PHASE1_PROJECT_NAME
+    project_file.write_bytes(
+        (runner.PHASE1_PROJECT_ROOT / runner.PHASE1_PROJECT_NAME).read_bytes()
+    )
+    scripts_dir = attempt / "scripts"
+    scripts_dir.mkdir()
+    script_records = {}
+    for label, source in runner._script_sources().items():
+        target = scripts_dir / source.name
+        target.write_bytes(source.read_bytes())
+        script_records[label] = {
+            "path": str(target),
+            "sha256": runner._sha256(target),
+        }
+    evidence_dir = attempt / "phase1-evidence"
+    evidence_dir.mkdir()
+    evidence_records = {}
+    for filename, expected_sha in runner.PHASE1_EVIDENCE_PINS.items():
+        target = evidence_dir / filename
+        target.write_bytes((runner.PHASE1_ATTEMPT_ROOT / filename).read_bytes())
+        evidence_records[filename] = {
+            "path": str(target),
+            "sha256": expected_sha,
+        }
     execution = {
+        "attempt_root": str(attempt),
+        "project_file": str(project_file),
+        "project_sha256": runner._sha256(project_file),
+        "phase1_source": {
+            "attempt_root": str(runner.PHASE1_ATTEMPT_ROOT),
+            "status": runner.hssd.DIAGNOSTIC_IMPORT_STATUS,
+            "project_projection_sha256": runner.PHASE1_PROJECT_PROJECTION_SHA256,
+            "evidence": evidence_records,
+        },
+        "contracts": contract_records,
         "scene_receipt": str(receipt_path),
         "placements": list(contracts.placements),
+        "execution_isolation": copy.deepcopy(runner.EXECUTION_ISOLATION),
+        "scripts": script_records,
+        "r2_placement_authority": runner._r2_placement_authority(
+            contracts.r2_remediation
+        ),
     }
+    execution_path = attempt / "hssd-phase2-execution.json"
+    execution_path.write_bytes(runner._canonical_json(execution))
     actors = []
     for placement in contracts.placements:
         actors.append(
@@ -202,7 +488,8 @@ def _terminal_fixture(
                 "world_transform_cm": placement["world_transform_cm"],
                 "tags": placement["tags"],
                 "actor_label": placement["actor_label"],
-                "actor_class_path": "/Script/Engine.StaticMeshActor",
+                "actor_path": runner.visual_shell_actor_path(placement["actor_label"]),
+                "actor_class_path": runner.VISUAL_SHELL_ACTOR_CLASS_PATH,
                 "actor_collision_enabled": False,
                 "actor_hidden_in_game": False,
                 "collision_profile": "NoCollision",
@@ -216,7 +503,7 @@ def _terminal_fixture(
         )
     gates = {
         "phase1_success_revalidated": True,
-        "exact_profile_house_scene_pins_verified": True,
+        "exact_profile_house_scene_r2_pins_verified": True,
         "existing_map_loaded": True,
         "exact_60_placements_spawned": True,
         "exact_10_per_room": True,
@@ -239,14 +526,36 @@ def _terminal_fixture(
             "status": runner.SUCCESS_STATUS,
             "error": None,
             "accepted_as_visual_evidence": False,
+            "accepted_as_playable_collision": False,
+            "accepted_as_ue_runtime": False,
             "full_material_fidelity": False,
             "promotable": False,
             "diagnostic_only": True,
             "content_namespace": runner.hssd.DIAGNOSTIC_NAMESPACE,
             "map_path": runner.MAP_PATH,
+            "execution_isolation": copy.deepcopy(runner.EXECUTION_ISOLATION),
+            "bindings": {
+                "engine": runner.hssd.EXPECTED_ENGINE_VERSION,
+                "project": execution["project_file"],
+                "execution_manifest": str(execution_path),
+                "execution_manifest_sha256": runner._sha256(execution_path),
+                "phase1_execution_sha256": runner.PHASE1_EVIDENCE_PINS[
+                    "hssd-execution.json"
+                ],
+                "phase1_import_receipt_sha256": runner.PHASE1_EVIDENCE_PINS[
+                    "hssd-import-receipt.json"
+                ],
+                "profile_sha256": runner.PROFILE_SHA256,
+                "house_sha256": runner.HOUSE_SHA256,
+                "scene_plan_sha256": runner.SCENE_PLAN_SHA256,
+                "r2_build_plan_sha256": runner.R2_BUILD_PLAN_SHA256,
+                "r2_build_plan_bytes": runner.R2_BUILD_PLAN_BYTES,
+                "r2_build_plan_content_digest": runner.R2_BUILD_PLAN_CONTENT_DIGEST,
+            },
             "actors": actors,
             "semantic_proxies": [],
             "policy": runner.PHASE2_POLICY,
+            "r2_placement_authority": execution["r2_placement_authority"],
             "claims": {
                 "placements_composed": True,
                 "player_eye_reviewed": False,
@@ -396,6 +705,12 @@ def test_terminal_validation_requires_all_sixty_safe_reloaded_shells(
     receipt = runner.validate_terminal(attempt, execution, stdout)
     assert len(receipt["actors"]) == 60
     assert all(
+        set(actor) == runner.VISUAL_SHELL_ACTOR_RECEIPT_KEYS
+        and actor["actor_path"] == runner.visual_shell_actor_path(actor["actor_label"])
+        and actor["actor_class_path"] == runner.VISUAL_SHELL_ACTOR_CLASS_PATH
+        for actor in receipt["actors"]
+    )
+    assert all(
         proxy["baseline"]["components"][0]["collision_profile"] == "NoCollision"
         and proxy["baseline"]["components"][0]["collision_mode"] == "NoCollision"
         and proxy["baseline"]["components"][0]["collision_enabled"] is False
@@ -435,6 +750,17 @@ def test_terminal_validation_accepts_already_hidden_presentation_proxy_baselines
     )
 
 
+def test_terminal_validation_rechecks_attempt_local_r2_plan_bytes(
+    tmp_path: pathlib.Path,
+) -> None:
+    attempt, execution, stdout, _receipt_path = _terminal_fixture(tmp_path)
+    plan_path = pathlib.Path(execution["contracts"]["r2_build_plan"]["path"])
+    plan_path.write_bytes(plan_path.read_bytes() + b"\n")
+
+    with pytest.raises(runner.RunnerError, match="changed or digest differs"):
+        runner.validate_terminal(attempt, execution, stdout)
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
@@ -443,6 +769,15 @@ def test_terminal_validation_accepts_already_hidden_presentation_proxy_baselines
         ),
         lambda receipt: receipt["actors"][0].__setitem__("visible", False),
         lambda receipt: receipt["actors"][0].__setitem__("actor_hidden_in_game", True),
+        lambda receipt: receipt["actors"][0].__setitem__(
+            "actor_class_path", "/Game/Forged.StaticMeshActor"
+        ),
+        lambda receipt: receipt["actors"][0].__setitem__(
+            "actor_path",
+            runner.MAP_PATH
+            + ".VistaPlayableHome:PersistentLevel.StaticMeshActor_999999",
+        ),
+        lambda receipt: receipt["actors"][0].__setitem__("accepted_as_runtime", False),
         lambda receipt: receipt["semantic_proxies"][0].__setitem__("authority", "none"),
         lambda receipt: receipt["semantic_proxies"][0][
             "authority_evidence"
@@ -463,11 +798,25 @@ def test_terminal_validation_accepts_already_hidden_presentation_proxy_baselines
             "semantic_state", {"semantic_id": "changed"}
         ),
         lambda receipt: receipt["semantic_proxies"][0].__setitem__("reloaded", None),
+        lambda receipt: receipt.__setitem__("accepted_as_playable_collision", True),
+        lambda receipt: receipt.__setitem__("accepted_as_ue_runtime", True),
+        lambda receipt: receipt["bindings"].__setitem__("engine", "forged"),
+        lambda receipt: receipt["bindings"].__setitem__("project", "/tmp/forged"),
+        lambda receipt: receipt["bindings"].__setitem__(
+            "execution_manifest_sha256", "0" * 64
+        ),
+        lambda receipt: receipt["execution_isolation"].__setitem__(
+            "os_network_namespace", "host"
+        ),
+        lambda receipt: receipt.__setitem__("extra_runtime_claim", True),
     ],
     ids=[
         "shell-actor-collision",
         "shell-visibility",
         "shell-actor-hidden",
+        "shell-forged-class-ending-static-mesh-actor",
+        "shell-forged-canonical-map-actor-path",
+        "shell-extra-negative-claim",
         "proxy-authority",
         "proxy-authority-evidence",
         "proxy-component-collision",
@@ -476,6 +825,13 @@ def test_terminal_validation_accepts_already_hidden_presentation_proxy_baselines
         "proxy-visibility-response-regression",
         "proxy-semantic-state",
         "proxy-malformed-reloaded-snapshot",
+        "playable-collision-claim",
+        "ue-runtime-claim",
+        "engine-binding",
+        "project-binding",
+        "execution-binding",
+        "network-isolation-binding",
+        "extra-top-level-claim",
     ],
 )
 def test_terminal_validation_fails_closed_for_actor_or_proxy_evidence_drift(
@@ -494,6 +850,8 @@ def test_runner_source_contains_nullrhi_containment_and_no_acceptance_claim() ->
     source = pathlib.Path(runner.__file__).read_text(encoding="utf-8")
 
     assert '"-nullrhi"' in source
+    assert '"--unshare-net"' in source
+    assert '"bubblewrap_unshare_net"' in source
     assert '"CUDA_VISIBLE_DEVICES": ""' in source
     assert '"live_runtime_mutation": False' in source
     assert '"gpu1_use": False' in source
