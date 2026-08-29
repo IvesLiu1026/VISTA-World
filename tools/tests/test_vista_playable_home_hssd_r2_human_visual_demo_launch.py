@@ -182,68 +182,20 @@ def _composition_contract(profile: dict[str, object]) -> dict[str, object]:
     )
 
 
-def _write_t2_fixture_bundle(root: Path) -> tuple[dict, dict, dict]:
-    partial, worker = _write_artifact_fixture(root)
-    plan = fixture_forge.seal_document(
-        {
-            "schema_version": fixture_forge.PLAN_SCHEMA,
-            "mode": "apply",
-            "attempt_name": "fixture-test-apply",
-            "output_root": str(root),
-            "profile": partial["profile"],
-            "recipe": partial["recipe"],
-            "builder_sources": fixture_forge._source_pins(),
-            "toolchain": partial["toolchain"],
-            "archetypes": partial["archetypes"],
-            "ue_package_inventory": partial["ue_package_inventory"],
-            "execution_policy": {
-                "headless": True,
-                "factory_startup": True,
-                "autoexec_disabled": True,
-                "network_namespace": "unshared",
-                "pid_namespace": "unshared",
-                "gpu_devices_visible": False,
-                "display_environment_forwarded": False,
-                "preview_device": "CPU",
-                "caller_selected_binary": False,
-                "caller_selected_script": False,
-                "caller_selected_assets": False,
-            },
-            "will_write": True,
-            "will_execute_blender": True,
-            "binary_payload_in_git": False,
-            "claims": {
-                "visual_acceptance": False,
-                "ue_imported": False,
-                "gta_quality_accepted": False,
-            },
-            "status": "authorized_apply_preflight",
-        }
-    )
-    worker_rows = []
-    for archetype_id in fixture_forge.EXPECTED_ARCHETYPE_IDS:
-        receipt_path = (
-            root
-            / fixture_forge.EXPECTED_ARTIFACT_RELATIVE_PATHS[archetype_id]["receipt"]
+def _write_t2_fixture_bundle(root: Path) -> tuple[dict, dict, dict, Path, dict]:
+    patcher = pytest.MonkeyPatch()
+    try:
+        plan, worker = _write_artifact_fixture(root, patcher)
+        inventory = fixture_forge._build_inventory(plan, worker, root)
+        return (
+            plan,
+            worker,
+            inventory,
+            root.parent,
+            copy.deepcopy(plan["toolchain"]),
         )
-        receipt = fixture_forge.load_json(receipt_path)
-        receipt["plan_content_digest"] = plan["content_digest"]
-        receipt = fixture_forge.seal_document(receipt)
-        receipt_path.write_bytes(fixture_forge.canonical_json_bytes(receipt))
-        worker_row = next(
-            row for row in worker["artifacts"] if row["archetype_id"] == archetype_id
-        )
-        worker_row["receipt_content_digest"] = receipt["content_digest"]
-        worker_rows.append(worker_row)
-    worker["plan_content_digest"] = plan["content_digest"]
-    worker["artifacts"] = worker_rows
-    worker = fixture_forge.seal_document(worker)
-    inventory = fixture_forge._build_inventory(plan, worker, root)
-    (root / "forge-plan.json").write_bytes(fixture_forge.canonical_json_bytes(plan))
-    (root / "worker-result.json").write_bytes(
-        fixture_forge.canonical_json_bytes(worker)
-    )
-    return plan, worker, inventory
+    finally:
+        patcher.undo()
 
 
 @dataclass
@@ -252,15 +204,25 @@ class Fixture:
     receipt: dict[str, object]
     trust: launcher.LauncherTrust
     parent: base.HumanVisualDemoInputs
+    t2_run_parent: Path
+    t2_toolchain: dict[str, object]
 
     def parent_loader(self, path: Path) -> base.HumanVisualDemoInputs:
         assert path == self.trust.r6_receipt.path
         return self.parent
 
     def load(self) -> launcher.R9HumanVisualDemoInputs:
-        return launcher.load_combined_receipt(
-            self.receipt_path, trust=self.trust, parent_loader=self.parent_loader
-        )
+        with (
+            mock.patch.object(fixture_forge, "DEFAULT_RUN_PARENT", self.t2_run_parent),
+            mock.patch.object(
+                fixture_forge,
+                "_verify_toolchain",
+                return_value=copy.deepcopy(self.t2_toolchain),
+            ),
+        ):
+            return launcher.load_combined_receipt(
+                self.receipt_path, trust=self.trust, parent_loader=self.parent_loader
+            )
 
     def reseal(self) -> None:
         self.receipt["content_digest"] = base.content_digest(self.receipt)
@@ -404,7 +366,20 @@ def _fixture(tmp_path: Path) -> Fixture:
     shutil.copyfile(fixture_forge.PROFILE_PATH, profile_path)
     profile_path.chmod(0o600)
     profile_document = fixture_forge.load_profile(profile_path)
-    _plan, _worker_result, inventory_document = _write_t2_fixture_bundle(output_root)
+    t2_root = tmp_path / "t2-runs/fixture-test-apply"
+    (
+        _plan,
+        _worker_result,
+        inventory_document,
+        t2_run_parent,
+        t2_toolchain,
+    ) = _write_t2_fixture_bundle(t2_root)
+    for directory in ("artifacts", "previews", "receipts", "source-snapshot"):
+        shutil.copytree(
+            t2_root / directory, output_root / directory, copy_function=shutil.copy2
+        )
+    for name in ("forge-plan.json", "worker-result.json", "source-snapshot.json"):
+        shutil.copy2(t2_root / name, output_root / name)
     inventory_path = output_root / launcher.LOCAL_ARTIFACT_NAMES["fixture_inventory"]
     inventory_path.write_bytes(fixture_forge.canonical_json_bytes(inventory_document))
     inventory_path.chmod(0o600)
@@ -609,7 +584,12 @@ def _fixture(tmp_path: Path) -> Fixture:
         encoding="ascii",
     )
     return Fixture(
-        receipt_path=receipt_path, receipt=receipt, trust=trust, parent=parent
+        receipt_path=receipt_path,
+        receipt=receipt,
+        trust=trust,
+        parent=parent,
+        t2_run_parent=t2_run_parent,
+        t2_toolchain=t2_toolchain,
     )
 
 
@@ -628,6 +608,14 @@ def test_v5_receipt_closes_r6_hssd_finish_and_pending_boundaries(
     local_profile = Path(inputs.upgrade["finish_profile"]["path"])
     assert local_profile.read_bytes() == fixture_forge.PROFILE_PATH.read_bytes()
     assert local_profile.read_bytes().startswith(b'{\n  "schema_version"')
+    inventory = fixture_forge.load_json(
+        Path(inputs.upgrade["fixture_inventory"]["path"])
+    )
+    assert inventory["schema_version"] == fixture_forge.INVENTORY_SCHEMA
+    assert inventory["status"] == (
+        "fixture_inventory_sealed_snapshot_provenance_not_ue_imported"
+    )
+    assert set(inventory) == launcher.FIXTURE_INVENTORY_KEYS
 
 
 def test_v5_revalidates_current_fixture_glb_and_local_receipt_pin(
@@ -646,6 +634,31 @@ def test_v5_revalidates_current_fixture_glb_and_local_receipt_pin(
     )
     result_path.write_bytes(result_path.read_bytes() + b"drift")
     with pytest.raises(base.HumanVisualDemoError, match="receipt pin"):
+        fixture.load()
+
+
+def test_v5_requires_v2_inventory_and_current_snapshot_tree(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path / "snapshot")
+    fixture.load()
+    snapshot_source = fixture.receipt_path.parent.joinpath(
+        "source-snapshot/tools/blender/vista_playable_home_r9_fixtures/forge.py"
+    )
+    snapshot_source.chmod(0o600)
+    snapshot_source.write_bytes(snapshot_source.read_bytes() + b"\n# drift\n")
+    snapshot_source.chmod(0o400)
+    with pytest.raises(base.HumanVisualDemoError, match="snapshot|evidence tree"):
+        fixture.load()
+
+    fixture = _fixture(tmp_path / "v1")
+    upgrade = fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]
+    inventory_path = Path(upgrade["fixture_inventory"]["path"])
+    inventory = fixture_forge.load_json(inventory_path)
+    inventory["schema_version"] = "simworld.vista.playable-home-r9-fixture-inventory/v1"
+    inventory = fixture_forge.seal_document(inventory)
+    inventory_path.write_bytes(fixture_forge.canonical_json_bytes(inventory))
+    upgrade["fixture_inventory"] = _pin(inventory_path)
+    fixture.reseal()
+    with pytest.raises(base.HumanVisualDemoError, match="T2 validation failed"):
         fixture.load()
 
 
