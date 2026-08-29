@@ -32,6 +32,7 @@ def _args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def _material(bpy: Any, name: str, contract: Mapping[str, Any]) -> Any:
     material = bpy.data.materials.new(name=name)
     material.use_nodes = True
+    material.use_backface_culling = True
     material.diffuse_color = tuple(contract["base_color_rgba"])
     material.metallic = float(contract["metallic"])
     material.roughness = float(contract["roughness"])
@@ -548,6 +549,11 @@ def run(argv: Sequence[str] | None = None) -> pathlib.Path:
             "recipe": request["recipe"],
             "builder_sources": request["builder_sources"],
             "source_snapshot_content_digest": request["source_snapshot_content_digest"],
+            "output_root": request["output_root"],
+            "toolchain": request["toolchain"],
+            "archetypes": request["archetypes"],
+            "ue_package_inventory": request["ue_package_inventory"],
+            "execution_policy": request["execution_policy"],
             "artifact_count": 3,
             "artifacts": artifact_rows,
             "execution": {
