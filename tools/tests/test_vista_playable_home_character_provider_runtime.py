@@ -45,6 +45,181 @@ def test_provider_selection_is_default_manny_and_closed_to_one_reviewed_class() 
     assert "if (bAllowCommandLineProviderOverride)" in resolver
 
 
+def test_citysample_provider_is_closed_to_the_fixed_character_class() -> None:
+    header = PROVIDER_HEADER.read_text(encoding="utf-8")
+    source = PROVIDER_SOURCE.read_text(encoding="utf-8")
+
+    assert "GetCitySampleCrowdVisualDemoProviderId" in header
+    assert 'TEXT("citysample_crowd_visual_demo_v1")' in source
+    assert (
+        'TEXT("/Game/CitySampleCrowd/Blueprints/"\n'
+        '         "BP_CrowdCharacter.BP_CrowdCharacter_C")'
+    ) in source
+    assert source.count("BP_CrowdCharacter.BP_CrowdCharacter_C") == 1
+    assert "TSoftClassPtr<ACharacter>" in source
+    assert "FSoftObjectPath(CitySampleCrowdVisualDemoClassPath)" in source
+    assert "LoadedProviderClass->IsChildOf(ACharacter::StaticClass())" in source
+    assert "ProviderId == CitySampleCrowdVisualDemoProviderId" in source
+    assert "FSoftObjectPath(ProviderValue)" not in source
+    assert "LoadClass" not in source
+
+
+def test_citysample_provider_requires_human_argv_and_refuses_world_port() -> None:
+    source = PROVIDER_SOURCE.read_text(encoding="utf-8")
+    gate = source.split(
+        "bool UVistaCharacterProviderComponent::"
+        "IsCitySampleHumanVisualDemoCommandLineAllowed",
+        1,
+    )[1].split("void UVistaCharacterProviderComponent::SetOwnerNoSeeForNearCamera", 1)[
+        0
+    ]
+    activation = source.split(
+        "bool UVistaCharacterProviderComponent::"
+        "ActivateAllowlistedCitySampleVisualDemo",
+        1,
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::NeutralizeCitySampleCharacter", 1
+    )[0]
+
+    assert 'TEXT("VistaHumanOperatedVisualDemo")' in source
+    assert 'TEXT("VistaWorldPort=")' in source
+    assert "ESearchCase::IgnoreCase" in gate
+    assert "FParse::Param(" in gate
+    assert "HumanOperatedVisualDemoCommandLineFlag" in gate
+    assert "bAllowCommandLineProviderOverride" in gate
+    assert "FParse::Value(" in gate
+    assert "CharacterProviderCommandLineKey" in gate
+    assert "FName(*ProviderValue) != CitySampleCrowdVisualDemoProviderId" in gate
+    for failure_code in (
+        "citysample_visual_demo_world_port_forbidden",
+        "citysample_visual_demo_human_argv_required",
+        "citysample_visual_demo_provider_argv_required",
+        "citysample_visual_demo_provider_argv_mismatch",
+    ):
+        assert failure_code in gate
+    assert activation.index("IsCitySampleHumanVisualDemoCommandLineAllowed") < (
+        activation.index("ProviderClass.LoadSynchronous()")
+    )
+
+
+def test_citysample_character_is_neutralized_to_a_visual_child() -> None:
+    source = PROVIDER_SOURCE.read_text(encoding="utf-8")
+    activation = source.split(
+        "bool UVistaCharacterProviderComponent::"
+        "ActivateAllowlistedCitySampleVisualDemo",
+        1,
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::NeutralizeCitySampleCharacter", 1
+    )[0]
+    neutralize = source.split(
+        "bool UVistaCharacterProviderComponent::NeutralizeCitySampleCharacter", 1
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::ValidateCitySampleVisualDemo", 1
+    )[0]
+    validate = source.split(
+        "bool UVistaCharacterProviderComponent::ValidateCitySampleVisualDemo", 1
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::ValidateMetaHumanVisualShell", 1
+    )[0]
+
+    assert "ProviderChildActorComponent->CreateChildActor(" in activation
+    assert activation.index("CreateChildActor(") < activation.index(
+        "ProviderChildActorComponent->RegisterComponent()"
+    )
+    customizer = activation.split("ProviderChildActorComponent->CreateChildActor(", 1)[
+        1
+    ].split("ProviderChildActorComponent->RegisterComponent()", 1)[0]
+    assert "AutoPossessPlayer" in customizer
+    assert "AutoPossessAI" in customizer
+    assert "AIControllerClass = nullptr" in customizer
+
+    for token in (
+        "VisualCharacter.AutoPossessPlayer = EAutoReceiveInput::Disabled",
+        "VisualCharacter.AutoPossessAI = EAutoPossessAI::Disabled",
+        "VisualCharacter.AIControllerClass = nullptr",
+        "VisualController->UnPossess()",
+        "VisualController->SetActorTickEnabled(false)",
+        "VisualController->Destroy()",
+        "VisualCharacter.SetReplicates(false)",
+        "VisualCharacter.SetReplicateMovement(false)",
+        "VisualCharacter.SetCanAffectNavigationGeneration(false)",
+        "VisualCharacter.SetActorTickEnabled(false)",
+        "VisualMovement->StopMovementImmediately()",
+        "VisualMovement->DisableMovement()",
+        "VisualMovement->Deactivate()",
+        "VisualMovement->SetComponentTickEnabled(false)",
+        "VisualCharacter.SetActorEnableCollision(false)",
+        "VisualCapsule->SetCollisionEnabled(ECollisionEnabled::NoCollision)",
+        "DisableVisualCollision(VisualCharacter)",
+        "VisualCharacter.AttachToComponent(",
+        "FAttachmentTransformRules::SnapToTargetNotIncludingScale",
+        "VisualCharacter.SetOwner(&OwnerCharacter)",
+    ):
+        assert token in neutralize
+    assert neutralize.index("AutoPossessAI = EAutoPossessAI::Disabled") < (
+        neutralize.index("VisualController->UnPossess()")
+    )
+    assert neutralize.index("VisualMovement->Deactivate()") < neutralize.index(
+        "VisualCharacter.SetOwner(&OwnerCharacter)"
+    )
+    assert "VisualCharacter.GetAttachParentActor() != &OwnerCharacter" in validate
+    assert "VisualCharacter.GetController() != nullptr" in validate
+    assert "VisualMovement->IsActive()" in validate
+    assert "VisualMovement->IsComponentTickEnabled()" in validate
+    assert "VisualCharacter.GetActorEnableCollision()" in validate
+    assert "Primitive->GetCollisionEnabled()" in validate
+    assert "Primitive->GetGenerateOverlapEvents()" in validate
+
+
+def test_citysample_visual_uses_hidden_manny_retarget_without_crowd_loop() -> None:
+    source = PROVIDER_SOURCE.read_text(encoding="utf-8")
+    activation = source.split(
+        "bool UVistaCharacterProviderComponent::"
+        "ActivateAllowlistedCitySampleVisualDemo",
+        1,
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::NeutralizeCitySampleCharacter", 1
+    )[0]
+    configure = source.split(
+        "bool UVistaCharacterProviderComponent::ConfigureMetaHumanRetarget", 1
+    )[1].split("bool UVistaCharacterProviderComponent::ValidateMetaHumanVisual", 1)[0]
+
+    assert "NPC1_AnimBP" not in source
+    assert "VisualBody->SetAnimInstanceClass(nullptr);" in activation
+    assert activation.index("VisualBody->SetAnimInstanceClass(nullptr)") < (
+        activation.index("ConfigureMetaHumanRetarget(")
+    )
+    assert "ACharacter* VisualCharacter = Cast<ACharacter>(&VisualActor)" in configure
+    assert "Body = VisualCharacter->GetMesh();" in configure
+    assert "ProviderRetargetComponent->SetSourcePerformerMesh(SourceManny)" in configure
+    assert "ProviderRetargetComponent->SetControlledMesh(Body)" in configure
+    assert activation.index("ValidateCitySampleVisualDemo(") < activation.index(
+        "SetMannyFallbackVisible(OwnerCharacter, false)"
+    )
+
+
+def test_citysample_status_makes_no_runtime_fidelity_or_ai_use_claim() -> None:
+    source = PROVIDER_SOURCE.read_text(encoding="utf-8")
+    activation = source.split(
+        "bool UVistaCharacterProviderComponent::"
+        "ActivateAllowlistedCitySampleVisualDemo",
+        1,
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::NeutralizeCitySampleCharacter", 1
+    )[0]
+
+    assert 'TEXT("citysample_visual_demo_active_unverified")' in source
+    assert 'TEXT("citysample_visual_demo_unavailable")' in source
+    assert "CitySampleVisualDemoActiveUnverifiedStatus" in activation
+    assert "bPhotorealCharacterReady = false;" in activation
+    assert "bPhotorealCharacterReady = true;" not in activation
+    assert "human_operated_only=true" in activation
+    assert "ai_vlm_data_use=forbidden" in activation
+    assert "combined_runtime_proof=required" in activation
+    assert "photoreal_claim=false" in activation
+    assert "gta_quality_claim=false" in activation
+
+
 def test_photoreal_child_hides_manny_only_after_validation() -> None:
     source = PROVIDER_SOURCE.read_text(encoding="utf-8")
 

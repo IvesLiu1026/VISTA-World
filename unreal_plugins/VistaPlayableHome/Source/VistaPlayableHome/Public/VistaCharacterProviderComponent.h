@@ -35,10 +35,12 @@ public:
     /** Closed identifiers shared by the player and NPC constructors. */
     static FName GetMannyProviderId();
     static FName GetMetaHumanVivianProviderId();
+    static FName GetCitySampleCrowdVisualDemoProviderId();
 
     /**
-     * Closed provider identifier. Supported values are "manny" and the one
-     * compiled MetaHuman provider ID. Unknown values never become asset paths.
+     * Closed provider identifier. Supported values are "manny", the reviewed
+     * Vivian provider and the human-operated City Sample visual-demo provider.
+     * Unknown values never become asset paths.
      */
     UPROPERTY(EditAnywhere, Config, BlueprintReadOnly, Category = "VISTA|Character Provider")
     FName RequestedProviderId = TEXT("manny");
@@ -89,6 +91,17 @@ private:
 
     FName ResolveRequestedProviderId() const;
     bool ActivateAllowlistedMetaHuman(ACharacter& OwnerCharacter);
+    bool ActivateAllowlistedCitySampleVisualDemo(ACharacter& OwnerCharacter);
+    bool IsCitySampleHumanVisualDemoCommandLineAllowed(
+        FName& OutFailureCode) const;
+    bool NeutralizeCitySampleCharacter(
+        ACharacter& OwnerCharacter,
+        ACharacter& VisualCharacter,
+        FName& OutFailureCode) const;
+    bool ValidateCitySampleVisualDemo(
+        ACharacter& OwnerCharacter,
+        ACharacter& VisualCharacter,
+        FName& OutFailureCode) const;
     bool ValidateMetaHumanVisualShell(
         AActor& VisualActor,
         FName& OutFailureCode) const;
@@ -112,5 +125,9 @@ private:
     void DestroyProviderChildActorComponent();
     void SetPhotorealUnavailable(
         ACharacter& OwnerCharacter,
+        FName FailureCode);
+    void SetProviderUnavailable(
+        ACharacter& OwnerCharacter,
+        FName RequestedProvider,
         FName FailureCode);
 };

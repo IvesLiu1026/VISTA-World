@@ -2,12 +2,15 @@
 
 #include "Animation/AnimInstance.h"
 #include "Components/ChildActorComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/EngineBaseTypes.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/Controller.h"
 #include "GameFramework/Pawn.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -22,17 +25,32 @@ namespace
 {
 const FName MannyProviderId(TEXT("manny"));
 const FName MetaHumanVivianProviderId(TEXT("metahuman_vivian_ue57_v1"));
+const FName CitySampleCrowdVisualDemoProviderId(
+    TEXT("citysample_crowd_visual_demo_v1"));
 const FName MannyActiveStatus(TEXT("manny_active"));
 const FName PhotorealReadyStatus(TEXT("photoreal_character_ready"));
 const FName PhotorealUnavailableStatus(TEXT("photoreal_character_unavailable"));
+const FName CitySampleVisualDemoActiveUnverifiedStatus(
+    TEXT("citysample_visual_demo_active_unverified"));
+const FName CitySampleVisualDemoUnavailableStatus(
+    TEXT("citysample_visual_demo_unavailable"));
 const TCHAR* CharacterProviderCommandLineKey = TEXT("VistaCharacterProvider=");
+const TCHAR* HumanOperatedVisualDemoCommandLineFlag =
+    TEXT("VistaHumanOperatedVisualDemo");
+const TCHAR* VistaWorldPortCommandLineKey = TEXT("VistaWorldPort=");
 
-// This is the only external visual class that the runtime may load. The path is
-// compiled into the plugin and mirrors the reviewed disposable-project authoring
-// commandlet; RequestedProviderId can never be interpreted as an object path.
+// These are the only external visual classes that the runtime may load. Their
+// paths are compiled into the plugin; RequestedProviderId can never be
+// interpreted as an object path.
 const TCHAR* MetaHumanVivianClassPath =
     TEXT("/Game/VISTA/Characters/MetaHumans/Vivian_VISTA/"
          "BP_Vivian_VISTA.BP_Vivian_VISTA_C");
+// This Epic/MetaHuman-backed class is licensed only for a human-operated,
+// visual-only private demo. It must never become an agent, dataset/database
+// record, or AI/VLM training, testing, evaluation, or review input.
+const TCHAR* CitySampleCrowdVisualDemoClassPath =
+    TEXT("/Game/CitySampleCrowd/Blueprints/"
+         "BP_CrowdCharacter.BP_CrowdCharacter_C");
 const TCHAR* MetaHumanRetargetAssetPath =
     TEXT("/Game/Characters/Mannequins/Rigs/"
          "RTG_Mannequin.RTG_Mannequin");
@@ -54,6 +72,11 @@ FName UVistaCharacterProviderComponent::GetMannyProviderId()
 FName UVistaCharacterProviderComponent::GetMetaHumanVivianProviderId()
 {
     return MetaHumanVivianProviderId;
+}
+
+FName UVistaCharacterProviderComponent::GetCitySampleCrowdVisualDemoProviderId()
+{
+    return CitySampleCrowdVisualDemoProviderId;
 }
 
 void UVistaCharacterProviderComponent::BeginPlay()
@@ -81,15 +104,63 @@ void UVistaCharacterProviderComponent::BeginPlay()
     {
         return;
     }
-    if (ProviderId != MetaHumanVivianProviderId)
+    if (ProviderId == MetaHumanVivianProviderId)
     {
-        SetPhotorealUnavailable(
-            *OwnerCharacter,
-            TEXT("character_provider_not_allowlisted"));
+        ActivateAllowlistedMetaHuman(*OwnerCharacter);
+        return;
+    }
+    if (ProviderId == CitySampleCrowdVisualDemoProviderId)
+    {
+        ActivateAllowlistedCitySampleVisualDemo(*OwnerCharacter);
         return;
     }
 
-    ActivateAllowlistedMetaHuman(*OwnerCharacter);
+    SetProviderUnavailable(
+        *OwnerCharacter,
+        ProviderId,
+        TEXT("character_provider_not_allowlisted"));
+}
+
+bool UVistaCharacterProviderComponent::IsCitySampleHumanVisualDemoCommandLineAllowed(
+    FName& OutFailureCode) const
+{
+    const FString CommandLine(FCommandLine::Get());
+    if (CommandLine.Contains(
+            VistaWorldPortCommandLineKey,
+            ESearchCase::IgnoreCase))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_world_port_forbidden");
+        return false;
+    }
+
+    if (!bAllowCommandLineProviderOverride ||
+        !FParse::Param(
+            FCommandLine::Get(),
+            HumanOperatedVisualDemoCommandLineFlag))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_human_argv_required");
+        return false;
+    }
+
+    FString ProviderValue;
+    if (!FParse::Value(
+            FCommandLine::Get(),
+            CharacterProviderCommandLineKey,
+            ProviderValue))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_provider_argv_required");
+        return false;
+    }
+    ProviderValue.TrimStartAndEndInline();
+    ProviderValue.ToLowerInline();
+    if (FName(*ProviderValue) != CitySampleCrowdVisualDemoProviderId)
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_provider_argv_mismatch");
+        return false;
+    }
+
+    OutFailureCode = NAME_None;
+    return true;
 }
 
 void UVistaCharacterProviderComponent::SetOwnerNoSeeForNearCamera(bool bHidden)
@@ -241,6 +312,302 @@ bool UVistaCharacterProviderComponent::ActivateAllowlistedMetaHuman(
     return false;
 }
 
+bool UVistaCharacterProviderComponent::ActivateAllowlistedCitySampleVisualDemo(
+    ACharacter& OwnerCharacter)
+{
+    FName FailureCode = NAME_None;
+    if (!IsCitySampleHumanVisualDemoCommandLineAllowed(FailureCode))
+    {
+        SetProviderUnavailable(
+            OwnerCharacter,
+            CitySampleCrowdVisualDemoProviderId,
+            FailureCode);
+        return false;
+    }
+
+    const TSoftClassPtr<ACharacter> ProviderClass{
+        FSoftObjectPath(CitySampleCrowdVisualDemoClassPath)};
+    UClass* LoadedProviderClass = ProviderClass.LoadSynchronous();
+    if (!IsValid(LoadedProviderClass) ||
+        !LoadedProviderClass->IsChildOf(ACharacter::StaticClass()))
+    {
+        SetProviderUnavailable(
+            OwnerCharacter,
+            CitySampleCrowdVisualDemoProviderId,
+            TEXT("citysample_visual_demo_class_unavailable"));
+        return false;
+    }
+
+    const TSoftObjectPtr<UIKRetargeter> RetargetAsset{
+        FSoftObjectPath(MetaHumanRetargetAssetPath)};
+    UIKRetargeter* LoadedRetargetAsset = RetargetAsset.LoadSynchronous();
+    if (!IsValid(LoadedRetargetAsset))
+    {
+        SetProviderUnavailable(
+            OwnerCharacter,
+            CitySampleCrowdVisualDemoProviderId,
+            TEXT("citysample_visual_demo_retarget_asset_unavailable"));
+        return false;
+    }
+
+    ProviderChildActorComponent = NewObject<UChildActorComponent>(
+        &OwnerCharacter,
+        TEXT("VistaCitySampleVisualDemoChild"));
+    if (!IsValid(ProviderChildActorComponent))
+    {
+        SetProviderUnavailable(
+            OwnerCharacter,
+            CitySampleCrowdVisualDemoProviderId,
+            TEXT("citysample_visual_demo_child_component_unavailable"));
+        return false;
+    }
+
+    OwnerCharacter.AddInstanceComponent(ProviderChildActorComponent);
+    ProviderChildActorComponent->SetupAttachment(OwnerCharacter.GetRootComponent());
+    ProviderChildActorComponent->SetRelativeLocation(FVector::ZeroVector);
+    ProviderChildActorComponent->SetRelativeRotation(FRotator::ZeroRotator);
+    ProviderChildActorComponent->SetChildActorClass(LoadedProviderClass);
+
+    // UChildActorComponent defers FinishSpawning until after this customizer.
+    // Strip all possession/AI intent before BP_CrowdCharacter can enter play;
+    // NeutralizeCitySampleCharacter repeats and validates the shutdown after
+    // Blueprint construction has completed.
+    ProviderChildActorComponent->CreateChildActor(
+        [](AActor* SpawnedVisualActor)
+        {
+            if (ACharacter* SpawnedVisualCharacter =
+                    Cast<ACharacter>(SpawnedVisualActor))
+            {
+                SpawnedVisualCharacter->AutoPossessPlayer =
+                    EAutoReceiveInput::Disabled;
+                SpawnedVisualCharacter->AutoPossessAI = EAutoPossessAI::Disabled;
+                SpawnedVisualCharacter->AIControllerClass = nullptr;
+                SpawnedVisualCharacter->SetReplicates(false);
+                SpawnedVisualCharacter->SetReplicateMovement(false);
+                SpawnedVisualCharacter->SetActorTickEnabled(false);
+                SpawnedVisualCharacter->SetActorEnableCollision(false);
+                SpawnedVisualCharacter->SetCanBeDamaged(false);
+            }
+        });
+    ProviderChildActorComponent->RegisterComponent();
+
+    ACharacter* VisualCharacter = Cast<ACharacter>(
+        ProviderChildActorComponent->GetChildActor());
+    if (!IsValid(VisualCharacter) ||
+        VisualCharacter->GetClass() != LoadedProviderClass ||
+        !VisualCharacter->IsActorInitialized() ||
+        VisualCharacter->IsActorBeingDestroyed())
+    {
+        FailureCode = TEXT("citysample_visual_demo_actor_unavailable");
+    }
+    else if (NeutralizeCitySampleCharacter(
+                 OwnerCharacter,
+                 *VisualCharacter,
+                 FailureCode))
+    {
+        USkeletalMeshComponent* VisualBody = VisualCharacter->GetMesh();
+        if (!IsValid(VisualBody) || !VisualBody->IsRegistered() ||
+            !VisualBody->IsVisible() ||
+            !IsValid(VisualBody->GetSkeletalMeshAsset()))
+        {
+            FailureCode = TEXT("citysample_visual_demo_body_not_ready");
+        }
+        else
+        {
+            // Discard the crowd Blueprint's pre-authored primary-body loop.
+            // The possessed VISTA pawn's speed-aware Manny remains the sole
+            // movement/animation authority and drives this visual through the
+            // reviewed retarget bridge.
+            VisualBody->SetAnimInstanceClass(nullptr);
+            if (ConfigureMetaHumanRetarget(
+                    OwnerCharacter,
+                    *VisualCharacter,
+                    *LoadedRetargetAsset,
+                    FailureCode) &&
+                ValidateCitySampleVisualDemo(
+                    OwnerCharacter,
+                    *VisualCharacter,
+                    FailureCode))
+            {
+                SetOwnerNoSeeForNearCamera(bOwnerNoSeeForNearCamera);
+                SetMannyFallbackVisible(OwnerCharacter, false);
+                ActiveProviderId = CitySampleCrowdVisualDemoProviderId;
+                ProviderStatus = CitySampleVisualDemoActiveUnverifiedStatus;
+                ProviderFailureCode = NAME_None;
+
+                // This provider is not a photoreal/GTA acceptance signal. Its
+                // assets and pixels are excluded from every AI-facing VISTA
+                // dataset, database, VLM review, training, test and evaluation.
+                bPhotorealCharacterReady = false;
+                UE_LOG(
+                    LogVistaCharacterProvider,
+                    Display,
+                    TEXT("VISTA_CITYSAMPLE_VISUAL_DEMO_ACTIVE provider=%s "
+                         "human_operated_only=true ai_vlm_data_use=forbidden "
+                         "combined_runtime_proof=required photoreal_claim=false "
+                         "gta_quality_claim=false"),
+                    *CitySampleCrowdVisualDemoProviderId.ToString());
+                return true;
+            }
+        }
+    }
+
+    if (IsValid(VisualCharacter))
+    {
+        VisualCharacter->SetActorHiddenInGame(true);
+    }
+    DestroyProviderRetargetComponent();
+    DestroyProviderChildActorComponent();
+    SetProviderUnavailable(
+        OwnerCharacter,
+        CitySampleCrowdVisualDemoProviderId,
+        FailureCode);
+    return false;
+}
+
+bool UVistaCharacterProviderComponent::NeutralizeCitySampleCharacter(
+    ACharacter& OwnerCharacter,
+    ACharacter& VisualCharacter,
+    FName& OutFailureCode) const
+{
+    // BP_CrowdCharacter is an ACharacter, but it is permitted here only as a
+    // sealed visual child. AVistaPlayableHomeCharacter keeps possession,
+    // semantic identity, input, movement, collision and interaction authority.
+    VisualCharacter.AutoPossessPlayer = EAutoReceiveInput::Disabled;
+    VisualCharacter.AutoPossessAI = EAutoPossessAI::Disabled;
+    VisualCharacter.AIControllerClass = nullptr;
+    if (AController* VisualController = VisualCharacter.GetController())
+    {
+        VisualController->UnPossess();
+        VisualController->SetActorTickEnabled(false);
+        VisualController->Destroy();
+    }
+    if (VisualCharacter.GetController() != nullptr)
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_controller_not_neutralized");
+        return false;
+    }
+
+    VisualCharacter.SetReplicates(false);
+    VisualCharacter.SetReplicateMovement(false);
+    VisualCharacter.SetCanAffectNavigationGeneration(false);
+    VisualCharacter.SetActorTickEnabled(false);
+    VisualCharacter.SetCanBeDamaged(false);
+
+    UCharacterMovementComponent* VisualMovement =
+        VisualCharacter.GetCharacterMovement();
+    if (!IsValid(VisualMovement))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_movement_unavailable");
+        return false;
+    }
+    VisualMovement->StopMovementImmediately();
+    VisualMovement->DisableMovement();
+    VisualMovement->Deactivate();
+    VisualMovement->SetComponentTickEnabled(false);
+
+    VisualCharacter.SetActorEnableCollision(false);
+    if (UCapsuleComponent* VisualCapsule = VisualCharacter.GetCapsuleComponent())
+    {
+        VisualCapsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        VisualCapsule->SetGenerateOverlapEvents(false);
+    }
+    DisableVisualCollision(VisualCharacter);
+
+    if (!IsValid(ProviderChildActorComponent) ||
+        !IsValid(VisualCharacter.GetRootComponent()))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_attachment_unavailable");
+        return false;
+    }
+    if (VisualCharacter.GetRootComponent()->GetAttachParent() !=
+        ProviderChildActorComponent)
+    {
+        const bool bAttached = VisualCharacter.AttachToComponent(
+            ProviderChildActorComponent,
+            FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+        if (!bAttached)
+        {
+            OutFailureCode = TEXT("citysample_visual_demo_attachment_failed");
+            return false;
+        }
+    }
+    VisualCharacter.SetOwner(&OwnerCharacter);
+    if (VisualCharacter.GetOwner() != &OwnerCharacter ||
+        VisualCharacter.GetAttachParentActor() != &OwnerCharacter)
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_owner_invalid");
+        return false;
+    }
+
+    OutFailureCode = NAME_None;
+    return true;
+}
+
+bool UVistaCharacterProviderComponent::ValidateCitySampleVisualDemo(
+    ACharacter& OwnerCharacter,
+    ACharacter& VisualCharacter,
+    FName& OutFailureCode) const
+{
+    if (VisualCharacter.GetOwner() != &OwnerCharacter ||
+        VisualCharacter.GetAttachParentActor() != &OwnerCharacter ||
+        VisualCharacter.GetController() != nullptr ||
+        VisualCharacter.AutoPossessPlayer != EAutoReceiveInput::Disabled ||
+        VisualCharacter.AutoPossessAI != EAutoPossessAI::Disabled ||
+        VisualCharacter.AIControllerClass != nullptr)
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_not_pure_visual");
+        return false;
+    }
+
+    UCharacterMovementComponent* VisualMovement =
+        VisualCharacter.GetCharacterMovement();
+    if (!IsValid(VisualMovement) || VisualMovement->IsActive() ||
+        VisualMovement->IsComponentTickEnabled())
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_movement_not_disabled");
+        return false;
+    }
+
+    const UCapsuleComponent* VisualCapsule = VisualCharacter.GetCapsuleComponent();
+    if (VisualCharacter.GetActorEnableCollision() ||
+        !IsValid(VisualCapsule) ||
+        VisualCapsule->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_collision_not_disabled");
+        return false;
+    }
+    TInlineComponentArray<UPrimitiveComponent*> VisualPrimitives;
+    VisualCharacter.GetComponents(VisualPrimitives);
+    for (const UPrimitiveComponent* Primitive : VisualPrimitives)
+    {
+        if (!IsValid(Primitive) ||
+            Primitive->GetCollisionEnabled() != ECollisionEnabled::NoCollision ||
+            Primitive->GetGenerateOverlapEvents())
+        {
+            OutFailureCode = TEXT("citysample_visual_demo_primitive_not_visual_only");
+            return false;
+        }
+    }
+
+    USkeletalMeshComponent* Body = VisualCharacter.GetMesh();
+    if (!IsValid(Body) || !Body->IsRegistered() || !Body->IsVisible() ||
+        !IsValid(Body->GetSkeletalMeshAsset()) ||
+        !IsValid(Cast<URetargetAnimInstance>(Body->GetAnimInstance())) ||
+        !IsValid(ProviderRetargetComponent) ||
+        !ProviderRetargetComponent->IsRegistered() ||
+        ProviderRetargetComponent->ControlledSkeletalMeshComponent.OverrideComponent.Get() !=
+            Body ||
+        !IsValid(ProviderRetargetComponent->RetargetAsset))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_retarget_not_ready");
+        return false;
+    }
+
+    OutFailureCode = NAME_None;
+    return true;
+}
+
 bool UVistaCharacterProviderComponent::ValidateMetaHumanVisualShell(
     AActor& VisualActor,
     FName& OutFailureCode) const
@@ -290,8 +657,15 @@ bool UVistaCharacterProviderComponent::ConfigureMetaHumanRetarget(
         return false;
     }
 
-    USkeletalMeshComponent* Body =
-        FindNamedSkeletalMesh(VisualActor, BodyComponentName);
+    USkeletalMeshComponent* Body = nullptr;
+    if (ACharacter* VisualCharacter = Cast<ACharacter>(&VisualActor))
+    {
+        Body = VisualCharacter->GetMesh();
+    }
+    else
+    {
+        Body = FindNamedSkeletalMesh(VisualActor, BodyComponentName);
+    }
     if (!IsValid(Body))
     {
         OutFailureCode = TEXT("character_provider_body_not_ready");
@@ -497,9 +871,27 @@ void UVistaCharacterProviderComponent::SetPhotorealUnavailable(
     ACharacter& OwnerCharacter,
     FName FailureCode)
 {
+    SetProviderUnavailable(
+        OwnerCharacter,
+        MetaHumanVivianProviderId,
+        FailureCode);
+}
+
+void UVistaCharacterProviderComponent::SetProviderUnavailable(
+    ACharacter& OwnerCharacter,
+    FName RequestedProvider,
+    FName FailureCode)
+{
     SetMannyFallbackVisible(OwnerCharacter, true);
     ActiveProviderId = MannyProviderId;
-    ProviderStatus = PhotorealUnavailableStatus;
+    if (RequestedProvider == CitySampleCrowdVisualDemoProviderId)
+    {
+        ProviderStatus = CitySampleVisualDemoUnavailableStatus;
+    }
+    else
+    {
+        ProviderStatus = PhotorealUnavailableStatus;
+    }
     ProviderFailureCode = FailureCode.IsNone()
         ? FName(TEXT("character_provider_validation_failed"))
         : FailureCode;
@@ -507,7 +899,8 @@ void UVistaCharacterProviderComponent::SetPhotorealUnavailable(
     UE_LOG(
         LogVistaCharacterProvider,
         Warning,
-        TEXT("VISTA_CHARACTER_PROVIDER_UNAVAILABLE requested=%s code=%s; Manny remains active"),
-        *MetaHumanVivianProviderId.ToString(),
+        TEXT("VISTA_CHARACTER_PROVIDER_UNAVAILABLE requested=%s code=%s; "
+             "Manny remains active and authoritative"),
+        *RequestedProvider.ToString(),
         *ProviderFailureCode.ToString());
 }
