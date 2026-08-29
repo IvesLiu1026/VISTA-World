@@ -543,10 +543,16 @@ def _render_view(output_root: pathlib.Path, view: Mapping[str, Any]) -> dict[str
         raise RuntimeError(f"render output already exists: {view['relative_path']}")
     bpy.context.scene.render.filepath = str(output)
     bpy.ops.render.render(write_still=True)
-    result = bpy.data.images.get("Render Result")
-    if result is None or tuple(result.size) != (1920, 1080):
-        raise RuntimeError("Render Result dimensions differ")
-    pixels = tuple(result.pixels[:])
+    # In background mode the transient Render Result can report 0x0 after
+    # write_still. Reload the exact PNG that downstream reviewers receive.
+    result = bpy.data.images.load(str(output), check_existing=False)
+    try:
+        if result is None or tuple(result.size) != (1920, 1080):
+            raise RuntimeError("saved render dimensions differ")
+        pixels = tuple(result.pixels[:])
+    finally:
+        if result is not None:
+            bpy.data.images.remove(result)
     if len(pixels) != 1920 * 1080 * 4:
         raise RuntimeError("Render Result pixel count differs")
     luminance = [
