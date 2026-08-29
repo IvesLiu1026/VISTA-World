@@ -49,6 +49,26 @@ public:
         const FVistaPhysicalActionRequest& Request,
         FVistaActionTransactionRecord& OutRecord);
 
+#if WITH_DEV_AUTOMATION_TESTS
+    /**
+     * Editor automation only: exercise the transaction independently of the
+     * currently license-blocked montage assets. The production entry point
+     * above still evaluates HasApprovedMutationAnimation and remains fail-closed.
+     */
+    bool BeginPhysicalInteractionForDevAutomation(
+        const FVistaPhysicalActionRequest& Request,
+        FVistaActionTransactionRecord& OutRecord);
+
+    /**
+     * Editor automation only: deterministically drive a previously accepted
+     * action through contact, then either complete it or fail after contact so
+     * the normal trusted rollback path is exercised.
+     */
+    bool DrivePhysicalInteractionForDevAutomation(
+        bool bFailAfterContact,
+        FVistaActionTransactionRecord& OutRecord);
+#endif
+
     /** Replay is side-effect free; a known id with a different signature fails closed. */
     bool TryReplayPhysicalInteraction(
         const FVistaPhysicalActionRequest& Request,
@@ -111,6 +131,11 @@ private:
     };
 
     TOptional<FActivePhysicalAction> ActiveAction;
+
+    bool BeginPhysicalInteractionImpl(
+        const FVistaPhysicalActionRequest& Request,
+        FVistaActionTransactionRecord& OutRecord,
+        bool bDevAutomationBypassesAnimationReadiness);
 
     static FString SemanticIdForActor(const AActor* Actor);
     static bool StableAnchorIdentity(

@@ -1,0 +1,19 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.7",
+  "Category": "Tests",
+  "Description": "Git-tracked host project for the VISTA R5 multi-client proof.",
+  "Modules": [
+    {
+      "Name": "VistaR5Proof",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "VistaPlayableHome",
+      "Enabled": true
+    }
+  ]
+}
