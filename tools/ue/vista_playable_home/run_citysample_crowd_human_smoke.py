@@ -300,6 +300,18 @@ TARGET_PACKAGE = "/Game/CitySampleCrowd/Blueprints/BP_CrowdCharacter"
 TARGET_OBJECT = TARGET_PACKAGE + ".BP_CrowdCharacter"
 TARGET_CLASS = TARGET_OBJECT + "_C"
 TARGET_CDO_PATH = TARGET_PACKAGE + ".Default__BP_CrowdCharacter_C"
+TARGET_ASSET_DATA_RECORDS: tuple[Mapping[str, str], ...] = (
+    {
+        "asset_class": "Blueprint",
+        "asset_name": "BP_CrowdCharacter",
+        "package_name": TARGET_PACKAGE,
+    },
+    {
+        "asset_class": "BlueprintGeneratedClass",
+        "asset_name": "BP_CrowdCharacter_C",
+        "package_name": TARGET_PACKAGE,
+    },
+)
 TARGET_ROOT = "/Game/CitySampleCrowd"
 
 # These byte pins prove that the copied source contains concrete animation,
@@ -2118,11 +2130,7 @@ def _read_sealed_result(plan: SmokePlan) -> tuple[dict[str, Any], str]:
     expected_native_module_evidence = _revalidate_engine_native_module_authority(plan)
     if result.get("engine_native_module_evidence") != expected_native_module_evidence:
         _fail("RESULT_INVALID", "engine native module evidence differs")
-    expected_target_asset_data = {
-        "asset_class": "Blueprint",
-        "object_path": TARGET_OBJECT,
-        "package_name": TARGET_PACKAGE,
-    }
+    expected_target_asset_data = [dict(record) for record in TARGET_ASSET_DATA_RECORDS]
     if result.get("target_asset_data") != expected_target_asset_data:
         _fail("RESULT_INVALID", "target AssetData evidence differs")
     exact_paths = {
