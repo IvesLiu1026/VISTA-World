@@ -8,6 +8,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
+#include "VistaActionExecutorComponent.h"
 #include "VistaAnimationComponent.h"
 #include "VistaCharacterProviderComponent.h"
 #include "VistaHomeNpcController.h"
@@ -53,9 +54,11 @@ AVistaHomeNpcCharacter::AVistaHomeNpcCharacter()
     CharacterProviderComponent->bAllowCommandLineProviderOverride = false;
 
     CarryAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("VistaCarryAnchor"));
-    CarryAnchor->SetupAttachment(GetMesh());
-    CarryAnchor->SetRelativeLocation(FVector(35.0f, 25.0f, 110.0f));
+    CarryAnchor->SetupAttachment(GetMesh(), TEXT("hand_r"));
+    CarryAnchor->SetRelativeTransform(FTransform::Identity);
+    CarryAnchor->SetIsReplicated(true);
     CarryAnchor->ComponentTags.Add(TEXT("VistaCarryAnchor"));
+    CarryAnchor->ComponentTags.Add(TEXT("VistaValidatedCarryAnchor"));
 }
 
 FString AVistaHomeNpcCharacter::VistaGetSemanticId_Implementation() const
@@ -142,6 +145,7 @@ FVistaInteractionResult AVistaHomeNpcCharacter::VistaInteract_Implementation(
 void AVistaHomeNpcCharacter::BeginPlay()
 {
     Super::BeginPlay();
+    EnsureCarryAnchorReady();
     // Event-only residents are serialized hidden by the world composer.  Keep
     // their capsule from becoming an invisible navigation obstacle until an
     // event queue explicitly reveals them.
@@ -158,6 +162,28 @@ void AVistaHomeNpcCharacter::BeginPlay()
             }
         }
     }
+}
+
+void AVistaHomeNpcCharacter::EnsureCarryAnchorReady()
+{
+    FName CarryCode;
+    if (!IsValid(UVistaActionExecutorComponent::PrepareCarryAnchor(
+            this, CarryCode)))
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT("VISTA_NPC_CARRY_ANCHOR_REJECTED npc=%s code=%s"),
+            *SemanticId,
+            *CarryCode.ToString());
+    }
+}
+
+void AVistaHomeNpcCharacter::OnRep_HeldItem()
+{
+    // Actor replication order is not assumed: both the carrier pointer and the
+    // pickup's HeldBy OnRep independently establish the same body-owned anchor.
+    EnsureCarryAnchorReady();
 }
 
 USceneComponent* AVistaHomeNpcCharacter::VistaGetCarryAnchor_Implementation() const
@@ -178,7 +204,8 @@ bool AVistaHomeNpcCharacter::VistaTryClaimItem_Implementation(AActor* Item)
         return false;
     }
     HeldItem = Pickup;
-    return true;
+    ForceNetUpdate();
+    return HeldItem == Pickup;
 }
 
 void AVistaHomeNpcCharacter::VistaReleaseItem_Implementation(AActor* Item)
@@ -186,6 +213,7 @@ void AVistaHomeNpcCharacter::VistaReleaseItem_Implementation(AActor* Item)
     if (HeldItem == Item)
     {
         HeldItem = nullptr;
+        ForceNetUpdate();
     }
 }
 

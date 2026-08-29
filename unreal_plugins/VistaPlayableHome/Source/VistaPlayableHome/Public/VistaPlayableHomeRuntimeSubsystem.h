@@ -5,6 +5,19 @@
 #include "VistaPlayableHomeTypes.h"
 #include "VistaPlayableHomeRuntimeSubsystem.generated.h"
 
+class UVistaActionExecutorComponent;
+struct FVistaPhysicalActionRequest;
+
+/** Game-thread outcomes from the world-owned physical-command claim ledger. */
+enum class EVistaPhysicalCommandClaimOutcome : uint8
+{
+    Unknown,
+    Claimed,
+    Replay,
+    Collision,
+    CapacityExceeded
+};
+
 UENUM(BlueprintType)
 enum class EVistaLiveEventOperation : uint8
 {
@@ -145,6 +158,12 @@ struct VISTAPLAYABLEHOME_API FVistaLiveCommandResult
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
     int32 QueuedActionCount = -1;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    bool bHasActionTransaction = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    FVistaActionTransactionRecord ActionTransaction;
 };
 
 /**
@@ -218,6 +237,9 @@ public:
     FVistaLiveCommandResult ExecuteInteraction(
         const FVistaLiveInteractionCommand& Command);
 
+    /** Allocate a world-lifetime unique physical-action ticket on the game thread. */
+    FName AllocatePhysicalActionCommandId();
+
     UFUNCTION(BlueprintCallable, Category = "VISTA|Runtime")
     FVistaLiveCommandResult ExecuteNpcQueue(
         const FVistaLiveNpcQueueCommand& Command);
@@ -231,7 +253,47 @@ public:
         const FVistaLiveEventCommand& Command);
 
 private:
+    friend class UVistaActionExecutorComponent;
+
+    struct FPhysicalCommandLedgerEntry final
+    {
+        FString CanonicalRequestHex;
+        FVistaActionTransactionRecord Record;
+        TWeakObjectPtr<UVistaActionExecutorComponent> Owner;
+        bool bTerminal = false;
+    };
+
+    static constexpr int32 MaxPhysicalCommandLedgerEntries = 64;
+    TMap<FName, FPhysicalCommandLedgerEntry> PhysicalCommandLedger;
+    TArray<FName> PhysicalCommandOrder;
+    FGuid PhysicalActionTicketNonce;
+    uint64 PhysicalActionTicketSequence = 0;
+
     bool ValidateEnvelope(const FVistaLiveCommandEnvelope& Envelope,
                           FVistaLiveCommandResult& OutResult) const;
     AActor* ResolveSemanticActor(const FString& SemanticId) const;
+    UVistaActionExecutorComponent* ResolveActionExecutor(AActor* Requester) const;
+    static void ApplyTransactionResult(
+        const FVistaActionTransactionRecord& Transaction,
+        FVistaLiveCommandResult& OutResult);
+    EVistaPhysicalCommandClaimOutcome TryReplayPhysicalCommand(
+        FName CommandId,
+        const FString& CanonicalRequestHex,
+        FVistaActionTransactionRecord& OutRecord) const;
+    EVistaPhysicalCommandClaimOutcome ClaimPhysicalCommand(
+        FName CommandId,
+        const FString& CanonicalRequestHex,
+        UVistaActionExecutorComponent* Owner,
+        const FVistaActionTransactionRecord& InitialRecord,
+        FVistaActionTransactionRecord& OutRecord);
+    bool PublishPhysicalCommand(
+        FName CommandId,
+        const FString& CanonicalRequestHex,
+        UVistaActionExecutorComponent* Owner,
+        const FVistaActionTransactionRecord& Record,
+        bool bTerminal);
+    bool GetPhysicalCommandRecord(
+        FName CommandId,
+        FVistaActionTransactionRecord& OutRecord) const;
+    bool EvictOldestTerminalPhysicalCommand();
 };

@@ -6,14 +6,19 @@
 #include "DynamicRHI.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/EngineVersion.h"
+#include "Misc/Guid.h"
+#include "GameFramework/Controller.h"
+#include "GameFramework/Pawn.h"
 #include "RHI.h"
 #include "RHIShaderPlatform.h"
 #include "RHIStrings.h"
 #include "VistaAnimationComponent.h"
+#include "VistaActionExecutorComponent.h"
 #include "VistaEventSubsystem.h"
 #include "VistaHomeNpcCharacter.h"
 #include "VistaHomeNpcController.h"
 #include "VistaInteractable.h"
+#include "VistaPickupActor.h"
 
 namespace
 {
@@ -42,6 +47,138 @@ constexpr const TCHAR* RendererCVarNames[] = {
     TEXT("sg.ShadingQuality"),
 };
 } // namespace
+
+EVistaPhysicalCommandClaimOutcome
+UVistaPlayableHomeRuntimeSubsystem::TryReplayPhysicalCommand(
+    FName CommandId,
+    const FString& CanonicalRequestHex,
+    FVistaActionTransactionRecord& OutRecord) const
+{
+    check(IsInGameThread());
+    const FPhysicalCommandLedgerEntry* Existing =
+        PhysicalCommandLedger.Find(CommandId);
+    if (Existing == nullptr)
+    {
+        return EVistaPhysicalCommandClaimOutcome::Unknown;
+    }
+    if (Existing->CanonicalRequestHex != CanonicalRequestHex)
+    {
+        return EVistaPhysicalCommandClaimOutcome::Collision;
+    }
+    OutRecord = Existing->Record;
+    return EVistaPhysicalCommandClaimOutcome::Replay;
+}
+
+EVistaPhysicalCommandClaimOutcome
+UVistaPlayableHomeRuntimeSubsystem::ClaimPhysicalCommand(
+    FName CommandId,
+    const FString& CanonicalRequestHex,
+    UVistaActionExecutorComponent* Owner,
+    const FVistaActionTransactionRecord& InitialRecord,
+    FVistaActionTransactionRecord& OutRecord)
+{
+    check(IsInGameThread());
+    const EVistaPhysicalCommandClaimOutcome Existing =
+        TryReplayPhysicalCommand(CommandId, CanonicalRequestHex, OutRecord);
+    if (Existing != EVistaPhysicalCommandClaimOutcome::Unknown)
+    {
+        return Existing;
+    }
+    if (CommandId.IsNone() || CanonicalRequestHex.IsEmpty() || !IsValid(Owner))
+    {
+        return EVistaPhysicalCommandClaimOutcome::CapacityExceeded;
+    }
+    while (PhysicalCommandLedger.Num() >= MaxPhysicalCommandLedgerEntries)
+    {
+        if (!EvictOldestTerminalPhysicalCommand())
+        {
+            return EVistaPhysicalCommandClaimOutcome::CapacityExceeded;
+        }
+    }
+    FPhysicalCommandLedgerEntry Entry;
+    Entry.CanonicalRequestHex = CanonicalRequestHex;
+    Entry.Record = InitialRecord;
+    Entry.Owner = Owner;
+    Entry.bTerminal = false;
+    PhysicalCommandLedger.Add(CommandId, MoveTemp(Entry));
+    PhysicalCommandOrder.Add(CommandId);
+    OutRecord = InitialRecord;
+    return EVistaPhysicalCommandClaimOutcome::Claimed;
+}
+
+bool UVistaPlayableHomeRuntimeSubsystem::PublishPhysicalCommand(
+    FName CommandId,
+    const FString& CanonicalRequestHex,
+    UVistaActionExecutorComponent* Owner,
+    const FVistaActionTransactionRecord& Record,
+    bool bTerminal)
+{
+    check(IsInGameThread());
+    FPhysicalCommandLedgerEntry* Entry = PhysicalCommandLedger.Find(CommandId);
+    if (Entry == nullptr || Entry->CanonicalRequestHex != CanonicalRequestHex ||
+        Entry->Owner.Get() != Owner || Entry->bTerminal)
+    {
+        return false;
+    }
+    Entry->Record = Record;
+    Entry->bTerminal = bTerminal;
+    if (bTerminal)
+    {
+        Entry->Owner.Reset();
+    }
+    return true;
+}
+
+bool UVistaPlayableHomeRuntimeSubsystem::GetPhysicalCommandRecord(
+    FName CommandId,
+    FVistaActionTransactionRecord& OutRecord) const
+{
+    check(IsInGameThread());
+    const FPhysicalCommandLedgerEntry* Entry =
+        PhysicalCommandLedger.Find(CommandId);
+    if (Entry == nullptr)
+    {
+        return false;
+    }
+    OutRecord = Entry->Record;
+    return true;
+}
+
+bool UVistaPlayableHomeRuntimeSubsystem::EvictOldestTerminalPhysicalCommand()
+{
+    check(IsInGameThread());
+    for (int32 Index = 0; Index < PhysicalCommandOrder.Num(); ++Index)
+    {
+        const FName Candidate = PhysicalCommandOrder[Index];
+        const FPhysicalCommandLedgerEntry* Entry =
+            PhysicalCommandLedger.Find(Candidate);
+        if (Entry != nullptr && Entry->bTerminal)
+        {
+            PhysicalCommandOrder.RemoveAt(Index);
+            PhysicalCommandLedger.Remove(Candidate);
+            return true;
+        }
+    }
+    return false;
+}
+
+FName UVistaPlayableHomeRuntimeSubsystem::AllocatePhysicalActionCommandId()
+{
+    check(IsInGameThread());
+    if (!PhysicalActionTicketNonce.IsValid())
+    {
+        PhysicalActionTicketNonce = FGuid::NewGuid();
+    }
+    if (PhysicalActionTicketSequence == MAX_uint64)
+    {
+        return NAME_None;
+    }
+    ++PhysicalActionTicketSequence;
+    return FName(*FString::Printf(
+        TEXT("world-physical-%s-%016llx"),
+        *PhysicalActionTicketNonce.ToString(EGuidFormats::Digits),
+        static_cast<unsigned long long>(PhysicalActionTicketSequence)));
+}
 
 FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::GetStatus(
     FName CommandId) const
@@ -100,6 +237,14 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::GetNpcStatus(
             Npc->FindComponentByClass<UVistaAnimationComponent>())
     {
         Output.AnimationResult = Animation->GetPlaybackResult();
+    }
+    if (IsValid(Controller->ActionExecutorComponent) &&
+        !Output.NpcActionResult.ActionId.IsNone())
+    {
+        Output.bHasActionTransaction =
+            Controller->ActionExecutorComponent->GetTransaction(
+                Output.NpcActionResult.ActionId,
+                Output.ActionTransaction);
     }
     Output.Code = TEXT("NPC_STATUS_OBSERVED");
     return Output;
@@ -195,17 +340,53 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteInteraction(
 {
     FVistaLiveCommandResult Output;
     Output.TargetSemanticId = Command.TargetSemanticId;
+    const bool bPhysical =
+        UVistaActionExecutorComponent::IsPhysicalAffordance(Command.Affordance);
+    FVistaPhysicalActionRequest PhysicalRequest;
+    if (bPhysical)
+    {
+        PhysicalRequest.CommandId = Command.Envelope.CommandId;
+        PhysicalRequest.RequesterSemanticId = Command.RequesterSemanticId;
+        PhysicalRequest.TargetSemanticId = Command.TargetSemanticId;
+        PhysicalRequest.PlacementAnchorSemanticId =
+            Command.PlacementAnchorSemanticId;
+        PhysicalRequest.Affordance = Command.Affordance;
+        PhysicalRequest.ExpectedRevision = Command.Envelope.ExpectedRevision;
+        PhysicalRequest.SessionGeneration = Command.Envelope.SessionGeneration;
+        PhysicalRequest.bCommitSessionGenerationOnSuccess = true;
+        FVistaActionTransactionRecord Replay;
+        const EVistaPhysicalCommandClaimOutcome ReplayOutcome =
+            TryReplayPhysicalCommand(
+                PhysicalRequest.CommandId,
+                UVistaActionExecutorComponent::CanonicalRequestHex(PhysicalRequest),
+                Replay);
+        if (ReplayOutcome == EVistaPhysicalCommandClaimOutcome::Replay)
+        {
+            ApplyTransactionResult(Replay, Output);
+            return Output;
+        }
+        if (ReplayOutcome == EVistaPhysicalCommandClaimOutcome::Collision)
+        {
+            Output.CommandId = Command.Envelope.CommandId;
+            Output.SessionGeneration = Command.Envelope.SessionGeneration;
+            Output.Code = TEXT("COMMAND_ID_COLLISION");
+            return Output;
+        }
+    }
+
     if (!ValidateEnvelope(Command.Envelope, Output))
     {
         return Output;
     }
     AActor* Requester = ResolveSemanticActor(Command.RequesterSemanticId);
-    AActor* Target = ResolveSemanticActor(Command.TargetSemanticId);
     if (!IsValid(Requester))
     {
         Output.Code = TEXT("REQUESTER_NOT_FOUND");
         return Output;
     }
+    UVistaActionExecutorComponent* Executor = bPhysical
+        ? ResolveActionExecutor(Requester) : nullptr;
+    AActor* Target = ResolveSemanticActor(Command.TargetSemanticId);
     if (!IsValid(Target) ||
         !Target->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()))
     {
@@ -223,6 +404,34 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteInteraction(
             return Output;
         }
         PlacementAnchor = AnchorActor->GetRootComponent();
+    }
+
+    if (bPhysical)
+    {
+        if (!IsValid(Executor))
+        {
+            Output.Code = TEXT("ACTION_EXECUTOR_NOT_FOUND");
+            return Output;
+        }
+        if (!IsValid(Cast<AVistaPickupActor>(Target)))
+        {
+            Output.Code = TEXT("PHYSICAL_TARGET_NOT_PICKUP");
+            return Output;
+        }
+        if (Command.Affordance == EVistaAffordance::Place &&
+            !IsValid(PlacementAnchor))
+        {
+            Output.Code = TEXT("PLACEMENT_TARGET_POINT_REQUIRED");
+            return Output;
+        }
+        PhysicalRequest.Requester = Requester;
+        PhysicalRequest.Target = Target;
+        PhysicalRequest.PlacementAnchor = PlacementAnchor;
+        PhysicalRequest.TimeoutSeconds = 10.0f;
+        FVistaActionTransactionRecord Transaction;
+        Executor->BeginPhysicalInteraction(PhysicalRequest, Transaction);
+        ApplyTransactionResult(Transaction, Output);
+        return Output;
     }
 
     FVistaInteractionRequest Request;
@@ -254,6 +463,26 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteInteraction(
         }
     }
     return Output;
+}
+
+void UVistaPlayableHomeRuntimeSubsystem::ApplyTransactionResult(
+    const FVistaActionTransactionRecord& Transaction,
+    FVistaLiveCommandResult& OutResult)
+{
+    OutResult.CommandId = Transaction.CommandId;
+    OutResult.TargetSemanticId = Transaction.TargetSemanticId;
+    OutResult.SessionGeneration = Transaction.SessionGeneration;
+    OutResult.Code = Transaction.Code;
+    OutResult.bHasActionTransaction = true;
+    OutResult.ActionTransaction = Transaction;
+    OutResult.State = Transaction.bHasAfterState
+        ? Transaction.AfterState
+        : Transaction.bHasContactState
+            ? Transaction.ContactState
+            : Transaction.BeforeState;
+    OutResult.bSucceeded =
+        Transaction.Status == EVistaActionTransactionStatus::Running ||
+        Transaction.Status == EVistaActionTransactionStatus::Succeeded;
 }
 
 FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteNpcQueue(
@@ -397,4 +626,22 @@ AActor* UVistaPlayableHomeRuntimeSubsystem::ResolveSemanticActor(
         }
     }
     return nullptr;
+}
+
+UVistaActionExecutorComponent*
+UVistaPlayableHomeRuntimeSubsystem::ResolveActionExecutor(AActor* Requester) const
+{
+    if (!IsValid(Requester))
+    {
+        return nullptr;
+    }
+    if (UVistaActionExecutorComponent* Executor =
+            Requester->FindComponentByClass<UVistaActionExecutorComponent>())
+    {
+        return Executor;
+    }
+    const APawn* Pawn = Cast<APawn>(Requester);
+    return IsValid(Pawn) && IsValid(Pawn->GetController())
+        ? Pawn->GetController()->FindComponentByClass<UVistaActionExecutorComponent>()
+        : nullptr;
 }

@@ -57,6 +57,15 @@ public:
     virtual TStatId GetStatId() const override;
 
 private:
+    struct FPickupBaselineRecord final
+    {
+        FVistaEntityRuntimeState RuntimeState;
+        FVistaPickupPhysicalStateSnapshot PhysicalState;
+        TWeakObjectPtr<USceneComponent> AttachmentParent;
+        TWeakObjectPtr<AActor> Carrier;
+        EVistaPickupDisposition Disposition = EVistaPickupDisposition::Free;
+    };
+
     FName WorldRevision = NAME_None;
     int32 SessionGeneration = 0;
     TMap<FName, FVistaEventDefinition> EventDefinitions;
@@ -66,6 +75,9 @@ private:
     double EventStartedAt = 0.0;
     float ActiveTimeoutSeconds = 0.0f;
     TMap<TWeakObjectPtr<AActor>, FVistaEntityRuntimeState> BaselineStates;
+    TMap<TWeakObjectPtr<AActor>, bool> BaselineActorCollisionStates;
+    TMap<TWeakObjectPtr<class AVistaPickupActor>, FPickupBaselineRecord>
+        PickupBaselineStates;
     TArray<TWeakObjectPtr<AActor>> SpawnedFixtures;
     TArray<TWeakObjectPtr<class AVistaHomeNpcController>> ModifiedNpcControllers;
     TArray<FVistaEventCondition> ActiveSuccessConditions;
@@ -79,7 +91,12 @@ private:
                            double ElapsedSeconds) const;
     void EvaluateOutcome();
     bool ApplyOperation(const FVistaEventOperation& Operation, FName& OutCode);
-    void RestoreBaseline();
+    bool CaptureBaselineState(
+        AActor* Actor,
+        const FVistaEntityRuntimeState& State,
+        FName& OutCode);
+    bool EnsurePhysicalActionsQuiescent(FName& OutCode) const;
+    bool RestoreBaseline(FName& OutCode);
     AActor* ResolveSemanticActor(const FString& SemanticId) const;
     AActor* ResolvePlayerActor() const;
     static FString InteractionKey(const FString& TargetSemanticId,

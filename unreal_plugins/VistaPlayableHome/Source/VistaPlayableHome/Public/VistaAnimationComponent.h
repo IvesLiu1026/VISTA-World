@@ -37,6 +37,10 @@ public:
 
     static bool SupportsAction(EVistaNpcActionType Type);
     static bool IsLegacyFallbackAction(EVistaNpcActionType Type);
+    /** Closed gate matching the reviewed animation profile's current license state. */
+    static bool HasApprovedMutationAnimation(
+        EVistaNpcActionType Type,
+        FName& OutCode);
 
     virtual void TickComponent(
         float DeltaTime,

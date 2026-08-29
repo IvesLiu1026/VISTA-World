@@ -3,12 +3,69 @@
 // Modified in VISTA-World on 2026-08-22: evaluate typed EventSpec outcomes.
 
 #include "EngineUtils.h"
+#include "HAL/PlatformMemory.h"
+#include "VistaActionExecutorComponent.h"
 #include "VistaHomeNpcCharacter.h"
 #include "VistaHomeNpcController.h"
 #include "VistaInteractable.h"
 #include "VistaPickupActor.h"
 #include "VistaPlayableHomeCharacter.h"
 #include "VistaSemanticActor.h"
+
+namespace
+{
+template <typename T>
+bool ScalarBitsEqual(const T& Left, const T& Right)
+{
+    return FPlatformMemory::Memcmp(&Left, &Right, sizeof(T)) == 0;
+}
+
+bool VectorBitsEqual(const FVector& Left, const FVector& Right)
+{
+    return ScalarBitsEqual(Left.X, Right.X) &&
+        ScalarBitsEqual(Left.Y, Right.Y) &&
+        ScalarBitsEqual(Left.Z, Right.Z);
+}
+
+bool TransformBitsEqual(const FTransform& Left, const FTransform& Right)
+{
+    const FVector LeftTranslation = Left.GetTranslation();
+    const FVector RightTranslation = Right.GetTranslation();
+    const FVector LeftScale = Left.GetScale3D();
+    const FVector RightScale = Right.GetScale3D();
+    const FQuat LeftRotation = Left.GetRotation();
+    const FQuat RightRotation = Right.GetRotation();
+    return VectorBitsEqual(LeftTranslation, RightTranslation) &&
+        VectorBitsEqual(LeftScale, RightScale) &&
+        ScalarBitsEqual(LeftRotation.X, RightRotation.X) &&
+        ScalarBitsEqual(LeftRotation.Y, RightRotation.Y) &&
+        ScalarBitsEqual(LeftRotation.Z, RightRotation.Z) &&
+        ScalarBitsEqual(LeftRotation.W, RightRotation.W);
+}
+
+bool RuntimeStatesBitExact(
+    const FVistaEntityRuntimeState& Left,
+    const FVistaEntityRuntimeState& Right)
+{
+    if (Left.SemanticId != Right.SemanticId ||
+        !TransformBitsEqual(Left.Transform, Right.Transform) ||
+        Left.bHidden != Right.bHidden ||
+        Left.bPortable != Right.bPortable ||
+        Left.Values.Num() != Right.Values.Num())
+    {
+        return false;
+    }
+    for (const TPair<FName, FString>& Pair : Left.Values)
+    {
+        const FString* RightValue = Right.Values.Find(Pair.Key);
+        if (RightValue == nullptr || *RightValue != Pair.Value)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+} // namespace
 
 void UVistaEventSubsystem::InitializeWorldRevision(FName Revision)
 {
@@ -18,7 +75,17 @@ void UVistaEventSubsystem::InitializeWorldRevision(FName Revision)
     }
     if (!ActiveEventId.IsNone())
     {
-        RestoreBaseline();
+        FName RestoreCode;
+        if (!RestoreBaseline(RestoreCode))
+        {
+            EventStatus = EVistaEventStatus::Failed;
+            UE_LOG(
+                LogTemp,
+                Error,
+                TEXT("VISTA_EVENT_REVISION_RESTORE_FAILED code=%s"),
+                *RestoreCode.ToString());
+            return;
+        }
     }
     WorldRevision = Revision;
     // The Node broker opens every UE session at generation zero.  World
@@ -265,6 +332,8 @@ bool UVistaEventSubsystem::StartEvent(
 
     EventStatus = EVistaEventStatus::Applying;
     BaselineStates.Reset();
+    BaselineActorCollisionStates.Reset();
+    PickupBaselineStates.Reset();
     SpawnedFixtures.Reset();
     ModifiedNpcControllers.Reset();
     ActivePublicGoal = Definition->PublicGoal;
@@ -290,7 +359,14 @@ bool UVistaEventSubsystem::StartEvent(
         }
         if (!Snapshot.SemanticId.IsEmpty())
         {
-            BaselineStates.Add(Actor, Snapshot);
+            if (!CaptureBaselineState(Actor, Snapshot, OutCode))
+            {
+                BaselineStates.Reset();
+                BaselineActorCollisionStates.Reset();
+                PickupBaselineStates.Reset();
+                EventStatus = EVistaEventStatus::Failed;
+                return false;
+            }
         }
     }
 
@@ -310,11 +386,28 @@ bool UVistaEventSubsystem::StartEvent(
             {
                 Snapshot = IVistaInteractable::Execute_VistaGetRuntimeState(Target);
             }
-            BaselineStates.Add(Target, Snapshot);
+            if (!CaptureBaselineState(Target, Snapshot, OutCode))
+            {
+                FName RestoreCode;
+                RestoreBaseline(RestoreCode);
+                EventStatus = EVistaEventStatus::Failed;
+                return false;
+            }
         }
         if (!ApplyOperation(Operation, OutCode))
         {
-            RestoreBaseline();
+            const FName OperationCode = OutCode;
+            FName RestoreCode;
+            if (!RestoreBaseline(RestoreCode))
+            {
+                OutCode = RestoreCode.IsNone()
+                    ? FName(TEXT("EVENT_START_ROLLBACK_FAILED"))
+                    : RestoreCode;
+            }
+            else
+            {
+                OutCode = OperationCode;
+            }
             EventStatus = EVistaEventStatus::Failed;
             return false;
         }
@@ -487,7 +580,22 @@ bool UVistaEventSubsystem::ApplyOperation(
     }
     if (Operation.Type == EVistaEventOperationType::SetTransform)
     {
-        Target->SetActorTransform(Operation.Transform, false, nullptr, ETeleportType::TeleportPhysics);
+        if (Cast<AVistaPickupActor>(Target))
+        {
+            // Pickup transforms are physical state. EventSpec/Blueprint callers
+            // must use the shared executor and cannot drift a body incrementally.
+            OutCode = TEXT("PICKUP_TRANSFORM_REQUIRES_ACTION_EXECUTOR");
+            return false;
+        }
+        if (!Target->SetActorTransform(
+                Operation.Transform,
+                false,
+                nullptr,
+                ETeleportType::TeleportPhysics))
+        {
+            OutCode = TEXT("TRANSFORM_SET_FAILED");
+            return false;
+        }
         OutCode = TEXT("TRANSFORM_SET");
         return true;
     }
@@ -558,6 +666,76 @@ bool UVistaEventSubsystem::ApplyOperation(
     return Result.IsSuccess();
 }
 
+bool UVistaEventSubsystem::CaptureBaselineState(
+    AActor* Actor,
+    const FVistaEntityRuntimeState& State,
+    FName& OutCode)
+{
+    if (!IsValid(Actor) || State.SemanticId.IsEmpty() ||
+        State.Transform.ContainsNaN())
+    {
+        OutCode = TEXT("BASELINE_STATE_INVALID");
+        return false;
+    }
+    if (AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(Actor))
+    {
+        const FVistaTrustedPhysicalRestoreToken Token;
+        FPickupBaselineRecord Record;
+        Record.RuntimeState = State;
+        USceneComponent* AttachmentParent = nullptr;
+        AActor* Carrier = nullptr;
+        if (!Pickup->CapturePhysicalStateTrusted(
+                Record.PhysicalState,
+                AttachmentParent,
+                Carrier,
+                Record.Disposition,
+                Token))
+        {
+            OutCode = TEXT("PICKUP_BASELINE_CAPTURE_FAILED");
+            return false;
+        }
+        Record.AttachmentParent = AttachmentParent;
+        Record.Carrier = Carrier;
+        PickupBaselineStates.Add(Pickup, MoveTemp(Record));
+    }
+    BaselineStates.Add(Actor, State);
+    BaselineActorCollisionStates.Add(Actor, Actor->GetActorEnableCollision());
+    OutCode = TEXT("BASELINE_CAPTURED");
+    return true;
+}
+
+bool UVistaEventSubsystem::EnsurePhysicalActionsQuiescent(FName& OutCode) const
+{
+    if (!GetWorld())
+    {
+        OutCode = TEXT("EVENT_WORLD_UNAVAILABLE");
+        return false;
+    }
+    for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+    {
+        TArray<UVistaActionExecutorComponent*> Executors;
+        It->GetComponents<UVistaActionExecutorComponent>(Executors);
+        for (const UVistaActionExecutorComponent* Executor : Executors)
+        {
+            if (IsValid(Executor) && Executor->HasActiveAction())
+            {
+                OutCode = TEXT("EVENT_RESET_ACTION_ACTIVE");
+                return false;
+            }
+        }
+        if (const AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(*It);
+            IsValid(Pickup) &&
+            (Pickup->ActiveTransactionExecutor.IsValid() ||
+             !Pickup->ActiveTransactionCommandId.IsNone()))
+        {
+            OutCode = TEXT("EVENT_RESET_TARGET_RESERVED");
+            return false;
+        }
+    }
+    OutCode = TEXT("PHYSICAL_ACTIONS_QUIESCENT");
+    return true;
+}
+
 bool UVistaEventSubsystem::ResetEvent(
     FName ExpectedRevision,
     int32 ExpectedGeneration,
@@ -572,15 +750,28 @@ bool UVistaEventSubsystem::ResetEvent(
         OutCode = TEXT("NO_ACTIVE_EVENT");
         return false;
     }
+    if (!EnsurePhysicalActionsQuiescent(OutCode))
+    {
+        return false;
+    }
     EventStatus = EVistaEventStatus::Resetting;
-    RestoreBaseline();
+    if (!RestoreBaseline(OutCode))
+    {
+        EventStatus = EVistaEventStatus::Failed;
+        return false;
+    }
     EventStatus = EVistaEventStatus::Inactive;
     OutCode = TEXT("EVENT_RESET");
     return true;
 }
 
-void UVistaEventSubsystem::RestoreBaseline()
+bool UVistaEventSubsystem::RestoreBaseline(FName& OutCode)
 {
+    if (!EnsurePhysicalActionsQuiescent(OutCode))
+    {
+        return false;
+    }
+    const FVistaTrustedPhysicalRestoreToken PhysicalRestoreToken;
     for (const TWeakObjectPtr<AVistaHomeNpcController>& Controller : ModifiedNpcControllers)
     {
         if (Controller.IsValid())
@@ -588,42 +779,205 @@ void UVistaEventSubsystem::RestoreBaseline()
             Controller->CancelActionQueue(TEXT("EVENT_RESET"));
         }
     }
-    // Release all currently carried pickups first. This prevents map iteration
-    // order from making a baseline-held item fail to reclaim its carrier slot.
-    for (const TPair<TWeakObjectPtr<AActor>, FVistaEntityRuntimeState>& Pair : BaselineStates)
-    {
-        if (AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(Pair.Key.Get());
-            IsValid(Pickup) && IsValid(Pickup->GetCarrier()))
-        {
-            Pickup->ReleaseFromCarrier();
-        }
-    }
-    for (const TPair<TWeakObjectPtr<AActor>, FVistaEntityRuntimeState>& Pair : BaselineStates)
+    // Preflight the complete graph before the first reset mutation.
+    for (const TPair<TWeakObjectPtr<AActor>, FVistaEntityRuntimeState>& Pair :
+         BaselineStates)
     {
         AActor* Actor = Pair.Key.Get();
         if (!IsValid(Actor))
+        {
+            OutCode = TEXT("BASELINE_TARGET_LOST");
+            return false;
+        }
+        if (!BaselineActorCollisionStates.Contains(Actor))
+        {
+            OutCode = TEXT("BASELINE_COLLISION_STATE_MISSING");
+            return false;
+        }
+        if (AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(Actor))
+        {
+            const FPickupBaselineRecord* Record =
+                PickupBaselineStates.Find(Pickup);
+            if (Record == nullptr ||
+                (Record->PhysicalState.bHasAttachmentParent &&
+                 !Record->AttachmentParent.IsValid()) ||
+                (Record->PhysicalState.bHeld && !Record->Carrier.IsValid()))
+            {
+                OutCode = TEXT("PICKUP_BASELINE_RECORD_INVALID");
+                return false;
+            }
+        }
+    }
+
+    // Stage 1: clear every pickup/carrier slot. Restore order below never
+    // depends on TMap iteration order.
+    for (const TPair<TWeakObjectPtr<AVistaPickupActor>, FPickupBaselineRecord>& Pair :
+         PickupBaselineStates)
+    {
+        AVistaPickupActor* Pickup = Pair.Key.Get();
+        if (!IsValid(Pickup))
+        {
+            OutCode = TEXT("PICKUP_BASELINE_TARGET_LOST");
+            return false;
+        }
+        if (!Pickup->ClearForTrustedBaselineRestore(PhysicalRestoreToken))
+        {
+            OutCode = TEXT("PICKUP_BASELINE_CLEAR_FAILED");
+            return false;
+        }
+    }
+
+    // Stage 2: restore and reread carriers and all other non-pickup actors
+    // before a held pickup resolves its exact hand-relative world transform.
+    for (const TPair<TWeakObjectPtr<AActor>, FVistaEntityRuntimeState>& Pair : BaselineStates)
+    {
+        AActor* Actor = Pair.Key.Get();
+        if (Cast<AVistaPickupActor>(Actor))
         {
             continue;
         }
         if (Actor->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()))
         {
-            IVistaInteractable::Execute_VistaApplyRuntimeState(Actor, Pair.Value);
+            const FVistaInteractionResult Result =
+                IVistaInteractable::Execute_VistaApplyRuntimeState(
+                    Actor, Pair.Value);
+            if (!Result.IsSuccess())
+            {
+                OutCode = Result.Code.IsNone()
+                    ? FName(TEXT("BASELINE_STATE_RESTORE_FAILED"))
+                    : Result.Code;
+                return false;
+            }
+            const bool* BaselineCollision =
+                BaselineActorCollisionStates.Find(Actor);
+            Actor->SetActorEnableCollision(
+                BaselineCollision != nullptr && *BaselineCollision);
+            const FVistaEntityRuntimeState RestoredState =
+                IVistaInteractable::Execute_VistaGetRuntimeState(Actor);
+            if (!RuntimeStatesBitExact(RestoredState, Pair.Value) ||
+                BaselineCollision == nullptr ||
+                Actor->GetActorEnableCollision() != *BaselineCollision)
+            {
+                OutCode = TEXT("BASELINE_STATE_VERIFY_FAILED");
+                return false;
+            }
         }
         else
         {
-            Actor->SetActorTransform(Pair.Value.Transform, false, nullptr,
-                                     ETeleportType::TeleportPhysics);
+            if (!Actor->SetActorTransform(
+                    Pair.Value.Transform,
+                    false,
+                    nullptr,
+                    ETeleportType::TeleportPhysics))
+            {
+                OutCode = TEXT("BASELINE_TRANSFORM_RESTORE_FAILED");
+                return false;
+            }
             Actor->SetActorHiddenInGame(Pair.Value.bHidden);
+            const bool* BaselineCollision =
+                BaselineActorCollisionStates.Find(Actor);
+            Actor->SetActorEnableCollision(
+                BaselineCollision != nullptr && *BaselineCollision);
+            if (!TransformBitsEqual(
+                    Actor->GetActorTransform(), Pair.Value.Transform) ||
+                Actor->IsHidden() != Pair.Value.bHidden ||
+                BaselineCollision == nullptr ||
+                Actor->GetActorEnableCollision() != *BaselineCollision)
+            {
+                OutCode = TEXT("BASELINE_ACTOR_VERIFY_FAILED");
+                return false;
+            }
+        }
+    }
+
+    // Stage 3: with every carrier already at baseline, restore pickups and
+    // their inventory slots, attachments, velocities, and dispositions.
+    for (const TPair<TWeakObjectPtr<AVistaPickupActor>, FPickupBaselineRecord>& Pair :
+         PickupBaselineStates)
+    {
+        AVistaPickupActor* Pickup = Pair.Key.Get();
+        const FPickupBaselineRecord& Record = Pair.Value;
+        const FVistaInteractionResult Result =
+            Pickup->RestorePhysicalStateTrusted(
+                Record.RuntimeState,
+                &Record.PhysicalState,
+                Record.AttachmentParent.Get(),
+                Record.Carrier.Get(),
+                PhysicalRestoreToken);
+        if (!Result.IsSuccess())
+        {
+            OutCode = Result.Code.IsNone()
+                ? FName(TEXT("PICKUP_BASELINE_RESTORE_FAILED"))
+                : Result.Code;
+            return false;
         }
     }
     for (const TWeakObjectPtr<AActor>& Spawned : SpawnedFixtures)
     {
         if (Spawned.IsValid())
         {
-            Spawned->Destroy();
+            if (!Spawned->Destroy())
+            {
+                OutCode = TEXT("FIXTURE_DESTROY_FAILED");
+                return false;
+            }
+        }
+    }
+
+    // Stage 4: reread the complete graph after all dependencies and fixtures
+    // have reached their terminal baseline state.
+    for (const TPair<TWeakObjectPtr<AActor>, FVistaEntityRuntimeState>& Pair :
+         BaselineStates)
+    {
+        AActor* Actor = Pair.Key.Get();
+        if (AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(Actor))
+        {
+            const FPickupBaselineRecord* Record =
+                PickupBaselineStates.Find(Pickup);
+            const FVistaEntityRuntimeState RestoredState =
+                IVistaInteractable::Execute_VistaGetRuntimeState(Pickup);
+            if (Record == nullptr ||
+                !RuntimeStatesBitExact(RestoredState, Record->RuntimeState) ||
+                !Pickup->MatchesPhysicalStateTrusted(
+                    Record->PhysicalState,
+                    Record->AttachmentParent.Get(),
+                    Record->Carrier.Get(),
+                    Record->Disposition,
+                    PhysicalRestoreToken))
+            {
+                OutCode = TEXT("PICKUP_BASELINE_VERIFY_FAILED");
+                return false;
+            }
+        }
+        else if (Actor->GetClass()->ImplementsInterface(
+                     UVistaInteractable::StaticClass()))
+        {
+            const bool* BaselineCollision =
+                BaselineActorCollisionStates.Find(Actor);
+            const FVistaEntityRuntimeState RestoredState =
+                IVistaInteractable::Execute_VistaGetRuntimeState(Actor);
+            if (!RuntimeStatesBitExact(RestoredState, Pair.Value) ||
+                BaselineCollision == nullptr ||
+                Actor->GetActorEnableCollision() != *BaselineCollision)
+            {
+                OutCode = TEXT("BASELINE_STATE_VERIFY_FAILED");
+                return false;
+            }
+        }
+        else if (!TransformBitsEqual(
+                     Actor->GetActorTransform(), Pair.Value.Transform) ||
+                 Actor->IsHidden() != Pair.Value.bHidden ||
+                 BaselineActorCollisionStates.Find(Actor) == nullptr ||
+                 Actor->GetActorEnableCollision() !=
+                     *BaselineActorCollisionStates.Find(Actor))
+        {
+            OutCode = TEXT("BASELINE_ACTOR_VERIFY_FAILED");
+            return false;
         }
     }
     BaselineStates.Reset();
+    BaselineActorCollisionStates.Reset();
+    PickupBaselineStates.Reset();
     SpawnedFixtures.Reset();
     ModifiedNpcControllers.Reset();
     ActiveSuccessConditions.Reset();
@@ -633,6 +987,8 @@ void UVistaEventSubsystem::RestoreBaseline()
     ActiveEventId = NAME_None;
     ActivePublicGoal.Reset();
     ActiveTimeoutSeconds = 0.0f;
+    OutCode = TEXT("BASELINE_RESTORED");
+    return true;
 }
 
 AActor* UVistaEventSubsystem::ResolveSemanticActor(const FString& SemanticId) const

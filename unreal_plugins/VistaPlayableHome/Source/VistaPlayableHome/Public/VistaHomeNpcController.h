@@ -12,6 +12,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVistaNpcSpoke,
                                              const FString&, NpcSemanticId,
                                              const FString&, Speech);
 
+class UVistaActionExecutorComponent;
+
 UCLASS(Blueprintable)
 class VISTAPLAYABLEHOME_API AVistaHomeNpcController final : public AAIController
 {
@@ -25,6 +27,9 @@ public:
 
     UPROPERTY(BlueprintAssignable, Category = "VISTA|NPC")
     FVistaNpcSpoke OnNpcSpoke;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    TObjectPtr<UVistaActionExecutorComponent> ActionExecutorComponent;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|NPC",
               meta = (ClampMin = "1", ClampMax = "64"))
@@ -96,6 +101,8 @@ private:
     FVistaInteractionResult ExecuteInteraction(AActor* Target, EVistaAffordance Affordance,
                                                 USceneComponent* PlacementAnchor = nullptr) const;
     bool PollAnimationAction();
+    bool PollPhysicalAction();
+    bool StartPhysicalAction(const FVistaNpcAction& Action, AActor* Target);
     FVistaInteractionResult ExecuteAnimatedInteraction(
         const FVistaNpcAction& Action,
         AActor* Target) const;

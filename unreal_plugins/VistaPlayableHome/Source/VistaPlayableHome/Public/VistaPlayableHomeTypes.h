@@ -106,6 +106,218 @@ struct VISTAPLAYABLEHOME_API FVistaInteractionResult
                                            const FString& InSemanticId = FString());
 };
 
+/** Observable phases for the shared physical-interaction transaction. */
+UENUM(BlueprintType)
+enum class EVistaActionPhase : uint8
+{
+    Idle,
+    Approach,
+    Align,
+    Animate,
+    ContactCommit,
+    Complete,
+    RollingBack,
+    Failed
+};
+
+UENUM(BlueprintType)
+enum class EVistaActionTransactionStatus : uint8
+{
+    Idle,
+    Running,
+    Succeeded,
+    Failed,
+    TimedOut,
+    Canceled
+};
+
+/** Authoritative network disposition for a portable pickup. */
+UENUM(BlueprintType)
+enum class EVistaPickupDisposition : uint8
+{
+    Free,
+    Held,
+    Placed
+};
+
+/** Complete rollback-relevant state of the authoritative pickup root/body. */
+USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaPickupPhysicalStateSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FTransform WorldTransform = FTransform::Identity;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bSimulatePhysics = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    uint8 CollisionEnabled = 0;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FName CollisionProfileName = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVector LinearVelocity = FVector::ZeroVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVector AngularVelocityDegrees = FVector::ZeroVector;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHasAttachmentParent = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FString AttachmentParentOwnerSemanticId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FName AttachmentParentComponentName = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FName AttachmentSocketName = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FTransform AttachmentRelativeTransform = FTransform::Identity;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHeld = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FString CarrierSemanticId;
+
+    /** Carrier whose single inventory slot was captured with this body state. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FString InventoryCarrierSemanticId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bInventorySlotOccupied = false;
+
+    /** Exact semantic identity in the captured carrier slot, when occupied. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FString InventoryItemSemanticId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FString PlacedAtSemanticId;
+};
+
+/**
+ * Closed evidence for one pickup/place/drop transaction.
+ *
+ * Before, contact, and after are separately captured so a caller never has to
+ * infer whether a physical mutation occurred from an animation status alone.
+ */
+USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaActionTransactionRecord
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FName CommandId = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    EVistaActionPhase Phase = EVistaActionPhase::Idle;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    EVistaActionTransactionStatus Status = EVistaActionTransactionStatus::Idle;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FName Code = TEXT("ACTION_IDLE");
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    EVistaAffordance Affordance = EVistaAffordance::Inspect;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FString RequesterSemanticId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FString TargetSemanticId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FString PlacementAnchorSemanticId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    TArray<EVistaActionPhase> PhaseHistory;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVistaEntityRuntimeState BeforeState;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVistaEntityRuntimeState ContactState;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVistaEntityRuntimeState AfterState;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVistaPickupPhysicalStateSnapshot BeforePhysicalState;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVistaPickupPhysicalStateSnapshot ContactPhysicalState;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVistaPickupPhysicalStateSnapshot AfterPhysicalState;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FTransform RequesterBeforeTransform = FTransform::Identity;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FTransform RequesterContactTransform = FTransform::Identity;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FTransform RequesterAfterTransform = FTransform::Identity;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHasBeforeState = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHasContactState = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHasAfterState = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHasBeforePhysicalState = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHasContactPhysicalState = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHasAfterPhysicalState = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bContactCommitted = false;
+
+    /** Set before entering the contact mutator, including failed/partial attempts. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bContactMutationAttempted = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bRollbackAttempted = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bRolledBack = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bRequesterTransformRestored = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FName RollbackCode = NAME_None;
+
+    /** Must be zero before contact and exactly one after a successful contact commit. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    int32 PhysicalMutationCount = 0;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    int32 SessionGeneration = 0;
+
+    bool IsTerminal() const
+    {
+        return Status == EVistaActionTransactionStatus::Succeeded ||
+            Status == EVistaActionTransactionStatus::Failed ||
+            Status == EVistaActionTransactionStatus::TimedOut ||
+            Status == EVistaActionTransactionStatus::Canceled;
+    }
+};
+
 UENUM(BlueprintType)
 enum class EVistaNpcActionType : uint8
 {

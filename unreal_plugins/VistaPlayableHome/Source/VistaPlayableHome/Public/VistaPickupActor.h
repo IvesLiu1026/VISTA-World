@@ -6,6 +6,50 @@
 
 class UStaticMeshComponent;
 class UStaticMesh;
+class AVistaPlayableHomeCharacter;
+class UVistaActionExecutorComponent;
+class UVistaEventSubsystem;
+class FVistaTrustedPhysicalRestoreToken;
+
+/** One replicated source of truth for attachment, placement, and rigid-body state. */
+USTRUCT()
+struct VISTAPLAYABLEHOME_API FVistaPickupReplicatedDisposition
+{
+    GENERATED_BODY()
+
+    UPROPERTY()
+    EVistaPickupDisposition Disposition = EVistaPickupDisposition::Free;
+
+    UPROPERTY()
+    TObjectPtr<AActor> Carrier = nullptr;
+
+    UPROPERTY()
+    FString PlacementAnchorSemanticId;
+
+    UPROPERTY()
+    FTransform WorldTransform = FTransform::Identity;
+
+    UPROPERTY()
+    FTransform AttachmentRelativeTransform = FTransform::Identity;
+
+    UPROPERTY()
+    FName AttachmentSocketName = NAME_None;
+
+    UPROPERTY()
+    bool bSimulatePhysics = true;
+
+    UPROPERTY()
+    uint8 CollisionEnabled = 0;
+
+    UPROPERTY()
+    FName CollisionProfileName = NAME_None;
+
+    UPROPERTY()
+    FVector LinearVelocity = FVector::ZeroVector;
+
+    UPROPERTY()
+    FVector AngularVelocityDegrees = FVector::ZeroVector;
+};
 
 UCLASS(Blueprintable)
 class VISTAPLAYABLEHOME_API AVistaPickupActor final : public AVistaSemanticActor
@@ -42,12 +86,17 @@ public:
     bool HasPresentationMesh() const;
 
     UFUNCTION(BlueprintPure, Category = "VISTA|Pickup")
-    AActor* GetCarrier() const { return HeldBy; }
+    AActor* GetCarrier() const
+    {
+        return PhysicalDisposition.Disposition == EVistaPickupDisposition::Held
+            ? PhysicalDisposition.Carrier.Get() : nullptr;
+    }
 
-    UFUNCTION(BlueprintCallable, Category = "VISTA|Pickup")
-    FVistaInteractionResult ReleaseFromCarrier(
-        const FVector& LinearVelocity = FVector::ZeroVector,
-        USceneComponent* PlacementAnchor = nullptr);
+    UFUNCTION(BlueprintPure, Category = "VISTA|Pickup")
+    EVistaPickupDisposition GetPhysicalDisposition() const
+    {
+        return PhysicalDisposition.Disposition;
+    }
 
     virtual FVistaEntityRuntimeState VistaGetRuntimeState_Implementation() const override;
     virtual FVistaInteractionResult VistaApplyRuntimeState_Implementation(
@@ -63,14 +112,70 @@ protected:
     virtual void BeginPlay() override;
 
 private:
-    UPROPERTY(ReplicatedUsing = OnRep_HeldBy)
-    TObjectPtr<AActor> HeldBy = nullptr;
+    friend class AVistaPlayableHomeCharacter;
+    friend class UVistaActionExecutorComponent;
+    friend class UVistaEventSubsystem;
+
+    UPROPERTY(ReplicatedUsing = OnRep_PhysicalDisposition)
+    FVistaPickupReplicatedDisposition PhysicalDisposition;
+
+    TWeakObjectPtr<UVistaActionExecutorComponent> ActiveTransactionExecutor;
+    FName ActiveTransactionCommandId = NAME_None;
 
     UFUNCTION()
-    void OnRep_HeldBy();
+    void OnRep_PhysicalDisposition();
 
+    bool TryReserveTransaction(
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId);
+    void ReleaseTransaction(
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId);
+    /** The only gameplay pickup/place/drop mutation entry; called at contact. */
+    FVistaInteractionResult CommitTransactionalInteraction(
+        UVistaActionExecutorComponent* Executor,
+        const FVistaInteractionRequest& Request,
+        FName CommitCommandId,
+        const FVector& ReleaseVelocity);
+    /** Administrative reset primitive; gameplay physical actions use the executor. */
+    FVistaInteractionResult ReleaseFromCarrier(
+        const FVector& LinearVelocity = FVector::ZeroVector,
+        USceneComponent* PlacementAnchor = nullptr);
     FVistaInteractionResult TryAttachTo(AActor* Carrier);
-    void ApplyAttachmentState();
+    bool ApplyPhysicalDisposition();
+    void SyncRuntimeDispositionValues();
+    bool ValidatePublicStatePatch(
+        const FVistaEntityRuntimeState& State,
+        FName& OutCode) const;
+    bool ClearForTrustedBaselineRestore(
+        const FVistaTrustedPhysicalRestoreToken& Token);
+    bool CapturePhysicalStateTrusted(
+        FVistaPickupPhysicalStateSnapshot& OutSnapshot,
+        USceneComponent*& OutAttachmentParent,
+        AActor*& OutCarrier,
+        EVistaPickupDisposition& OutDisposition,
+        const FVistaTrustedPhysicalRestoreToken& Token) const;
+    bool MatchesPhysicalStateTrusted(
+        const FVistaPickupPhysicalStateSnapshot& ExpectedSnapshot,
+        const USceneComponent* ExpectedAttachmentParent,
+        const AActor* ExpectedCarrier,
+        EVistaPickupDisposition ExpectedDisposition,
+        const FVistaTrustedPhysicalRestoreToken& Token) const;
+    FVistaInteractionResult RestorePhysicalStateTrusted(
+        const FVistaEntityRuntimeState& State,
+        const FVistaPickupPhysicalStateSnapshot* PhysicalSnapshot,
+        USceneComponent* AttachmentParent,
+        AActor* Carrier,
+        const FVistaTrustedPhysicalRestoreToken& Token);
     void NormalizePlacementState();
     void RefreshPresentationState();
+};
+
+/** Unforgeable C++ capability for rollback and captured-baseline restoration. */
+class FVistaTrustedPhysicalRestoreToken final
+{
+private:
+    FVistaTrustedPhysicalRestoreToken() = default;
+    friend class UVistaActionExecutorComponent;
+    friend class UVistaEventSubsystem;
 };

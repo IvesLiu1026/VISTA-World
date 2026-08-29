@@ -182,16 +182,12 @@ FString ErrorResponse(const FString& CommandId, const TCHAR* Code)
     return SerializeObject(Response);
 }
 
-TSharedRef<FJsonObject> RuntimeStateJson(const FVistaEntityRuntimeState& State)
+TSharedRef<FJsonObject> TransformJson(const FTransform& Value)
 {
-    const TSharedRef<FJsonObject> Output = MakeShared<FJsonObject>();
-    Output->SetStringField(TEXT("semantic_id"), State.SemanticId);
-    Output->SetBoolField(TEXT("hidden"), State.bHidden);
-    Output->SetBoolField(TEXT("portable"), State.bPortable);
-    const FVector Location = State.Transform.GetLocation();
-    const FRotator Rotation = State.Transform.Rotator();
-    const FVector Scale = State.Transform.GetScale3D();
     const TSharedRef<FJsonObject> Transform = MakeShared<FJsonObject>();
+    const FVector Location = Value.GetLocation();
+    const FRotator Rotation = Value.Rotator();
+    const FVector Scale = Value.GetScale3D();
     Transform->SetArrayField(TEXT("location_cm"), {
         MakeShared<FJsonValueNumber>(Location.X),
         MakeShared<FJsonValueNumber>(Location.Y),
@@ -206,7 +202,16 @@ TSharedRef<FJsonObject> RuntimeStateJson(const FVistaEntityRuntimeState& State)
         MakeShared<FJsonValueNumber>(Scale.X),
         MakeShared<FJsonValueNumber>(Scale.Y),
         MakeShared<FJsonValueNumber>(Scale.Z)});
-    Output->SetObjectField(TEXT("transform"), Transform);
+    return Transform;
+}
+
+TSharedRef<FJsonObject> RuntimeStateJson(const FVistaEntityRuntimeState& State)
+{
+    const TSharedRef<FJsonObject> Output = MakeShared<FJsonObject>();
+    Output->SetStringField(TEXT("semantic_id"), State.SemanticId);
+    Output->SetBoolField(TEXT("hidden"), State.bHidden);
+    Output->SetBoolField(TEXT("portable"), State.bPortable);
+    Output->SetObjectField(TEXT("transform"), TransformJson(State.Transform));
     const TSharedRef<FJsonObject> Values = MakeShared<FJsonObject>();
     for (const TPair<FName, FString>& Pair : State.Values)
     {
@@ -215,6 +220,200 @@ TSharedRef<FJsonObject> RuntimeStateJson(const FVistaEntityRuntimeState& State)
         Values->SetStringField(Pair.Key.ToString().ToLower(), Pair.Value);
     }
     Output->SetObjectField(TEXT("values"), Values);
+    return Output;
+}
+
+TSharedRef<FJsonObject> PhysicalStateJson(
+    const FVistaPickupPhysicalStateSnapshot& State)
+{
+    const TSharedRef<FJsonObject> Output = MakeShared<FJsonObject>();
+    Output->SetObjectField(TEXT("world_transform"), TransformJson(State.WorldTransform));
+    Output->SetBoolField(TEXT("simulate_physics"), State.bSimulatePhysics);
+    Output->SetNumberField(TEXT("collision_enabled"), State.CollisionEnabled);
+    Output->SetStringField(
+        TEXT("collision_profile"), State.CollisionProfileName.ToString());
+    Output->SetArrayField(TEXT("linear_velocity_cm_s"), {
+        MakeShared<FJsonValueNumber>(State.LinearVelocity.X),
+        MakeShared<FJsonValueNumber>(State.LinearVelocity.Y),
+        MakeShared<FJsonValueNumber>(State.LinearVelocity.Z)});
+    Output->SetArrayField(TEXT("angular_velocity_deg_s"), {
+        MakeShared<FJsonValueNumber>(State.AngularVelocityDegrees.X),
+        MakeShared<FJsonValueNumber>(State.AngularVelocityDegrees.Y),
+        MakeShared<FJsonValueNumber>(State.AngularVelocityDegrees.Z)});
+    Output->SetBoolField(
+        TEXT("has_attachment_parent"), State.bHasAttachmentParent);
+    Output->SetStringField(
+        TEXT("attachment_parent_owner_semantic_id"),
+        State.AttachmentParentOwnerSemanticId);
+    Output->SetStringField(
+        TEXT("attachment_parent_component"),
+        State.AttachmentParentComponentName.ToString());
+    Output->SetStringField(
+        TEXT("attachment_socket"), State.AttachmentSocketName.ToString());
+    Output->SetObjectField(
+        TEXT("attachment_relative_transform"),
+        TransformJson(State.AttachmentRelativeTransform));
+    Output->SetBoolField(TEXT("held"), State.bHeld);
+    Output->SetStringField(TEXT("carrier_semantic_id"), State.CarrierSemanticId);
+    Output->SetStringField(
+        TEXT("inventory_carrier_semantic_id"),
+        State.InventoryCarrierSemanticId);
+    Output->SetBoolField(
+        TEXT("inventory_slot_occupied"), State.bInventorySlotOccupied);
+    Output->SetStringField(
+        TEXT("inventory_item_semantic_id"),
+        State.InventoryItemSemanticId);
+    Output->SetStringField(
+        TEXT("placed_at_semantic_id"), State.PlacedAtSemanticId);
+    return Output;
+}
+
+const TCHAR* ActionPhaseText(EVistaActionPhase Phase)
+{
+    switch (Phase)
+    {
+    case EVistaActionPhase::Approach: return TEXT("approach");
+    case EVistaActionPhase::Align: return TEXT("align");
+    case EVistaActionPhase::Animate: return TEXT("animate");
+    case EVistaActionPhase::ContactCommit: return TEXT("contact_commit");
+    case EVistaActionPhase::Complete: return TEXT("complete");
+    case EVistaActionPhase::RollingBack: return TEXT("rolling_back");
+    case EVistaActionPhase::Failed: return TEXT("failed");
+    default: return TEXT("idle");
+    }
+}
+
+const TCHAR* ActionTransactionStatusText(EVistaActionTransactionStatus Status)
+{
+    switch (Status)
+    {
+    case EVistaActionTransactionStatus::Running: return TEXT("running");
+    case EVistaActionTransactionStatus::Succeeded: return TEXT("succeeded");
+    case EVistaActionTransactionStatus::Failed: return TEXT("failed");
+    case EVistaActionTransactionStatus::TimedOut: return TEXT("timed_out");
+    case EVistaActionTransactionStatus::Canceled: return TEXT("canceled");
+    default: return TEXT("idle");
+    }
+}
+
+TSharedRef<FJsonObject> ActionTransactionJson(
+    const FVistaActionTransactionRecord& Transaction)
+{
+    const TSharedRef<FJsonObject> Output = MakeShared<FJsonObject>();
+    Output->SetStringField(TEXT("phase"), ActionPhaseText(Transaction.Phase));
+    Output->SetStringField(
+        TEXT("transaction_status"),
+        ActionTransactionStatusText(Transaction.Status));
+    Output->SetStringField(TEXT("code"), Transaction.Code.ToString());
+    Output->SetStringField(
+        TEXT("requester_semantic_id"), Transaction.RequesterSemanticId);
+    Output->SetStringField(TEXT("target_semantic_id"), Transaction.TargetSemanticId);
+    if (Transaction.PlacementAnchorSemanticId.IsEmpty())
+    {
+        Output->SetField(
+            TEXT("placement_anchor_semantic_id"), MakeShared<FJsonValueNull>());
+    }
+    else
+    {
+        Output->SetStringField(
+            TEXT("placement_anchor_semantic_id"),
+            Transaction.PlacementAnchorSemanticId);
+    }
+    TArray<TSharedPtr<FJsonValue>> PhaseHistory;
+    for (EVistaActionPhase Phase : Transaction.PhaseHistory)
+    {
+        PhaseHistory.Add(MakeShared<FJsonValueString>(ActionPhaseText(Phase)));
+    }
+    Output->SetArrayField(TEXT("phase_history"), PhaseHistory);
+    Output->SetBoolField(
+        TEXT("contact_mutation_attempted"),
+        Transaction.bContactMutationAttempted);
+    Output->SetBoolField(TEXT("contact_committed"), Transaction.bContactCommitted);
+    Output->SetNumberField(
+        TEXT("physical_mutation_count"), Transaction.PhysicalMutationCount);
+    Output->SetBoolField(TEXT("rollback_attempted"), Transaction.bRollbackAttempted);
+    Output->SetBoolField(TEXT("rolled_back"), Transaction.bRolledBack);
+    Output->SetBoolField(
+        TEXT("requester_transform_restored"),
+        Transaction.bRequesterTransformRestored);
+    Output->SetObjectField(
+        TEXT("requester_before_transform"),
+        TransformJson(Transaction.RequesterBeforeTransform));
+    Output->SetObjectField(
+        TEXT("requester_contact_transform"),
+        TransformJson(Transaction.RequesterContactTransform));
+    Output->SetObjectField(
+        TEXT("requester_after_transform"),
+        TransformJson(Transaction.RequesterAfterTransform));
+    if (Transaction.RollbackCode.IsNone())
+    {
+        Output->SetField(TEXT("rollback_code"), MakeShared<FJsonValueNull>());
+    }
+    else
+    {
+        Output->SetStringField(
+            TEXT("rollback_code"), Transaction.RollbackCode.ToString());
+    }
+    if (Transaction.bHasBeforeState)
+    {
+        Output->SetObjectField(
+            TEXT("before_state"), RuntimeStateJson(Transaction.BeforeState));
+    }
+    else
+    {
+        Output->SetField(TEXT("before_state"), MakeShared<FJsonValueNull>());
+    }
+    if (Transaction.bHasContactState)
+    {
+        Output->SetObjectField(
+            TEXT("contact_state"), RuntimeStateJson(Transaction.ContactState));
+    }
+    else
+    {
+        Output->SetField(TEXT("contact_state"), MakeShared<FJsonValueNull>());
+    }
+    if (Transaction.bHasAfterState)
+    {
+        Output->SetObjectField(
+            TEXT("after_state"), RuntimeStateJson(Transaction.AfterState));
+    }
+    else
+    {
+        Output->SetField(TEXT("after_state"), MakeShared<FJsonValueNull>());
+    }
+    if (Transaction.bHasBeforePhysicalState)
+    {
+        Output->SetObjectField(
+            TEXT("before_physical_state"),
+            PhysicalStateJson(Transaction.BeforePhysicalState));
+    }
+    else
+    {
+        Output->SetField(
+            TEXT("before_physical_state"), MakeShared<FJsonValueNull>());
+    }
+    if (Transaction.bHasContactPhysicalState)
+    {
+        Output->SetObjectField(
+            TEXT("contact_physical_state"),
+            PhysicalStateJson(Transaction.ContactPhysicalState));
+    }
+    else
+    {
+        Output->SetField(
+            TEXT("contact_physical_state"), MakeShared<FJsonValueNull>());
+    }
+    if (Transaction.bHasAfterPhysicalState)
+    {
+        Output->SetObjectField(
+            TEXT("after_physical_state"),
+            PhysicalStateJson(Transaction.AfterPhysicalState));
+    }
+    else
+    {
+        Output->SetField(
+            TEXT("after_physical_state"), MakeShared<FJsonValueNull>());
+    }
     return Output;
 }
 
@@ -257,6 +456,12 @@ FString ResultResponse(const FVistaLiveCommandResult& Result,
     if (!Result.State.SemanticId.IsEmpty())
     {
         Response->SetObjectField(TEXT("state"), RuntimeStateJson(Result.State));
+    }
+    if (Result.bHasActionTransaction)
+    {
+        Response->SetObjectField(
+            TEXT("action_transaction"),
+            ActionTransactionJson(Result.ActionTransaction));
     }
     if (Result.QueuedActionCount >= 0)
     {
@@ -536,6 +741,16 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
              !IsSemanticId(Command.PlacementAnchorSemanticId)))
         {
             return ErrorResponse(CommandId, TEXT("PLACEMENT_ANCHOR_INVALID"));
+        }
+        if (Command.Affordance == EVistaAffordance::Place &&
+            Command.PlacementAnchorSemanticId.IsEmpty())
+        {
+            return ErrorResponse(CommandId, TEXT("PLACEMENT_ANCHOR_REQUIRED"));
+        }
+        if (Command.Affordance != EVistaAffordance::Place &&
+            !Command.PlacementAnchorSemanticId.IsEmpty())
+        {
+            return ErrorResponse(CommandId, TEXT("PLACEMENT_ANCHOR_UNEXPECTED"));
         }
         return ResultResponse(Runtime->ExecuteInteraction(Command));
     }

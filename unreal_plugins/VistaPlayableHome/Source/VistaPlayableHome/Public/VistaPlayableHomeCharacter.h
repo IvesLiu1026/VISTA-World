@@ -13,6 +13,7 @@ class UInputAction;
 class UInputMappingContext;
 class USceneComponent;
 class USpringArmComponent;
+class UVistaActionExecutorComponent;
 class UVistaAnimationComponent;
 class UVistaCharacterProviderComponent;
 class UVistaInteractionComponent;
@@ -95,6 +96,9 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
     TObjectPtr<UVistaAnimationComponent> AnimationComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    TObjectPtr<UVistaActionExecutorComponent> ActionExecutorComponent;
 
     /**
      * Visual-only provider. Gameplay, collision and input remain on this
@@ -209,6 +213,11 @@ private:
     void UpdateNearCameraVisualOcclusion(const FVector& CameraLocation);
     void SetNearCameraVisualHidden(bool bHidden);
     void RestoreNearCameraVisualOcclusion();
+    FVistaInteractionResult BeginPhysicalInteraction(
+        AActor* PhysicalTarget,
+        EVistaAffordance Affordance,
+        AActor* PlacementOwner = nullptr,
+        const FVector& ReleaseVelocity = FVector::ZeroVector);
 
     UFUNCTION(Server, Reliable)
     void ServerPerformDefaultInteraction();

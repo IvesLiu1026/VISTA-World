@@ -7,6 +7,7 @@
 #include "NavigationSystem.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "VistaAnimationComponent.h"
+#include "VistaActionExecutorComponent.h"
 #include "VistaEventSubsystem.h"
 #include "VistaHomeNpcCharacter.h"
 #include "VistaInteractable.h"
@@ -15,6 +16,9 @@
 AVistaHomeNpcController::AVistaHomeNpcController()
 {
     PrimaryActorTick.bCanEverTick = true;
+    ActionExecutorComponent =
+        CreateDefaultSubobject<UVistaActionExecutorComponent>(
+            TEXT("VistaActionExecutorComponent"));
 }
 
 bool AVistaHomeNpcController::ValidateAction(
@@ -88,6 +92,15 @@ bool AVistaHomeNpcController::ValidateAction(
         OutCode = TEXT("SPEECH_TOO_LONG");
         return false;
     }
+    if (Action.Type == EVistaNpcActionType::PickUp ||
+        Action.Type == EVistaNpcActionType::Place)
+    {
+        if (!UVistaAnimationComponent::HasApprovedMutationAnimation(
+                Action.Type, OutCode))
+        {
+            return false;
+        }
+    }
     OutCode = TEXT("OK");
     return true;
 }
@@ -154,6 +167,10 @@ void AVistaHomeNpcController::CancelActionQueue(FName Reason)
     ActionQueue.Reset();
     ActiveNavigationGoal.Reset();
     ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
+    if (IsValid(ActionExecutorComponent))
+    {
+        ActionExecutorComponent->CancelActiveAction(CompletionReason);
+    }
     if (UVistaAnimationComponent* Animation = IsValid(GetPawn())
         ? GetPawn()->FindComponentByClass<UVistaAnimationComponent>() : nullptr)
     {
@@ -179,7 +196,7 @@ void AVistaHomeNpcController::Tick(float DeltaSeconds)
         return;
     }
 
-    if (PollAnimationAction())
+    if (PollPhysicalAction() || PollAnimationAction())
     {
         return;
     }
@@ -295,6 +312,13 @@ void AVistaHomeNpcController::StartCurrentAction()
         : ResolveSemanticActor(Action.TargetSemanticId);
     bActionStarted = true;
 
+    if (Action.Type == EVistaNpcActionType::PickUp ||
+        Action.Type == EVistaNpcActionType::Place)
+    {
+        StartPhysicalAction(Action, Target);
+        return;
+    }
+
     if (UVistaAnimationComponent::SupportsAction(Action.Type))
     {
         UVistaAnimationComponent* Animation =
@@ -395,26 +419,9 @@ void AVistaHomeNpcController::StartCurrentAction()
     EVistaAffordance Affordance = EVistaAffordance::Inspect;
     switch (Action.Type)
     {
-    case EVistaNpcActionType::PickUp: Affordance = EVistaAffordance::PickUp; break;
     case EVistaNpcActionType::OpenDoor: Affordance = EVistaAffordance::Open; break;
     case EVistaNpcActionType::CloseDoor: Affordance = EVistaAffordance::Close; break;
     case EVistaNpcActionType::Sit: Affordance = EVistaAffordance::Sit; break;
-    case EVistaNpcActionType::Place:
-    {
-        AActor* HeldItem = IVistaItemCarrier::Execute_VistaGetHeldItem(GetPawn());
-        if (!IsValid(HeldItem) ||
-            !HeldItem->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()))
-        {
-            CompleteCurrent(EVistaNpcActionStatus::Failed, TEXT("NO_HELD_ITEM"));
-            return;
-        }
-        const FVistaInteractionResult Result = ExecuteInteraction(
-            HeldItem, EVistaAffordance::Place, Target->GetRootComponent());
-        CompleteCurrent(Result.IsSuccess() ? EVistaNpcActionStatus::Succeeded
-                                           : EVistaNpcActionStatus::Failed,
-                        Result.Code);
-        return;
-    }
     default: break;
     }
     const FVistaInteractionResult Result = ExecuteInteraction(Target, Affordance);
@@ -491,9 +498,7 @@ bool AVistaHomeNpcController::PollAnimationAction()
     case EVistaAnimationPlaybackStatus::Running:
         return true;
     case EVistaAnimationPlaybackStatus::Succeeded:
-        if ((CurrentAction->Type == EVistaNpcActionType::PickUp ||
-             CurrentAction->Type == EVistaNpcActionType::Place ||
-             CurrentAction->Type == EVistaNpcActionType::OpenDoor ||
+        if ((CurrentAction->Type == EVistaNpcActionType::OpenDoor ||
              CurrentAction->Type == EVistaNpcActionType::CloseDoor) &&
             !bAnimationInteractionCommitted)
         {
@@ -517,30 +522,104 @@ bool AVistaHomeNpcController::PollAnimationAction()
     }
 }
 
+bool AVistaHomeNpcController::StartPhysicalAction(
+    const FVistaNpcAction& Action,
+    AActor* Target)
+{
+    if (!IsValid(ActionExecutorComponent) || !IsValid(GetPawn()))
+    {
+        CompleteCurrent(EVistaNpcActionStatus::Failed,
+                        TEXT("ACTION_EXECUTOR_UNAVAILABLE"));
+        return false;
+    }
+
+    AActor* PhysicalTarget = Target;
+    AActor* PlacementOwner = nullptr;
+    EVistaAffordance Affordance = EVistaAffordance::PickUp;
+    if (Action.Type == EVistaNpcActionType::Place)
+    {
+        PlacementOwner = Target;
+        PhysicalTarget = IVistaItemCarrier::Execute_VistaGetHeldItem(GetPawn());
+        Affordance = EVistaAffordance::Place;
+    }
+    if (!IsValid(PhysicalTarget))
+    {
+        CompleteCurrent(EVistaNpcActionStatus::Failed,
+                        Action.Type == EVistaNpcActionType::Place
+                            ? FName(TEXT("NO_HELD_ITEM"))
+                            : FName(TEXT("TARGET_NOT_FOUND")));
+        return false;
+    }
+
+    FVistaPhysicalActionRequest Request;
+    Request.CommandId = Action.ActionId;
+    Request.Requester = GetPawn();
+    Request.Target = PhysicalTarget;
+    Request.PlacementOwner = PlacementOwner;
+    Request.Affordance = Affordance;
+    Request.TimeoutSeconds = Action.TimeoutSeconds;
+    FVistaActionTransactionRecord Record;
+    if (!ActionExecutorComponent->BeginPhysicalInteraction(Request, Record))
+    {
+        CompleteCurrent(EVistaNpcActionStatus::Failed, Record.Code);
+        return false;
+    }
+    return true;
+}
+
+bool AVistaHomeNpcController::PollPhysicalAction()
+{
+    if (!CurrentAction.IsSet() ||
+        (CurrentAction->Type != EVistaNpcActionType::PickUp &&
+         CurrentAction->Type != EVistaNpcActionType::Place))
+    {
+        return false;
+    }
+    if (!IsValid(ActionExecutorComponent))
+    {
+        CompleteCurrent(EVistaNpcActionStatus::Failed,
+                        TEXT("ACTION_EXECUTOR_UNAVAILABLE"));
+        return true;
+    }
+    FVistaActionTransactionRecord Record;
+    if (!ActionExecutorComponent->GetTransaction(
+            CurrentAction->ActionId, Record))
+    {
+        CompleteCurrent(EVistaNpcActionStatus::Failed,
+                        TEXT("ACTION_TRANSACTION_LOST"));
+        return true;
+    }
+    switch (Record.Status)
+    {
+    case EVistaActionTransactionStatus::Idle:
+    case EVistaActionTransactionStatus::Running:
+        return true;
+    case EVistaActionTransactionStatus::Succeeded:
+        CompleteCurrent(EVistaNpcActionStatus::Succeeded, Record.Code);
+        return true;
+    case EVistaActionTransactionStatus::TimedOut:
+        CompleteCurrent(EVistaNpcActionStatus::TimedOut, Record.Code);
+        return true;
+    case EVistaActionTransactionStatus::Canceled:
+        CompleteCurrent(EVistaNpcActionStatus::Canceled, Record.Code);
+        return true;
+    case EVistaActionTransactionStatus::Failed:
+    default:
+        CompleteCurrent(EVistaNpcActionStatus::Failed, Record.Code);
+        return true;
+    }
+}
+
 FVistaInteractionResult AVistaHomeNpcController::ExecuteAnimatedInteraction(
     const FVistaNpcAction& Action,
     AActor* Target) const
 {
     switch (Action.Type)
     {
-    case EVistaNpcActionType::PickUp:
-        return ExecuteInteraction(Target, EVistaAffordance::PickUp);
     case EVistaNpcActionType::OpenDoor:
         return ExecuteInteraction(Target, EVistaAffordance::Open);
     case EVistaNpcActionType::CloseDoor:
         return ExecuteInteraction(Target, EVistaAffordance::Close);
-    case EVistaNpcActionType::Place:
-    {
-        AActor* HeldItem = IVistaItemCarrier::Execute_VistaGetHeldItem(GetPawn());
-        if (!IsValid(HeldItem) || !IsValid(Target) ||
-            !HeldItem->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()))
-        {
-            return FVistaInteractionResult::Failure(
-                EVistaInteractionStatus::InvalidState, TEXT("NO_HELD_ITEM"));
-        }
-        return ExecuteInteraction(
-            HeldItem, EVistaAffordance::Place, Target->GetRootComponent());
-    }
     default:
         return FVistaInteractionResult::Success(
             FString(), FVistaEntityRuntimeState(), TEXT("ANIMATION_CONTACT_NOT_REQUIRED"));
