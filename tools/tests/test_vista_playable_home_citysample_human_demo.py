@@ -535,6 +535,12 @@ def test_fixed_presentations_and_duplicate_identity_are_exact() -> None:
 def test_commandlet_has_configure_save_destroy_and_cold_reload_proof() -> None:
     source = COMMANDLET.read_text(encoding="utf-8")
     assert "actor.configure_presentation_mesh(" in source
+    assert 'component.get_editor_property("relative_location")' in source
+    assert 'component.get_editor_property("relative_rotation")' in source
+    assert 'component.get_editor_property("relative_scale3d")' in source
+    assert "component.get_relative_location()" not in source
+    assert "component.get_relative_rotation()" not in source
+    assert "component.get_relative_scale3d()" not in source
     assert "actor_subsystem.destroy_actor(duplicate)" in source
     assert "EditorLoadingAndSavingUtils.save_map" in source
     assert source.count("level_subsystem.load_level(MAP_OBJECT_PATH)") >= 2
