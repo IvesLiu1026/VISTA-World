@@ -454,6 +454,83 @@ def test_checked_in_profile_digest_allows_pretty_bytes_but_closes_content(
     assert observed == value
 
 
+def test_hssd_build_plan_uses_canonical_bytes_with_no_newline_content_digest(
+    tmp_path: pathlib.Path,
+) -> None:
+    value = {"schema_version": "hssd-build-plan/v1", "placements": [1, 2, 3]}
+    value["content_digest"] = materializer._content_digest(
+        value, trailing_newline=False
+    )
+    path = (tmp_path / "build-plan.json").resolve()
+    path.write_bytes(materializer._canonical_json(value))
+
+    _artifact, observed = materializer._canonical_document(
+        path,
+        "HSSD-style build plan",
+        digest_trailing_newline=False,
+    )
+    assert observed == value
+    with pytest.raises(materializer.R9PreflightError, match="content digest"):
+        materializer._canonical_document(path, "wrong digest convention")
+
+
+def _private_directory(path: pathlib.Path) -> pathlib.Path:
+    path.mkdir(mode=0o700)
+    path.chmod(0o700)
+    return path
+
+
+def test_namespace_walker_ignores_legal_build_root_and_detects_byte_drift(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = _private_directory(tmp_path / "project")
+    build = _private_directory(project / "Build")
+    build_metadata = build / "Build.version"
+    build_metadata.write_bytes(b'{"MajorVersion":5}\n')
+    build_metadata.chmod(0o600)
+    current = project
+    for part in materializer.HSSD_NAMESPACE_RELATIVE.parts:
+        current = _private_directory(current / part)
+    first_asset = current / "A.uasset"
+    second_asset = current / "B.uasset"
+    first_asset.write_bytes(b"first\n")
+    second_asset.write_bytes(b"second\n")
+    first_asset.chmod(0o600)
+    second_asset.chmod(0o600)
+
+    before = materializer._namespace_manifest(project)
+    before_tree = materializer._manifest_tree(before)
+    first_asset.write_bytes(b"drift\n")
+    first_asset.chmod(0o600)
+    after = materializer._namespace_manifest(project)
+    after_tree = materializer._manifest_tree(after)
+
+    assert len(before) == 2
+    assert all(not relative.startswith("Build/") for relative in before)
+    assert before_tree["file_count"] == 2
+    assert before_tree["tree_sha256"] != after_tree["tree_sha256"]
+
+
+def test_namespace_walker_rejects_symlink_special_and_mode_drift(
+    tmp_path: pathlib.Path,
+) -> None:
+    project = _private_directory(tmp_path / "project")
+    current = project
+    for part in materializer.HSSD_NAMESPACE_RELATIVE.parts:
+        current = _private_directory(current / part)
+    asset = current / "A.uasset"
+    asset.write_bytes(b"sealed\n")
+    asset.chmod(0o600)
+    link = current / "alias.uasset"
+    link.symlink_to(asset)
+    with pytest.raises(materializer.R9PreflightError, match="symlink"):
+        materializer._namespace_manifest(project)
+    link.unlink()
+    asset.chmod(0o644)
+    with pytest.raises(materializer.R9PreflightError, match="type or mode"):
+        materializer._namespace_manifest(project)
+
+
 def test_schema_and_local_artifact_names_match_v5_launcher_contract() -> None:
     assert materializer.COMBINED_RECEIPT_SCHEMA_V5.endswith("/v5")
     assert (
