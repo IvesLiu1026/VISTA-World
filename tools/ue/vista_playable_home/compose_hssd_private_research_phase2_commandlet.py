@@ -361,6 +361,8 @@ def visual_shell_observation(actor, placement):
     component_state = component_observation(component)
     transform = observed_transform(actor)
     tags = sorted_tags(actor)
+    actor_path = str(actor.get_path_name())
+    actor_class_path = str(actor.get_class().get_path_name())
     require(
         actor_collision_enabled(actor) is False
         and actor_hidden(actor) is False
@@ -383,9 +385,9 @@ def visual_shell_observation(actor, placement):
         "source_asset_id": placement["source_asset_id"],
         "semantic_target_id": placement["semantic_target_id"],
         "object_path": placement["object_path"],
-        "actor_path": str(actor.get_path_name()),
+        "actor_path": actor_path,
         "actor_label": str(actor.get_actor_label()),
-        "actor_class_path": str(actor.get_class().get_path_name()),
+        "actor_class_path": actor_class_path,
         "actor_collision_enabled": actor_collision_enabled(actor),
         "actor_hidden_in_game": actor_hidden(actor),
         "world_transform_cm": placement["world_transform_cm"],
@@ -591,6 +593,12 @@ def run():
                 transient=False,
             )
             require(actor is not None, "failed to spawn HSSD visual shell")
+            require(
+                actor.rename(placement["actor_label"])
+                and str(actor.get_path_name())
+                == phase2.visual_shell_actor_path(placement["actor_label"]),
+                "failed to establish canonical HSSD visual-shell actor path",
+            )
             configure_visual_shell(
                 actor,
                 asset_by_id[placement["source_asset_id"]],
@@ -697,7 +705,7 @@ def run():
     succeeded = status == phase2.SUCCESS_STATUS
     gates = {
         "phase1_success_revalidated": True,
-        "exact_profile_house_scene_pins_verified": True,
+        "exact_profile_house_scene_r2_pins_verified": True,
         "existing_map_loaded": existing_map_loaded,
         "exact_60_placements_spawned": succeeded and len(actors_observed) == 60,
         "exact_10_per_room": succeeded,
@@ -732,6 +740,8 @@ def run():
             "status": status,
             "error": error,
             "accepted_as_visual_evidence": False,
+            "accepted_as_playable_collision": False,
+            "accepted_as_ue_runtime": False,
             "full_material_fidelity": False,
             "promotable": False,
             "diagnostic_only": True,
@@ -749,14 +759,19 @@ def run():
                 "profile_sha256": phase2.PROFILE_SHA256,
                 "house_sha256": phase2.HOUSE_SHA256,
                 "scene_plan_sha256": phase2.SCENE_PLAN_SHA256,
+                "r2_build_plan_sha256": phase2.R2_BUILD_PLAN_SHA256,
+                "r2_build_plan_bytes": phase2.R2_BUILD_PLAN_BYTES,
+                "r2_build_plan_content_digest": (phase2.R2_BUILD_PLAN_CONTENT_DIGEST),
             },
             "content_namespace": execution["content_namespace"],
             "map_path": execution["map_path"],
+            "execution_isolation": execution["execution_isolation"],
             "actors": sorted(actors_observed, key=lambda item: item["instance_id"]),
             "semantic_proxies": sorted(
                 proxy_observations, key=lambda item: item["semantic_target_id"]
             ),
             "policy": phase2.PHASE2_POLICY,
+            "r2_placement_authority": execution["r2_placement_authority"],
             "claims": {
                 "placements_composed": succeeded,
                 "player_eye_reviewed": False,
