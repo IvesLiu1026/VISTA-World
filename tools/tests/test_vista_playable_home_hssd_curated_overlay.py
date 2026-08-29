@@ -617,6 +617,17 @@ def test_dry_run_is_deterministic_exact_and_zero_write(fixture: Fixture) -> None
             "hssd.r1/entry_hall.clothes.01",
         ]
     ]
+    collision_contract = first.report["visual_policy"][
+        "semantic_proxy_collision_contract"
+    ]
+    assert collision_contract == overlay.SEMANTIC_COLLISION_CONTRACT
+    assert collision_contract["observable_channels"] == ["Pawn", "Visibility"]
+    assert collision_contract["observed_authority_responses"] == {
+        "Pawn": "Block",
+        "Visibility": "Block",
+    }
+    assert collision_contract["non_authority_channels_observed"] is False
+    assert collision_contract["non_authority_ignore_persistence_verified"] is False
     assert first.report["license"]["use_class"] == "private_noncommercial_research_only"
     assert first.report["license"]["attribution_required"] is True
     assert first.report["claims"] == {
@@ -788,7 +799,7 @@ def test_missing_semantic_proxy_identity_fails_closed(fixture: Fixture) -> None:
         overlay.build_plan(fixture.attempt, config=config)
 
 
-def test_runtime_semantic_authority_requires_minimal_full_channel_matrix(
+def test_runtime_semantic_authority_requires_exact_observable_channel_matrix(
     fixture: Fixture,
 ) -> None:
     scene = json.loads(fixture.phase2_scene.read_text(encoding="utf-8"))
@@ -801,14 +812,21 @@ def test_runtime_semantic_authority_requires_minimal_full_channel_matrix(
         observation, semantic_target_id
     )
 
-    observation["components"][0]["collision_responses"]["WorldDynamic"] = "Block"
+    observation["components"][0]["collision_responses"]["Pawn"] = "Ignore"
     assert not overlay._semantic_runtime_authority_observation_valid(
         observation, semantic_target_id
     )
     observation["components"][0]["collision_responses"] = dict(
         overlay.SEMANTIC_QUERY_COLLISION_RESPONSES
     )
-    observation["components"][0]["collision_responses"].pop("Camera")
+    observation["components"][0]["collision_responses"]["WorldDynamic"] = "Ignore"
+    assert not overlay._semantic_runtime_authority_observation_valid(
+        observation, semantic_target_id
+    )
+    observation["components"][0]["collision_responses"] = dict(
+        overlay.SEMANTIC_QUERY_COLLISION_RESPONSES
+    )
+    observation["components"][0]["collision_responses"].pop("Visibility")
     assert not overlay._semantic_runtime_authority_observation_valid(
         observation, semantic_target_id
     )
@@ -982,6 +1000,12 @@ def test_scene_binding_contract_is_exact_and_covers_closed_lineage(
             overlay._canonical_json(execution["selected_package_seals"])
         ).hexdigest()
     )
+    assert (
+        bindings["semantic_collision_contract_sha256"]
+        == hashlib.sha256(
+            overlay._canonical_json(overlay.SEMANTIC_COLLISION_CONTRACT)
+        ).hexdigest()
+    )
 
 
 def test_publish_window_validator_runs_after_provisional_before_atomic_name(
@@ -1050,7 +1074,8 @@ def test_commandlet_contains_fail_closed_runtime_gates() -> None:
         "semantic_proxy_authority_reloaded",
         "SEMANTIC_COLLISION_CHANNELS",
         "SEMANTIC_QUERY_BLOCK_CHANNELS",
-        "semantic_proxy_non_authority_channels_ignored",
+        "semantic_proxy_collision_write_sequence_completed",
+        "SEMANTIC_COLLISION_CONTRACT",
         "PENDING_CLAIMS",
         "_expected_scene_bindings",
         'accepted_as_visual_evidence": False',
@@ -1058,6 +1083,25 @@ def test_commandlet_contains_fail_closed_runtime_gates() -> None:
         "gta_level",
     ):
         assert token in source
+
+
+def test_commandlet_writes_default_ignore_before_observable_block_overrides() -> None:
+    path = UE_ROOT / "compose_hssd_curated_overlay_commandlet.py"
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    repair = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "repair_semantic_proxy_query_authority_and_hide"
+    )
+    repair_source = ast.get_source_segment(source, repair)
+    assert repair_source is not None
+    assert repair_source.index("set_collision_response_to_all_channels") < (
+        repair_source.index("set_collision_response_to_channel")
+    )
+    assert 'collision_response_value("Ignore")' in repair_source
+    assert 'collision_response_value("Block")' in repair_source
 
 
 def test_runner_never_shells_out_or_deletes() -> None:
