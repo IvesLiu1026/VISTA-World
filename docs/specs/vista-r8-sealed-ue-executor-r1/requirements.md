@@ -69,6 +69,10 @@ Acceptance notes:
   digest, BuildId and critical UE binaries.
 - BuildPlugin validation includes the full normalized tree, descriptor,
   `UnrealEditor.modules` BuildId and both fixed module binaries.
+- The direct Python binary and runtime-closure pins govern the unprivileged
+  sandbox wrapper. They do not by themselves seal the interpreter executing
+  the privileged host executor; the later root bootstrap SHALL independently
+  bind that live host interpreter/runtime before granting execution authority.
 - Every held input is revalidated immediately before launch and after child
   exit.
 - Symlinks, writable authority paths, owner/mode drift, unknown files and
@@ -159,6 +163,9 @@ publication and negative claims without launching UE or requiring root/GPU.
 
 - Exact production authority pins remain intentionally unset until independent
   root provisioning and review.
+- The root bootstrap's live host interpreter/runtime binding remains an
+  explicit execution prerequisite; this source slice does not claim that the
+  privileged bootstrap interpreter is already closed.
 - The first real run will determine whether the bounded stdout archive limit
   needs adjustment; changing it requires a reviewed source revision.
 

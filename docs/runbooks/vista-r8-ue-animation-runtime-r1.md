@@ -6,23 +6,28 @@ This slice implements the code and evidence contract for importing the five
 project-authored MakeHuman CC0 R8 FBXs into the already verified R6 character
 project, then authoring a minimal locomotion/pickup/place runtime closure.
 
-Current status is **blocked before write**. The source feature and dry-run plan
-are implemented, but executable authority is intentionally a separate lane.
+Current status is **blocked before write**. The source feature, zero-write plan,
+and a CPU-only sealed-executor candidate are implemented, but executable
+authority remains an independently provisioned and reviewed lane.
 Three blockers remain:
 
 1. a fresh root-published R8 host receipt produced after the reviewed
    Blender/publisher repair; and
 2. a reviewed BuildPlugin package containing this exact plugin source; and
-3. a sealed UE 5.7 execution authority/runner that binds immutable R3,
-   BuildPlugin, commandlet, and **full engine closure**, mounts a sealed manifest
-   at fixed sandbox paths, unshares the network, and publishes through a
-   distinct immutable boundary.
+3. a fixed root-owned external executor policy, exact installed bundle,
+   immutable UE engine, pinned sandbox-wrapper `/usr/bin/python3.10`, normalized
+   host-runtime closure and BuildPlugin authorities. The privileged executor's
+   own live host interpreter/bootstrap is not mechanically bound by this
+   source slice and remains an unresolved root-authority prerequisite. None is
+   provisioned by this source change.
 
-The materializer's dry run is valid and zero-write. This source slice contains
-no `Popen`/UE runner; `--apply` always refuses before creating an attempt. This
-is deliberate because the installed NAS engine ancestry is mutable and an
-attempt-local copied plugin/commandlet/FBX would permit same-UID pathname
-replacement. No UE, UHT, UBT,
+The original materializer's dry run remains valid and zero-write; its `--apply`
+still refuses before creating an attempt. The separate executor candidate is
+`tools/ue/vista_playable_home/makehuman_cc0_animation_runtime_executor.py` with
+a private sandbox wrapper beside it. Checkout dry-run never loads authority
+paths. `--execute` first requires the exact acknowledgement and then the fixed
+root-owned `/root/vista-r8-ue57-executor-r1-policy.json`; absent that external
+bootstrap it fails before launch or publication. No UE, UHT, UBT,
 BuildPlugin, GPU, Blender, render, or external R8 artifact was executed or read
 during this implementation. Nothing in this document is runtime, interaction,
 human-motion-quality, photorealism, or GTA-quality acceptance.
@@ -94,10 +99,15 @@ reviewed_buildplugin_package_pins
 sealed_ue57_execution_authority_and_runner
 ```
 
-Filling the R8 and BuildPlugin pins alone does **not** authorize apply. A future
-execution-authority change must be reviewed independently; it may then consume
-this closed plan/commandlet, but must not revive attempt-local executable
-copies or the mutable NAS engine pathname.
+Filling the R8 and BuildPlugin pins alone does **not** authorize apply. The
+executor source, external root policy, bundle, sandbox-wrapper Python binary,
+normalized host-runtime closure and actual normalized bwrap command must all be
+reviewed and cross-bound; no attempt-local executable copy or mutable NAS
+engine is authority. These checks close the Python/runtime bytes visible to the
+private sandbox wrapper only. They do not close the privileged host process
+that initially interprets the executor. A later administrator-owned bootstrap
+must mechanically bind that live interpreter before any real execution can be
+claimed as sealed.
 
 ## UE commandlet
 
@@ -236,6 +246,30 @@ uv run --with pytest python -m pytest -q \
 Result after the sealed-runner boundary and cold-reload/content-delta fixes:
 `90 passed`.
 
+Sealed-executor CPU-only validation (no UE, GPU, root, network or real
+publication):
+
+```bash
+PYTHONPATH=. uv run pytest -q \
+  tools/tests/test_vista_playable_home_makehuman_cc0_animation_runtime_executor.py
+
+PYTHONPATH=. uv run pytest -q \
+  tools/tests/test_vista_playable_home_makehuman_cc0_animation_runtime_materializer.py \
+  tools/tests/test_vista_playable_home_makehuman_cc0_animation_vertical_slice.py
+```
+
+Result: `41 passed` focused and `77 passed` related. The focused suite uses
+temporary fake root authorities to cover the external bootstrap policy, full
+authority admission, sandbox-wrapper Python/host-runtime closure, exact
+normalized bwrap command, memfd seals, R3 empty directories, same-UID TOCTOU
+rejection, exact terminal receipt schemas and semantic bindings, canonical
+USTAR bounds, recursive type-strict JSON proof comparison (so `1`/`0` cannot
+impersonate booleans), exception-total child kill/wait cleanup, post-rename
+failure cleanup and fake immutable publication. This does not validate or
+close the privileged host interpreter bootstrap.
+This is source-level evidence only, not permission or evidence for a real UE
+run.
+
 ## Next authorized sequence
 
 1. Finish review/commit of the R8 source lane and run its root-owned publisher
@@ -244,12 +278,16 @@ Result after the sealed-runner boundary and cold-reload/content-delta fixes:
    seals, 53-bone round-trip evidence, root-motion evidence, and claims; then
    record the four R8 pins.
 3. Build and review a plugin package from this exact source commit.
-4. Implement/review the separate sealed UE runner: root-owned immutable full
-   engine and R3/plugin/commandlet closure, held or sealed inputs, fixed sandbox
-   paths, bwrap network isolation, and immutable publication. Do not use the
-   current mutable NAS engine path or same-UID attempt copies.
-5. Only after that runner passes adversarial review, record all pins and run one
-   fresh external attempt. Do not touch production or any prior attempt.
-6. If the commandlet succeeds, keep `accepted:false`; next run BuildPlugin/
+4. Independently re-review the sealed executor source and its adversarial fake
+   tests. Do not provision authority while source review is unresolved.
+5. In a distinct administrator-owned lane, publish the exact 0555/0444 bundle,
+   full engine, BuildPlugin and normalized host-runtime closure, then author the
+   fixed external root policy and a mechanically bound launcher for the
+   privileged host interpreter. The policy and launcher are the non-cyclic
+   bootstrap trust anchor; the bundle cannot self-authorize its own pin or the
+   interpreter that is already executing it.
+6. Only after independent pin review, authorize one fresh external attempt. Do
+   not touch production or any prior attempt.
+7. If the commandlet succeeds, keep `accepted:false`; next run BuildPlugin/
    dedicated-server two-client runtime and human motion review as separate
    evidence lanes.
