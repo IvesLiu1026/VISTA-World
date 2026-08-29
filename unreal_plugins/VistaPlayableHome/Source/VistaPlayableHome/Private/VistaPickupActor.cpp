@@ -4,7 +4,9 @@
 #include "Engine/CollisionProfile.h"
 #include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
+#include "HAL/PlatformMemory.h"
 #include "Net/UnrealNetwork.h"
+#include "VistaActionExecutorComponent.h"
 #include "VistaHomeNpcCharacter.h"
 #include "VistaItemCarrier.h"
 #include "VistaPlayableHomeCharacter.h"
@@ -14,6 +16,60 @@ namespace
 constexpr const TCHAR* StableSemanticTagPrefix = TEXT("VistaSemanticId=");
 constexpr const TCHAR* PlacementOwnerTagPrefix = TEXT("VistaOwner=");
 constexpr const TCHAR* PlacementAnchorDelimiter = TEXT("/anchor.");
+
+template <typename T>
+bool ScalarBitsEqual(const T& Left, const T& Right)
+{
+    return FPlatformMemory::Memcmp(&Left, &Right, sizeof(T)) == 0;
+}
+
+bool VectorBitsEqual(const FVector& Left, const FVector& Right)
+{
+    return ScalarBitsEqual(Left.X, Right.X) &&
+        ScalarBitsEqual(Left.Y, Right.Y) &&
+        ScalarBitsEqual(Left.Z, Right.Z);
+}
+
+bool TransformBitsEqual(const FTransform& Left, const FTransform& Right)
+{
+    const FVector LeftTranslation = Left.GetTranslation();
+    const FVector RightTranslation = Right.GetTranslation();
+    const FVector LeftScale = Left.GetScale3D();
+    const FVector RightScale = Right.GetScale3D();
+    const FQuat LeftRotation = Left.GetRotation();
+    const FQuat RightRotation = Right.GetRotation();
+    return VectorBitsEqual(LeftTranslation, RightTranslation) &&
+        VectorBitsEqual(LeftScale, RightScale) &&
+        ScalarBitsEqual(LeftRotation.X, RightRotation.X) &&
+        ScalarBitsEqual(LeftRotation.Y, RightRotation.Y) &&
+        ScalarBitsEqual(LeftRotation.Z, RightRotation.Z) &&
+        ScalarBitsEqual(LeftRotation.W, RightRotation.W);
+}
+
+bool PhysicalSnapshotsBitExact(
+    const FVistaPickupPhysicalStateSnapshot& Left,
+    const FVistaPickupPhysicalStateSnapshot& Right)
+{
+    return TransformBitsEqual(Left.WorldTransform, Right.WorldTransform) &&
+        Left.bSimulatePhysics == Right.bSimulatePhysics &&
+        Left.CollisionEnabled == Right.CollisionEnabled &&
+        Left.CollisionProfileName == Right.CollisionProfileName &&
+        VectorBitsEqual(Left.LinearVelocity, Right.LinearVelocity) &&
+        VectorBitsEqual(
+            Left.AngularVelocityDegrees, Right.AngularVelocityDegrees) &&
+        Left.bHasAttachmentParent == Right.bHasAttachmentParent &&
+        Left.AttachmentParentOwnerSemanticId ==
+            Right.AttachmentParentOwnerSemanticId &&
+        Left.AttachmentParentComponentName ==
+            Right.AttachmentParentComponentName &&
+        Left.AttachmentSocketName == Right.AttachmentSocketName &&
+        TransformBitsEqual(
+            Left.AttachmentRelativeTransform,
+            Right.AttachmentRelativeTransform) &&
+        Left.bHeld == Right.bHeld &&
+        Left.CarrierSemanticId == Right.CarrierSemanticId &&
+        Left.PlacedAtSemanticId == Right.PlacedAtSemanticId;
+}
 
 bool IsLowerAsciiAlpha(const TCHAR Character)
 {
@@ -205,14 +261,38 @@ AActor* ResolveCarrier(UWorld* World, const FString& SemanticId)
     }
     const FName RawTag(*SemanticId);
     const FName StableTag(*(FString(TEXT("VistaSemanticId=")) + SemanticId));
+    AActor* Match = nullptr;
     for (TActorIterator<AActor> It(World); It; ++It)
     {
         if (It->ActorHasTag(RawTag) || It->ActorHasTag(StableTag))
         {
-            return *It;
+            if (Match != nullptr)
+            {
+                return nullptr;
+            }
+            Match = *It;
         }
     }
-    return nullptr;
+    return Match;
+}
+
+AActor* CarrierInventoryItem(AActor* Carrier)
+{
+    return IsValid(Carrier) &&
+        Carrier->GetClass()->ImplementsInterface(UVistaItemCarrier::StaticClass())
+        ? IVistaItemCarrier::Execute_VistaGetHeldItem(Carrier)
+        : nullptr;
+}
+
+bool CarrierInventoryIsEmpty(AActor* Carrier)
+{
+    return IsValid(Carrier) && !IsValid(CarrierInventoryItem(Carrier));
+}
+
+bool CarrierInventoryHolds(AActor* Carrier, const AActor* Item)
+{
+    return IsValid(Carrier) && IsValid(Item) &&
+        CarrierInventoryItem(Carrier) == Item;
 }
 }
 
@@ -223,6 +303,10 @@ AVistaPickupActor::AVistaPickupActor()
     Mesh->SetCollisionProfileName(UCollisionProfile::PhysicsActor_ProfileName);
     Mesh->SetSimulatePhysics(true);
     Mesh->SetGenerateOverlapEvents(true);
+    PhysicalDisposition.CollisionEnabled =
+        static_cast<uint8>(Mesh->GetCollisionEnabled());
+    PhysicalDisposition.CollisionProfileName =
+        UCollisionProfile::PhysicsActor_ProfileName;
 
     PresentationMesh =
         CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PresentationMesh"));
@@ -291,32 +375,96 @@ void AVistaPickupActor::GetLifetimeReplicatedProps(
     TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    DOREPLIFETIME(AVistaPickupActor, HeldBy);
+    DOREPLIFETIME(AVistaPickupActor, PhysicalDisposition);
 }
 
 FVistaEntityRuntimeState AVistaPickupActor::VistaGetRuntimeState_Implementation() const
 {
     FVistaEntityRuntimeState State = Super::VistaGetRuntimeState_Implementation();
     State.bPortable = bPortable;
-    State.Values.Add(TEXT("held"), IsValid(HeldBy) ? TEXT("true") : TEXT("false"));
-    State.Values.Add(TEXT("held_by"), CarrierSemanticId(HeldBy));
-    if (IsValid(HeldBy))
+    const bool bHeld =
+        PhysicalDisposition.Disposition == EVistaPickupDisposition::Held &&
+        IsValid(PhysicalDisposition.Carrier.Get());
+    State.Values.Add(TEXT("held"), bHeld ? TEXT("true") : TEXT("false"));
+    State.Values.Add(
+        TEXT("held_by"),
+        bHeld ? CarrierSemanticId(PhysicalDisposition.Carrier.Get()) : FString());
+    if (bHeld)
     {
         State.Values.Remove(TEXT("placed_at"));
     }
-    else if (const FString* PlacementValue = State.Values.Find(TEXT("placed_at")))
+    else if (PhysicalDisposition.Disposition == EVistaPickupDisposition::Placed)
     {
-        FString NormalizedPlacement;
-        if (NormalizeStoredPlacementAnchor(GetWorld(), *PlacementValue, NormalizedPlacement))
-        {
-            State.Values.Add(TEXT("placed_at"), NormalizedPlacement);
-        }
-        else
-        {
-            State.Values.Remove(TEXT("placed_at"));
-        }
+        State.Values.Add(
+            TEXT("placed_at"), PhysicalDisposition.PlacementAnchorSemanticId);
+    }
+    else
+    {
+        State.Values.Remove(TEXT("placed_at"));
     }
     return State;
+}
+
+bool AVistaPickupActor::ValidatePublicStatePatch(
+    const FVistaEntityRuntimeState& State,
+    FName& OutCode) const
+{
+    const FVistaEntityRuntimeState Current = VistaGetRuntimeState_Implementation();
+    if ((!State.SemanticId.IsEmpty() && State.SemanticId != SemanticId) ||
+        !TransformBitsEqual(State.Transform, Current.Transform))
+    {
+        OutCode = TEXT("PHYSICAL_TRANSFORM_PATCH_REJECTED");
+        return false;
+    }
+    if (State.bPortable != Current.bPortable)
+    {
+        OutCode = TEXT("PORTABLE_PHYSICS_PATCH_REJECTED");
+        return false;
+    }
+    for (const FName Key : {FName(TEXT("held")), FName(TEXT("held_by")),
+                            FName(TEXT("placed_at"))})
+    {
+        const FString* Requested = State.Values.Find(Key);
+        const FString* Existing = Current.Values.Find(Key);
+        if ((Requested == nullptr) != (Existing == nullptr) ||
+            (Requested != nullptr && *Requested != *Existing))
+        {
+            OutCode = TEXT("PHYSICAL_STATE_PATCH_REJECTED");
+            return false;
+        }
+    }
+    for (const FName Key : {
+             FName(TEXT("attachment_parent")),
+             FName(TEXT("attachment_socket")),
+             FName(TEXT("simulate_physics")),
+             FName(TEXT("collision_enabled")),
+             FName(TEXT("collision_profile")),
+             FName(TEXT("linear_velocity")),
+             FName(TEXT("angular_velocity")),
+             FName(TEXT("physical_disposition"))})
+    {
+        if (State.Values.Contains(Key))
+        {
+            OutCode = TEXT("PHYSICS_METADATA_PATCH_REJECTED");
+            return false;
+        }
+    }
+    for (const TPair<FName, FString>& Pair : State.Values)
+    {
+        const FString Key = Pair.Key.ToString().ToLower();
+        if (Key.StartsWith(TEXT("attachment")) ||
+            Key.StartsWith(TEXT("physics")) ||
+            Key.StartsWith(TEXT("collision")) ||
+            Key.StartsWith(TEXT("simulate")) ||
+            Key.Contains(TEXT("velocity")) ||
+            Key == TEXT("physical_disposition"))
+        {
+            OutCode = TEXT("PHYSICS_METADATA_PATCH_REJECTED");
+            return false;
+        }
+    }
+    OutCode = TEXT("PICKUP_NON_PHYSICAL_PATCH_ALLOWED");
+    return true;
 }
 
 FVistaInteractionResult AVistaPickupActor::VistaApplyRuntimeState_Implementation(
@@ -328,59 +476,29 @@ FVistaInteractionResult AVistaPickupActor::VistaApplyRuntimeState_Implementation
             EVistaInteractionStatus::Rejected, TEXT("AUTHORITY_REQUIRED"), SemanticId);
     }
 
-    FString NormalizedPlacement;
-    const FString* PlacementValue = State.Values.Find(TEXT("placed_at"));
-    const bool bRestorePlacement = PlacementValue &&
-        !IsNullPlacementStateValue(*PlacementValue);
-    if (bRestorePlacement &&
-        !NormalizeStoredPlacementAnchor(GetWorld(), *PlacementValue, NormalizedPlacement))
+    FName ValidationCode;
+    if (!ValidatePublicStatePatch(State, ValidationCode))
     {
         return FVistaInteractionResult::Failure(
-            EVistaInteractionStatus::NotFound,
-            TEXT("BASELINE_PLACEMENT_ANCHOR_NOT_FOUND"), SemanticId);
+            EVistaInteractionStatus::Rejected, ValidationCode, SemanticId);
     }
-    if (IsValid(HeldBy))
-    {
-        ReleaseFromCarrier();
-    }
-    bPortable = State.bPortable;
-    const FString* HeldValue = State.Values.Find(TEXT("held"));
-    const bool bRestoreHeld = HeldValue &&
-        HeldValue->Equals(TEXT("true"), ESearchCase::IgnoreCase);
-    const FString* DesiredCarrierId = State.Values.Find(TEXT("held_by"));
-    const FVistaInteractionResult BaseResult = Super::VistaApplyRuntimeState_Implementation(State);
+    // A public patch may change only non-physical values/presentation. Never
+    // forward caller-owned transform data to the semantic-actor base, even
+    // when it happens to compare equal to the current physical transform.
+    FVistaEntityRuntimeState NonPhysicalState = State;
+    NonPhysicalState.Transform = GetActorTransform();
+    NonPhysicalState.bPortable = bPortable;
+    const FVistaInteractionResult BaseResult =
+        Super::VistaApplyRuntimeState_Implementation(NonPhysicalState);
     if (!BaseResult.IsSuccess())
     {
         return BaseResult;
     }
-    if (bRestorePlacement)
-    {
-        RuntimeStateValues.Add(TEXT("placed_at"), NormalizedPlacement);
-    }
-    else
-    {
-        RuntimeStateValues.Remove(TEXT("placed_at"));
-    }
-    Mesh->SetSimulatePhysics(bPortable && !bRestorePlacement);
-    if (bRestoreHeld)
-    {
-        AActor* Carrier = DesiredCarrierId
-            ? ResolveCarrier(GetWorld(), *DesiredCarrierId)
-            : nullptr;
-        if (!IsValid(Carrier))
-        {
-            return FVistaInteractionResult::Failure(
-                EVistaInteractionStatus::NotFound,
-                TEXT("BASELINE_CARRIER_NOT_FOUND"), SemanticId);
-        }
-        const FVistaInteractionResult AttachResult = TryAttachTo(Carrier);
-        if (!AttachResult.IsSuccess())
-        {
-            return AttachResult;
-        }
-    }
+    SyncRuntimeDispositionValues();
     return FVistaInteractionResult::Success(
-        SemanticId, VistaGetRuntimeState_Implementation(), TEXT("PICKUP_STATE_APPLIED"));
+        SemanticId,
+        VistaGetRuntimeState_Implementation(),
+        TEXT("PICKUP_NON_PHYSICAL_STATE_APPLIED"));
 }
 
 FVistaInteractionResult AVistaPickupActor::VistaInteract_Implementation(
@@ -397,26 +515,97 @@ FVistaInteractionResult AVistaPickupActor::VistaInteract_Implementation(
             EVistaInteractionStatus::Rejected, TEXT("AUTHORITY_REQUIRED"), SemanticId);
     }
 
+    if (UVistaActionExecutorComponent::IsPhysicalAffordance(Request.Affordance))
+    {
+        // Physical state is committed only by UVistaActionExecutorComponent at
+        // a verified contact notify. The interface remains readable and keeps
+        // non-physical source compatibility, but cannot bypass the transaction.
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("ACTION_EXECUTOR_REQUIRED"),
+            SemanticId);
+    }
+    return Super::VistaInteract_Implementation(Request);
+}
+
+bool AVistaPickupActor::TryReserveTransaction(
+    UVistaActionExecutorComponent* Executor,
+    FName CommandId)
+{
+    if (!IsValid(Executor) || CommandId.IsNone())
+    {
+        return false;
+    }
+    if (ActiveTransactionExecutor.IsValid())
+    {
+        return false;
+    }
+    ActiveTransactionExecutor = Executor;
+    ActiveTransactionCommandId = CommandId;
+    return true;
+}
+
+void AVistaPickupActor::ReleaseTransaction(
+    UVistaActionExecutorComponent* Executor,
+    FName CommandId)
+{
+    if (ActiveTransactionExecutor.Get() == Executor &&
+        ActiveTransactionCommandId == CommandId)
+    {
+        ActiveTransactionExecutor.Reset();
+        ActiveTransactionCommandId = NAME_None;
+    }
+}
+
+FVistaInteractionResult AVistaPickupActor::CommitTransactionalInteraction(
+    UVistaActionExecutorComponent* Executor,
+    const FVistaInteractionRequest& Request,
+    FName CommitCommandId,
+    const FVector& ReleaseVelocity)
+{
+    if (!IsValid(Executor) || CommitCommandId.IsNone() ||
+        ActiveTransactionExecutor.Get() != Executor ||
+        ActiveTransactionCommandId != CommitCommandId)
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("TRANSACTION_RESERVATION_REQUIRED"),
+            SemanticId);
+    }
+    const FVistaInteractionResult Validation = ValidateRequest(Request);
+    if (!Validation.IsSuccess())
+    {
+        return Validation;
+    }
+    if (!HasAuthority())
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected, TEXT("AUTHORITY_REQUIRED"), SemanticId);
+    }
     switch (Request.Affordance)
     {
     case EVistaAffordance::PickUp:
         return TryAttachTo(Request.Requester);
     case EVistaAffordance::Drop:
-        if (HeldBy != Request.Requester)
+        if (GetCarrier() != Request.Requester)
         {
             return FVistaInteractionResult::Failure(
-                EVistaInteractionStatus::InvalidRequester, TEXT("NOT_ITEM_CARRIER"), SemanticId);
+                EVistaInteractionStatus::InvalidRequester,
+                TEXT("NOT_ITEM_CARRIER"), SemanticId);
         }
-        return ReleaseFromCarrier();
+        return ReleaseFromCarrier(ReleaseVelocity);
     case EVistaAffordance::Place:
-        if (HeldBy != Request.Requester || !IsValid(Request.PlacementAnchor))
+        if (GetCarrier() != Request.Requester || !IsValid(Request.PlacementAnchor))
         {
             return FVistaInteractionResult::Failure(
-                EVistaInteractionStatus::InvalidState, TEXT("PLACEMENT_ANCHOR_REQUIRED"), SemanticId);
+                EVistaInteractionStatus::InvalidState,
+                TEXT("PLACEMENT_ANCHOR_REQUIRED"), SemanticId);
         }
         return ReleaseFromCarrier(FVector::ZeroVector, Request.PlacementAnchor);
     default:
-        return Super::VistaInteract_Implementation(Request);
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Unsupported,
+            TEXT("PHYSICAL_AFFORDANCE_REQUIRED"), SemanticId);
     }
 }
 
@@ -427,7 +616,7 @@ FVistaInteractionResult AVistaPickupActor::TryAttachTo(AActor* Carrier)
         return FVistaInteractionResult::Failure(
             EVistaInteractionStatus::InvalidState, TEXT("ITEM_NOT_PORTABLE"), SemanticId);
     }
-    if (IsValid(HeldBy))
+    if (IsValid(GetCarrier()))
     {
         return FVistaInteractionResult::Failure(
             EVistaInteractionStatus::Busy, TEXT("ITEM_ALREADY_HELD"), SemanticId);
@@ -437,16 +626,72 @@ FVistaInteractionResult AVistaPickupActor::TryAttachTo(AActor* Carrier)
         return FVistaInteractionResult::Failure(
             EVistaInteractionStatus::InvalidRequester, TEXT("CARRIER_REQUIRED"), SemanticId);
     }
-    USceneComponent* Anchor = IVistaItemCarrier::Execute_VistaGetCarryAnchor(Carrier);
-    if (!IsValid(Anchor) || !IVistaItemCarrier::Execute_VistaTryClaimItem(Carrier, this))
+    FName CarryCode;
+    USceneComponent* Anchor =
+        UVistaActionExecutorComponent::PrepareCarryAnchor(Carrier, CarryCode);
+    if (!IsValid(Anchor))
     {
         return FVistaInteractionResult::Failure(
-            EVistaInteractionStatus::Busy, TEXT("CARRIER_SLOT_UNAVAILABLE"), SemanticId);
+            EVistaInteractionStatus::Busy,
+            CarryCode,
+            SemanticId);
+    }
+    if (!CarrierInventoryIsEmpty(Carrier) ||
+        !IVistaItemCarrier::Execute_VistaTryClaimItem(Carrier, this))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Busy,
+            TEXT("CARRIER_SLOT_UNAVAILABLE"),
+            SemanticId);
+    }
+    if (!CarrierInventoryHolds(Carrier, this))
+    {
+        IVistaItemCarrier::Execute_VistaReleaseItem(Carrier, this);
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            CarrierInventoryIsEmpty(Carrier)
+                ? FName(TEXT("CARRIER_CLAIM_VERIFY_FAILED"))
+                : FName(TEXT("CARRIER_CLAIM_COMPENSATION_FAILED")),
+            SemanticId);
     }
 
-    HeldBy = Carrier;
-    RuntimeStateValues.Remove(TEXT("placed_at"));
-    ApplyAttachmentState();
+    FVistaPickupReplicatedDisposition Previous = PhysicalDisposition;
+    Previous.WorldTransform = GetActorTransform();
+    Previous.AttachmentRelativeTransform =
+        GetRootComponent()->GetRelativeTransform();
+    Previous.AttachmentSocketName = GetRootComponent()->GetAttachSocketName();
+    Previous.bSimulatePhysics = Mesh->IsSimulatingPhysics();
+    Previous.CollisionEnabled = static_cast<uint8>(Mesh->GetCollisionEnabled());
+    Previous.CollisionProfileName = Mesh->GetCollisionProfileName();
+    Previous.LinearVelocity = Mesh->GetPhysicsLinearVelocity();
+    Previous.AngularVelocityDegrees =
+        Mesh->GetPhysicsAngularVelocityInDegrees();
+    PhysicalDisposition.Disposition = EVistaPickupDisposition::Held;
+    PhysicalDisposition.Carrier = Carrier;
+    PhysicalDisposition.PlacementAnchorSemanticId.Reset();
+    PhysicalDisposition.WorldTransform = GetActorTransform();
+    PhysicalDisposition.AttachmentRelativeTransform = FTransform::Identity;
+    PhysicalDisposition.AttachmentSocketName = NAME_None;
+    PhysicalDisposition.bSimulatePhysics = false;
+    PhysicalDisposition.CollisionEnabled =
+        static_cast<uint8>(ECollisionEnabled::NoCollision);
+    PhysicalDisposition.CollisionProfileName =
+        UCollisionProfile::PhysicsActor_ProfileName;
+    PhysicalDisposition.LinearVelocity = FVector::ZeroVector;
+    PhysicalDisposition.AngularVelocityDegrees = FVector::ZeroVector;
+    if (!ApplyPhysicalDisposition() || !CarrierInventoryHolds(Carrier, this))
+    {
+        IVistaItemCarrier::Execute_VistaReleaseItem(Carrier, this);
+        const bool bCarrierSlotReleased = CarrierInventoryIsEmpty(Carrier);
+        PhysicalDisposition = Previous;
+        const bool bPreviousRestored = ApplyPhysicalDisposition();
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            bPreviousRestored && bCarrierSlotReleased
+                ? FName(TEXT("CARRY_ATTACHMENT_FAILED"))
+                : FName(TEXT("CARRY_ATTACHMENT_ROLLBACK_FAILED")),
+            SemanticId);
+    }
     ForceNetUpdate();
     return FVistaInteractionResult::Success(
         SemanticId, VistaGetRuntimeState_Implementation(), TEXT("ITEM_PICKED_UP"));
@@ -461,7 +706,7 @@ FVistaInteractionResult AVistaPickupActor::ReleaseFromCarrier(
         return FVistaInteractionResult::Failure(
             EVistaInteractionStatus::Rejected, TEXT("AUTHORITY_REQUIRED"), SemanticId);
     }
-    if (!IsValid(HeldBy))
+    if (!IsValid(GetCarrier()))
     {
         return FVistaInteractionResult::Failure(
             EVistaInteractionStatus::InvalidState, TEXT("ITEM_NOT_HELD"), SemanticId);
@@ -476,71 +721,605 @@ FVistaInteractionResult AVistaPickupActor::ReleaseFromCarrier(
             TEXT("PLACEMENT_ANCHOR_NOT_STABLE"), SemanticId);
     }
 
-    AActor* PreviousCarrier = HeldBy;
-    const FTransform ReleaseTransform = IsValid(PlacementAnchor)
-        ? PlacementAnchor->GetComponentTransform()
-        : GetActorTransform();
-    DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-    HeldBy = nullptr;
-    Mesh->SetCollisionProfileName(UCollisionProfile::PhysicsActor_ProfileName);
-    Mesh->SetSimulatePhysics(!IsValid(PlacementAnchor));
-    SetActorTransform(ReleaseTransform, false, nullptr, ETeleportType::TeleportPhysics);
-    if (!IsValid(PlacementAnchor))
+    AActor* PreviousCarrier = GetCarrier();
+    if (!CarrierInventoryHolds(PreviousCarrier, this))
     {
-        Mesh->SetPhysicsLinearVelocity(LinearVelocity);
-        RuntimeStateValues.Remove(TEXT("placed_at"));
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("CARRIER_INVENTORY_DIVERGED"),
+            SemanticId);
     }
-    else
+    FVistaPickupReplicatedDisposition Previous = PhysicalDisposition;
+    Previous.WorldTransform = GetActorTransform();
+    Previous.AttachmentRelativeTransform =
+        GetRootComponent()->GetRelativeTransform();
+    Previous.AttachmentSocketName = GetRootComponent()->GetAttachSocketName();
+    Previous.bSimulatePhysics = Mesh->IsSimulatingPhysics();
+    Previous.CollisionEnabled = static_cast<uint8>(Mesh->GetCollisionEnabled());
+    Previous.CollisionProfileName = Mesh->GetCollisionProfileName();
+    Previous.LinearVelocity = Mesh->GetPhysicsLinearVelocity();
+    Previous.AngularVelocityDegrees =
+        Mesh->GetPhysicsAngularVelocityInDegrees();
+    PhysicalDisposition.Disposition = IsValid(PlacementAnchor)
+        ? EVistaPickupDisposition::Placed : EVistaPickupDisposition::Free;
+    PhysicalDisposition.Carrier = nullptr;
+    PhysicalDisposition.PlacementAnchorSemanticId = PlacementAnchorSemanticId;
+    PhysicalDisposition.WorldTransform = IsValid(PlacementAnchor)
+        ? PlacementAnchor->GetComponentTransform() : GetActorTransform();
+    PhysicalDisposition.AttachmentRelativeTransform = FTransform::Identity;
+    PhysicalDisposition.AttachmentSocketName = NAME_None;
+    PhysicalDisposition.bSimulatePhysics = !IsValid(PlacementAnchor) && bPortable;
+    PhysicalDisposition.CollisionProfileName =
+        UCollisionProfile::PhysicsActor_ProfileName;
+    PhysicalDisposition.CollisionEnabled =
+        static_cast<uint8>(ECollisionEnabled::QueryAndPhysics);
+    PhysicalDisposition.LinearVelocity = IsValid(PlacementAnchor)
+        ? FVector::ZeroVector : LinearVelocity;
+    PhysicalDisposition.AngularVelocityDegrees = FVector::ZeroVector;
+    if (!ApplyPhysicalDisposition())
     {
-        RuntimeStateValues.Add(TEXT("placed_at"), PlacementAnchorSemanticId);
+        PhysicalDisposition = Previous;
+        const bool bPreviousRestored = ApplyPhysicalDisposition();
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            !bPreviousRestored ||
+                    !CarrierInventoryHolds(PreviousCarrier, this)
+                ? FName(TEXT("PHYSICAL_DISPOSITION_ROLLBACK_FAILED"))
+                : IsValid(PlacementAnchor)
+                    ? FName(TEXT("PLACEMENT_TRANSFORM_MISMATCH"))
+                    : FName(TEXT("DROP_DISPOSITION_FAILED")),
+            SemanticId);
     }
     IVistaItemCarrier::Execute_VistaReleaseItem(PreviousCarrier, this);
+    if (!CarrierInventoryIsEmpty(PreviousCarrier))
+    {
+        PhysicalDisposition = Previous;
+        const bool bPhysicalRestored = ApplyPhysicalDisposition();
+        const bool bInventoryRestored =
+            CarrierInventoryHolds(PreviousCarrier, this) ||
+            (CarrierInventoryIsEmpty(PreviousCarrier) &&
+             IVistaItemCarrier::Execute_VistaTryClaimItem(
+                 PreviousCarrier, this) &&
+             CarrierInventoryHolds(PreviousCarrier, this));
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            bPhysicalRestored && bInventoryRestored
+                ? FName(TEXT("CARRIER_RELEASE_VERIFY_FAILED"))
+                : FName(TEXT("CARRIER_RELEASE_ROLLBACK_FAILED")),
+            SemanticId);
+    }
     ForceNetUpdate();
     return FVistaInteractionResult::Success(
         SemanticId, VistaGetRuntimeState_Implementation(),
         IsValid(PlacementAnchor) ? TEXT("ITEM_PLACED") : TEXT("ITEM_DROPPED"));
 }
 
-void AVistaPickupActor::OnRep_HeldBy()
+void AVistaPickupActor::OnRep_PhysicalDisposition()
 {
-    ApplyAttachmentState();
+    if (!ApplyPhysicalDisposition())
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT("VISTA_PICKUP_DISPOSITION_REJECTED semantic_id=%s disposition=%d"),
+            *SemanticId,
+            static_cast<int32>(PhysicalDisposition.Disposition));
+    }
 }
 
-void AVistaPickupActor::ApplyAttachmentState()
+void AVistaPickupActor::SyncRuntimeDispositionValues()
 {
-    if (IsValid(HeldBy) && HeldBy->GetClass()->ImplementsInterface(UVistaItemCarrier::StaticClass()))
+    const bool bHeld =
+        PhysicalDisposition.Disposition == EVistaPickupDisposition::Held &&
+        IsValid(PhysicalDisposition.Carrier.Get());
+    RuntimeStateValues.Add(TEXT("held"), bHeld ? TEXT("true") : TEXT("false"));
+    RuntimeStateValues.Add(
+        TEXT("held_by"),
+        bHeld ? CarrierSemanticId(PhysicalDisposition.Carrier.Get()) : FString());
+    if (PhysicalDisposition.Disposition == EVistaPickupDisposition::Placed)
     {
-        if (USceneComponent* Anchor = IVistaItemCarrier::Execute_VistaGetCarryAnchor(HeldBy))
-        {
-            Mesh->SetSimulatePhysics(false);
-            Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-            AttachToComponent(Anchor, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-            return;
-        }
-    }
-    DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-    Mesh->SetCollisionProfileName(UCollisionProfile::PhysicsActor_ProfileName);
-    Mesh->SetSimulatePhysics(bPortable);
-}
-
-void AVistaPickupActor::NormalizePlacementState()
-{
-    const FString* PlacementValue = RuntimeStateValues.Find(TEXT("placed_at"));
-    if (!PlacementValue || IsNullPlacementStateValue(*PlacementValue))
-    {
-        RuntimeStateValues.Remove(TEXT("placed_at"));
-        return;
-    }
-    FString NormalizedPlacement;
-    if (NormalizeStoredPlacementAnchor(GetWorld(), *PlacementValue, NormalizedPlacement))
-    {
-        RuntimeStateValues.Add(TEXT("placed_at"), NormalizedPlacement);
-        Mesh->SetSimulatePhysics(false);
+        RuntimeStateValues.Add(
+            TEXT("placed_at"), PhysicalDisposition.PlacementAnchorSemanticId);
     }
     else
     {
         RuntimeStateValues.Remove(TEXT("placed_at"));
     }
+}
+
+bool AVistaPickupActor::ApplyPhysicalDisposition()
+{
+    if (!IsValid(Mesh) || !IsValid(GetRootComponent()) ||
+        PhysicalDisposition.WorldTransform.ContainsNaN() ||
+        PhysicalDisposition.AttachmentRelativeTransform.ContainsNaN() ||
+        PhysicalDisposition.LinearVelocity.ContainsNaN() ||
+        PhysicalDisposition.AngularVelocityDegrees.ContainsNaN())
+    {
+        return false;
+    }
+
+    if (PhysicalDisposition.Disposition == EVistaPickupDisposition::Held)
+    {
+        AActor* Carrier = PhysicalDisposition.Carrier.Get();
+        FName CarryCode;
+        USceneComponent* Anchor =
+            UVistaActionExecutorComponent::PrepareCarryAnchor(Carrier, CarryCode);
+        if (!IsValid(Carrier) || !IsValid(Anchor) ||
+            !PhysicalDisposition.PlacementAnchorSemanticId.IsEmpty() ||
+            PhysicalDisposition.bSimulatePhysics)
+        {
+            Mesh->SetSimulatePhysics(false);
+            Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+            return false;
+        }
+        Mesh->SetSimulatePhysics(false);
+        Mesh->SetPhysicsLinearVelocity(PhysicalDisposition.LinearVelocity);
+        Mesh->SetPhysicsAngularVelocityInDegrees(
+            PhysicalDisposition.AngularVelocityDegrees);
+        Mesh->SetCollisionProfileName(PhysicalDisposition.CollisionProfileName);
+        Mesh->SetCollisionEnabled(
+            static_cast<ECollisionEnabled::Type>(
+                PhysicalDisposition.CollisionEnabled));
+        if ((GetRootComponent()->GetAttachParent() != Anchor ||
+             GetRootComponent()->GetAttachSocketName() !=
+                 PhysicalDisposition.AttachmentSocketName) &&
+            !AttachToComponent(
+                Anchor,
+                FAttachmentTransformRules::KeepWorldTransform,
+                PhysicalDisposition.AttachmentSocketName))
+        {
+            return false;
+        }
+        GetRootComponent()->SetRelativeTransform(
+            PhysicalDisposition.AttachmentRelativeTransform,
+            false,
+            nullptr,
+            ETeleportType::TeleportPhysics);
+        SyncRuntimeDispositionValues();
+        return GetRootComponent()->GetAttachParent() == Anchor &&
+            GetRootComponent()->GetAttachSocketName() ==
+                PhysicalDisposition.AttachmentSocketName &&
+            TransformBitsEqual(
+                GetRootComponent()->GetRelativeTransform(),
+                PhysicalDisposition.AttachmentRelativeTransform) &&
+            !Mesh->IsSimulatingPhysics() &&
+            static_cast<uint8>(Mesh->GetCollisionEnabled()) ==
+                PhysicalDisposition.CollisionEnabled &&
+            Mesh->GetCollisionProfileName() ==
+                PhysicalDisposition.CollisionProfileName &&
+            VectorBitsEqual(
+                Mesh->GetPhysicsLinearVelocity(),
+                PhysicalDisposition.LinearVelocity) &&
+            VectorBitsEqual(
+                Mesh->GetPhysicsAngularVelocityInDegrees(),
+                PhysicalDisposition.AngularVelocityDegrees);
+    }
+
+    DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+    Mesh->SetSimulatePhysics(false);
+    Mesh->SetCollisionProfileName(PhysicalDisposition.CollisionProfileName);
+    Mesh->SetCollisionEnabled(
+        static_cast<ECollisionEnabled::Type>(PhysicalDisposition.CollisionEnabled));
+    const bool bTransformApplied = SetActorTransform(
+        PhysicalDisposition.WorldTransform,
+        false,
+        nullptr,
+        ETeleportType::TeleportPhysics);
+    Mesh->SetSimulatePhysics(PhysicalDisposition.bSimulatePhysics);
+    Mesh->SetPhysicsLinearVelocity(PhysicalDisposition.LinearVelocity);
+    Mesh->SetPhysicsAngularVelocityInDegrees(
+        PhysicalDisposition.AngularVelocityDegrees);
+    SyncRuntimeDispositionValues();
+    FString NormalizedPlacementIdentity;
+    const bool bPlacementIdentityValid =
+        PhysicalDisposition.Disposition != EVistaPickupDisposition::Placed ||
+        (HasAuthority()
+            ? NormalizeStoredPlacementAnchor(
+                  GetWorld(),
+                  PhysicalDisposition.PlacementAnchorSemanticId,
+                  NormalizedPlacementIdentity) &&
+                  NormalizedPlacementIdentity ==
+                      PhysicalDisposition.PlacementAnchorSemanticId
+            : IsStablePlacementAnchorSemanticId(
+                  PhysicalDisposition.PlacementAnchorSemanticId));
+    return bTransformApplied && bPlacementIdentityValid &&
+        !IsValid(PhysicalDisposition.Carrier.Get()) &&
+        (PhysicalDisposition.Disposition == EVistaPickupDisposition::Placed
+            ? !PhysicalDisposition.bSimulatePhysics &&
+                !PhysicalDisposition.PlacementAnchorSemanticId.IsEmpty()
+            : PhysicalDisposition.Disposition == EVistaPickupDisposition::Free &&
+                PhysicalDisposition.PlacementAnchorSemanticId.IsEmpty()) &&
+        GetRootComponent()->GetAttachParent() == nullptr &&
+        TransformBitsEqual(
+            GetActorTransform(), PhysicalDisposition.WorldTransform) &&
+        Mesh->IsSimulatingPhysics() ==
+            PhysicalDisposition.bSimulatePhysics &&
+        static_cast<uint8>(Mesh->GetCollisionEnabled()) ==
+            PhysicalDisposition.CollisionEnabled &&
+        Mesh->GetCollisionProfileName() ==
+            PhysicalDisposition.CollisionProfileName &&
+        VectorBitsEqual(
+            Mesh->GetPhysicsLinearVelocity(),
+            PhysicalDisposition.LinearVelocity) &&
+        VectorBitsEqual(
+            Mesh->GetPhysicsAngularVelocityInDegrees(),
+            PhysicalDisposition.AngularVelocityDegrees);
+}
+
+bool AVistaPickupActor::CapturePhysicalStateTrusted(
+    FVistaPickupPhysicalStateSnapshot& OutSnapshot,
+    USceneComponent*& OutAttachmentParent,
+    AActor*& OutCarrier,
+    EVistaPickupDisposition& OutDisposition,
+    const FVistaTrustedPhysicalRestoreToken& Token) const
+{
+    static_cast<void>(Token);
+    OutSnapshot = FVistaPickupPhysicalStateSnapshot();
+    OutAttachmentParent = nullptr;
+    OutCarrier = nullptr;
+    OutDisposition = EVistaPickupDisposition::Free;
+    if (!IsValid(Mesh) || !IsValid(GetRootComponent()))
+    {
+        return false;
+    }
+
+    const USceneComponent* Root = GetRootComponent();
+    OutAttachmentParent = Root->GetAttachParent();
+    OutCarrier = GetCarrier();
+    OutDisposition = PhysicalDisposition.Disposition;
+    OutSnapshot.WorldTransform = GetActorTransform();
+    OutSnapshot.bSimulatePhysics = Mesh->IsSimulatingPhysics();
+    OutSnapshot.CollisionEnabled =
+        static_cast<uint8>(Mesh->GetCollisionEnabled());
+    OutSnapshot.CollisionProfileName = Mesh->GetCollisionProfileName();
+    OutSnapshot.LinearVelocity = Mesh->GetPhysicsLinearVelocity();
+    OutSnapshot.AngularVelocityDegrees =
+        Mesh->GetPhysicsAngularVelocityInDegrees();
+    OutSnapshot.bHasAttachmentParent = IsValid(OutAttachmentParent);
+    if (IsValid(OutAttachmentParent))
+    {
+        OutSnapshot.AttachmentParentOwnerSemanticId =
+            CarrierSemanticId(OutAttachmentParent->GetOwner());
+        OutSnapshot.AttachmentParentComponentName =
+            OutAttachmentParent->GetFName();
+        OutSnapshot.AttachmentSocketName = Root->GetAttachSocketName();
+        OutSnapshot.AttachmentRelativeTransform = Root->GetRelativeTransform();
+    }
+    OutSnapshot.bHeld = IsValid(OutCarrier);
+    OutSnapshot.CarrierSemanticId = CarrierSemanticId(OutCarrier);
+    if (IsValid(OutCarrier))
+    {
+        AActor* InventoryItem = CarrierInventoryItem(OutCarrier);
+        OutSnapshot.InventoryCarrierSemanticId =
+            CarrierSemanticId(OutCarrier);
+        OutSnapshot.bInventorySlotOccupied = IsValid(InventoryItem);
+        OutSnapshot.InventoryItemSemanticId = CarrierSemanticId(InventoryItem);
+    }
+    if (PhysicalDisposition.Disposition == EVistaPickupDisposition::Placed)
+    {
+        OutSnapshot.PlacedAtSemanticId =
+            PhysicalDisposition.PlacementAnchorSemanticId;
+    }
+
+    const bool bDispositionCoherent =
+        (OutDisposition == EVistaPickupDisposition::Held &&
+         OutSnapshot.bHeld && OutSnapshot.bHasAttachmentParent &&
+         !OutSnapshot.bSimulatePhysics &&
+         OutSnapshot.PlacedAtSemanticId.IsEmpty()) ||
+        (OutDisposition == EVistaPickupDisposition::Placed &&
+         !OutSnapshot.bHeld && !OutSnapshot.bHasAttachmentParent &&
+         !OutSnapshot.bSimulatePhysics &&
+         !OutSnapshot.PlacedAtSemanticId.IsEmpty()) ||
+        (OutDisposition == EVistaPickupDisposition::Free &&
+         !OutSnapshot.bHeld && !OutSnapshot.bHasAttachmentParent &&
+         OutSnapshot.PlacedAtSemanticId.IsEmpty());
+    return bDispositionCoherent &&
+        !OutSnapshot.WorldTransform.ContainsNaN() &&
+        !OutSnapshot.AttachmentRelativeTransform.ContainsNaN() &&
+        !OutSnapshot.LinearVelocity.ContainsNaN() &&
+        !OutSnapshot.AngularVelocityDegrees.ContainsNaN() &&
+        (!OutSnapshot.bHeld ||
+         (!OutSnapshot.CarrierSemanticId.IsEmpty() &&
+          OutSnapshot.bInventorySlotOccupied &&
+          OutSnapshot.InventoryItemSemanticId == SemanticId));
+}
+
+bool AVistaPickupActor::MatchesPhysicalStateTrusted(
+    const FVistaPickupPhysicalStateSnapshot& ExpectedSnapshot,
+    const USceneComponent* ExpectedAttachmentParent,
+    const AActor* ExpectedCarrier,
+    EVistaPickupDisposition ExpectedDisposition,
+    const FVistaTrustedPhysicalRestoreToken& Token) const
+{
+    FVistaPickupPhysicalStateSnapshot ActualSnapshot;
+    USceneComponent* ActualAttachmentParent = nullptr;
+    AActor* ActualCarrier = nullptr;
+    EVistaPickupDisposition ActualDisposition = EVistaPickupDisposition::Free;
+    return CapturePhysicalStateTrusted(
+               ActualSnapshot,
+               ActualAttachmentParent,
+               ActualCarrier,
+               ActualDisposition,
+               Token) &&
+        ActualAttachmentParent == ExpectedAttachmentParent &&
+        ActualCarrier == ExpectedCarrier &&
+        ActualDisposition == ExpectedDisposition &&
+        (!IsValid(ExpectedCarrier) ||
+         CarrierInventoryHolds(
+             const_cast<AActor*>(ExpectedCarrier), this)) &&
+        PhysicalSnapshotsBitExact(ActualSnapshot, ExpectedSnapshot);
+}
+
+bool AVistaPickupActor::ClearForTrustedBaselineRestore(
+    const FVistaTrustedPhysicalRestoreToken& Token)
+{
+    static_cast<void>(Token);
+    if (!HasAuthority() || !IsValid(Mesh))
+    {
+        return false;
+    }
+    if (AActor* PreviousCarrier = GetCarrier(); IsValid(PreviousCarrier))
+    {
+        if (!CarrierInventoryHolds(PreviousCarrier, this))
+        {
+            return false;
+        }
+        IVistaItemCarrier::Execute_VistaReleaseItem(PreviousCarrier, this);
+        if (!CarrierInventoryIsEmpty(PreviousCarrier))
+        {
+            return false;
+        }
+    }
+    PhysicalDisposition.Disposition = EVistaPickupDisposition::Free;
+    PhysicalDisposition.Carrier = nullptr;
+    PhysicalDisposition.PlacementAnchorSemanticId.Reset();
+    PhysicalDisposition.WorldTransform = GetActorTransform();
+    PhysicalDisposition.AttachmentRelativeTransform = FTransform::Identity;
+    PhysicalDisposition.AttachmentSocketName = NAME_None;
+    PhysicalDisposition.bSimulatePhysics = bPortable;
+    PhysicalDisposition.CollisionProfileName =
+        UCollisionProfile::PhysicsActor_ProfileName;
+    PhysicalDisposition.CollisionEnabled =
+        static_cast<uint8>(ECollisionEnabled::QueryAndPhysics);
+    PhysicalDisposition.LinearVelocity = FVector::ZeroVector;
+    PhysicalDisposition.AngularVelocityDegrees = FVector::ZeroVector;
+    return ApplyPhysicalDisposition();
+}
+
+FVistaInteractionResult AVistaPickupActor::RestorePhysicalStateTrusted(
+    const FVistaEntityRuntimeState& State,
+    const FVistaPickupPhysicalStateSnapshot* PhysicalSnapshot,
+    USceneComponent* AttachmentParent,
+    AActor* Carrier,
+    const FVistaTrustedPhysicalRestoreToken& Token)
+{
+    static_cast<void>(Token);
+    if (!HasAuthority() || !IsValid(Mesh) ||
+        (!State.SemanticId.IsEmpty() && State.SemanticId != SemanticId) ||
+        State.Transform.ContainsNaN())
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("TRUSTED_RESTORE_INPUT_INVALID"),
+            SemanticId);
+    }
+
+    const FString* HeldValue = State.Values.Find(TEXT("held"));
+    const bool bRestoreHeld = HeldValue &&
+        HeldValue->Equals(TEXT("true"), ESearchCase::IgnoreCase);
+    const FString* HeldByValue = State.Values.Find(TEXT("held_by"));
+    const FString* PlacedAtValue = State.Values.Find(TEXT("placed_at"));
+    const bool bRestorePlaced = PlacedAtValue &&
+        !IsNullPlacementStateValue(*PlacedAtValue);
+    if (bRestoreHeld && bRestorePlaced)
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("TRUSTED_RESTORE_DISPOSITION_CONFLICT"),
+            SemanticId);
+    }
+
+    FVistaPickupReplicatedDisposition Desired;
+    Desired.WorldTransform = State.Transform;
+    Desired.CollisionProfileName =
+        UCollisionProfile::PhysicsActor_ProfileName;
+    Desired.CollisionEnabled = bRestoreHeld
+        ? static_cast<uint8>(ECollisionEnabled::NoCollision)
+        : static_cast<uint8>(ECollisionEnabled::QueryAndPhysics);
+    Desired.bSimulatePhysics = !bRestoreHeld && !bRestorePlaced && State.bPortable;
+    if (PhysicalSnapshot != nullptr)
+    {
+        if (PhysicalSnapshot->WorldTransform.ContainsNaN() ||
+            PhysicalSnapshot->AttachmentRelativeTransform.ContainsNaN() ||
+            PhysicalSnapshot->LinearVelocity.ContainsNaN() ||
+            PhysicalSnapshot->AngularVelocityDegrees.ContainsNaN() ||
+            PhysicalSnapshot->bHeld != bRestoreHeld ||
+            (PhysicalSnapshot->bHasAttachmentParent != bRestoreHeld) ||
+            (PhysicalSnapshot->bSimulatePhysics &&
+             PhysicalSnapshot->bHasAttachmentParent) ||
+            PhysicalSnapshot->PlacedAtSemanticId !=
+                (bRestorePlaced ? *PlacedAtValue : FString()))
+        {
+            return FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::InvalidState,
+                TEXT("TRUSTED_RESTORE_SNAPSHOT_INVALID"),
+                SemanticId);
+        }
+        Desired.WorldTransform = PhysicalSnapshot->WorldTransform;
+        Desired.AttachmentRelativeTransform =
+            PhysicalSnapshot->AttachmentRelativeTransform;
+        Desired.AttachmentSocketName = PhysicalSnapshot->AttachmentSocketName;
+        Desired.bSimulatePhysics = PhysicalSnapshot->bSimulatePhysics;
+        Desired.CollisionEnabled = PhysicalSnapshot->CollisionEnabled;
+        Desired.CollisionProfileName = PhysicalSnapshot->CollisionProfileName;
+        Desired.LinearVelocity = PhysicalSnapshot->LinearVelocity;
+        Desired.AngularVelocityDegrees =
+            PhysicalSnapshot->AngularVelocityDegrees;
+    }
+
+    if (bRestoreHeld)
+    {
+        if (!IsValid(Carrier) && HeldByValue != nullptr)
+        {
+            Carrier = ResolveCarrier(GetWorld(), *HeldByValue);
+        }
+        if (!IsValid(Carrier))
+        {
+            return FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::NotFound,
+                TEXT("BASELINE_CARRIER_NOT_FOUND"),
+                SemanticId);
+        }
+        FName CarryCode;
+        USceneComponent* ExactCarryAnchor =
+            UVistaActionExecutorComponent::PrepareCarryAnchor(Carrier, CarryCode);
+        if (!IsValid(ExactCarryAnchor) ||
+            (AttachmentParent != nullptr && AttachmentParent != ExactCarryAnchor) ||
+            HeldByValue == nullptr ||
+            *HeldByValue != CarrierSemanticId(Carrier) ||
+            (PhysicalSnapshot != nullptr &&
+             (PhysicalSnapshot->AttachmentParentOwnerSemanticId !=
+                  CarrierSemanticId(Carrier) ||
+              PhysicalSnapshot->AttachmentParentComponentName !=
+                  ExactCarryAnchor->GetFName())))
+        {
+            return FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::NotFound,
+                TEXT("TRUSTED_RESTORE_CARRIER_INVALID"),
+                SemanticId);
+        }
+        Desired.Disposition = EVistaPickupDisposition::Held;
+        Desired.Carrier = Carrier;
+    }
+    else if (bRestorePlaced)
+    {
+        FString NormalizedPlacement;
+        if (!NormalizeStoredPlacementAnchor(
+                GetWorld(), *PlacedAtValue, NormalizedPlacement) ||
+            NormalizedPlacement != *PlacedAtValue || AttachmentParent != nullptr ||
+            IsValid(Carrier))
+        {
+            return FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::NotFound,
+                TEXT("TRUSTED_RESTORE_PLACEMENT_INVALID"),
+                SemanticId);
+        }
+        Desired.Disposition = EVistaPickupDisposition::Placed;
+        Desired.PlacementAnchorSemanticId = NormalizedPlacement;
+        Desired.bSimulatePhysics = false;
+    }
+    else
+    {
+        if (AttachmentParent != nullptr || IsValid(Carrier))
+        {
+            return FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::InvalidState,
+                TEXT("TRUSTED_RESTORE_FREE_ATTACHMENT_INVALID"),
+                SemanticId);
+        }
+        Desired.Disposition = EVistaPickupDisposition::Free;
+    }
+
+    if (!ClearForTrustedBaselineRestore(Token))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("TRUSTED_RESTORE_CLEAR_FAILED"),
+            SemanticId);
+    }
+    bPortable = State.bPortable;
+    const FVistaInteractionResult BaseResult =
+        Super::VistaApplyRuntimeState_Implementation(State);
+    if (!BaseResult.IsSuccess())
+    {
+        return BaseResult;
+    }
+    bool bCarrierClaimed = false;
+    if (Desired.Disposition == EVistaPickupDisposition::Held)
+    {
+        bCarrierClaimed =
+            IVistaItemCarrier::Execute_VistaTryClaimItem(Carrier, this);
+        if (!bCarrierClaimed || !CarrierInventoryHolds(Carrier, this))
+        {
+            if (bCarrierClaimed)
+            {
+                IVistaItemCarrier::Execute_VistaReleaseItem(Carrier, this);
+            }
+            return FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::Busy,
+                CarrierInventoryIsEmpty(Carrier)
+                    ? FName(TEXT("TRUSTED_RESTORE_CARRIER_SLOT_UNAVAILABLE"))
+                    : FName(TEXT("TRUSTED_RESTORE_CARRIER_CLAIM_DIVERGED")),
+                SemanticId);
+        }
+    }
+    PhysicalDisposition = Desired;
+    if (!ApplyPhysicalDisposition())
+    {
+        if (bCarrierClaimed)
+        {
+            IVistaItemCarrier::Execute_VistaReleaseItem(Carrier, this);
+        }
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            !bCarrierClaimed || CarrierInventoryIsEmpty(Carrier)
+                ? FName(TEXT("TRUSTED_RESTORE_APPLY_FAILED"))
+                : FName(TEXT("TRUSTED_RESTORE_COMPENSATION_FAILED")),
+            SemanticId);
+    }
+    if (Desired.Disposition == EVistaPickupDisposition::Held &&
+        !CarrierInventoryHolds(Carrier, this))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("TRUSTED_RESTORE_CARRIER_VERIFY_FAILED"),
+            SemanticId);
+    }
+    ForceNetUpdate();
+    return FVistaInteractionResult::Success(
+        SemanticId,
+        VistaGetRuntimeState_Implementation(),
+        TEXT("TRUSTED_PHYSICAL_STATE_RESTORED"));
+}
+
+void AVistaPickupActor::NormalizePlacementState()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+    const FString* PlacementValue = RuntimeStateValues.Find(TEXT("placed_at"));
+    FString NormalizedPlacement;
+    const bool bPlaced = PlacementValue &&
+        !IsNullPlacementStateValue(*PlacementValue) &&
+        NormalizeStoredPlacementAnchor(
+            GetWorld(), *PlacementValue, NormalizedPlacement);
+    PhysicalDisposition.Disposition = bPlaced
+        ? EVistaPickupDisposition::Placed : EVistaPickupDisposition::Free;
+    PhysicalDisposition.Carrier = nullptr;
+    PhysicalDisposition.PlacementAnchorSemanticId = bPlaced
+        ? NormalizedPlacement : FString();
+    PhysicalDisposition.WorldTransform = GetActorTransform();
+    PhysicalDisposition.AttachmentRelativeTransform = FTransform::Identity;
+    PhysicalDisposition.AttachmentSocketName = NAME_None;
+    PhysicalDisposition.bSimulatePhysics = !bPlaced && bPortable;
+    PhysicalDisposition.CollisionProfileName =
+        UCollisionProfile::PhysicsActor_ProfileName;
+    PhysicalDisposition.CollisionEnabled =
+        static_cast<uint8>(ECollisionEnabled::QueryAndPhysics);
+    PhysicalDisposition.LinearVelocity = bPlaced
+        ? FVector::ZeroVector : Mesh->GetPhysicsLinearVelocity();
+    PhysicalDisposition.AngularVelocityDegrees = bPlaced
+        ? FVector::ZeroVector : Mesh->GetPhysicsAngularVelocityInDegrees();
+    if (!ApplyPhysicalDisposition())
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT("VISTA_PICKUP_INITIAL_DISPOSITION_REJECTED semantic_id=%s"),
+            *SemanticId);
+    }
+    ForceNetUpdate();
 }
 
 void AVistaPickupActor::RefreshPresentationState()

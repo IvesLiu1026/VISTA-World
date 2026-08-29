@@ -78,6 +78,11 @@ protected:
     virtual void BeginPlay() override;
 
 private:
-    UPROPERTY(Replicated)
+    UPROPERTY(ReplicatedUsing = OnRep_HeldItem)
     TObjectPtr<AVistaPickupActor> HeldItem = nullptr;
+
+    UFUNCTION()
+    void OnRep_HeldItem();
+
+    void EnsureCarryAnchorReady();
 };

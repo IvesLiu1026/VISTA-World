@@ -68,10 +68,25 @@ bool UVistaAnimationComponent::SupportsAction(EVistaNpcActionType Type)
 bool UVistaAnimationComponent::IsLegacyFallbackAction(EVistaNpcActionType Type)
 {
     return Type == EVistaNpcActionType::LookAt ||
-        Type == EVistaNpcActionType::PickUp ||
-        Type == EVistaNpcActionType::Place ||
         Type == EVistaNpcActionType::OpenDoor ||
         Type == EVistaNpcActionType::CloseDoor;
+}
+
+bool UVistaAnimationComponent::HasApprovedMutationAnimation(
+    EVistaNpcActionType Type,
+    FName& OutCode)
+{
+    // ue_5_7_3_animation_v1 currently marks pickup and drop/place as
+    // blocked_on_license. Merely finding an object at the expected package path
+    // is not approval and must never turn a blocked source into runtime-ready.
+    if (Type == EVistaNpcActionType::PickUp ||
+        Type == EVistaNpcActionType::Place)
+    {
+        OutCode = TEXT("ANIMATION_SOURCE_LICENSE_UNAPPROVED");
+        return false;
+    }
+    OutCode = TEXT("ANIMATION_SOURCE_APPROVED");
+    return true;
 }
 
 bool UVistaAnimationComponent::RequiresTarget(EVistaNpcActionType Type)
@@ -126,6 +141,10 @@ bool UVistaAnimationComponent::StartNpcAction(
     if (Action.ActionId.IsNone() || !SupportsAction(Action.Type))
     {
         OutCode = TEXT("ANIMATION_ACTION_UNSUPPORTED");
+        return false;
+    }
+    if (!HasApprovedMutationAnimation(Action.Type, OutCode))
+    {
         return false;
     }
     if (RequiresTarget(Action.Type) && !IsValid(Target))

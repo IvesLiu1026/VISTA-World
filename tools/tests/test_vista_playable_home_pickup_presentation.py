@@ -78,12 +78,12 @@ def test_runtime_attachment_keeps_presentation_under_pickup_actor_authority() ->
     release = _function(
         source,
         "FVistaInteractionResult AVistaPickupActor::ReleaseFromCarrier(",
-        "void AVistaPickupActor::OnRep_HeldBy()",
+        "void AVistaPickupActor::OnRep_PhysicalDisposition()",
     )
     attachment_state = _function(
         source,
-        "void AVistaPickupActor::ApplyAttachmentState()",
-        "void AVistaPickupActor::NormalizePlacementState()",
+        "bool AVistaPickupActor::ApplyPhysicalDisposition()",
+        "bool AVistaPickupActor::ClearForTrustedBaselineRestore(",
     )
 
     assert "PresentationMesh->SetVisibility(bHasPresentation, false);" in refresh
@@ -92,13 +92,25 @@ def test_runtime_attachment_keeps_presentation_under_pickup_actor_authority() ->
     assert "SetActorHiddenInGame" not in source
 
     assert "SetRootComponent(Mesh);" in source
-    assert "AttachToComponent(Anchor," in attachment_state
-    assert "DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);" in release
+    assert "AttachToComponent(" in attachment_state
     assert (
-        "Mesh->SetCollisionProfileName(UCollisionProfile::PhysicsActor_ProfileName);"
-        in release
+        "DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);"
+        in attachment_state
     )
-    assert "Mesh->SetSimulatePhysics(!IsValid(PlacementAnchor));" in release
+    assert "Mesh->SetCollisionProfileName(" in attachment_state
+    assert (
+        "Mesh->SetSimulatePhysics(PhysicalDisposition.bSimulatePhysics);"
+        in attachment_state
+    )
+    assert "PhysicalDisposition = Previous;" in release
+    assert "ApplyPhysicalDisposition();" in release
+    for direct_mutation in (
+        "DetachFromActor(",
+        "Mesh->SetCollisionProfileName(",
+        "Mesh->SetSimulatePhysics(",
+        "AttachToComponent(",
+    ):
+        assert direct_mutation not in release
     assert "PresentationMesh" not in attach
     assert "PresentationMesh" not in release
     assert "PresentationMesh" not in attachment_state
