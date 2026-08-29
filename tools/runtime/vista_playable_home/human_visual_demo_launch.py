@@ -31,6 +31,7 @@ from typing import Any, Callable, Mapping
 
 COMBINED_RECEIPT_SCHEMA_V2 = "simworld.vista.human-visual-demo-combined-receipt/v2"
 COMBINED_RECEIPT_SCHEMA_V3 = "simworld.vista.human-visual-demo-combined-receipt/v3"
+COMBINED_RECEIPT_SCHEMA_V4 = "simworld.vista.human-visual-demo-combined-receipt/v4"
 # The legacy name remains the v2 value so existing producers and their emitted
 # bytes are unchanged.  V3 is an additive, explicitly selected receipt shape.
 COMBINED_RECEIPT_SCHEMA = COMBINED_RECEIPT_SCHEMA_V2
@@ -83,6 +84,7 @@ RECEIPT_KEYS = frozenset(
     }
 )
 RECEIPT_V3_KEYS = RECEIPT_KEYS | {"realism_r4_upgrade"}
+RECEIPT_V4_KEYS = RECEIPT_KEYS | {"accessory_r6_upgrade"}
 ARTIFACT_KEYS = frozenset({"path", "sha256", "size_bytes"})
 MAP_KEYS = frozenset({"object_path", "package"})
 PROJECT_STATIC_TREE_KEYS = frozenset(
@@ -399,6 +401,319 @@ REALISM_R4_SHADOW_CATEGORY_COUNTS = {
     "pickup_presentation_visible": 3,
     "pickup_proxy_hidden": 3,
 }
+ACCESSORY_R6_UPGRADE_SCHEMA = "simworld.vista.human-visual-demo-accessory-r6-upgrade/v1"
+ACCESSORY_R6_EXECUTION_SCHEMA = (
+    "simworld.vista.human-visual-demo-accessory-r6-execution/v1"
+)
+ACCESSORY_R6_RESULT_SCHEMA = "simworld.vista.human-visual-demo-accessory-r6-result/v1"
+ACCESSORY_R6_UPGRADE_STATUS = "accessory_r6_map_saved_cold_reloaded"
+ACCESSORY_R6_EXECUTION_STATUS = "authorized_apply_request"
+ACCESSORY_R6_ACCEPTANCE = dict(REALISM_R4_ACCEPTANCE)
+ACCESSORY_R6_TRUSTED_R4_PARENT = {
+    "receipt": {
+        "path": (
+            "/data/sysx/vista-world/runs/vista-action-world-r1/"
+            "combined-realism-r4-human-demo-20260829c/"
+            "human-visual-demo-combined-receipt.json"
+        ),
+        "sha256": "fb17a5a88fc1d78061c5de0ae70e79643d33141a532431ad12ee5ef44666b71b",
+        "size_bytes": 6_374,
+    },
+    "project": {
+        "path": (
+            "/data/sysx/vista-world/runs/vista-action-world-r1/"
+            "combined-realism-r4-human-demo-20260829c/project/"
+            "VistaPlayableHome.uproject"
+        ),
+        "sha256": "fe11c7e48eb895eec74e48868fc458a24a2290e826f8cbe75edea0e8ba8b674a",
+        "size_bytes": 522,
+    },
+    "project_static_tree": {
+        "algorithm": PROJECT_STATIC_TREE_ALGORITHM,
+        "file_count": 2_444,
+        "total_bytes": 9_152_756_331,
+        "tree_sha256": "3b86c49090a8f60fd12ba70927b53925de7f3b0471ecf4e009445d6ea5ff4df0",
+    },
+    "map": {
+        "path": (
+            "/data/sysx/vista-world/runs/vista-action-world-r1/"
+            "combined-realism-r4-human-demo-20260829c/project/Content/VISTA/"
+            "PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap"
+        ),
+        "sha256": "a3a9a0d87957e6c454f12dc4805a1735ed903b19d64fb9948bb733577f59f76c",
+        "size_bytes": 466_557,
+    },
+    "r4_commandlet": {
+        "path": (
+            "/data/sysx/vista-world/runs/vista-action-world-r1/"
+            "combined-realism-r4-human-demo-20260829c/"
+            "compose_combined_realism_r4_commandlet.py"
+        ),
+        "sha256": "628d65f62306f68dc049e5011d26d58ddfa20fd6771aaba7c600e52296127302",
+        "size_bytes": 62_307,
+    },
+}
+ACCESSORY_R6_TRUSTED_SOURCE_ROOT = Path(__file__).resolve().parents[3]
+ACCESSORY_R6_TRUSTED_SCRIPTS = {
+    "materializer": {
+        "path": ACCESSORY_R6_TRUSTED_SOURCE_ROOT
+        / "tools/ue/vista_playable_home/materialize_accessory_r6.py",
+        "sha256": "ff7bf013577443291df5606a8b2885e79e649ecd6aa81e238c71ec707d44dcac",
+        "size_bytes": 42_495,
+    },
+    "commandlet": {
+        "path": ACCESSORY_R6_TRUSTED_SOURCE_ROOT
+        / "tools/ue/vista_playable_home/compose_accessory_r6_commandlet.py",
+        "sha256": "f39a277779ba782ef559435fede2ad81d2287b007af12b75215198d72b3c00a8",
+        "size_bytes": 38_717,
+    },
+}
+ACCESSORY_R6_ACKNOWLEDGEMENTS = {
+    "private_noncommercial_research": (
+        "I acknowledge City Sample use is restricted to private noncommercial research."
+    ),
+    "epic_ue_only_content_entitlement": (
+        "I confirm my Epic entitlement and UE-only use of City Sample content."
+    ),
+    "no_redistribution": (
+        "I acknowledge source UAssets and external asset payloads may not be redistributed."
+    ),
+    "external_assets_outside_git": (
+        "I acknowledge every external asset payload remains outside Git."
+    ),
+    "human_visual_demo_only": (
+        "I acknowledge these accessories are for a human-operated visual demo only."
+    ),
+    "excluded_from_vista_and_ai": (
+        "I acknowledge this output is excluded from VISTA datasets/databases and AI/VLM training, testing, evaluation, or review."
+    ),
+    "sealed_r4_large_copy": (
+        "I authorize an isolated 9.15 GiB reflink or copy of the sealed R4-C project."
+    ),
+}
+ACCESSORY_R6_FIT_POLICY = "uniform_contain_existing_visual_envelope_v1"
+ACCESSORY_R6_TARGET_ASSETS = {
+    "home.r1/room.bedroom/entity.phone.01": {
+        "actor_path": (
+            "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/"
+            "VistaPlayableHome.VistaPlayableHome:PersistentLevel.VistaPickupActor_2"
+        ),
+        "source_mesh_object_path": (
+            "/Game/VISTA/PlayableHome/hssd_private_research_r5_phase1_diagnostic/"
+            "HSSDPrivateResearch/Assets/hssd_static_phone/"
+            "hssd_static_phone.hssd_static_phone"
+        ),
+        "asset_class": "StaticMesh",
+        "object_path": "/Game/CitySampleCrowd/Character/Accessories/phoneA.phoneA",
+        "package_name": "/Game/CitySampleCrowd/Character/Accessories/phoneA",
+        "relative_path": "Content/CitySampleCrowd/Character/Accessories/phoneA.uasset",
+        "sha256": "02b6cb33727624293fbfd206f32d562972a60554f36d91657a2389b0359b09da",
+        "size_bytes": 76_212,
+        "mode": 0o600,
+    },
+    "home.r1/room.kitchen_dining/entity.coffee_cup.01": {
+        "actor_path": (
+            "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/"
+            "VistaPlayableHome.VistaPlayableHome:PersistentLevel.VistaPickupActor_3"
+        ),
+        "source_mesh_object_path": (
+            "/Game/VISTA/PlayableHome/hssd_private_research_r5_phase1_diagnostic/"
+            "HSSDPrivateResearch/Assets/hssd_static_coffee_cup/"
+            "hssd_static_coffee_cup.hssd_static_coffee_cup"
+        ),
+        "asset_class": "StaticMesh",
+        "object_path": "/Game/CitySampleCrowd/Character/Accessories/cupA.cupA",
+        "package_name": "/Game/CitySampleCrowd/Character/Accessories/cupA",
+        "relative_path": "Content/CitySampleCrowd/Character/Accessories/cupA.uasset",
+        "sha256": "ffc9b7b8d9468832f3c9e28825a522f5a3a3f1e6faf3e4ef4f87e9f505b4854e",
+        "size_bytes": 250_764,
+        "mode": 0o600,
+    },
+}
+ACCESSORY_R6_POT_SEMANTIC_ID = "home.r1/room.kitchen_dining/entity.pot.01"
+ACCESSORY_R6_UPGRADE_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "parent_combined_receipt",
+        "source_map",
+        "source_project_static_tree",
+        "asset_inventory",
+        "execution",
+        "result",
+        "materializer",
+        "commandlet",
+        "r4_commandlet_support",
+        "unreal_editor_cmd",
+        "build_version",
+        "network_namespace",
+        "map_object_path",
+        "output_project_static_tree",
+        "observations",
+        "acceptance",
+    }
+)
+ACCESSORY_R6_EXECUTION_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "attempt_root",
+        "project",
+        "materializer",
+        "commandlet",
+        "r4_commandlet_support",
+        "result",
+        "engine",
+        "map",
+        "parent_combined_receipt",
+        "source_project_static_tree",
+        "source_static_manifest",
+        "asset_inventory",
+        "accessory_contract",
+        "legal_scope",
+        "acknowledgements",
+        "claims",
+        "acceptance",
+        "content_digest",
+    }
+)
+ACCESSORY_R6_RESULT_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "provider_id",
+        "human_operated_visual_demo_only",
+        "prohibited_agent_adapter",
+        "execution_sha256",
+        "map_object_path",
+        "map_package",
+        "actor_inventory_before",
+        "actor_inventory_reloaded",
+        "target_observations_before",
+        "target_asset_records",
+        "target_fit_records",
+        "target_observations_after_save",
+        "target_observations_reloaded",
+        "pot_observation_before",
+        "pot_observation_reloaded",
+        "legal_scope",
+        "claims",
+        "acceptance",
+        "gates",
+        "error",
+        "content_digest",
+    }
+)
+ACCESSORY_R6_RESULT_GATE_KEYS = frozenset(
+    {
+        "fixed_map_loaded",
+        "source_actor_inventory_exact",
+        "exact_two_targets_found",
+        "exact_static_mesh_assets_loaded",
+        "asset_registry_type_and_provenance_exact",
+        "deterministic_reflection_fit_computed",
+        "only_target_presentations_mutated",
+        "semantic_actor_authority_preserved",
+        "pickup_collision_proxy_preserved",
+        "pot_presentation_preserved",
+        "map_saved",
+        "map_cold_reloaded",
+        "actor_inventory_reloaded_exact",
+        "target_presentations_reloaded_exact",
+        "only_map_static_artifact_changed",
+        "cold_reloaded_map_artifact_sealed",
+    }
+)
+ACCESSORY_R6_ENGINE_KEYS = frozenset(
+    {
+        "version",
+        "unreal_editor_cmd",
+        "build_version",
+        "network_namespace",
+        "null_rhi",
+    }
+)
+ACCESSORY_R6_MAP_KEYS = REALISM_R4_MAP_KEYS
+ACCESSORY_R6_EXECUTION_RESULT_KEYS = REALISM_R4_EXECUTION_RESULT_KEYS
+ACCESSORY_R6_ASSET_INVENTORY_KEYS = frozenset(
+    {"citysample_result", "dependency_asset_records"}
+)
+ACCESSORY_R6_DEPENDENCY_KEYS = frozenset({"asset_class", "object_path", "package_name"})
+ACCESSORY_R6_CONTRACT_KEYS = frozenset({"targets", "pot_semantic_id", "fit_policy"})
+ACCESSORY_R6_TARGET_KEYS = frozenset(
+    {
+        "semantic_id",
+        "actor_path",
+        "source_mesh_object_path",
+        "asset",
+        "uasset",
+        "fit_policy",
+    }
+)
+ACCESSORY_R6_UASSET_KEYS = frozenset({"relative_path", "sha256", "size_bytes", "mode"})
+ACCESSORY_R6_OBSERVATION_KEYS = frozenset(
+    {
+        "semantic_id",
+        "actor_path",
+        "actor_class_path",
+        "tags",
+        "actor_transform",
+        "actor_replication",
+        "portable",
+        "carrier_path",
+        "attach_parent_actor_path",
+        "owner_path",
+        "actor_hidden_in_game",
+        "proxy",
+        "presentation",
+    }
+)
+ACCESSORY_R6_REPLICATION_KEYS = frozenset(
+    {"replicates", "replicate_movement", "net_load_on_client"}
+)
+ACCESSORY_R6_COMPONENT_KEYS = frozenset(
+    {
+        "component_path",
+        "component_name",
+        "mesh_object_path",
+        "relative_transform",
+        "visible",
+        "collision_mode",
+        "collision_profile_name",
+        "mobility",
+        "attach_parent_component_path",
+        "simulate_physics",
+        "generate_overlap_events",
+        "can_ever_affect_navigation",
+        "cast_shadow",
+        "cast_hidden_shadow",
+    }
+)
+ACCESSORY_R6_FIT_KEYS = frozenset(
+    {
+        "semantic_id",
+        "policy",
+        "bounds_method",
+        "source_mesh_object_path",
+        "target_mesh_object_path",
+        "source_bounds",
+        "target_bounds",
+        "source_envelope_cm",
+        "uniform_scale",
+        "final_relative_transform",
+    }
+)
+ACCESSORY_R6_BOUNDS_KEYS = frozenset({"min_cm", "max_cm", "size_cm", "center_cm"})
+ACCESSORY_R6_OBSERVATIONS = {
+    "phone_presentation_replaced": True,
+    "coffee_cup_presentation_replaced": True,
+    "pot_presentation_preserved": True,
+    "semantic_actor_authority_preserved": True,
+    "pickup_collision_proxy_preserved": True,
+    "deterministic_reflection_fit_sealed": True,
+    "only_map_static_artifact_changed": True,
+    "map_saved_and_cold_reloaded": True,
+}
 LEGAL_SCOPE = {
     "private_noncommercial_research_only": True,
     "epic_ue_only_content_entitlement_confirmed": True,
@@ -445,6 +760,7 @@ class HumanVisualDemoInputs:
     map_package: ArtifactPin
     receipt_schema_version: str
     realism_r4_upgrade: Mapping[str, Any] | None
+    accessory_r6_upgrade: Mapping[str, Any] | None = None
 
 
 def canonical_json(payload: Mapping[str, Any]) -> bytes:
@@ -1728,6 +2044,837 @@ def _validate_realism_r4_upgrade(
     return validated
 
 
+def _validate_r6_dependency_record(payload: Any, label: str) -> dict[str, str]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError(f"{label} must be an object")
+    _require_exact_keys(payload, ACCESSORY_R6_DEPENDENCY_KEYS, label)
+    if (
+        payload.get("asset_class") != "StaticMesh"
+        or not isinstance(payload.get("object_path"), str)
+        or not payload["object_path"].startswith("/Game/")
+        or not isinstance(payload.get("package_name"), str)
+        or not payload["package_name"].startswith("/Game/")
+        or payload["object_path"].rsplit(".", 1)[0] != payload["package_name"]
+    ):
+        raise HumanVisualDemoError(f"{label} StaticMesh identity differs")
+    return dict(payload)
+
+
+def _validate_r6_uasset(
+    payload: Any,
+    *,
+    expected_relative: str,
+    source_manifest: Mapping[str, Mapping[str, Any]],
+    label: str,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError(f"{label} must be an object")
+    _require_exact_keys(payload, ACCESSORY_R6_UASSET_KEYS, label)
+    relative = payload.get("relative_path")
+    if relative != expected_relative or relative not in source_manifest:
+        raise HumanVisualDemoError(f"{label} source-manifest binding differs")
+    expected = source_manifest[relative]
+    if payload != {"relative_path": relative, **expected}:
+        raise HumanVisualDemoError(f"{label} pin differs from source manifest")
+    return copy.deepcopy(payload)
+
+
+def _validate_r6_asset_inventory(
+    payload: Any,
+    *,
+    parent_inputs: HumanVisualDemoInputs,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError("R6 asset inventory must be an object")
+    _require_exact_keys(
+        payload, ACCESSORY_R6_ASSET_INVENTORY_KEYS, "R6 asset inventory"
+    )
+    city_pin = _artifact_pin(payload.get("citysample_result"), "R6 City Sample result")
+    if _pin_document(city_pin) != parent_inputs.source_provenance["citysample_result"]:
+        raise HumanVisualDemoError(
+            "R6 City Sample result differs from parent provenance"
+        )
+    city_raw = _sealed_bytes(
+        city_pin.path, "R6 City Sample result", maximum_bytes=MAX_RECEIPT_BYTES * 128
+    )
+    city_result = _strict_json(city_raw)
+    city_gates = city_result.get("gates")
+    if (
+        city_raw != canonical_json(city_result)
+        or city_result.get("content_digest") != content_digest(city_result)
+        or city_result.get("schema_version")
+        != "vista.citysample-crowd-human-forward-load-result/v1"
+        or city_result.get("status") != "forward_load_validated_private_research_only"
+        or city_result.get("accepted") is not False
+        or city_result.get("runtime_visual_acceptance") is not False
+        or city_result.get("character_provider_published") is not False
+        or not isinstance(city_gates, dict)
+        or city_gates.get("asset_registry_dependency_closure_validated") is not True
+        or city_gates.get("source_uassets_remained_outside_git") is not True
+        or not isinstance(city_result.get("dependency_asset_records"), list)
+    ):
+        raise HumanVisualDemoError("R6 City Sample inventory evidence boundary differs")
+    expected = [
+        {
+            "asset_class": row["asset_class"],
+            "object_path": row["object_path"],
+            "package_name": row["package_name"],
+        }
+        for _semantic, row in sorted(ACCESSORY_R6_TARGET_ASSETS.items())
+    ]
+    expected.sort(key=lambda row: row["object_path"])
+    records = payload.get("dependency_asset_records")
+    if not isinstance(records, list):
+        raise HumanVisualDemoError("R6 dependency record inventory must be a list")
+    validated = [
+        _validate_r6_dependency_record(row, "R6 dependency record") for row in records
+    ]
+    if validated != expected or any(
+        city_result["dependency_asset_records"].count(row) != 1 for row in expected
+    ):
+        raise HumanVisualDemoError(
+            "R6 dependency records lack exact inventory provenance"
+        )
+    return {
+        "citysample_result": _pin_document(city_pin),
+        "dependency_asset_records": validated,
+    }
+
+
+def _validate_r6_contract(
+    payload: Any,
+    *,
+    source_manifest: Mapping[str, Mapping[str, Any]],
+    asset_inventory: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError("R6 accessory contract must be an object")
+    _require_exact_keys(payload, ACCESSORY_R6_CONTRACT_KEYS, "R6 accessory contract")
+    if (
+        payload.get("fit_policy") != ACCESSORY_R6_FIT_POLICY
+        or payload.get("pot_semantic_id") != ACCESSORY_R6_POT_SEMANTIC_ID
+        or not isinstance(payload.get("targets"), list)
+        or len(payload["targets"]) != 2
+    ):
+        raise HumanVisualDemoError("R6 accessory contract identity differs")
+    targets: list[dict[str, Any]] = []
+    prior = ""
+    inventory_records = asset_inventory["dependency_asset_records"]
+    for row in payload["targets"]:
+        if not isinstance(row, dict):
+            raise HumanVisualDemoError("R6 accessory target must be an object")
+        _require_exact_keys(row, ACCESSORY_R6_TARGET_KEYS, "R6 accessory target")
+        semantic_id = row.get("semantic_id")
+        if not isinstance(semantic_id, str) or semantic_id <= prior:
+            raise HumanVisualDemoError("R6 accessory targets are not uniquely sorted")
+        expected = ACCESSORY_R6_TARGET_ASSETS.get(semantic_id)
+        asset = _validate_r6_dependency_record(row.get("asset"), "R6 target asset")
+        if (
+            expected is None
+            or row.get("actor_path") != expected["actor_path"]
+            or row.get("source_mesh_object_path") != expected["source_mesh_object_path"]
+            or row.get("fit_policy") != ACCESSORY_R6_FIT_POLICY
+            or asset
+            != {
+                "asset_class": expected["asset_class"],
+                "object_path": expected["object_path"],
+                "package_name": expected["package_name"],
+            }
+            or asset not in inventory_records
+        ):
+            raise HumanVisualDemoError("R6 accessory target identity differs")
+        uasset = _validate_r6_uasset(
+            row.get("uasset"),
+            expected_relative=expected["relative_path"],
+            source_manifest=source_manifest,
+            label="R6 target UAsset",
+        )
+        if uasset != {
+            "relative_path": expected["relative_path"],
+            "sha256": expected["sha256"],
+            "size_bytes": expected["size_bytes"],
+            "mode": expected["mode"],
+        }:
+            raise HumanVisualDemoError("R6 target production UAsset pin differs")
+        targets.append({**copy.deepcopy(row), "asset": asset, "uasset": uasset})
+        prior = semantic_id
+    if set(row["semantic_id"] for row in targets) != set(ACCESSORY_R6_TARGET_ASSETS):
+        raise HumanVisualDemoError("R6 accessory target semantic inventory differs")
+    return {
+        "targets": targets,
+        "pot_semantic_id": ACCESSORY_R6_POT_SEMANTIC_ID,
+        "fit_policy": ACCESSORY_R6_FIT_POLICY,
+    }
+
+
+def _validate_r6_vector(payload: Any, label: str) -> list[float]:
+    if (
+        not isinstance(payload, list)
+        or len(payload) != 3
+        or any(
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(float(value))
+            for value in payload
+        )
+    ):
+        raise HumanVisualDemoError(f"{label} must be a finite xyz vector")
+    return [float(value) for value in payload]
+
+
+def _validate_r6_component(payload: Any, label: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError(f"{label} must be an object")
+    _require_exact_keys(payload, ACCESSORY_R6_COMPONENT_KEYS, label)
+    result = copy.deepcopy(payload)
+    result["relative_transform"] = _validate_transform(
+        payload.get("relative_transform"), label + " relative transform"
+    )
+    for key in (
+        "visible",
+        "simulate_physics",
+        "generate_overlap_events",
+        "can_ever_affect_navigation",
+        "cast_shadow",
+        "cast_hidden_shadow",
+    ):
+        if type(payload.get(key)) is not bool:
+            raise HumanVisualDemoError(f"{label} {key} is not boolean")
+    if (
+        not isinstance(payload.get("component_path"), str)
+        or not payload["component_path"].startswith("/Game/")
+        or payload.get("component_name") not in {"PickupMesh", "PresentationMesh"}
+        or not isinstance(payload.get("mesh_object_path"), str)
+        or not payload["mesh_object_path"].startswith(("/Game/", "/Engine/"))
+        or not isinstance(payload.get("collision_mode"), str)
+        or not isinstance(payload.get("collision_profile_name"), str)
+        or not payload["collision_profile_name"]
+        or not isinstance(payload.get("mobility"), str)
+        or not payload["mobility"]
+        or (
+            payload.get("attach_parent_component_path") is not None
+            and (
+                not isinstance(payload["attach_parent_component_path"], str)
+                or not payload["attach_parent_component_path"].startswith("/Game/")
+            )
+        )
+    ):
+        raise HumanVisualDemoError(f"{label} component identity differs")
+    return result
+
+
+def _validate_r6_observation(payload: Any, label: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError(f"{label} must be an object")
+    _require_exact_keys(payload, ACCESSORY_R6_OBSERVATION_KEYS, label)
+    semantic_id = payload.get("semantic_id")
+    if not isinstance(semantic_id, str) or not semantic_id:
+        raise HumanVisualDemoError(f"{label} semantic identity differs")
+    tags = payload.get("tags")
+    replication = payload.get("actor_replication")
+    if (
+        payload.get("actor_class_path") != "/Script/VistaPlayableHome.VistaPickupActor"
+        or not isinstance(payload.get("actor_path"), str)
+        or not isinstance(tags, list)
+        or tags != sorted(tags)
+        or len(tags) != len(set(tags))
+        or f"VistaSemanticId={semantic_id}" not in tags
+        or "VistaRole=pickup" not in tags
+        or not isinstance(replication, dict)
+    ):
+        raise HumanVisualDemoError(f"{label} actor authority identity differs")
+    _require_exact_keys(
+        replication, ACCESSORY_R6_REPLICATION_KEYS, label + " replication"
+    )
+    if any(type(replication.get(key)) is not bool for key in replication):
+        raise HumanVisualDemoError(f"{label} replication authority differs")
+    if type(payload.get("portable")) is not bool:
+        raise HumanVisualDemoError(f"{label} portable authority differs")
+    if type(payload.get("actor_hidden_in_game")) is not bool:
+        raise HumanVisualDemoError(f"{label} hidden authority differs")
+    for key in ("carrier_path", "attach_parent_actor_path", "owner_path"):
+        value = payload.get(key)
+        if value is not None and (
+            not isinstance(value, str) or not value.startswith("/Game/")
+        ):
+            raise HumanVisualDemoError(f"{label} {key} authority differs")
+    result = copy.deepcopy(payload)
+    result["actor_transform"] = _validate_transform(
+        payload.get("actor_transform"), label + " actor transform"
+    )
+    result["proxy"] = _validate_r6_component(payload.get("proxy"), label + " proxy")
+    result["presentation"] = _validate_r6_component(
+        payload.get("presentation"), label + " presentation"
+    )
+    if (
+        result["proxy"]["component_name"] != "PickupMesh"
+        or result["presentation"]["component_name"] != "PresentationMesh"
+        or result["proxy"]["attach_parent_component_path"] is not None
+        or result["presentation"]["attach_parent_component_path"]
+        != result["proxy"]["component_path"]
+        or result["proxy"]["visible"] is not False
+        or result["presentation"]["visible"] is not True
+        or result["presentation"]["collision_mode"] != "NoCollision"
+        or result["presentation"]["collision_profile_name"] != "NoCollision"
+        or result["presentation"]["simulate_physics"] is not False
+        or result["presentation"]["generate_overlap_events"] is not False
+        or result["presentation"]["can_ever_affect_navigation"] is not False
+    ):
+        raise HumanVisualDemoError(f"{label} pickup presentation policy differs")
+    return result
+
+
+def _validate_r6_fit(payload: Any, label: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError(f"{label} must be an object")
+    _require_exact_keys(payload, ACCESSORY_R6_FIT_KEYS, label)
+    if (
+        payload.get("policy") != ACCESSORY_R6_FIT_POLICY
+        or payload.get("bounds_method") != "StaticMesh.get_bounding_box"
+        or not isinstance(payload.get("source_mesh_object_path"), str)
+        or not isinstance(payload.get("target_mesh_object_path"), str)
+        or not isinstance(payload.get("uniform_scale"), (int, float))
+        or isinstance(payload.get("uniform_scale"), bool)
+        or not math.isfinite(float(payload["uniform_scale"]))
+        or float(payload["uniform_scale"]) <= 0.0
+    ):
+        raise HumanVisualDemoError(f"{label} deterministic fit identity differs")
+    result = copy.deepcopy(payload)
+    for key in ("source_bounds", "target_bounds"):
+        bounds = payload.get(key)
+        if not isinstance(bounds, dict):
+            raise HumanVisualDemoError(f"{label} {key} must be an object")
+        _require_exact_keys(bounds, ACCESSORY_R6_BOUNDS_KEYS, label + " " + key)
+        result[key] = {
+            name: _validate_r6_vector(bounds.get(name), label + " " + key + " " + name)
+            for name in sorted(ACCESSORY_R6_BOUNDS_KEYS)
+        }
+        if any(value <= 0.0 for value in result[key]["size_cm"]):
+            raise HumanVisualDemoError(f"{label} {key} has non-positive extent")
+    result["source_envelope_cm"] = _validate_r6_vector(
+        payload.get("source_envelope_cm"), label + " source envelope"
+    )
+    if any(value <= 0.0 for value in result["source_envelope_cm"]):
+        raise HumanVisualDemoError(f"{label} source envelope is non-positive")
+    result["final_relative_transform"] = _validate_transform(
+        payload.get("final_relative_transform"), label + " final transform"
+    )
+    scale = result["final_relative_transform"]["scale"]
+    if any(not _number_equal(value, payload["uniform_scale"]) for value in scale):
+        raise HumanVisualDemoError(f"{label} uniform scale differs")
+    return result
+
+
+def _r6_normalized_number(value: float) -> float:
+    rounded = round(float(value), 6)
+    return 0.0 if rounded == 0.0 else rounded
+
+
+def _r6_contain_scale(value: float) -> float:
+    return _r6_normalized_number(math.floor(float(value) * 1_000_000.0) / 1_000_000.0)
+
+
+def _r6_rotate_vector(vector: list[float], rotation_deg: list[float]) -> list[float]:
+    """Match FRotationTranslationMatrix's row-vector FRotator convention."""
+    roll, pitch, yaw = (math.radians(value) for value in rotation_deg)
+    sr, cr = math.sin(roll), math.cos(roll)
+    sp, cp = math.sin(pitch), math.cos(pitch)
+    sy, cy = math.sin(yaw), math.cos(yaw)
+    matrix = (
+        (cp * cy, cp * sy, sp),
+        (sr * sp * cy - cr * sy, sr * sp * sy + cr * cy, -sr * cp),
+        (-(cr * sp * cy + sr * sy), cy * sr - cr * sp * sy, cr * cp),
+    )
+    return [
+        _r6_normalized_number(
+            sum(vector[row] * matrix[row][column] for row in range(3))
+        )
+        for column in range(3)
+    ]
+
+
+def _validate_r6_fit_derivation(
+    fit: Mapping[str, Any], source: Mapping[str, Any], label: str
+) -> None:
+    for bounds_key in ("source_bounds", "target_bounds"):
+        bounds = fit[bounds_key]
+        expected_size = [
+            _r6_normalized_number(high - low)
+            for low, high in zip(bounds["min_cm"], bounds["max_cm"])
+        ]
+        expected_center = [
+            _r6_normalized_number((low + high) / 2.0)
+            for low, high in zip(bounds["min_cm"], bounds["max_cm"])
+        ]
+        if any(
+            not _number_equal(left, right)
+            for left, right in zip(bounds["size_cm"], expected_size)
+        ) or any(
+            not _number_equal(left, right)
+            for left, right in zip(bounds["center_cm"], expected_center)
+        ):
+            raise HumanVisualDemoError(f"{label} reflected bounds derivation differs")
+    source_transform = source["presentation"]["relative_transform"]
+    if any(value <= 0.0 for value in source_transform["scale"]):
+        raise HumanVisualDemoError(f"{label} source scale is not strictly positive")
+    expected_envelope = [
+        _r6_normalized_number(size * abs(scale))
+        for size, scale in zip(
+            fit["source_bounds"]["size_cm"], source_transform["scale"]
+        )
+    ]
+    if any(
+        not _number_equal(left, right)
+        for left, right in zip(fit["source_envelope_cm"], expected_envelope)
+    ):
+        raise HumanVisualDemoError(f"{label} source envelope derivation differs")
+    expected_uniform = _r6_contain_scale(
+        min(
+            envelope / target_size
+            for envelope, target_size in zip(
+                expected_envelope, fit["target_bounds"]["size_cm"]
+            )
+        )
+    )
+    if not _number_equal(fit["uniform_scale"], expected_uniform):
+        raise HumanVisualDemoError(f"{label} uniform contain scale differs")
+    center_delta = [
+        source_center * source_scale - target_center * expected_uniform
+        for source_center, source_scale, target_center in zip(
+            fit["source_bounds"]["center_cm"],
+            source_transform["scale"],
+            fit["target_bounds"]["center_cm"],
+        )
+    ]
+    rotated_delta = _r6_rotate_vector(center_delta, source_transform["rotation_deg"])
+    expected_transform = {
+        "location_cm": [
+            _r6_normalized_number(location + delta)
+            for location, delta in zip(source_transform["location_cm"], rotated_delta)
+        ],
+        "rotation_deg": copy.deepcopy(source_transform["rotation_deg"]),
+        "scale": [expected_uniform, expected_uniform, expected_uniform],
+    }
+    if not _transforms_equal(fit["final_relative_transform"], expected_transform):
+        raise HumanVisualDemoError(f"{label} final center-aligned transform differs")
+
+
+def _r6_authority_view(observation: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        key: copy.deepcopy(value)
+        for key, value in observation.items()
+        if key != "presentation"
+    }
+
+
+def _validate_r6_result(
+    pin: ArtifactPin,
+    *,
+    execution: Mapping[str, Any],
+    map_package: ArtifactPin,
+    contract: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    result = _strict_canonical_pinned_document(
+        pin, "R6 result", ACCESSORY_R6_RESULT_KEYS
+    )
+    sidecar_path = Path(execution["result"]["sidecar_path"])
+    sidecar = _sealed_bytes(sidecar_path, "R6 result sidecar", maximum_bytes=256)
+    if sidecar != f"{pin.sha256}  {pin.path.name}\n".encode("ascii"):
+        raise HumanVisualDemoError("R6 result sidecar differs")
+    if (
+        result.get("schema_version") != ACCESSORY_R6_RESULT_SCHEMA
+        or result.get("status") != ACCESSORY_R6_UPGRADE_STATUS
+        or result.get("provider_id") != PROVIDER_ID
+        or result.get("human_operated_visual_demo_only") is not True
+        or result.get("prohibited_agent_adapter") is not True
+        or result.get("execution_sha256")
+        != hashlib.sha256(canonical_json(execution)).hexdigest()
+        or result.get("map_object_path") != execution["map"]["object_path"]
+        or result.get("map_package") != _pin_document(map_package)
+        or result.get("legal_scope") != LEGAL_SCOPE
+        or result.get("claims") != CLAIMS
+        or result.get("acceptance") != ACCESSORY_R6_ACCEPTANCE
+        or result.get("error") is not None
+    ):
+        raise HumanVisualDemoError("R6 result identity or claim boundary differs")
+    gates = result.get("gates")
+    if (
+        not isinstance(gates, dict)
+        or set(gates) != ACCESSORY_R6_RESULT_GATE_KEYS
+        or any(value is not True for value in gates.values())
+    ):
+        raise HumanVisualDemoError("R6 result gates differ")
+    before_inventory = _validate_actor_inventory(
+        result.get("actor_inventory_before"), "R6 source actor inventory"
+    )
+    reloaded_inventory = _validate_actor_inventory(
+        result.get("actor_inventory_reloaded"), "R6 reloaded actor inventory"
+    )
+    if before_inventory != reloaded_inventory:
+        raise HumanVisualDemoError("R6 actor identity inventory changed")
+
+    def observations(key: str) -> list[dict[str, Any]]:
+        rows = result.get(key)
+        if not isinstance(rows, list) or len(rows) != 2:
+            raise HumanVisualDemoError(f"R6 {key} inventory differs")
+        validated = [
+            _validate_r6_observation(row, f"R6 {key} observation") for row in rows
+        ]
+        if [row["semantic_id"] for row in validated] != sorted(
+            ACCESSORY_R6_TARGET_ASSETS
+        ):
+            raise HumanVisualDemoError(f"R6 {key} semantic inventory differs")
+        return validated
+
+    before = observations("target_observations_before")
+    after = observations("target_observations_after_save")
+    reloaded = observations("target_observations_reloaded")
+    asset_records_payload = result.get("target_asset_records")
+    if not isinstance(asset_records_payload, list):
+        raise HumanVisualDemoError("R6 runtime asset record inventory differs")
+    asset_records = [
+        _validate_r6_dependency_record(row, "R6 runtime asset record")
+        for row in asset_records_payload
+    ]
+    expected_asset_records = sorted(
+        [row["asset"] for row in contract["targets"]],
+        key=lambda row: row["object_path"],
+    )
+    if asset_records != expected_asset_records:
+        raise HumanVisualDemoError("R6 runtime asset provenance/type evidence differs")
+    fits_payload = result.get("target_fit_records")
+    if not isinstance(fits_payload, list) or len(fits_payload) != 2:
+        raise HumanVisualDemoError("R6 fit record inventory differs")
+    fits = [_validate_r6_fit(row, "R6 fit record") for row in fits_payload]
+    if [row["semantic_id"] for row in fits] != sorted(ACCESSORY_R6_TARGET_ASSETS):
+        raise HumanVisualDemoError("R6 fit semantic inventory differs")
+    contract_by_semantic = {row["semantic_id"]: row for row in contract["targets"]}
+    for source, upgraded, cold, fit in zip(before, after, reloaded, fits):
+        target = contract_by_semantic[source["semantic_id"]]
+        if (
+            source["actor_path"] != target["actor_path"]
+            or source["presentation"]["mesh_object_path"]
+            != target["source_mesh_object_path"]
+            or cold != upgraded
+            or _r6_authority_view(source) != _r6_authority_view(upgraded)
+            or fit["semantic_id"] != source["semantic_id"]
+            or fit["source_mesh_object_path"]
+            != source["presentation"]["mesh_object_path"]
+            or fit["target_mesh_object_path"] != target["asset"]["object_path"]
+            or upgraded["presentation"]["mesh_object_path"]
+            != target["asset"]["object_path"]
+            or upgraded["presentation"]["relative_transform"]
+            != fit["final_relative_transform"]
+        ):
+            raise HumanVisualDemoError(
+                "R6 target mutation or cold-reload evidence differs"
+            )
+        _validate_r6_fit_derivation(fit, source, "R6 target fit")
+        before_presentation = copy.deepcopy(source["presentation"])
+        after_presentation = copy.deepcopy(upgraded["presentation"])
+        for key in ("mesh_object_path", "relative_transform"):
+            before_presentation.pop(key)
+            after_presentation.pop(key)
+        if before_presentation != after_presentation:
+            raise HumanVisualDemoError(
+                "R6 presentation policy changed outside fit fields"
+            )
+    pot_before = _validate_r6_observation(
+        result.get("pot_observation_before"), "R6 source pot observation"
+    )
+    pot_reloaded = _validate_r6_observation(
+        result.get("pot_observation_reloaded"), "R6 reloaded pot observation"
+    )
+    if (
+        pot_before != pot_reloaded
+        or pot_before["semantic_id"] != ACCESSORY_R6_POT_SEMANTIC_ID
+    ):
+        raise HumanVisualDemoError("R6 pot presentation or authority changed")
+    observations_summary = {
+        "phone_presentation_replaced": True,
+        "coffee_cup_presentation_replaced": True,
+        "pot_presentation_preserved": True,
+        "semantic_actor_authority_preserved": gates[
+            "semantic_actor_authority_preserved"
+        ],
+        "pickup_collision_proxy_preserved": gates["pickup_collision_proxy_preserved"],
+        "deterministic_reflection_fit_sealed": gates[
+            "deterministic_reflection_fit_computed"
+        ],
+        "only_map_static_artifact_changed": gates["only_map_static_artifact_changed"],
+        "map_saved_and_cold_reloaded": gates["map_saved"]
+        and gates["map_cold_reloaded"],
+    }
+    return result, observations_summary
+
+
+def _validate_r6_trusted_script(pin: ArtifactPin, key: str) -> None:
+    expected = ACCESSORY_R6_TRUSTED_SCRIPTS.get(key)
+    if expected is None:
+        raise HumanVisualDemoError("R6 trusted script key differs")
+    source_pin = _artifact_pin(
+        {
+            "path": str(expected["path"]),
+            "sha256": expected["sha256"],
+            "size_bytes": expected["size_bytes"],
+        },
+        "trusted Git R6 " + key,
+    )
+    if (
+        pin.sha256 != source_pin.sha256
+        or pin.size_bytes != source_pin.size_bytes
+        or pin.path.name != Path(expected["path"]).name
+    ):
+        raise HumanVisualDemoError(
+            f"R6 {key} differs from its Git-tracked trust anchor"
+        )
+
+
+def _validate_r6_trusted_parent(
+    parent_pin: ArtifactPin, parent_inputs: HumanVisualDemoInputs
+) -> None:
+    trusted = ACCESSORY_R6_TRUSTED_R4_PARENT
+    if (
+        _pin_document(parent_pin) != trusted["receipt"]
+        or _pin_document(parent_inputs.project) != trusted["project"]
+        or parent_inputs.project_static_tree != trusted["project_static_tree"]
+        or _pin_document(parent_inputs.map_package) != trusted["map"]
+        or parent_inputs.map_object_path
+        != "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome"
+        or parent_inputs.realism_r4_upgrade is None
+        or parent_inputs.realism_r4_upgrade.get("commandlet")
+        != trusted["r4_commandlet"]
+    ):
+        raise HumanVisualDemoError(
+            "R6 parent differs from the exact trusted R4-C lineage"
+        )
+
+
+def _validate_r6_parent_passthrough(
+    source_provenance: Mapping[str, Any],
+    executable: ArtifactPin,
+    parent_inputs: HumanVisualDemoInputs,
+) -> None:
+    if (
+        dict(source_provenance) != dict(parent_inputs.source_provenance)
+        or executable != parent_inputs.executable
+    ):
+        raise HumanVisualDemoError(
+            "R6 top-level provenance/executable differs from trusted R4-C parent"
+        )
+
+
+def _validate_accessory_r6_upgrade(
+    payload: Any,
+    *,
+    receipt_parent: Path,
+    project: ArtifactPin,
+    project_static_tree: Mapping[str, Any],
+    source_provenance: Mapping[str, Any],
+    executable: ArtifactPin,
+    map_object_path: str,
+    map_package: ArtifactPin,
+) -> tuple[dict[str, Any], HumanVisualDemoInputs]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError("R6 upgrade provenance must be an object")
+    _require_exact_keys(payload, ACCESSORY_R6_UPGRADE_KEYS, "R6 upgrade provenance")
+    if (
+        payload.get("schema_version") != ACCESSORY_R6_UPGRADE_SCHEMA
+        or payload.get("status") != ACCESSORY_R6_UPGRADE_STATUS
+        or payload.get("map_object_path") != map_object_path
+        or project.path != receipt_parent / "project" / "VistaPlayableHome.uproject"
+    ):
+        raise HumanVisualDemoError("R6 upgrade identity differs")
+    local_names = {
+        "execution": "accessory-r6-execution.json",
+        "result": "accessory-r6-result.json",
+        "materializer": "materialize_accessory_r6.py",
+        "commandlet": "compose_accessory_r6_commandlet.py",
+        "r4_commandlet_support": "r4-commandlet-support.py",
+    }
+    local_pins: dict[str, ArtifactPin] = {}
+    validated: dict[str, Any] = {
+        "schema_version": ACCESSORY_R6_UPGRADE_SCHEMA,
+        "status": ACCESSORY_R6_UPGRADE_STATUS,
+    }
+    for key, filename in local_names.items():
+        pin = _artifact_pin(payload.get(key), "R6 " + key)
+        if pin.path != receipt_parent / filename:
+            raise HumanVisualDemoError(f"R6 {key} binding differs")
+        local_pins[key] = pin
+        validated[key] = _pin_document(pin)
+    _validate_r6_trusted_script(local_pins["materializer"], "materializer")
+    _validate_r6_trusted_script(local_pins["commandlet"], "commandlet")
+    unreal_editor_cmd = _artifact_pin(
+        payload.get("unreal_editor_cmd"), "R6 UnrealEditor-Cmd", executable=True
+    )
+    build_version = _artifact_pin(payload.get("build_version"), "R6 Build.version")
+    network_namespace = _artifact_pin(
+        payload.get("network_namespace"),
+        "R6 private network namespace wrapper",
+        executable=True,
+    )
+    if (
+        unreal_editor_cmd.path.name != "UnrealEditor-Cmd"
+        or build_version.path.name != "Build.version"
+        or network_namespace != _network_namespace_pin()
+    ):
+        raise HumanVisualDemoError("R6 toolchain identity differs")
+    validated["unreal_editor_cmd"] = _pin_document(unreal_editor_cmd)
+    validated["build_version"] = _pin_document(build_version)
+    validated["network_namespace"] = _pin_document(network_namespace)
+
+    parent_pin = _artifact_pin(
+        payload.get("parent_combined_receipt"), "R6 parent combined receipt"
+    )
+    parent_inputs = load_combined_receipt(parent_pin.path)
+    _validate_r6_trusted_parent(parent_pin, parent_inputs)
+    _validate_r6_parent_passthrough(source_provenance, executable, parent_inputs)
+    if (
+        parent_inputs.receipt_schema_version != COMBINED_RECEIPT_SCHEMA_V3
+        or parent_inputs.realism_r4_upgrade is None
+        or parent_inputs.accessory_r6_upgrade is not None
+        or parent_inputs.receipt_sha256 != parent_pin.sha256
+        or parent_inputs.receipt == receipt_parent / COMBINED_RECEIPT_NAME
+    ):
+        raise HumanVisualDemoError("R6 parent R4 receipt binding differs")
+    parent_r4_commandlet = _artifact_pin(
+        parent_inputs.realism_r4_upgrade["commandlet"],
+        "R6 parent R4 commandlet",
+    )
+    if (
+        local_pins["r4_commandlet_support"].sha256 != parent_r4_commandlet.sha256
+        or local_pins["r4_commandlet_support"].size_bytes
+        != parent_r4_commandlet.size_bytes
+    ):
+        raise HumanVisualDemoError("R6 copied R4 commandlet support differs")
+    validated["parent_combined_receipt"] = _pin_document(parent_pin)
+    source_map = _artifact_pin(payload.get("source_map"), "R6 source map")
+    if source_map != parent_inputs.map_package:
+        raise HumanVisualDemoError("R6 source map differs from parent receipt")
+    source_stat = os.stat(source_map.path, follow_symlinks=False)
+    output_stat = os.stat(map_package.path, follow_symlinks=False)
+    if (
+        source_map.path == map_package.path
+        or (source_stat.st_dev, source_stat.st_ino)
+        == (output_stat.st_dev, output_stat.st_ino)
+        or source_map.sha256 == map_package.sha256
+    ):
+        raise HumanVisualDemoError("R6 output map aliases or duplicates its parent map")
+    validated["source_map"] = _pin_document(source_map)
+    source_tree = _validate_project_tree_shape(
+        payload.get("source_project_static_tree"), "R6 source project static tree"
+    )
+    output_tree = _validate_project_tree_shape(
+        payload.get("output_project_static_tree"), "R6 output project static tree"
+    )
+    if (
+        source_tree != parent_inputs.project_static_tree
+        or output_tree != project_static_tree
+    ):
+        raise HumanVisualDemoError("R6 project tree lineage differs")
+    validated["source_project_static_tree"] = source_tree
+    validated["output_project_static_tree"] = output_tree
+    asset_inventory = _validate_r6_asset_inventory(
+        payload.get("asset_inventory"), parent_inputs=parent_inputs
+    )
+    validated["asset_inventory"] = asset_inventory
+
+    execution = _strict_canonical_pinned_document(
+        local_pins["execution"], "R6 execution", ACCESSORY_R6_EXECUTION_KEYS
+    )
+    source_manifest = _validate_r4_source_manifest(
+        execution.get("source_static_manifest"), parent_inputs.project_static_tree
+    )
+    contract = _validate_r6_contract(
+        execution.get("accessory_contract"),
+        source_manifest=source_manifest,
+        asset_inventory=asset_inventory,
+    )
+    engine = execution.get("engine")
+    map_payload = execution.get("map")
+    result_binding = execution.get("result")
+    if (
+        not isinstance(engine, dict)
+        or not isinstance(map_payload, dict)
+        or not isinstance(result_binding, dict)
+    ):
+        raise HumanVisualDemoError("R6 execution nested contract differs")
+    _require_exact_keys(engine, ACCESSORY_R6_ENGINE_KEYS, "R6 execution engine")
+    _require_exact_keys(map_payload, ACCESSORY_R6_MAP_KEYS, "R6 execution map")
+    _require_exact_keys(
+        result_binding, ACCESSORY_R6_EXECUTION_RESULT_KEYS, "R6 result binding"
+    )
+    expected_source_package = {
+        "path": str(
+            receipt_parent
+            / "project/Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/"
+            "VistaPlayableHome.umap"
+        ),
+        "sha256": parent_inputs.map_package.sha256,
+        "size_bytes": parent_inputs.map_package.size_bytes,
+    }
+    if (
+        execution.get("schema_version") != ACCESSORY_R6_EXECUTION_SCHEMA
+        or execution.get("status") != ACCESSORY_R6_EXECUTION_STATUS
+        or execution.get("attempt_root") != str(receipt_parent)
+        or execution.get("project") != _pin_document(project)
+        or execution.get("materializer") != validated["materializer"]
+        or execution.get("commandlet") != validated["commandlet"]
+        or execution.get("r4_commandlet_support") != validated["r4_commandlet_support"]
+        or execution.get("parent_combined_receipt")
+        != validated["parent_combined_receipt"]
+        or execution.get("source_project_static_tree") != source_tree
+        or execution.get("asset_inventory") != asset_inventory
+        or execution.get("acknowledgements") != ACCESSORY_R6_ACKNOWLEDGEMENTS
+        or execution.get("legal_scope") != LEGAL_SCOPE
+        or execution.get("claims") != CLAIMS
+        or execution.get("acceptance") != ACCESSORY_R6_ACCEPTANCE
+        or engine.get("version") != "5.7.3-50162420+++UE5+Release-5.7"
+        or engine.get("unreal_editor_cmd") != validated["unreal_editor_cmd"]
+        or engine.get("build_version") != validated["build_version"]
+        or engine.get("network_namespace") != validated["network_namespace"]
+        or engine.get("unreal_editor_cmd")
+        != parent_inputs.realism_r4_upgrade["unreal_editor_cmd"]
+        or engine.get("build_version")
+        != parent_inputs.realism_r4_upgrade["build_version"]
+        or engine.get("null_rhi") is not True
+        or map_payload.get("object_path") != map_object_path
+        or map_payload.get("relative_path")
+        != "Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap"
+        or map_payload.get("source_package") != expected_source_package
+        or result_binding
+        != {
+            "path": str(receipt_parent / "accessory-r6-result.json"),
+            "sidecar_path": str(receipt_parent / "accessory-r6-result.json.sha256"),
+        }
+    ):
+        raise HumanVisualDemoError("R6 execution cross-binding differs")
+    if execution["result"]["path"] != str(local_pins["result"].path):
+        raise HumanVisualDemoError("R6 execution/result path cross-binding differs")
+    _result, observations = _validate_r6_result(
+        local_pins["result"],
+        execution=execution,
+        map_package=map_package,
+        contract=contract,
+    )
+    output_manifest = _project_static_manifest(project.path)
+    _validate_only_r4_map_changed(source_manifest, output_manifest)
+    if (
+        payload.get("observations") != observations
+        or observations != ACCESSORY_R6_OBSERVATIONS
+    ):
+        raise HumanVisualDemoError("R6 upgrade observations differ")
+    if payload.get("acceptance") != ACCESSORY_R6_ACCEPTANCE:
+        raise HumanVisualDemoError("R6 acceptance boundary differs")
+    validated["map_object_path"] = map_object_path
+    validated["observations"] = copy.deepcopy(observations)
+    validated["acceptance"] = dict(ACCESSORY_R6_ACCEPTANCE)
+    if validated != payload:
+        raise HumanVisualDemoError("R6 upgrade provenance differs after validation")
+    return validated, parent_inputs
+
+
 def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
     if receipt_path.name != COMBINED_RECEIPT_NAME:
         raise HumanVisualDemoError(
@@ -1752,6 +2899,8 @@ def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
         _require_exact_keys(receipt, RECEIPT_KEYS, "combined receipt")
     elif receipt_schema == COMBINED_RECEIPT_SCHEMA_V3:
         _require_exact_keys(receipt, RECEIPT_V3_KEYS, "combined receipt")
+    elif receipt_schema == COMBINED_RECEIPT_SCHEMA_V4:
+        _require_exact_keys(receipt, RECEIPT_V4_KEYS, "combined receipt")
     else:
         raise HumanVisualDemoError("combined receipt schema differs")
     if raw != canonical_json(receipt):
@@ -1799,6 +2948,7 @@ def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
         raise HumanVisualDemoError("map package is not the receipt-pinned project map")
 
     realism_r4_upgrade = None
+    accessory_r6_upgrade = None
     if receipt_schema == COMBINED_RECEIPT_SCHEMA_V3:
         realism_r4_upgrade = _validate_realism_r4_upgrade(
             receipt.get("realism_r4_upgrade"),
@@ -1808,6 +2958,18 @@ def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
             map_object_path=map_object_path,
             map_package=map_package,
         )
+    elif receipt_schema == COMBINED_RECEIPT_SCHEMA_V4:
+        accessory_r6_upgrade, parent_inputs = _validate_accessory_r6_upgrade(
+            receipt.get("accessory_r6_upgrade"),
+            receipt_parent=receipt_path.parent,
+            project=project,
+            project_static_tree=project_static_tree,
+            source_provenance=source_provenance,
+            executable=executable_pin,
+            map_object_path=map_object_path,
+            map_package=map_package,
+        )
+        realism_r4_upgrade = parent_inputs.realism_r4_upgrade
 
     return HumanVisualDemoInputs(
         receipt=receipt_path,
@@ -1821,6 +2983,7 @@ def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
         map_package=map_package,
         receipt_schema_version=receipt_schema,
         realism_r4_upgrade=realism_r4_upgrade,
+        accessory_r6_upgrade=accessory_r6_upgrade,
     )
 
 
