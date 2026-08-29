@@ -1,0 +1,190 @@
+{
+  "schema_version": "simworld.vista.playable-home-realism-r4/v1",
+  "profile_id": "realistic_interior_r4_lighting_shadows_v1",
+  "house_revision": "vista_playable_home_r1",
+  "source_house_content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7",
+  "base_visual_profile": {
+    "visual_profile_id": "realistic_interior_r2",
+    "content_digest": "a596a6f384ea0a1d4f321e8e60e603356cd7c4a500b893addbbe6d16aee8b53b"
+  },
+  "renderer_contract": {
+    "dynamic_gi": "software_lumen",
+    "reflections": "lumen",
+    "anti_aliasing": "tsr",
+    "shadow_method": "virtual_shadow_maps",
+    "hardware_ray_tracing": false,
+    "config_is_runtime_proof": false
+  },
+  "practical_fixture_light_pairs": [
+    {
+      "pair_id": "pair.entry_hall.ceiling.01",
+      "room_id": "home.r1/room.entry_hall",
+      "fixture": {
+        "fixture_id": "fixture.entry_hall.ceiling.01",
+        "mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "location_cm": [0, -80, 270],
+        "rotation_deg": [0, 0, 0],
+        "scale": [0.18, 0.18, 0.04],
+        "cast_shadow": true
+      },
+      "light": {
+        "light_id": "light.entry_hall.ceiling.01",
+        "type": "spot",
+        "location_cm": [0, -80, 252],
+        "rotation_deg": [0, -90, 0],
+        "scale": [1, 1, 1],
+        "intensity": 900,
+        "unit": "lumens",
+        "temperature_k": 3000,
+        "attenuation_radius_cm": 650,
+        "cast_shadow": true
+      }
+    },
+    {
+      "pair_id": "pair.living_room.ceiling.01",
+      "room_id": "home.r1/room.living_room",
+      "fixture": {
+        "fixture_id": "fixture.living_room.ceiling.01",
+        "mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "location_cm": [-400, -200, 270],
+        "rotation_deg": [0, 0, 0],
+        "scale": [0.25, 0.25, 0.035],
+        "cast_shadow": true
+      },
+      "light": {
+        "light_id": "light.living_room.ceiling.01",
+        "type": "rect",
+        "location_cm": [-400, -200, 252],
+        "rotation_deg": [0, -90, 0],
+        "scale": [1, 1, 1],
+        "intensity": 1400,
+        "unit": "lumens",
+        "temperature_k": 2900,
+        "attenuation_radius_cm": 850,
+        "cast_shadow": true
+      }
+    },
+    {
+      "pair_id": "pair.kitchen_dining.ceiling.01",
+      "room_id": "home.r1/room.kitchen_dining",
+      "fixture": {
+        "fixture_id": "fixture.kitchen_dining.ceiling.01",
+        "mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "location_cm": [400, -200, 270],
+        "rotation_deg": [0, 0, 0],
+        "scale": [0.22, 0.22, 0.05],
+        "cast_shadow": true
+      },
+      "light": {
+        "light_id": "light.kitchen_dining.ceiling.01",
+        "type": "rect",
+        "location_cm": [400, -200, 252],
+        "rotation_deg": [0, -90, 0],
+        "scale": [1, 1, 1],
+        "intensity": 1800,
+        "unit": "lumens",
+        "temperature_k": 3500,
+        "attenuation_radius_cm": 900,
+        "cast_shadow": true
+      }
+    },
+    {
+      "pair_id": "pair.bedroom.ceiling.01",
+      "room_id": "home.r1/room.bedroom",
+      "fixture": {
+        "fixture_id": "fixture.bedroom.ceiling.01",
+        "mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "location_cm": [-400, 200, 270],
+        "rotation_deg": [0, 0, 0],
+        "scale": [0.22, 0.22, 0.04],
+        "cast_shadow": true
+      },
+      "light": {
+        "light_id": "light.bedroom.ceiling.01",
+        "type": "spot",
+        "location_cm": [-400, 200, 252],
+        "rotation_deg": [0, -90, 0],
+        "scale": [1, 1, 1],
+        "intensity": 1050,
+        "unit": "lumens",
+        "temperature_k": 2700,
+        "attenuation_radius_cm": 750,
+        "cast_shadow": true
+      }
+    },
+    {
+      "pair_id": "pair.office.ceiling.01",
+      "room_id": "home.r1/room.office",
+      "fixture": {
+        "fixture_id": "fixture.office.ceiling.01",
+        "mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "location_cm": [400, 200, 270],
+        "rotation_deg": [0, 0, 0],
+        "scale": [0.24, 0.24, 0.035],
+        "cast_shadow": true
+      },
+      "light": {
+        "light_id": "light.office.ceiling.01",
+        "type": "rect",
+        "location_cm": [400, 200, 252],
+        "rotation_deg": [0, -90, 0],
+        "scale": [1, 1, 1],
+        "intensity": 1500,
+        "unit": "lumens",
+        "temperature_k": 4000,
+        "attenuation_radius_cm": 800,
+        "cast_shadow": true
+      }
+    },
+    {
+      "pair_id": "pair.bathroom_laundry.ceiling.01",
+      "room_id": "home.r1/room.bathroom_laundry",
+      "fixture": {
+        "fixture_id": "fixture.bathroom_laundry.ceiling.01",
+        "mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "location_cm": [0, 600, 270],
+        "rotation_deg": [0, 0, 0],
+        "scale": [0.2, 0.2, 0.035],
+        "cast_shadow": true
+      },
+      "light": {
+        "light_id": "light.bathroom_laundry.ceiling.01",
+        "type": "spot",
+        "location_cm": [0, 600, 252],
+        "rotation_deg": [0, -90, 0],
+        "scale": [1, 1, 1],
+        "intensity": 1300,
+        "unit": "lumens",
+        "temperature_k": 4200,
+        "attenuation_radius_cm": 650,
+        "cast_shadow": true
+      }
+    }
+  ],
+  "post_process": {
+    "motion_blur_amount": 0,
+    "chromatic_aberration_intensity": 0,
+    "film_grain_intensity": 0,
+    "bloom_intensity": 0.3,
+    "vignette_intensity": 0.1,
+    "exposure": {
+      "metering_mode": "histogram",
+      "min_ev100": 7.5,
+      "max_ev100": 11,
+      "speed_up": 3,
+      "speed_down": 1
+    }
+  },
+  "shadow_policy": {
+    "visible_presentation_cast_shadow": true,
+    "visible_presentation_cast_hidden_shadow": false,
+    "hidden_collision_proxy_cast_shadow": false,
+    "hidden_collision_proxy_cast_hidden_shadow": false
+  },
+  "claims": {
+    "runtime_visual_acceptance": false,
+    "gta_quality_accepted": false,
+    "runtime_play_proof": "pending"
+  },
+  "content_digest": "8df2d80cc9af526ad5cc1ff26af708642908fb9c77ba7e8b5e1ef3cf8149f090"
+}
