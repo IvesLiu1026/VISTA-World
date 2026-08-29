@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import argparse
 import copy
-import ctypes
-import fcntl
 import hashlib
 import json
 import math
@@ -28,6 +26,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from tools.admin import vista_blender_authority as blender_authority
+
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[3]
 PROFILE_RELATIVE_PATH = pathlib.PurePosixPath(
     "world_packs/vista_playable_home_r1/visual_profiles/hssd_r2_citysample_live_r1.json"
@@ -39,18 +39,22 @@ RECIPE_RELATIVE_PATH = pathlib.PurePosixPath(
 )
 RECIPE_PATH = PACKAGE_ROOT / "recipe.json"
 WORKER_PATH = PACKAGE_ROOT / "blender_worker.py"
-DEFAULT_BLENDER = pathlib.Path("/home/yhliu/.local/opt/blender-4.5.8-linux-x64/blender")
+DEFAULT_BLENDER_AUTHORITY_ROOT = blender_authority.AUTHORITY_ROOT
+DEFAULT_BLENDER_DISTRIBUTION_ROOT = blender_authority.DISTRIBUTION_ROOT
+DEFAULT_BLENDER = (
+    DEFAULT_BLENDER_DISTRIBUTION_ROOT / blender_authority.BLENDER_RELATIVE_PATH
+)
 DEFAULT_BWRAP = pathlib.Path("/usr/bin/bwrap")
 DEFAULT_RUN_PARENT = pathlib.Path("/data/sysx/vista-world/runs/vista-action-world-r1")
 
 PROFILE_SCHEMA = "simworld.vista.playable-home-hssd-r2-citysample-live-profile/v1"
 RECIPE_SCHEMA = "simworld.vista.playable-home-r9-fixture-recipe/v1"
-PLAN_SCHEMA = "simworld.vista.playable-home-r9-fixture-forge-plan/v2"
-WORKER_REQUEST_SCHEMA = "simworld.vista.playable-home-r9-fixture-worker-request/v2"
-ARTIFACT_RECEIPT_SCHEMA = "simworld.vista.playable-home-r9-fixture-artifact-receipt/v2"
-WORKER_RESULT_SCHEMA = "simworld.vista.playable-home-r9-fixture-worker-result/v2"
-INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v2"
-SOURCE_SNAPSHOT_SCHEMA = "simworld.vista.playable-home-r9-fixture-source-snapshot/v1"
+PLAN_SCHEMA = "simworld.vista.playable-home-r9-fixture-forge-plan/v3"
+WORKER_REQUEST_SCHEMA = "simworld.vista.playable-home-r9-fixture-worker-request/v3"
+ARTIFACT_RECEIPT_SCHEMA = "simworld.vista.playable-home-r9-fixture-artifact-receipt/v3"
+WORKER_RESULT_SCHEMA = "simworld.vista.playable-home-r9-fixture-worker-result/v3"
+INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v3"
+SOURCE_SNAPSHOT_SCHEMA = "simworld.vista.playable-home-r9-fixture-source-snapshot/v2"
 
 PINNED_BLENDER_VERSION = "4.5.8 LTS"
 PINNED_BLENDER_SHA256 = (
@@ -60,7 +64,7 @@ PINNED_BLENDER_BYTES = 163_587_256
 PINNED_BWRAP_SHA256 = "d78807229d616606e339c5988392b9e0ab4a6a6998fa51e4590837f426a12fca"
 PINNED_BWRAP_BYTES = 72_160
 PINNED_PROFILE_CONTENT_DIGEST = (
-    "f90659d60384edfaabdc34cdfd4a5b3aa0cd8d0226b59fe694e018a86874b314"
+    "105fc5270594b0667b8616f2fa5a583757f45c25017db49a263be2d7e68967f2"
 )
 PINNED_RECIPE_CONTENT_DIGEST = (
     "09d9b345f520ddf657ab3c6d3ff680f56c77941a3a63e9396296d9a7fb0fb045"
@@ -76,6 +80,8 @@ EXPECTED_ARTIFACT_RELATIVE_PATHS = {
     for archetype_id in EXPECTED_ARCHETYPE_IDS
 }
 BUILDER_SOURCE_RELATIVE_PATHS = (
+    pathlib.PurePosixPath("tools/admin/__init__.py"),
+    pathlib.PurePosixPath("tools/admin/vista_blender_authority.py"),
     pathlib.PurePosixPath("tools/blender/vista_playable_home_r9_fixtures/__init__.py"),
     pathlib.PurePosixPath("tools/blender/vista_playable_home_r9_fixtures/__main__.py"),
     pathlib.PurePosixPath(
@@ -280,14 +286,19 @@ def repo_source_pin(
         or not relative_path.parts
     ):
         _fail("FIXTURE_SOURCE_IDENTITY_INVALID", "repository source path is unsafe")
-    if content_digest_value is not None:
-        _require_sha256(content_digest_value, "repository source content digest")
     pin = file_pin(candidate)
+    if content_digest_value is None:
+        content_digest_value = pin["sha256"]
+        content_digest_kind = "raw_sha256"
+    else:
+        _require_sha256(content_digest_value, "repository source content digest")
+        content_digest_kind = "canonical_json_sha256"
     return {
         "relative_path": relative_path.as_posix(),
         "sha256": pin["sha256"],
         "size_bytes": pin["size_bytes"],
         "content_digest": content_digest_value,
+        "content_digest_kind": content_digest_kind,
     }
 
 
@@ -359,7 +370,13 @@ def _validate_repo_source_pin(
 ) -> None:
     _require_keys(
         value,
-        {"relative_path", "sha256", "size_bytes", "content_digest"},
+        {
+            "relative_path",
+            "sha256",
+            "size_bytes",
+            "content_digest",
+            "content_digest_kind",
+        },
         label,
     )
     _require_string(
@@ -367,11 +384,15 @@ def _validate_repo_source_pin(
     )
     _require_sha256(value["sha256"], f"{label}.sha256")
     _require_positive_int(value["size_bytes"], f"{label}.size_bytes")
-    if current_content_digest is None:
-        if value["content_digest"] is not None:
-            _fail("FIXTURE_SCHEMA_INVALID", f"{label}.content_digest must be null")
-    else:
-        _require_sha256(value["content_digest"], f"{label}.content_digest")
+    _require_sha256(value["content_digest"], f"{label}.content_digest")
+    expected_digest_kind = (
+        "raw_sha256" if current_content_digest is None else "canonical_json_sha256"
+    )
+    _require_string(
+        value["content_digest_kind"],
+        expected_digest_kind,
+        f"{label}.content_digest_kind",
+    )
     expected = repo_source_pin(
         current_path,
         content_digest_value=current_content_digest,
@@ -418,6 +439,22 @@ def _validate_material(material: Mapping[str, Any], label: str) -> None:
         "existing_generic_interchange_fallback_not_photoreal",
     }:
         _fail("FIXTURE_PROFILE_INVALID", f"{label} quality is not explicit")
+
+
+def _expected_profile_blender_authority() -> dict:
+    return {
+        "authority_id": "blender-4.5.8-r1",
+        "root": str(DEFAULT_BLENDER_AUTHORITY_ROOT),
+        "distribution_root": str(DEFAULT_BLENDER_DISTRIBUTION_ROOT),
+        "manifest_path": str(blender_authority.MANIFEST_PATH),
+        "manifest_schema_version": blender_authority.MANIFEST_SCHEMA_VERSION,
+        "official_archive": {
+            "official_url": blender_authority.OFFICIAL_ARCHIVE_URL,
+            "sha256": blender_authority.OFFICIAL_ARCHIVE_SHA256,
+            "size_bytes": blender_authority.OFFICIAL_ARCHIVE_BYTES,
+        },
+        "root_owned_nonwritable_required": True,
+    }
 
 
 def _validate_transform(value: Mapping[str, Any], label: str) -> None:
@@ -527,7 +564,14 @@ def load_profile(path: pathlib.Path | None = None) -> dict:
     )
     _require_keys(
         fixture_forge["blender"],
-        {"path", "version", "sha256", "size_bytes", "execution_device"},
+        {
+            "path",
+            "version",
+            "sha256",
+            "size_bytes",
+            "execution_device",
+            "authority",
+        },
         "profile.fixture_forge.blender",
     )
     _require_string(
@@ -553,6 +597,8 @@ def load_profile(path: pathlib.Path | None = None) -> dict:
         "CPU",
         "forge Blender device",
     )
+    if fixture_forge["blender"]["authority"] != _expected_profile_blender_authority():
+        _fail("FIXTURE_PROFILE_INVALID", "forge Blender authority contract drifted")
     _require_keys(
         fixture_forge["recipe"],
         {"relative_path", "schema_version", "recipe_id", "content_digest"},
@@ -589,9 +635,13 @@ def load_profile(path: pathlib.Path | None = None) -> dict:
             "profile",
             "recipe",
             "forge_plan",
+            "worker_request",
             "worker_result",
             "source_snapshot",
+            "output_root",
             "toolchain",
+            "archetypes",
+            "execution_policy",
             "artifact_count",
             "artifacts",
             "ue_package_inventory",
@@ -1157,40 +1207,237 @@ def load_recipe(path: pathlib.Path | None = None) -> dict:
     return recipe
 
 
-def _verify_toolchain() -> dict:
-    blender = file_pin(DEFAULT_BLENDER, maximum_bytes=PINNED_BLENDER_BYTES + 1)
+def _validate_blender_authority_contract(
+    value: Mapping[str, Any], label: str = "Blender authority"
+) -> None:
+    _require_keys(
+        value,
+        {
+            "schema_version",
+            "source_archive",
+            "authority_root",
+            "distribution_root",
+            "manifest",
+            "blender",
+            "wrapper_python",
+        },
+        label,
+    )
+    _require_string(
+        value["schema_version"],
+        blender_authority.MANIFEST_SCHEMA_VERSION,
+        f"{label}.schema_version",
+    )
+    if value["source_archive"] != {
+        "official_url": blender_authority.OFFICIAL_ARCHIVE_URL,
+        "sha256": blender_authority.OFFICIAL_ARCHIVE_SHA256,
+        "size_bytes": blender_authority.OFFICIAL_ARCHIVE_BYTES,
+    }:
+        _fail("FIXTURE_BLENDER_AUTHORITY_INVALID", f"{label} archive pin drifted")
+    _require_string(
+        value["authority_root"],
+        str(DEFAULT_BLENDER_AUTHORITY_ROOT),
+        f"{label}.authority_root",
+    )
+    _require_string(
+        value["distribution_root"],
+        str(DEFAULT_BLENDER_DISTRIBUTION_ROOT),
+        f"{label}.distribution_root",
+    )
+    _require_keys(
+        value["manifest"],
+        {
+            "path",
+            "sha256",
+            "size_bytes",
+            "content_tree_sha256",
+            "tree_sha256",
+            "entry_count",
+        },
+        f"{label}.manifest",
+    )
+    _require_string(
+        value["manifest"]["path"],
+        str(blender_authority.MANIFEST_PATH),
+        f"{label}.manifest.path",
+    )
+    for key in ("sha256", "content_tree_sha256", "tree_sha256"):
+        _require_sha256(value["manifest"][key], f"{label}.manifest.{key}")
+    _require_positive_int(
+        value["manifest"]["size_bytes"], f"{label}.manifest.size_bytes"
+    )
+    _require_positive_int(
+        value["manifest"]["entry_count"], f"{label}.manifest.entry_count"
+    )
+    _require_keys(
+        value["blender"], {"path", "sha256", "size_bytes"}, f"{label}.blender"
+    )
+    if value["blender"] != {
+        "path": str(DEFAULT_BLENDER),
+        "sha256": PINNED_BLENDER_SHA256,
+        "size_bytes": PINNED_BLENDER_BYTES,
+    }:
+        _fail("FIXTURE_BLENDER_AUTHORITY_INVALID", f"{label} Blender pin drifted")
+    _require_keys(
+        value["wrapper_python"],
+        {"path", "sha256", "size_bytes"},
+        f"{label}.wrapper_python",
+    )
+    _require_string(
+        value["wrapper_python"]["path"],
+        str(
+            DEFAULT_BLENDER_DISTRIBUTION_ROOT
+            / blender_authority.WRAPPER_PYTHON_RELATIVE_PATH
+        ),
+        f"{label}.wrapper_python.path",
+    )
+    _require_sha256(value["wrapper_python"]["sha256"], f"{label}.wrapper_python.sha256")
+    _require_positive_int(
+        value["wrapper_python"]["size_bytes"],
+        f"{label}.wrapper_python.size_bytes",
+    )
+
+
+def _audit_fixed_blender_authority() -> dict:
+    try:
+        authority = blender_authority.audit_fixed_authority()
+    except blender_authority.BlenderAuthorityError as exc:
+        raise FixtureForgeError(
+            "FIXTURE_BLENDER_AUTHORITY_ADMIN_PREFLIGHT_REQUIRED",
+            (
+                "root-owned Blender 4.5.8 authority is absent or invalid at "
+                f"{DEFAULT_BLENDER_AUTHORITY_ROOT}"
+            ),
+        ) from exc
+    _validate_blender_authority_contract(authority)
+    return authority
+
+
+def _assert_blender_authority_current(
+    expected_authority: Mapping[str, Any], *, phase: str
+) -> None:
+    _validate_blender_authority_contract(expected_authority)
+    if _audit_fixed_blender_authority() != expected_authority:
+        _fail(
+            "FIXTURE_BLENDER_AUTHORITY_DRIFT",
+            f"Blender authority changed {phase}",
+        )
+
+
+def _open_authority_distribution(expected_authority: Mapping[str, Any]) -> int:
+    _assert_blender_authority_current(
+        expected_authority, phase="before its distribution was opened"
+    )
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_DIRECTORY", 0)
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        descriptor = os.open(DEFAULT_BLENDER_DISTRIBUTION_ROOT, flags)
+        info = os.fstat(descriptor)
+        pathname_info = os.lstat(DEFAULT_BLENDER_DISTRIBUTION_ROOT)
+    except OSError as exc:
+        if "descriptor" in locals():
+            os.close(descriptor)
+        raise FixtureForgeError(
+            "FIXTURE_BLENDER_AUTHORITY_OPEN_FAILED",
+            "fixed Blender distribution could not be opened",
+        ) from exc
     if (
-        blender["sha256"] != PINNED_BLENDER_SHA256
-        or blender["size_bytes"] != PINNED_BLENDER_BYTES
+        not stat.S_ISDIR(info.st_mode)
+        or stat.S_ISLNK(pathname_info.st_mode)
+        or info.st_uid != 0
+        or info.st_gid != 0
+        or stat.S_IMODE(info.st_mode) & 0o022
+        or (info.st_dev, info.st_ino) != (pathname_info.st_dev, pathname_info.st_ino)
     ):
-        _fail("FIXTURE_BLENDER_DRIFT", "Blender binary pin drifted")
+        os.close(descriptor)
+        _fail(
+            "FIXTURE_BLENDER_AUTHORITY_OPEN_FAILED",
+            "fixed Blender distribution descriptor is not root-owned immutable",
+        )
+    try:
+        _assert_blender_authority_current(
+            expected_authority, phase="while its distribution was opened"
+        )
+    except FixtureForgeError:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _version_probe_command(*, distribution_fd: int) -> list[str]:
+    return [
+        str(DEFAULT_BWRAP),
+        "--die-with-parent",
+        "--new-session",
+        "--unshare-net",
+        "--unshare-pid",
+        "--ro-bind",
+        "/",
+        "/",
+        "--ro-bind-fd",
+        str(distribution_fd),
+        str(DEFAULT_BLENDER_DISTRIBUTION_ROOT),
+        "--dev",
+        "/dev",
+        "--proc",
+        "/proc",
+        "--tmpfs",
+        "/tmp",
+        "--chdir",
+        "/tmp",
+        str(DEFAULT_BLENDER),
+        "--version",
+    ]
+
+
+def _verify_toolchain(*, execute_version_probe: bool = True) -> dict:
+    authority = _audit_fixed_blender_authority()
     bwrap = file_pin(DEFAULT_BWRAP, maximum_bytes=PINNED_BWRAP_BYTES + 1)
     if (
         bwrap["sha256"] != PINNED_BWRAP_SHA256
         or bwrap["size_bytes"] != PINNED_BWRAP_BYTES
     ):
         _fail("FIXTURE_BWRAP_DRIFT", "Bubblewrap binary pin drifted")
-    try:
-        probe = subprocess.run(
-            [str(DEFAULT_BLENDER), "--version"],
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=30,
-            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise FixtureForgeError(
-            "FIXTURE_BLENDER_PROBE_FAILED", "Blender version probe failed"
-        ) from exc
-    first_line = probe.stdout.decode("utf-8", errors="replace").splitlines()[0]
-    if probe.returncode != 0 or first_line != f"Blender {PINNED_BLENDER_VERSION}":
-        _fail("FIXTURE_BLENDER_VERSION_DRIFT", "Blender 4.5.8 LTS is required")
+    if execute_version_probe:
+        distribution_fd = _open_authority_distribution(authority)
+        try:
+            probe = subprocess.run(
+                _version_probe_command(distribution_fd=distribution_fd),
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=30,
+                env=_subprocess_environment(),
+                start_new_session=True,
+                pass_fds=(distribution_fd,),
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise FixtureForgeError(
+                "FIXTURE_BLENDER_PROBE_FAILED",
+                "fd-bound root-owned Blender version probe failed",
+            ) from exc
+        finally:
+            os.close(distribution_fd)
+            _assert_blender_authority_current(
+                authority, phase="during the version probe"
+            )
+        lines = probe.stdout.decode("utf-8", errors="replace").splitlines()
+        first_line = lines[0] if lines else ""
+        if probe.returncode != 0 or first_line != f"Blender {PINNED_BLENDER_VERSION}":
+            _fail("FIXTURE_BLENDER_VERSION_DRIFT", "Blender 4.5.8 LTS is required")
     return {
         "blender": {
-            **blender,
+            "path": str(DEFAULT_BLENDER),
+            "sha256": PINNED_BLENDER_SHA256,
+            "size_bytes": PINNED_BLENDER_BYTES,
             "version": PINNED_BLENDER_VERSION,
             "execution_device": "CPU",
+            "authority": authority,
+            "execution_binding": "root_owned_distribution_fd_read_only",
         },
         "bubblewrap": {
             **bwrap,
@@ -1198,70 +1445,6 @@ def _verify_toolchain() -> dict:
             "device_policy": "private_dev_without_gpu_nodes",
         },
     }
-
-
-def _sealed_file_snapshot(
-    path: pathlib.Path, *, expected_sha256: str, expected_size_bytes: int
-) -> int:
-    raw = _read_regular_file(path, maximum_bytes=expected_size_bytes + 1)
-    if (
-        len(raw) != expected_size_bytes
-        or hashlib.sha256(raw).hexdigest() != expected_sha256
-    ):
-        _fail("FIXTURE_TOOLCHAIN_DRIFT", f"toolchain source drifted: {path}")
-    flags = getattr(os, "MFD_CLOEXEC", 0x0001) | getattr(
-        os, "MFD_ALLOW_SEALING", 0x0002
-    )
-    try:
-        if hasattr(os, "memfd_create"):
-            descriptor = os.memfd_create("vista-r9-sealed-toolchain", flags)
-        else:
-            libc = ctypes.CDLL(None, use_errno=True)
-            memfd_create = libc.memfd_create
-            memfd_create.argtypes = (ctypes.c_char_p, ctypes.c_uint)
-            memfd_create.restype = ctypes.c_int
-            descriptor = memfd_create(b"vista-r9-sealed-toolchain", flags)
-            if descriptor < 0:
-                errno = ctypes.get_errno()
-                raise OSError(errno, os.strerror(errno))
-        offset = 0
-        while offset < len(raw):
-            offset += os.write(descriptor, raw[offset:])
-        os.fchmod(descriptor, 0o500)
-        os.fsync(descriptor)
-        seals = (
-            getattr(fcntl, "F_SEAL_SEAL", 0x0001)
-            | getattr(fcntl, "F_SEAL_SHRINK", 0x0002)
-            | getattr(fcntl, "F_SEAL_GROW", 0x0004)
-            | getattr(fcntl, "F_SEAL_WRITE", 0x0008)
-        )
-        fcntl.fcntl(descriptor, getattr(fcntl, "F_ADD_SEALS", 1033), seals)
-        observed_seals = fcntl.fcntl(descriptor, getattr(fcntl, "F_GET_SEALS", 1034))
-        if observed_seals & seals != seals:
-            _fail("FIXTURE_TOOLCHAIN_SNAPSHOT_FAILED", "memfd seals are incomplete")
-        observed = hashlib.sha256()
-        cursor = 0
-        while cursor < expected_size_bytes:
-            chunk = os.pread(
-                descriptor, min(1024 * 1024, expected_size_bytes - cursor), cursor
-            )
-            if not chunk:
-                _fail("FIXTURE_TOOLCHAIN_SNAPSHOT_FAILED", "sealed memfd is truncated")
-            observed.update(chunk)
-            cursor += len(chunk)
-        if observed.hexdigest() != expected_sha256:
-            _fail("FIXTURE_TOOLCHAIN_SNAPSHOT_FAILED", "sealed memfd bytes drifted")
-        return descriptor
-    except FixtureForgeError:
-        if "descriptor" in locals():
-            os.close(descriptor)
-        raise
-    except OSError as exc:
-        if "descriptor" in locals():
-            os.close(descriptor)
-        raise FixtureForgeError(
-            "FIXTURE_TOOLCHAIN_SNAPSHOT_FAILED", "unable to seal toolchain memfd"
-        ) from exc
 
 
 @dataclass(frozen=True)
@@ -1359,7 +1542,9 @@ def _expected_execution_policy() -> dict:
         "toolchain_probe_executes_blender_binary": True,
         "toolchain_probe_generation_executed": False,
         "immutable_source_snapshot": True,
-        "blender_binary_execution": "sealed_memfd_read_only_bind_fd",
+        "blender_binary_execution": (
+            "audited_root_owned_distribution_read_only_bind_fd"
+        ),
         "caller_selected_binary": False,
         "caller_selected_script": False,
         "caller_selected_assets": False,
@@ -1485,7 +1670,7 @@ def validate_plan(plan: Mapping[str, Any], *, expected_mode: str | None = None) 
     _validate_builder_sources(plan["builder_sources"], profile=profile, recipe=recipe)
     if plan["source_snapshot"] != _expected_snapshot_policy():
         _fail("FIXTURE_PLAN_INVALID", "source snapshot policy drifted")
-    if plan["toolchain"] != _verify_toolchain():
+    if plan["toolchain"] != _verify_toolchain(execute_version_probe=False):
         _fail("FIXTURE_PLAN_INVALID", "current toolchain differs from plan")
     if plan["archetypes"] != _expected_archetype_plan(recipe):
         _fail("FIXTURE_PLAN_INVALID", "archetype plan drifted")
@@ -1717,7 +1902,7 @@ def _validate_source_snapshot(
                 "FIXTURE_SOURCE_SNAPSHOT_DRIFT",
                 f"snapshot bytes drifted: {relative_path}",
             )
-        if row["content_digest"] is not None:
+        if row["content_digest_kind"] == "canonical_json_sha256":
             document = load_json(source_path)
             _validate_digest(document, f"snapshot {relative_path}")
             if document["content_digest"] != row["content_digest"]:
@@ -1725,6 +1910,14 @@ def _validate_source_snapshot(
                     "FIXTURE_SOURCE_SNAPSHOT_DRIFT",
                     f"snapshot content digest drifted: {relative_path}",
                 )
+        elif (
+            row["content_digest_kind"] != "raw_sha256"
+            or row["content_digest"] != observed["sha256"]
+        ):
+            _fail(
+                "FIXTURE_SOURCE_SNAPSHOT_DRIFT",
+                f"snapshot raw digest drifted: {relative_path}",
+            )
     return manifest
 
 
@@ -1802,7 +1995,9 @@ def _worker_request(plan: Mapping[str, Any]) -> dict:
                 "content_digest"
             ],
             "output_root": plan["output_root"],
+            "toolchain": copy.deepcopy(plan["toolchain"]),
             "archetypes": copy.deepcopy(plan["archetypes"]),
+            "ue_package_inventory": copy.deepcopy(plan["ue_package_inventory"]),
             "execution_policy": copy.deepcopy(plan["execution_policy"]),
             "status": "ready_for_fixed_snapshot_worker",
         }
@@ -1823,7 +2018,9 @@ def validate_worker_request(
             "source_snapshot",
             "source_snapshot_content_digest",
             "output_root",
+            "toolchain",
             "archetypes",
+            "ue_package_inventory",
             "execution_policy",
             "status",
             "content_digest",
@@ -1869,6 +2066,10 @@ def validate_worker_request(
     )
     if value["archetypes"] != _expected_archetype_plan(recipe):
         _fail("FIXTURE_WORKER_REQUEST_INVALID", "request archetypes drifted")
+    if value["toolchain"] != _verify_toolchain(execute_version_probe=False):
+        _fail("FIXTURE_WORKER_REQUEST_INVALID", "request toolchain drifted")
+    if value["ue_package_inventory"] != _expected_ue_package_inventory(profile):
+        _fail("FIXTURE_WORKER_REQUEST_INVALID", "request packages drifted")
     if value["execution_policy"] != _expected_execution_policy():
         _fail("FIXTURE_WORKER_REQUEST_INVALID", "request execution policy drifted")
     _require_string(
@@ -1983,6 +2184,111 @@ def _position_accessor_bounds(
     return actual_min, actual_max
 
 
+def _reject_glb_extension_payloads(value: Any, *, location: str = "$") -> None:
+    if type(value) is dict:
+        if "extensions" in value:
+            _fail(
+                "FIXTURE_GLB_INVALID",
+                f"GLB extension payload is prohibited at {location}",
+            )
+        for key, child in value.items():
+            _reject_glb_extension_payloads(child, location=f"{location}.{key}")
+    elif type(value) is list:
+        for index, child in enumerate(value):
+            _reject_glb_extension_payloads(child, location=f"{location}[{index}]")
+
+
+def _require_gltf_number(value: Any, expected: float, label: str) -> None:
+    if (
+        type(value) not in {int, float}
+        or not math.isfinite(value)
+        or abs(float(value) - expected) > 1e-6
+    ):
+        _fail("FIXTURE_GLB_MATERIAL_DRIFT", f"{label} differs from recipe")
+
+
+def _require_gltf_vector(value: Any, expected: Sequence[float], label: str) -> None:
+    if type(value) is not list or len(value) != len(expected):
+        _fail("FIXTURE_GLB_MATERIAL_DRIFT", f"{label} differs from recipe")
+    for index, (observed, target) in enumerate(zip(value, expected, strict=True)):
+        _require_gltf_number(observed, float(target), f"{label}[{index}]")
+
+
+def _expected_exported_material_contracts(
+    archetype: Mapping[str, Any], materials: Sequence[Mapping[str, Any]]
+) -> list[dict]:
+    if len(materials) != 2:
+        _fail("FIXTURE_RECIPE_INVALID", "exactly two fixture materials are required")
+    rows = []
+    for name, material in zip(archetype["material_names"], materials, strict=True):
+        rows.append(
+            {
+                "name": name,
+                "role": material["role"],
+                "base_color_rgba": copy.deepcopy(material["base_color_rgba"]),
+                "metallic": material["metallic"],
+                "roughness": material["roughness"],
+                "emissive_factor": [
+                    material["emission_color_rgba"][index]
+                    * material["emission_strength"]
+                    for index in range(3)
+                ],
+                "alpha_mode": material["alpha_mode"],
+                "double_sided": False,
+            }
+        )
+    return rows
+
+
+def _validate_exported_material(
+    value: Mapping[str, Any], expected: Mapping[str, Any], label: str
+) -> None:
+    allowed_keys = {
+        "name",
+        "pbrMetallicRoughness",
+        "emissiveFactor",
+        "alphaMode",
+        "doubleSided",
+        "extras",
+    }
+    if set(value) - allowed_keys:
+        _fail("FIXTURE_GLB_MATERIAL_DRIFT", f"{label} has unsupported fields")
+    _require_string(value.get("name"), expected["name"], f"{label}.name")
+    pbr = value.get("pbrMetallicRoughness")
+    if type(pbr) is not dict or set(pbr) != {
+        "baseColorFactor",
+        "metallicFactor",
+        "roughnessFactor",
+    }:
+        _fail("FIXTURE_GLB_MATERIAL_DRIFT", f"{label} PBR fields are not closed")
+    _require_gltf_vector(
+        pbr["baseColorFactor"], expected["base_color_rgba"], f"{label}.base_color"
+    )
+    _require_gltf_number(
+        pbr["metallicFactor"], float(expected["metallic"]), f"{label}.metallic"
+    )
+    _require_gltf_number(
+        pbr["roughnessFactor"], float(expected["roughness"]), f"{label}.roughness"
+    )
+    observed_emissive = value.get("emissiveFactor", [0.0, 0.0, 0.0])
+    _require_gltf_vector(
+        observed_emissive, expected["emissive_factor"], f"{label}.emissive"
+    )
+    _require_string(
+        value.get("alphaMode", "OPAQUE"), expected["alpha_mode"], f"{label}.alpha"
+    )
+    _require_bool(
+        value.get("doubleSided", False),
+        expected["double_sided"],
+        f"{label}.double_sided",
+    )
+    if value.get("extras") != {
+        "vista_r9_alpha_mode": "OPAQUE",
+        "vista_r9_material_role": expected["role"],
+    }:
+        _fail("FIXTURE_GLB_MATERIAL_DRIFT", f"{label} extras differ from recipe")
+
+
 def inspect_glb(path: pathlib.Path, archetype: Mapping[str, Any]) -> dict:
     document, raw, binary = _glb_json(path)
     scenes = document.get("scenes", [])
@@ -1990,13 +2296,9 @@ def inspect_glb(path: pathlib.Path, archetype: Mapping[str, Any]) -> dict:
         _fail("FIXTURE_GLB_INVALID", "GLB must have one active scene")
     if document.get("cameras") not in (None, []):
         _fail("FIXTURE_GLB_INVALID", "GLB unexpectedly contains cameras")
-    extensions = document.get("extensionsRequired", [])
-    if extensions:
-        _fail("FIXTURE_GLB_INVALID", "GLB requires unsupported extensions")
-    if "KHR_lights_punctual" in document.get(
-        "extensionsUsed", []
-    ) or "KHR_lights_punctual" in document.get("extensions", {}):
-        _fail("FIXTURE_GLB_INVALID", "GLB unexpectedly contains lights")
+    if document.get("extensionsRequired", []) or document.get("extensionsUsed", []):
+        _fail("FIXTURE_GLB_INVALID", "GLB extensions are prohibited")
+    _reject_glb_extension_payloads(document)
     if document.get("animations") not in (None, []) or document.get("skins") not in (
         None,
         [],
@@ -2031,17 +2333,18 @@ def inspect_glb(path: pathlib.Path, archetype: Mapping[str, Any]) -> dict:
             _fail("FIXTURE_GLB_INVALID", "GLB node TRS/matrix must be absent identity")
         if any(key in node for key in ("camera", "skin")):
             _fail("FIXTURE_GLB_INVALID", "GLB node camera/skin binding is prohibited")
-        if "KHR_lights_punctual" in node.get("extensions", {}):
-            _fail("FIXTURE_GLB_INVALID", "GLB node light binding is prohibited")
     if meshes[0].get("name") != archetype["mesh_name"]:
         _fail("FIXTURE_GLB_INVALID", "GLB mesh name drifted")
-    if [item.get("name") for item in materials] != archetype["material_names"]:
-        _fail("FIXTURE_GLB_INVALID", "GLB material names drifted")
-    for material in materials:
-        if material.get("alphaMode", "OPAQUE") != "OPAQUE":
-            _fail("FIXTURE_GLB_INVALID", "GLB material is not opaque")
-        if material.get("doubleSided", False) is not False:
-            _fail("FIXTURE_GLB_INVALID", "GLB material is unexpectedly double-sided")
+    recipe = load_recipe()
+    expected_materials = _expected_exported_material_contracts(
+        archetype, recipe["materials"]
+    )
+    for index, (material, expected_material) in enumerate(
+        zip(materials, expected_materials, strict=True)
+    ):
+        _validate_exported_material(
+            material, expected_material, f"GLB material[{index}]"
+        )
     primitives = meshes[0].get("primitives", [])
     if len(primitives) != 2 or sorted(item.get("material") for item in primitives) != [
         0,
@@ -2092,6 +2395,7 @@ def inspect_glb(path: pathlib.Path, archetype: Mapping[str, Any]) -> dict:
         "camera_count": 0,
         "light_count": 0,
         "texture_count": 0,
+        "material_contracts": expected_materials,
         "mesh_local_bounds_cm": {
             "min_cm": [round(value, 6) for value in blender_min_cm],
             "max_cm": [round(value, 6) for value in blender_max_cm],
@@ -2281,6 +2585,7 @@ def _artifact_receipt(value: Mapping[str, Any], archetype: Mapping[str, Any]) ->
             "camera_count",
             "light_count",
             "texture_count",
+            "material_contracts",
             "mesh_local_bounds_cm",
             "contracted_mesh_local_bounds_cm",
             "bounds_tolerance_cm",
@@ -2289,6 +2594,10 @@ def _artifact_receipt(value: Mapping[str, Any], archetype: Mapping[str, Any]) ->
         },
         "artifact receipt GLB",
     )
+    if value["glb"]["material_contracts"] != _expected_exported_material_contracts(
+        archetype, recipe["materials"]
+    ):
+        _fail("FIXTURE_RECEIPT_INVALID", "artifact material contract drifted")
     _require_keys(
         value["preview"],
         {
@@ -2386,6 +2695,11 @@ def _validate_worker_result(
             "recipe",
             "builder_sources",
             "source_snapshot_content_digest",
+            "output_root",
+            "toolchain",
+            "archetypes",
+            "ue_package_inventory",
+            "execution_policy",
             "artifact_count",
             "artifacts",
             "execution",
@@ -2423,6 +2737,21 @@ def _validate_worker_result(
         ],
         "worker result snapshot digest",
     )
+    output_root = pathlib.Path(value["output_root"])
+    if (
+        not output_root.is_absolute()
+        or output_root.parent != DEFAULT_RUN_PARENT
+        or not _SAFE_ATTEMPT_RE.fullmatch(output_root.name)
+    ):
+        _fail("FIXTURE_WORKER_RESULT_INVALID", "worker output root drifted")
+    if value["toolchain"] != _verify_toolchain(execute_version_probe=False):
+        _fail("FIXTURE_WORKER_RESULT_INVALID", "worker toolchain drifted")
+    if value["archetypes"] != _expected_archetype_plan(recipe):
+        _fail("FIXTURE_WORKER_RESULT_INVALID", "worker archetypes drifted")
+    if value["ue_package_inventory"] != _expected_ue_package_inventory(profile):
+        _fail("FIXTURE_WORKER_RESULT_INVALID", "worker packages drifted")
+    if value["execution_policy"] != _expected_execution_policy():
+        _fail("FIXTURE_WORKER_RESULT_INVALID", "worker execution policy drifted")
     _require_int(value["artifact_count"], 3, "worker artifact count")
     artifacts = _require_list(value["artifacts"], "worker artifacts", count=3)
     for row in artifacts:
@@ -2493,7 +2822,16 @@ def _validate_worker_result(
     if expected_plan is not None:
         if value["plan_content_digest"] != expected_plan["content_digest"]:
             _fail("FIXTURE_WORKER_RESULT_INVALID", "worker plan digest drifted")
-        for key in ("profile", "recipe", "builder_sources"):
+        for key in (
+            "profile",
+            "recipe",
+            "builder_sources",
+            "output_root",
+            "toolchain",
+            "archetypes",
+            "ue_package_inventory",
+            "execution_policy",
+        ):
             if value[key] != expected_plan[key]:
                 _fail(
                     "FIXTURE_WORKER_RESULT_INVALID",
@@ -2529,7 +2867,7 @@ def _subprocess_environment(
     return environment
 
 
-def _worker_command(output_root: pathlib.Path, *, blender_fd: int) -> list[str]:
+def _worker_command(output_root: pathlib.Path, *, distribution_fd: int) -> list[str]:
     snapshot_root = _safe_child(output_root, SOURCE_SNAPSHOT_ROOT.as_posix())
     snapshot_worker = snapshot_root.joinpath(
         *pathlib.PurePosixPath(
@@ -2549,8 +2887,8 @@ def _worker_command(output_root: pathlib.Path, *, blender_fd: int) -> list[str]:
         str(output_root),
         str(output_root),
         "--ro-bind-fd",
-        str(blender_fd),
-        str(DEFAULT_BLENDER),
+        str(distribution_fd),
+        str(DEFAULT_BLENDER_DISTRIBUTION_ROOT),
         "--ro-bind",
         str(snapshot_root),
         str(snapshot_root),
@@ -2670,7 +3008,10 @@ def _build_inventory(
             }
         )
     plan_path = output_root / "forge-plan.json"
+    request_path = output_root / "worker-request.json"
     result_path = output_root / "worker-result.json"
+    request = load_json(request_path)
+    validate_worker_request(request, expected_plan=plan)
     if load_json(plan_path) != plan or load_json(result_path) != worker_result:
         _fail("FIXTURE_INVENTORY_INVALID", "plan/result mappings differ from bytes")
     snapshot_manifest = _validate_source_snapshot(
@@ -2683,6 +3024,9 @@ def _build_inventory(
             "profile": copy.deepcopy(plan["profile"]),
             "recipe": copy.deepcopy(plan["recipe"]),
             "forge_plan": _document_pin(plan_path, relative_path="forge-plan.json"),
+            "worker_request": _document_pin(
+                request_path, relative_path="worker-request.json"
+            ),
             "worker_result": _document_pin(
                 result_path, relative_path="worker-result.json"
             ),
@@ -2696,7 +3040,10 @@ def _build_inventory(
                 "tree_content_digest": snapshot_manifest["content_digest"],
                 "status": "exact_source_snapshot_current_bytes_validated",
             },
+            "output_root": plan["output_root"],
             "toolchain": copy.deepcopy(plan["toolchain"]),
+            "archetypes": copy.deepcopy(plan["archetypes"]),
+            "execution_policy": copy.deepcopy(plan["execution_policy"]),
             "artifact_count": 3,
             "artifacts": rows,
             "ue_package_inventory": copy.deepcopy(plan["ue_package_inventory"]),
@@ -2719,9 +3066,13 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
             "profile",
             "recipe",
             "forge_plan",
+            "worker_request",
             "worker_result",
             "source_snapshot",
+            "output_root",
             "toolchain",
+            "archetypes",
+            "execution_policy",
             "artifact_count",
             "artifacts",
             "ue_package_inventory",
@@ -2763,6 +3114,12 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
         expected_path="worker-result.json",
         include_content_digest=True,
     )
+    _validate_file_pin(
+        value["worker_request"],
+        "inventory worker request",
+        expected_path="worker-request.json",
+        include_content_digest=True,
+    )
     _require_keys(
         value["source_snapshot"],
         {"manifest", "source_count", "sources", "tree_content_digest", "status"},
@@ -2800,10 +3157,29 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
         "exact_source_snapshot_current_bytes_validated",
         "inventory snapshot status",
     )
+    output_root = pathlib.Path(value["output_root"])
+    if (
+        not output_root.is_absolute()
+        or output_root.parent != DEFAULT_RUN_PARENT
+        or not _SAFE_ATTEMPT_RE.fullmatch(output_root.name)
+    ):
+        _fail("FIXTURE_INVENTORY_INVALID", "inventory output root drifted")
+    if value["archetypes"] != _expected_archetype_plan(recipe):
+        _fail("FIXTURE_INVENTORY_INVALID", "inventory archetypes drifted")
+    if value["execution_policy"] != _expected_execution_policy():
+        _fail("FIXTURE_INVENTORY_INVALID", "inventory execution policy drifted")
     _require_keys(value["toolchain"], {"blender", "bubblewrap"}, "toolchain")
     _require_keys(
         value["toolchain"]["blender"],
-        {"path", "sha256", "size_bytes", "version", "execution_device"},
+        {
+            "path",
+            "sha256",
+            "size_bytes",
+            "version",
+            "execution_device",
+            "authority",
+            "execution_binding",
+        },
         "toolchain.blender",
     )
     _require_string(
@@ -2831,6 +3207,20 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
         "CPU",
         "toolchain Blender device",
     )
+    _require_string(
+        value["toolchain"]["blender"]["execution_binding"],
+        "root_owned_distribution_fd_read_only",
+        "toolchain Blender execution binding",
+    )
+    _validate_blender_authority_contract(
+        value["toolchain"]["blender"]["authority"], "toolchain Blender authority"
+    )
+    if value["toolchain"]["blender"]["authority"]["blender"] != {
+        "path": value["toolchain"]["blender"]["path"],
+        "sha256": value["toolchain"]["blender"]["sha256"],
+        "size_bytes": value["toolchain"]["blender"]["size_bytes"],
+    }:
+        _fail("FIXTURE_INVENTORY_INVALID", "authority Blender pin differs")
     _require_keys(
         value["toolchain"]["bubblewrap"],
         {"path", "sha256", "size_bytes", "network_namespace", "device_policy"},
@@ -2861,7 +3251,7 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
         "private_dev_without_gpu_nodes",
         "toolchain device policy",
     )
-    if value["toolchain"] != _verify_toolchain():
+    if value["toolchain"] != _verify_toolchain(execute_version_probe=False):
         _fail("FIXTURE_INVENTORY_INVALID", "current toolchain differs")
     _require_int(value["artifact_count"], 3, "fixture inventory artifact count")
     artifacts = _require_list(
@@ -2894,6 +3284,7 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
                 "camera_count",
                 "light_count",
                 "texture_count",
+                "material_contracts",
                 "mesh_local_bounds_cm",
                 "contracted_mesh_local_bounds_cm",
                 "bounds_tolerance_cm",
@@ -2902,6 +3293,15 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
             },
             "inventory GLB",
         )
+        archetype = next(
+            item
+            for item in recipe["archetypes"]
+            if item["archetype_id"] == archetype_id
+        )
+        if row["glb"]["material_contracts"] != _expected_exported_material_contracts(
+            archetype, recipe["materials"]
+        ):
+            _fail("FIXTURE_INVENTORY_INVALID", "inventory material contract drifted")
         _require_keys(
             row["preview"],
             {
@@ -2971,6 +3371,14 @@ def validate_fixture_inventory_file(path: pathlib.Path) -> dict:
     _validate_output_tree(output_root, stage="final")
     plan = _load_pinned_document(output_root, value["forge_plan"], label="forge plan")
     validate_plan(plan, expected_mode="apply")
+    if value["output_root"] != str(output_root) or plan["output_root"] != str(
+        output_root
+    ):
+        _fail("FIXTURE_INVENTORY_DRIFT", "current output root differs from pins")
+    worker_request = _load_pinned_document(
+        output_root, value["worker_request"], label="worker request"
+    )
+    validate_worker_request(worker_request, expected_plan=plan)
     worker_result = _load_pinned_document(
         output_root, value["worker_result"], label="worker result"
     )
@@ -2989,12 +3397,21 @@ def validate_fixture_inventory_file(path: pathlib.Path) -> dict:
         _fail("FIXTURE_INVENTORY_DRIFT", "inventory source pins differ from plan")
     if value["toolchain"] != plan["toolchain"]:
         _fail("FIXTURE_INVENTORY_DRIFT", "inventory toolchain differs from plan")
+    if value["output_root"] != plan["output_root"]:
+        _fail("FIXTURE_INVENTORY_DRIFT", "inventory output root differs from plan")
+    if value["archetypes"] != plan["archetypes"]:
+        _fail("FIXTURE_INVENTORY_DRIFT", "inventory archetypes differ from plan")
+    if value["execution_policy"] != plan["execution_policy"]:
+        _fail("FIXTURE_INVENTORY_DRIFT", "inventory policy differs from plan")
     if value["ue_package_inventory"] != plan["ue_package_inventory"]:
         _fail("FIXTURE_INVENTORY_DRIFT", "inventory packages differ from plan")
     if value["source_snapshot"]["sources"] != plan["builder_sources"]:
         _fail("FIXTURE_INVENTORY_DRIFT", "inventory source tree differs from plan")
     recipe = load_recipe()
     by_id = {item["archetype_id"]: item for item in recipe["archetypes"]}
+    worker_artifacts_by_id = {
+        item["archetype_id"]: item for item in worker_result["artifacts"]
+    }
     for row in value["artifacts"]:
         glb = inspect_glb(
             _safe_child(output_root, row["glb"]["path"]), by_id[row["archetype_id"]]
@@ -3024,6 +3441,17 @@ def validate_fixture_inventory_file(path: pathlib.Path) -> dict:
             or receipt["content_digest"] != expected_pin["content_digest"]
         ):
             _fail("FIXTURE_INVENTORY_DRIFT", "current artifact receipt differs")
+        expected_worker_row = {
+            "archetype_id": row["archetype_id"],
+            "glb_sha256": glb["sha256"],
+            "preview_sha256": preview["sha256"],
+            "receipt_content_digest": receipt["content_digest"],
+        }
+        if worker_artifacts_by_id[row["archetype_id"]] != expected_worker_row:
+            _fail(
+                "FIXTURE_INVENTORY_DRIFT",
+                "worker-result artifact row differs from current inventory bytes",
+            )
     return value
 
 
@@ -3041,12 +3469,11 @@ def apply_forge(config: ForgeConfig) -> pathlib.Path:
     _validate_source_snapshot(output_root, expected_sources=plan["builder_sources"])
     _validate_output_tree(output_root, stage="request")
     snapshot_root = _safe_child(output_root, SOURCE_SNAPSHOT_ROOT.as_posix())
-    blender_fd = _sealed_file_snapshot(
-        DEFAULT_BLENDER,
-        expected_sha256=PINNED_BLENDER_SHA256,
-        expected_size_bytes=PINNED_BLENDER_BYTES,
+    expected_authority = plan["toolchain"]["blender"]["authority"]
+    distribution_fd = _open_authority_distribution(
+        expected_authority,
     )
-    command = _worker_command(output_root, blender_fd=blender_fd)
+    command = _worker_command(output_root, distribution_fd=distribution_fd)
     try:
         completed = subprocess.run(
             command,
@@ -3056,14 +3483,17 @@ def apply_forge(config: ForgeConfig) -> pathlib.Path:
             timeout=20 * 60,
             env=_subprocess_environment(snapshot_root),
             start_new_session=True,
-            pass_fds=(blender_fd,),
+            pass_fds=(distribution_fd,),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise FixtureForgeError(
             "FIXTURE_WORKER_FAILED", "fixed Blender worker did not complete"
         ) from exc
     finally:
-        os.close(blender_fd)
+        os.close(distribution_fd)
+        _assert_blender_authority_current(
+            expected_authority, phase="during fixture generation"
+        )
     _write_exclusive(output_root / "blender-worker.log", completed.stdout)
     if completed.returncode != 0:
         _fail("FIXTURE_WORKER_FAILED", f"Blender exited {completed.returncode}")
