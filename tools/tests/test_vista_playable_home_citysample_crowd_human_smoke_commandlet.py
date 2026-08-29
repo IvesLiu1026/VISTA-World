@@ -239,6 +239,102 @@ def test_sanitized_config_byte_pins_match_host_runner() -> None:
         module.PINNED_CONTENT_METADATA_PROJECTION_SHA256
         == runner.PINNED_CONTENT_METADATA_PROJECTION_SHA256
     )
+    default_engine = runner.SANITIZED_CONFIG_FILES[
+        pathlib.PurePosixPath("Config/DefaultEngine.ini")
+    ]
+    assert (
+        b"[/Script/AndroidFileServerEditor.AndroidFileServerRuntimeSettings]"
+        in default_engine
+    )
+    assert b"bEnablePlugin=False" in default_engine
+    assert b"SecurityToken" not in default_engine
+
+
+def test_manifest_rejects_android_file_server_security_token_mutation(
+    tmp_path: pathlib.Path,
+) -> None:
+    module = _pure_commandlet()
+    project_root = tmp_path / "project"
+    project_path = project_root / module.PROJECT_NAME
+    project_path.parent.mkdir(parents=True)
+    project_path.write_bytes(b"{}\n")
+
+    records = []
+    for relative, raw in runner.SANITIZED_CONFIG_FILES.items():
+        candidate = project_root.joinpath(*relative.parts)
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        candidate.write_bytes(raw)
+        records.append(
+            {
+                "project_relative_path": relative.as_posix(),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size_bytes": len(raw),
+                "source_kind": "project_generated_sanitized_config",
+            }
+        )
+
+    content_raw = b"fixture-uasset"
+    content_relative = "Content/Fixture.uasset"
+    content_path = project_root / content_relative
+    content_path.parent.mkdir(parents=True)
+    content_path.write_bytes(content_raw)
+    records.append(
+        {
+            "project_relative_path": content_relative,
+            "sha256": hashlib.sha256(content_raw).hexdigest(),
+            "size_bytes": len(content_raw),
+            "source_kind": "pinned_source_content_copy",
+        }
+    )
+    records.sort(key=lambda record: record["project_relative_path"])
+
+    projection = "a" * 64
+    module.PINNED_CONTENT_FILE_COUNT = 1
+    module.PINNED_CONTENT_SIZE_BYTES = len(content_raw)
+    module.PINNED_CONTENT_METADATA_PROJECTION_SHA256 = projection
+    manifest = {
+        "schema_version": module.COPY_MANIFEST_SCHEMA,
+        "accepted": False,
+        "copy_strategy": "full_content_and_sanitized_config_then_registry_audit",
+        "source_metadata_projection_sha256": projection,
+        "source_content_file_count": 1,
+        "source_content_size_bytes": len(content_raw),
+        "file_count": len(records),
+        "size_bytes": sum(record["size_bytes"] for record in records),
+        "files": records,
+        "source_format_uassets_in_git": False,
+        "source_config_copied": False,
+        "source_network_settings_copied": False,
+        "redistribution_authorized": False,
+        "content_digest": "",
+    }
+    manifest["content_digest"] = module.content_digest(manifest)
+    manifest_raw = module.canonical_json(manifest)
+    manifest_path = tmp_path / module.COPY_MANIFEST_NAME
+    manifest_path.write_bytes(manifest_raw)
+    manifest_sha256 = hashlib.sha256(manifest_raw).hexdigest()
+    manifest_path.with_name(manifest_path.name + ".sha256").write_text(
+        f"{manifest_sha256}  {module.COPY_MANIFEST_NAME}\n",
+        encoding="utf-8",
+    )
+    request = {
+        "copy_manifest_sha256": manifest_sha256,
+        "copy_projection_sha256": projection,
+    }
+
+    module._validate_copy_manifest(
+        request, manifest_path.as_posix(), project_path.as_posix()
+    )
+
+    default_engine = project_root / "Config/DefaultEngine.ini"
+    default_engine.write_bytes(
+        default_engine.read_bytes()
+        + b"SecurityToken=must-never-be-accepted-even-if-ue-generated-it\n"
+    )
+    with pytest.raises(module.SmokeFailure, match="copied size differs"):
+        module._validate_copy_manifest(
+            request, manifest_path.as_posix(), project_path.as_posix()
+        )
 
 
 def test_commandlet_authorization_requires_exact_six_true_fields() -> None:

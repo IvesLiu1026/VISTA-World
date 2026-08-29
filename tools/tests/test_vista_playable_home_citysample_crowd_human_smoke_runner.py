@@ -716,13 +716,14 @@ def test_apply_copies_full_projection_invokes_isolated_nullrhi_and_seals_receipt
     disposable_project = json.loads(
         (attempt / "project" / runner.DISPOSABLE_PROJECT_NAME).read_text()
     )
-    assert [plugin["Name"] for plugin in disposable_project["Plugins"]] == [
-        "EditorScriptingUtilities",
-        "HairStrands",
-        "MassGameplay",
-        "PythonScriptPlugin",
-        "RigLogic",
-        "SunPosition",
+    assert disposable_project["Plugins"] == [
+        {"Enabled": False, "Name": "AndroidFileServer"},
+        {"Enabled": True, "Name": "EditorScriptingUtilities"},
+        {"Enabled": True, "Name": "HairStrands"},
+        {"Enabled": True, "Name": "MassGameplay"},
+        {"Enabled": True, "Name": "PythonScriptPlugin"},
+        {"Enabled": True, "Name": "RigLogic"},
+        {"Enabled": True, "Name": "SunPosition"},
     ]
     for relative in [runner.TARGET_RELATIVE, *runner.KEY_SOURCE_PINS]:
         assert (attempt / "project").joinpath(*relative.parts).read_bytes() == (
@@ -740,6 +741,19 @@ def test_apply_copies_full_projection_invokes_isolated_nullrhi_and_seals_receipt
         (attempt / "project").joinpath(*relative.parts).read_bytes()
         for relative in runner.SANITIZED_CONFIG_FILES
     )
+    default_engine = attempt / "project/Config/DefaultEngine.ini"
+    assert (
+        default_engine.read_bytes()
+        == runner.SANITIZED_CONFIG_FILES[
+            pathlib.PurePosixPath("Config/DefaultEngine.ini")
+        ]
+    )
+    assert (
+        b"[/Script/AndroidFileServerEditor.AndroidFileServerRuntimeSettings]"
+        in default_engine.read_bytes()
+    )
+    assert b"bEnablePlugin=False" in default_engine.read_bytes()
+    assert b"bAllowNetworkConnection=False" in default_engine.read_bytes()
     assert b"SecurityToken" not in copied_config
     assert b"must-not-copy" not in copied_config
     assert (

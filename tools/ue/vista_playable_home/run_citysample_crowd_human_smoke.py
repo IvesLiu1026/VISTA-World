@@ -341,6 +341,13 @@ SANITIZED_CONFIG_FILES: Mapping[PurePosixPath, bytes] = {
         b"r.GPUSkin.Support16BitBoneIndex=True\n"
         b"r.GPUSkin.UnlimitedBoneInfluences=True\n"
         b"r.SkinCache.CompileShaders=True\n"
+        b"\n"
+        b"[/Script/AndroidFileServerEditor.AndroidFileServerRuntimeSettings]\n"
+        b"bEnablePlugin=False\n"
+        b"bAllowNetworkConnection=False\n"
+        b"bIncludeInShipping=False\n"
+        b"bAllowExternalStartInShipping=False\n"
+        b"bCompileAFSProject=False\n"
     ),
     PurePosixPath("Config/DefaultGame.ini"): (
         b"[/Script/EngineSettings.GeneralProjectSettings]\n"
@@ -811,8 +818,13 @@ def _disposable_project_descriptor(source_raw: bytes) -> bytes:
         for plugin_name in ENGINE_PLUGIN_PINS
         if plugin_name not in existing_plugin_names
     )
-    # Project modules and the network/streaming plugin are intentionally absent:
-    # this forward-load audit needs only source-format content and editor Python.
+    # UE may otherwise auto-enable AndroidFileServer and append a random
+    # SecurityToken to DefaultEngine.ini before the Python commandlet runs.
+    # Keep both the descriptor and sanitized INI pinned so any startup mutation
+    # remains a hard manifest failure rather than an accepted random token.
+    plugins.append({"Enabled": False, "Name": "AndroidFileServer"})
+    # Project modules and enabled network/streaming plugins are intentionally
+    # absent: this audit needs only source-format content and editor Python.
     descriptor = {
         "Category": "Private Research",
         "Description": "Disposable CitySampleCrowd UE 5.7 forward-load smoke",
