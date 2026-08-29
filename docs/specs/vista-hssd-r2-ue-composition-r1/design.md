@@ -37,14 +37,20 @@ validator remain the execution mechanism.
    transforms.
 4. Include the R2 plan record and remediation summary in host plan/execution.
 5. Copy the exact R2 plan into the fresh attempt and rederive inside UE.
-6. Launch the commandlet through pinned Bubblewrap with `--unshare-net` and
-   NullRHI, with same-FD JSON parsing plus immediate pre-launch input checks.
+6. Launch the commandlet through pinned Bubblewrap with `--unshare-net`,
+   `--unshare-pid`, NullRHI and `-notraceserver`, with same-FD JSON parsing plus
+   immediate pre-launch input checks.
 7. Spawn/reload the same 60 NoCollision shells under deterministic
    persistent-level object names, close every actor receipt to the exact field
    schema and class path, repair/hide the same 19 semantic proxies and bind the
    R2 plan into scene and host receipts.
-8. Revalidate the execution manifest, scripts, evidence, contracts and project
-   descriptor before terminal publication.
+8. After direct UE exit, terminate any residual process group and require three
+   stable same-FD stat/SHA observations of both logs.
+9. Revalidate the execution manifest, scripts, evidence, contracts and project
+   descriptor; snapshot stdout, engine log, execution, scene receipt and map;
+   require the same snapshots again immediately before host publication.
+10. Publish the v4 host receipt with closure evidence and immediately run the
+    standalone current-byte revalidator.
 
 ## Failure Handling
 
@@ -52,12 +58,14 @@ validator remain the execution mechanism.
   transform drift fails before attempt creation in dry/apply preflight.
 - Any actor receipt with a forged map path, suffix-only class match or extra
   claim field fails terminal validation.
+- Any after-return append or current stdout/engine/execution/scene/map hash
+  drift fails host publication or later revalidation.
 - UE failure retains only the fresh quarantined attempt and failure receipt.
 - Existing material-conflict, visual, runtime and GTA claims remain false.
 
 ## File Plan
 
-- Update `run_hssd_private_research_composition.py` to the R2-bound v3 contract.
+- Update `run_hssd_private_research_composition.py` to the R2-bound v4 contract.
 - Update the Phase-1 terminal validator with explicit historical-lineage
   parameters, plus the focused Phase-2 runner/commandlet tests.
 - Update the parent T10 task evidence only after a real append-only run succeeds.
