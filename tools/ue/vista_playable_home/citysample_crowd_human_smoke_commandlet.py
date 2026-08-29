@@ -28,6 +28,18 @@ TARGET_PACKAGE = "/Game/CitySampleCrowd/Blueprints/BP_CrowdCharacter"
 TARGET_OBJECT = TARGET_PACKAGE + ".BP_CrowdCharacter"
 TARGET_CLASS = TARGET_OBJECT + "_C"
 TARGET_CDO_PATH = TARGET_PACKAGE + ".Default__BP_CrowdCharacter_C"
+TARGET_ASSET_DATA_RECORDS = [
+    {
+        "asset_class": "Blueprint",
+        "asset_name": "BP_CrowdCharacter",
+        "package_name": TARGET_PACKAGE,
+    },
+    {
+        "asset_class": "BlueprintGeneratedClass",
+        "asset_name": "BP_CrowdCharacter_C",
+        "package_name": TARGET_PACKAGE,
+    },
+]
 TARGET_UASSET_SHA256 = (
     "4deeaef11653c887ab85242cb444a8b3752b611a2a3c7c341d570f0646f82450"
 )
@@ -1373,21 +1385,33 @@ def _asset_record(asset_data, package_name):
 
 
 def _target_asset_data_evidence(registry):
-    observed = [
-        _asset_record(asset_data, TARGET_PACKAGE)
-        for asset_data in _asset_data_for_package(registry, TARGET_PACKAGE)
-    ]
-    expected = {
-        "asset_class": "Blueprint",
-        "object_path": TARGET_OBJECT,
-        "package_name": TARGET_PACKAGE,
-    }
-    require(
-        observed == [expected],
-        "TARGET_ASSET_DATA_MISMATCH",
-        "target package does not contain the one exact Blueprint AssetData",
+    # UE 5.7 AssetData does not expose ``object_path``.  Record only fields
+    # observed directly from AssetData here; exact object/class paths are
+    # independently forward-loaded below.  The package contains both the
+    # Blueprint and its generated class, so filtering either record would make
+    # the receipt incomplete and could conceal an unexpected third record.
+    observed = sorted(
+        [
+            {
+                "asset_class": _class_name(asset_data),
+                "asset_name": str(_property(asset_data, "asset_name") or ""),
+                "package_name": str(_property(asset_data, "package_name") or ""),
+            }
+            for asset_data in _asset_data_for_package(registry, TARGET_PACKAGE)
+        ],
+        key=lambda item: (
+            item["package_name"],
+            item["asset_name"],
+            item["asset_class"],
+        ),
     )
-    return expected
+    require(
+        observed == TARGET_ASSET_DATA_RECORDS,
+        "TARGET_ASSET_DATA_MISMATCH",
+        "target package AssetData inventory differs from the exact Blueprint and "
+        "BlueprintGeneratedClass pair",
+    )
+    return observed
 
 
 def _key_dependency_evidence(records, dependencies, request):

@@ -41,9 +41,22 @@ def _pure_commandlet() -> types.ModuleType:
 
 
 class _AssetData:
-    def __init__(self, class_name: str, object_path: str) -> None:
+    def __init__(
+        self,
+        class_name: str,
+        object_path: str | None = None,
+        *,
+        asset_name: str | None = None,
+        package_name: str | None = None,
+    ) -> None:
         self.asset_class_path = "/Script/Engine." + class_name
-        self.object_path = object_path
+        if object_path is not None:
+            self.object_path = object_path
+            inferred_package, inferred_name = object_path.rsplit(".", 1)
+            package_name = package_name or inferred_package
+            asset_name = asset_name or inferred_name
+        self.asset_name = asset_name
+        self.package_name = package_name
 
     def get_editor_property(self, name: str):
         return getattr(self, name)
@@ -63,10 +76,15 @@ class _Registry:
         self.assets = {
             "/Game/CitySampleCrowd/Blueprints/BP_CrowdCharacter": [
                 _AssetData(
+                    "BlueprintGeneratedClass",
+                    asset_name="BP_CrowdCharacter_C",
+                    package_name=("/Game/CitySampleCrowd/Blueprints/BP_CrowdCharacter"),
+                ),
+                _AssetData(
                     "Blueprint",
-                    "/Game/CitySampleCrowd/Blueprints/"
-                    "BP_CrowdCharacter.BP_CrowdCharacter",
-                )
+                    asset_name="BP_CrowdCharacter",
+                    package_name=("/Game/CitySampleCrowd/Blueprints/BP_CrowdCharacter"),
+                ),
             ],
             "/Game/CitySampleCrowd/Blueprints/NPC1_AnimBP": [
                 _AssetData(
@@ -119,22 +137,53 @@ def test_recursive_asset_registry_closure_reaches_anim_mesh_and_skeleton() -> No
     assert len(records) == 3
 
 
-def test_target_asset_data_requires_one_exact_blueprint_object() -> None:
+def test_target_asset_data_requires_exact_stably_ordered_blueprint_pair() -> None:
     module = _pure_commandlet()
     registry = _Registry()
 
-    assert module._target_asset_data_evidence(registry) == {
-        "asset_class": "Blueprint",
-        "object_path": module.TARGET_OBJECT,
-        "package_name": module.TARGET_PACKAGE,
-    }
-    registry.assets[module.TARGET_PACKAGE] = []
-    with pytest.raises(module.SmokeFailure, match="one exact Blueprint AssetData"):
-        module._target_asset_data_evidence(registry)
-    registry.assets[module.TARGET_PACKAGE] = [
-        _AssetData("Character", module.TARGET_OBJECT)
-    ]
-    with pytest.raises(module.SmokeFailure, match="one exact Blueprint AssetData"):
+    assert module._target_asset_data_evidence(registry) == (
+        module.TARGET_ASSET_DATA_RECORDS
+    )
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "class", "name", "package"])
+def test_target_asset_data_rejects_incomplete_or_wrong_inventory(mutation: str) -> None:
+    module = _pure_commandlet()
+    registry = _Registry()
+    records = list(registry.assets[module.TARGET_PACKAGE])
+    if mutation == "missing":
+        records.pop()
+    elif mutation == "extra":
+        records.append(
+            _AssetData(
+                "Blueprint",
+                asset_name="Unexpected",
+                package_name=module.TARGET_PACKAGE,
+            )
+        )
+    elif mutation == "class":
+        records[0] = _AssetData(
+            "Character",
+            asset_name="BP_CrowdCharacter_C",
+            package_name=module.TARGET_PACKAGE,
+        )
+    elif mutation == "name":
+        records[0] = _AssetData(
+            "BlueprintGeneratedClass",
+            asset_name="Unrelated_C",
+            package_name=module.TARGET_PACKAGE,
+        )
+    else:
+        records[0] = _AssetData(
+            "BlueprintGeneratedClass",
+            asset_name="BP_CrowdCharacter_C",
+            package_name="/Game/Other/BP_CrowdCharacter",
+        )
+    registry.assets[module.TARGET_PACKAGE] = records
+
+    with pytest.raises(
+        module.SmokeFailure, match="exact Blueprint and BlueprintGeneratedClass pair"
+    ):
         module._target_asset_data_evidence(registry)
 
 

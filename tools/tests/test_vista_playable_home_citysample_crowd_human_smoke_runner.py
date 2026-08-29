@@ -285,11 +285,9 @@ def _success_result(plan: runner.SmokePlan) -> dict:
         "dependency_closure_sha256": runner._sha256_bytes(
             runner.canonical_json({"asset_records": records, "packages": packages})
         ),
-        "target_asset_data": {
-            "asset_class": "Blueprint",
-            "object_path": runner.TARGET_OBJECT,
-            "package_name": runner.TARGET_PACKAGE,
-        },
+        "target_asset_data": [
+            dict(record) for record in runner.TARGET_ASSET_DATA_RECORDS
+        ],
         "blueprint_object_path": runner.TARGET_OBJECT,
         "generated_class_path": runner.TARGET_CLASS,
         "loaded_class_path": runner.TARGET_CLASS,
@@ -358,11 +356,13 @@ def test_host_accepts_only_closed_self_consistent_success_evidence(
         ("generated_class_path", "/Game/Other.UnrelatedCharacter_C"),
         (
             "target_asset_data",
-            {
-                "asset_class": "Blueprint",
-                "object_path": "/Game/Other.Unrelated",
-                "package_name": "/Game/Other",
-            },
+            [
+                {
+                    "asset_class": "Blueprint",
+                    "asset_name": "Unrelated",
+                    "package_name": "/Game/Other",
+                }
+            ],
         ),
         ("skeletal_component_count", 0),
         ("dependency_asset_count", 999),
@@ -410,6 +410,35 @@ def test_host_rejects_arbitrary_self_consistent_dependency_closure(
     result["dependency_closure_sha256"] = runner._sha256_bytes(
         runner.canonical_json({"asset_records": records, "packages": packages})
     )
+    _write_commandlet_result_for_host_validation(plan, result)
+
+    with pytest.raises(runner.CitySampleCrowdSmokeError, match="RESULT_INVALID"):
+        runner._read_sealed_result(plan)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "extra", "reordered"])
+def test_host_rejects_incomplete_extra_or_reordered_target_asset_data(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    fixture = Fixture(tmp_path, monkeypatch)
+    plan = runner.plan_smoke(fixture.config())
+    result = _success_result(plan)
+    target_records = list(result["target_asset_data"])
+    if mutation == "missing":
+        target_records.pop()
+    elif mutation == "extra":
+        target_records.append(
+            {
+                "asset_class": "Blueprint",
+                "asset_name": "Unexpected",
+                "package_name": runner.TARGET_PACKAGE,
+            }
+        )
+    else:
+        target_records.reverse()
+    result["target_asset_data"] = target_records
     _write_commandlet_result_for_host_validation(plan, result)
 
     with pytest.raises(runner.CitySampleCrowdSmokeError, match="RESULT_INVALID"):
