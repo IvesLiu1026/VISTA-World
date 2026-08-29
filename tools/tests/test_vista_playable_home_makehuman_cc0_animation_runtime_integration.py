@@ -138,6 +138,8 @@ def test_editor_authoring_bridge_has_zero_argument_closed_surface_and_topology()
     assert 'FindPin(TEXT("X"))' in source
     assert 'FindPin(TEXT("Source"))' in source
     assert 'FindPin(TEXT("Result"))' in source
+    assert "const UEdGraphSchema* GraphSchema" in source
+    assert "const UEdGraphSchema* Schema" not in source
     assert "Graphs[0]->Nodes.Num() != 4" in source
     assert "AnimBlueprint->GeneratedClass->GetPathName()" in source
     assert "Pickup->SlotAnimTracks.Num() != 1" in source
