@@ -6,6 +6,7 @@ import json
 import pathlib
 import struct
 import zlib
+from collections.abc import Callable
 
 import pytest
 
@@ -152,6 +153,29 @@ def _glb_bytes(
             struct.pack("<4sII", b"glTF", 2, total),
             struct.pack("<II", len(json_raw), 0x4E4F534A),
             json_raw,
+            struct.pack("<II", len(binary), 0x004E4942),
+            binary,
+        )
+    )
+
+
+def _rewrite_glb_json(raw: bytes, transform: Callable[[str], str]) -> bytes:
+    json_length, json_kind = struct.unpack_from("<II", raw, 12)
+    assert json_kind == 0x4E4F534A
+    json_start = 20
+    binary_header = json_start + json_length
+    binary_length, binary_kind = struct.unpack_from("<II", raw, binary_header)
+    assert binary_kind == 0x004E4942
+    binary = raw[binary_header + 8 : binary_header + 8 + binary_length]
+    document = raw[json_start:binary_header].rstrip(b" \t\r\n\x00").decode("utf-8")
+    rewritten = transform(document).encode("utf-8")
+    rewritten += b" " * (-len(rewritten) % 4)
+    total = 12 + 8 + len(rewritten) + 8 + len(binary)
+    return b"".join(
+        (
+            struct.pack("<4sII", b"glTF", 2, total),
+            struct.pack("<II", len(rewritten), 0x4E4F534A),
+            rewritten,
             struct.pack("<II", len(binary), 0x004E4942),
             binary,
         )
@@ -674,6 +698,34 @@ def test_glb_inspection_closes_structure_materials_and_bounds(
 
     path.write_bytes(_glb_bytes(archetype, cameras=[{"type": "perspective"}]))
     with pytest.raises(forge.FixtureForgeError, match="contains cameras"):
+        forge.inspect_glb(path, archetype)
+
+
+def test_glb_json_rejects_duplicate_keys_before_structural_inspection(
+    tmp_path: pathlib.Path,
+) -> None:
+    archetype = forge.load_recipe()["archetypes"][2]
+    raw = _glb_bytes(archetype)
+
+    def duplicate_scene(document: str) -> str:
+        marker = '"scene":0,'
+        assert marker in document
+        return document.replace(marker, '"scene":0,"scene":0,', 1)
+
+    path = tmp_path / "duplicate-key.glb"
+    path.write_bytes(_rewrite_glb_json(raw, duplicate_scene))
+    with pytest.raises(forge.FixtureForgeError, match="FIXTURE_JSON_DUPLICATE_KEY"):
+        forge.inspect_glb(path, archetype)
+
+
+@pytest.mark.parametrize("nonfinite", [float("nan"), float("inf"), float("-inf")])
+def test_glb_json_rejects_nonfinite_constants_before_structural_inspection(
+    tmp_path: pathlib.Path, nonfinite: float
+) -> None:
+    archetype = forge.load_recipe()["archetypes"][2]
+    path = tmp_path / "nonfinite.glb"
+    path.write_bytes(_glb_bytes(archetype, extras={"nonfinite": nonfinite}))
+    with pytest.raises(forge.FixtureForgeError, match="FIXTURE_JSON_NON_FINITE"):
         forge.inspect_glb(path, archetype)
 
 
