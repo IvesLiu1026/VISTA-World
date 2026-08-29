@@ -682,6 +682,7 @@ def run():
     semantic_repaired = []
     semantic_reloaded = []
     semantic_write_sequence_completed = []
+    semantic_authority_failure = None
     conflicts_before = []
     conflicts_reloaded = []
     allowed_contacts_before = []
@@ -719,8 +720,18 @@ def run():
             semantic_before.append(baseline)
             repair_semantic_proxy_query_authority_and_hide(proxy)
             repaired = semantic_proxy_observation(proxy, expected)
+            authority_diff = curated._semantic_proxy_authority_field_diff(
+                repaired, expected
+            )
+            if authority_diff:
+                semantic_authority_failure = {
+                    "semantic_target_id": authority["semantic_target_id"],
+                    "phase": "after_authority_repair_and_hide",
+                    "field_diff": authority_diff,
+                }
             require(
-                curated._semantic_proxy_authority_matches(repaired, expected),
+                not authority_diff
+                and curated._semantic_proxy_authority_matches(repaired, expected),
                 "semantic proxy query authority repair failed: "
                 + authority["semantic_target_id"],
             )
@@ -783,8 +794,18 @@ def run():
         )
         for index, (_proxy, observed) in enumerate(reloaded_proxy_pairs):
             expected = execution["semantic_authorities"][index]["reloaded"]
+            authority_diff = curated._semantic_proxy_authority_field_diff(
+                observed, expected
+            )
+            if authority_diff:
+                semantic_authority_failure = {
+                    "semantic_target_id": expected["semantic_target_id"],
+                    "phase": "cold_reload",
+                    "field_diff": authority_diff,
+                }
             require(
-                curated._semantic_proxy_authority_matches(observed, expected),
+                not authority_diff
+                and curated._semantic_proxy_authority_matches(observed, expected),
                 "semantic proxy lost query authority after reload: "
                 + expected["semantic_target_id"],
             )
@@ -812,6 +833,8 @@ def run():
             "message": str(exc)[:512],
             "stage": stage,
         }
+        if semantic_authority_failure is not None:
+            error["semantic_authority_diff"] = semantic_authority_failure
 
     succeeded = status == curated.SUCCESS_STATUS
     room_counts = {
