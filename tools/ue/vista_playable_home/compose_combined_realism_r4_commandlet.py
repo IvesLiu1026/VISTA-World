@@ -1210,8 +1210,8 @@ def spawn_post_process(actor_subsystem, profile):
         "motion_blur_amount": post_profile["motion_blur_amount"],
         "override_scene_fringe_intensity": True,
         "scene_fringe_intensity": post_profile["chromatic_aberration_intensity"],
-        "override_grain_intensity": True,
-        "grain_intensity": post_profile["film_grain_intensity"],
+        "override_film_grain_intensity": True,
+        "film_grain_intensity": post_profile["film_grain_intensity"],
         "override_bloom_intensity": True,
         "bloom_intensity": post_profile["bloom_intensity"],
         "override_vignette_intensity": True,
@@ -1241,7 +1241,7 @@ def observe_post_process(post, profile):
         "override_auto_exposure_speed_down",
         "override_motion_blur_amount",
         "override_scene_fringe_intensity",
-        "override_grain_intensity",
+        "override_film_grain_intensity",
         "override_bloom_intensity",
         "override_vignette_intensity",
     )
@@ -1259,7 +1259,7 @@ def observe_post_process(post, profile):
             settings.get_editor_property("scene_fringe_intensity")
         ),
         "film_grain_intensity": normalized_number(
-            settings.get_editor_property("grain_intensity")
+            settings.get_editor_property("film_grain_intensity")
         ),
         "bloom_intensity": normalized_number(
             settings.get_editor_property("bloom_intensity")
