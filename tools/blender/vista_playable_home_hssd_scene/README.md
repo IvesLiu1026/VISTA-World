@@ -4,8 +4,8 @@ This directory contains two separate assemblers:
 
 - `assembler.py` / `blender_worker.py` retain the earlier one-room R5 review
   path.
-- `forge.py` / `six_room_blender_worker.py` are the six-room R7 path described
-  here.
+- `forge.py` / `six_room_blender_worker.py` are the six-room R2 placement
+  remediation path over the sealed R7 materialization described here.
 
 The six-room forge is private, non-commercial research tooling. HSSD GLBs,
 Blender files, renders, and receipts stay outside Git. It does not download
@@ -23,22 +23,36 @@ PYTHONPATH=. uv run python -m \
 ```
 
 It revalidates the sealed R7 HSSD materialization (26 normalized GLBs and 26
-asset receipts), the checked-in six-room `HouseSpec`, and the pinned Blender and
-builder bytes. The emitted plan contains:
+asset receipts), its exact profile/scene-plan/placement digests, the checked-in
+six-room `HouseSpec`, and the pinned Blender and builder bytes. It then applies
+17 fixed transform-policy overrides. There is no caller-provided placement
+override. The emitted plan contains:
 
 - 26 prototype imports and 60 linked-instance placements;
 - room-local and world-space rotated AABBs;
 - explicit floor, surface, and wall-edge support records;
-- every protected portal-approach conflict;
+- a before/after protected portal-approach ledger;
 - every retained R1 semantic proxy and its visual alignment delta;
 - review-only secondary AABB proxies or explicit detail-no-collision policies;
-- known contact/overlap relations and unresolved blockers.
+- explicit visual-contact and collision policies;
+- the unchanged external source/license authority and remaining review blockers.
 
-Known R7 gaps are intentionally visible in the plan. The faucet has no
-derivable surface support, five wall-edge placements lack a credible wall
-anchor, ten placements intersect protected portal approaches, and some visual
-to R1 proxy offsets exceed the review threshold. These block playable-collision
-or GTA-quality claims; they do not prevent a visual review build.
+The deterministic R2 transform layer reduces protected portal conflict
+assignments from 10 to 0, collision-blocking overlap pairs from 1 to 0, semantic
+proxy deltas over 0.10 m from 2 to 0, and hard geometric support outliers from
+7 to 2. All 60 rotated AABBs remain inside their six rooms. The bathroom faucet
+still lacks a derivable fixture surface, and the office ladder stays aligned to
+its retained semantic proxy instead of inventing a wall anchor. Separately,
+all 18 wall-edge items remain `review_pending`: proximity to a room boundary is
+not wall-fixture authority. The 20 secondary AABB policies also remain review
+candidates until a separate Unreal collision receipt exists. Chair/table and
+soft-dressing AABB contacts likewise remain review-pending; they do not block
+this deterministic transform-remediation step, but no visual or physics review
+is claimed.
+
+This is placement remediation, not runtime proof. It does not promote the
+scene to accepted visual evidence, playable collision, Unreal runtime, or
+GTA-quality status; all such claims remain false.
 
 ## Explicit Blender execution
 
