@@ -31,12 +31,15 @@ COMBINED_RECEIPT_SCHEMA = "simworld.vista.human-visual-demo-combined-receipt/v2"
 COMBINED_RECEIPT_STATUS = "sealed_human_visual_demo_candidate"
 COMBINED_RECEIPT_NAME = "human-visual-demo-combined-receipt.json"
 COMBINED_RECEIPT_SIDECAR_NAME = COMBINED_RECEIPT_NAME + ".sha256"
-PLAN_SCHEMA = "simworld.vista.human-visual-demo-launch-plan/v1"
+PLAN_SCHEMA = "simworld.vista.human-visual-demo-launch-plan/v2"
 PROVIDER_ID = "citysample_crowd_visual_demo_v1"
+CAMERA_PROFILE = "realistic_interior_r2"
 DISPLAY = ":118"
 GPU = 0
 WIDTH = 1920
 HEIGHT = 1080
+TARGET_FPS = 60
+SCREEN_PERCENTAGE = 100
 STARTUP_GRACE_SECONDS = 3.0
 MAX_RECEIPT_BYTES = 64 * 1024
 TRUSTED_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -44,6 +47,7 @@ PROJECT_STATIC_TREE_ALGORITHM = "sha256-path-nul-mode-size-content-v1"
 PROJECT_STATIC_ROOTS = ("Config", "Content", "Plugins")
 MUTABLE_PROJECT_DIRECTORIES = frozenset({"Saved", "Intermediate", "DerivedDataCache"})
 LOCK_ROOT = Path(f"/tmp/vista-human-visual-demo-locks-{os.geteuid()}")
+CACHE_PARENT = Path("/data/sysx/vista-world/cache/human-visual-demo")
 NETWORK_NAMESPACE_EXECUTABLE = Path("/usr/bin/bwrap")
 NETWORK_NAMESPACE_EXECUTABLE_SHA256 = (
     "d78807229d616606e339c5988392b9e0ab4a6a6998fa51e4590837f426a12fca"
@@ -607,6 +611,7 @@ def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
 
 
 def build_command(inputs: HumanVisualDemoInputs) -> list[str]:
+    cache_root = runtime_cache_root(inputs)
     return [
         str(NETWORK_NAMESPACE_EXECUTABLE),
         "--unshare-net",
@@ -624,24 +629,71 @@ def build_command(inputs: HumanVisualDemoInputs) -> list[str]:
         f"-ResX={WIDTH}",
         f"-ResY={HEIGHT}",
         f"-graphicsadapter={GPU}",
+        f"-UserDir={cache_root / 'user'}",
         "-NoSplash",
         "-NOSOUND",
         "-NoAnalytics",
+        "-NoVSync",
         "-notraceserver",
         "-ddc=InstalledNoZenLocalFallback",
         "-SaveToUserDir",
+        f"-ExecCmds=t.MaxFPS {TARGET_FPS},r.ScreenPercentage {SCREEN_PERCENTAGE}",
         "-UDPMESSAGING_TRANSPORT_ENABLE=0",
         "-ini:Engine:[/Script/TcpMessaging.TcpMessagingSettings]:EnableTransport=False",
         (
             "-ini:Engine:[/Script/AppleARKit.AppleARKitSettings]:"
             "bEnableLiveLinkForFaceTracking=False"
         ),
+        f"-VistaCameraProfile={CAMERA_PROFILE}",
         f"-VistaCharacterProvider={PROVIDER_ID}",
         "-VistaHumanOperatedVisualDemo",
     ]
 
 
-def sanitized_environment(private_root: Path) -> dict[str, str]:
+def runtime_cache_root(inputs: HumanVisualDemoInputs) -> Path:
+    if not SHA256_RE.fullmatch(inputs.receipt_sha256):
+        raise HumanVisualDemoError("runtime cache receipt identity is invalid")
+    return CACHE_PARENT / inputs.receipt_sha256
+
+
+def _ensure_private_owned_directory(path: Path, label: str) -> None:
+    try:
+        path.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    except OSError as exc:
+        raise HumanVisualDemoError(f"{label} could not be created") from exc
+    try:
+        metadata = os.lstat(path)
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        raise HumanVisualDemoError(f"{label} is unavailable") from exc
+    if (
+        resolved != path
+        or stat.S_ISLNK(metadata.st_mode)
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.geteuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise HumanVisualDemoError(
+            f"{label} must be a private real directory owned by the current user"
+        )
+
+
+def ensure_runtime_cache(inputs: HumanVisualDemoInputs) -> Path:
+    cache_parent_parent = CACHE_PARENT.parent
+    _ensure_private_owned_directory(cache_parent_parent, "visual-demo cache parent")
+    _ensure_private_owned_directory(CACHE_PARENT, "visual-demo cache namespace")
+    cache_root = runtime_cache_root(inputs)
+    _ensure_private_owned_directory(cache_root, "receipt-bound runtime cache")
+    for relative in ("ddc", "user"):
+        _ensure_private_owned_directory(
+            cache_root / relative, f"runtime cache {relative} directory"
+        )
+    return cache_root
+
+
+def sanitized_environment(private_root: Path, cache_root: Path) -> dict[str, str]:
     return {
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
@@ -654,6 +706,8 @@ def sanitized_environment(private_root: Path) -> dict[str, str]:
         "XDG_CACHE_HOME": str(private_root / "xdg-cache"),
         "XDG_CONFIG_HOME": str(private_root / "xdg-config"),
         "XDG_DATA_HOME": str(private_root / "xdg-data"),
+        # Unreal's Unix platform layer canonicalizes '-' to '_' before getenv().
+        "UE_LocalDataCachePath": str(cache_root / "ddc"),
         "VISTA_CHARACTER_PROVIDER": PROVIDER_ID,
         "VISTA_HUMAN_OPERATED_VISUAL_DEMO": "1",
     }
@@ -661,6 +715,7 @@ def sanitized_environment(private_root: Path) -> dict[str, str]:
 
 def build_plan(inputs: HumanVisualDemoInputs) -> dict[str, Any]:
     command = build_command(inputs)
+    cache_root = runtime_cache_root(inputs)
     return {
         "schema_version": PLAN_SCHEMA,
         "status": PENDING_STATUS,
@@ -685,6 +740,14 @@ def build_plan(inputs: HumanVisualDemoInputs) -> dict[str, Any]:
             "gpu": GPU,
             "width": WIDTH,
             "height": HEIGHT,
+            "camera_profile": CAMERA_PROFILE,
+            "target_fps": TARGET_FPS,
+            "screen_percentage": SCREEN_PERCENTAGE,
+            "persistent_runtime_cache": {
+                "path": str(cache_root),
+                "identity": "combined_receipt_sha256",
+                "mode": "0700",
+            },
             "network_namespace_wrapper": {
                 "path": str(NETWORK_NAMESPACE_EXECUTABLE),
                 "sha256": NETWORK_NAMESPACE_EXECUTABLE_SHA256,
@@ -692,7 +755,9 @@ def build_plan(inputs: HumanVisualDemoInputs) -> dict[str, Any]:
             },
         },
         "command": command,
-        "environment_keys": sorted(sanitized_environment(Path("/private-runtime"))),
+        "environment_keys": sorted(
+            sanitized_environment(Path("/private-runtime"), cache_root)
+        ),
         "security": {
             "closed_environment": True,
             "shell": False,
@@ -702,6 +767,9 @@ def build_plan(inputs: HumanVisualDemoInputs) -> dict[str, Any]:
             "local_zen_autolaunch_disabled": True,
             "apple_arkit_livelink_disabled": True,
             "private_network_namespace": True,
+            "receipt_bound_private_runtime_cache": True,
+            "target_fps_cap_request_bound": True,
+            "screen_percentage_request_bound": True,
             "agent_runtime_invoked": False,
             "human_operated_visual_demo_only": True,
             "prohibited_agent_adapter": True,
@@ -838,11 +906,12 @@ def run_human_visual_demo(
             previous_handlers[signum] = signal.getsignal(signum)
             signal.signal(signum, request_stop)
         _emit_status(PENDING_STATUS, inputs)
+        cache_root = ensure_runtime_cache(inputs)
         with tempfile.TemporaryDirectory(prefix="vista-human-visual-demo-") as root:
             private_root = Path(root)
             for relative in ("home", "tmp", "xdg-cache", "xdg-config", "xdg-data"):
                 (private_root / relative).mkdir(mode=0o700)
-            environment = sanitized_environment(private_root)
+            environment = sanitized_environment(private_root, cache_root)
             revalidated = load_combined_receipt(inputs.receipt)
             if revalidated != inputs:
                 raise HumanVisualDemoError(
