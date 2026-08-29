@@ -375,12 +375,10 @@ def _read_artifact(
             digest.update(chunk)
             chunks.append(chunk)
         after = os.fstat(descriptor)
-        identity = lambda item: (
-            item.st_dev,
-            item.st_ino,
-            item.st_size,
-            item.st_mtime_ns,
-        )
+
+        def identity(item: os.stat_result) -> tuple[int, int, int, int]:
+            return item.st_dev, item.st_ino, item.st_size, item.st_mtime_ns
+
         _require(identity(before) == identity(after), label + " changed while read")
         raw = b"".join(chunks)
     finally:
@@ -498,6 +496,142 @@ def _manifest_tree(manifest: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _namespace_file_record(
+    path: pathlib.Path, project_root: pathlib.Path
+) -> tuple[str, dict[str, Any]]:
+    """Seal one namespace file through one O_NOFOLLOW descriptor."""
+
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise R9PreflightError("HSSD namespace file is unavailable") from exc
+    try:
+        before = os.fstat(descriptor)
+        mode = stat.S_IMODE(before.st_mode)
+        _require(
+            stat.S_ISREG(before.st_mode) and mode == 0o600,
+            "HSSD namespace file type or mode differs",
+        )
+        digest = hashlib.sha256()
+        total = 0
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+            total += len(chunk)
+        after = os.fstat(descriptor)
+        _require(
+            (
+                before.st_dev,
+                before.st_ino,
+                before.st_size,
+                before.st_mtime_ns,
+                before.st_ctime_ns,
+            )
+            == (
+                after.st_dev,
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+                after.st_ctime_ns,
+            )
+            and total == before.st_size,
+            "HSSD namespace file changed while hashing",
+        )
+    finally:
+        os.close(descriptor)
+    try:
+        resolved = path.resolve(strict=True)
+        relative = resolved.relative_to(project_root).as_posix()
+        relative.encode("utf-8")
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise R9PreflightError("HSSD namespace file path differs") from exc
+    _require(resolved == path, "HSSD namespace file is symlinked or noncanonical")
+    return relative, {
+        "sha256": digest.hexdigest(),
+        "size_bytes": total,
+        "mode": mode,
+    }
+
+
+def _namespace_manifest(
+    project_root: pathlib.Path,
+    prefix: pathlib.PurePosixPath = HSSD_NAMESPACE_RELATIVE,
+) -> dict[str, Mapping[str, Any]]:
+    """Hash only the fixed HSSD namespace, ignoring legitimate sibling roots."""
+
+    _require(
+        project_root.is_absolute() and not project_root.is_symlink(),
+        "HSSD project root is invalid",
+    )
+    try:
+        project_metadata = os.lstat(project_root)
+        resolved_root = project_root.resolve(strict=True)
+    except OSError as exc:
+        raise R9PreflightError("HSSD project root is unavailable") from exc
+    _require(
+        resolved_root == project_root
+        and stat.S_ISDIR(project_metadata.st_mode)
+        and stat.S_IMODE(project_metadata.st_mode) == 0o700,
+        "HSSD project root identity or mode differs",
+    )
+    namespace = project_root.joinpath(*prefix.parts)
+    current = project_root
+    for part in prefix.parts:
+        current = current / part
+        try:
+            metadata = os.lstat(current)
+        except OSError as exc:
+            raise R9PreflightError("HSSD namespace directory is unavailable") from exc
+        _require(
+            not stat.S_ISLNK(metadata.st_mode)
+            and stat.S_ISDIR(metadata.st_mode)
+            and stat.S_IMODE(metadata.st_mode) == 0o700,
+            "HSSD namespace directory type or mode differs",
+        )
+    _require(
+        namespace.resolve(strict=True) == namespace,
+        "HSSD namespace is symlinked or noncanonical",
+    )
+
+    records: dict[str, Mapping[str, Any]] = {}
+
+    def visit(directory: pathlib.Path) -> None:
+        try:
+            entries = sorted(
+                os.scandir(directory), key=lambda item: item.name.encode("utf-8")
+            )
+        except (OSError, UnicodeError) as exc:
+            raise R9PreflightError("HSSD namespace cannot be enumerated") from exc
+        for entry in entries:
+            candidate = pathlib.Path(entry.path)
+            try:
+                metadata = entry.stat(follow_symlinks=False)
+            except OSError as exc:
+                raise R9PreflightError("HSSD namespace entry is unavailable") from exc
+            _require(
+                not stat.S_ISLNK(metadata.st_mode),
+                "HSSD namespace contains a symlink",
+            )
+            if stat.S_ISDIR(metadata.st_mode):
+                _require(
+                    stat.S_IMODE(metadata.st_mode) == 0o700,
+                    "HSSD namespace directory mode differs",
+                )
+                visit(candidate)
+                continue
+            _require(
+                stat.S_ISREG(metadata.st_mode),
+                "HSSD namespace contains a special file",
+            )
+            relative, record = _namespace_file_record(candidate, project_root)
+            _require(relative not in records, "HSSD namespace path is duplicated")
+            records[relative] = record
+
+    visit(namespace)
+    _require(records, "HSSD namespace is empty")
+    return dict(sorted(records.items(), key=lambda item: item[0].encode("utf-8")))
+
+
 def _hssd_module():
     commandlet_root = pathlib.Path(__file__).resolve().parent
     if str(commandlet_root) not in sys.path:
@@ -571,6 +705,7 @@ def _source_state(config: Config) -> SourceState:
         "HSSD R2 build plan",
         expected_sha256=HSSD_R2_BUILD_PLAN_SHA256,
         expected_bytes=HSSD_R2_BUILD_PLAN_BYTES,
+        digest_trailing_newline=False,
     )
     map_artifact, _ = _read_artifact(
         config.hssd_r2_root / "project" / pathlib.Path(MAP_RELATIVE_PATH),
@@ -590,15 +725,14 @@ def _source_state(config: Config) -> SourceState:
         and len(collision) == 60,
         "HSSD R2 retained authority differs",
     )
-    hssd_project = (
-        config.hssd_r2_root / "project" / "VistaPlayableAnimationDemo.uproject"
-    )
-    _hssd_tree, hssd_manifest = r4._project_manifest(hssd_project)
-    r6_namespace = _manifest_subset(source_manifest, HSSD_NAMESPACE_RELATIVE)
-    r2_namespace = _manifest_subset(hssd_manifest, HSSD_NAMESPACE_RELATIVE)
+    r6_namespace = _namespace_manifest(inputs.project.path.parent)
+    source_namespace = _manifest_subset(source_manifest, HSSD_NAMESPACE_RELATIVE)
+    r2_namespace = _namespace_manifest(config.hssd_r2_root / "project")
     namespace_tree = _manifest_tree(r6_namespace)
     _require(
-        r6_namespace == r2_namespace and namespace_tree == HSSD_NAMESPACE_TREE,
+        r6_namespace == source_namespace
+        and r6_namespace == r2_namespace
+        and namespace_tree == HSSD_NAMESPACE_TREE,
         "R6 and HSSD R2 namespaces are not byte-identical",
     )
     authority = {
