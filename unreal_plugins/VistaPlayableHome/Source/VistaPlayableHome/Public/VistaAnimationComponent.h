@@ -37,10 +37,10 @@ public:
 
     static bool SupportsAction(EVistaNpcActionType Type);
     static bool IsLegacyFallbackAction(EVistaNpcActionType Type);
-    /** Closed gate matching the reviewed animation profile's current license state. */
-    static bool HasApprovedMutationAnimation(
+    /** Closed gate matching both the reviewed CC0 profile and active provider. */
+    bool HasApprovedMutationAnimation(
         EVistaNpcActionType Type,
-        FName& OutCode);
+        FName& OutCode) const;
 
     virtual void TickComponent(
         float DeltaTime,
@@ -65,4 +65,8 @@ private:
     static FName CompletionSignalFor(EVistaNpcActionType Type);
     static FName ContactSignalFor(EVistaNpcActionType Type);
     static bool RequiresTarget(EVistaNpcActionType Type);
+    bool ResolveMontage(
+        EVistaNpcActionType Type,
+        TSoftObjectPtr<UAnimMontage>& OutMontage,
+        FName& OutCode) const;
 };
