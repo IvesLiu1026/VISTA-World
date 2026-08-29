@@ -832,6 +832,64 @@ def test_runtime_semantic_authority_requires_exact_observable_channel_matrix(
     )
 
 
+def test_runtime_authority_preserves_per_proxy_navigation_overlap_and_mobility(
+    fixture: Fixture,
+) -> None:
+    scene = json.loads(fixture.phase2_scene.read_text(encoding="utf-8"))
+    expected = scene["semantic_proxies"][0]["after_authority_repair_and_hide"]
+    observation = json.loads(json.dumps(expected))
+    expected_component = expected["components"][0]
+    observed_component = observation["components"][0]
+
+    expected_component["can_ever_affect_navigation"] = True
+    expected_component["generate_overlap_events"] = True
+    expected_component["mobility"] = "<COMPONENTMOBILITY.MOVABLE: 2>"
+    observed_component.update(
+        {
+            "can_ever_affect_navigation": True,
+            "generate_overlap_events": True,
+            "mobility": "<COMPONENTMOBILITY.MOVABLE: 2>",
+        }
+    )
+
+    semantic_target_id = expected["semantic_target_id"]
+    assert overlay._semantic_runtime_authority_observation_valid(
+        observation, semantic_target_id
+    )
+    assert overlay._semantic_proxy_authority_matches(observation, expected)
+    assert overlay._semantic_proxy_authority_field_diff(observation, expected) == []
+
+    observed_component["can_ever_affect_navigation"] = False
+    assert not overlay._semantic_proxy_authority_matches(observation, expected)
+    assert overlay._semantic_proxy_authority_field_diff(observation, expected) == [
+        {
+            "field": "components[0].can_ever_affect_navigation",
+            "expected": True,
+            "actual": False,
+        }
+    ]
+
+
+def test_semantic_authority_diff_is_bounded_to_safe_policy_fields(
+    fixture: Fixture,
+) -> None:
+    scene = json.loads(fixture.phase2_scene.read_text(encoding="utf-8"))
+    expected = scene["semantic_proxies"][0]["after_authority_repair_and_hide"]
+    observation = json.loads(json.dumps(expected))
+    observation["components"][0]["collision_responses"]["Visibility"] = "Ignore"
+    observation["semantic_state"]["secret_like_untrusted_field"] = "must-not-appear"
+
+    differences = overlay._semantic_proxy_authority_field_diff(observation, expected)
+    assert differences == [
+        {
+            "field": "components[0].collision_responses",
+            "expected": {"Pawn": "Block", "Visibility": "Block"},
+            "actual": {"Pawn": "Block", "Visibility": "Ignore"},
+        }
+    ]
+    assert "must-not-appear" not in json.dumps(differences, sort_keys=True)
+
+
 def test_resealed_lineage_rebinding_without_causal_link_fails_closed(
     fixture: Fixture,
 ) -> None:
@@ -1075,6 +1133,7 @@ def test_commandlet_contains_fail_closed_runtime_gates() -> None:
         "SEMANTIC_COLLISION_CHANNELS",
         "SEMANTIC_QUERY_BLOCK_CHANNELS",
         "semantic_proxy_collision_write_sequence_completed",
+        "semantic_authority_diff",
         "SEMANTIC_COLLISION_CONTRACT",
         "PENDING_CLAIMS",
         "_expected_scene_bindings",
@@ -1102,6 +1161,8 @@ def test_commandlet_writes_default_ignore_before_observable_block_overrides() ->
     )
     assert 'collision_response_value("Ignore")' in repair_source
     assert 'collision_response_value("Block")' in repair_source
+    assert "generate_overlap_events" not in repair_source
+    assert "can_ever_affect_navigation" not in repair_source
 
 
 def test_runner_never_shells_out_or_deletes() -> None:
