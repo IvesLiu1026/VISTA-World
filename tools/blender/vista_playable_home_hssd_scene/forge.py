@@ -218,6 +218,30 @@ def _regular_file(root: pathlib.Path, relative: str) -> pathlib.Path:
     return candidate
 
 
+def _private_output_directories_are_empty(
+    root: pathlib.Path, names: Sequence[str]
+) -> bool:
+    """Check fixed output directories without accepting links or loose modes."""
+
+    for name in names:
+        path = root / name
+        try:
+            metadata = os.lstat(path)
+            resolved = path.resolve(strict=True)
+        except OSError:
+            return False
+        if (
+            resolved != path
+            or stat.S_ISLNK(metadata.st_mode)
+            or not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) != PRIVATE_DIRECTORY_MODE
+            or next(path.iterdir(), None) is not None
+        ):
+            return False
+    return True
+
+
 def inspect_scene_glb(
     path: pathlib.Path,
     *,

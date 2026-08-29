@@ -294,6 +294,27 @@ def test_output_inside_git_and_source_descendant_are_rejected(
         )
 
 
+def test_private_output_directories_must_be_real_owned_0700_and_empty(
+    tmp_path: pathlib.Path,
+) -> None:
+    root = tmp_path / "attempt"
+    root.mkdir(mode=0o700)
+    scene = root / "scene"
+    render = root / "render"
+    scene.mkdir(mode=0o700)
+    render.mkdir(mode=0o700)
+
+    assert forge._private_output_directories_are_empty(root, ("scene", "render"))
+
+    marker = scene / "unexpected"
+    marker.write_text("drift", encoding="utf-8")
+    assert not forge._private_output_directories_are_empty(root, ("scene", "render"))
+    marker.unlink()
+
+    render.chmod(0o755)
+    assert not forge._private_output_directories_are_empty(root, ("scene", "render"))
+
+
 def test_stripped_blender_environment_excludes_credentials_and_proxies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
