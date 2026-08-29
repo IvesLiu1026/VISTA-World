@@ -516,9 +516,13 @@ def simulates_physics(component):
 
 
 def relative_transform(component):
-    location = component.get_relative_location()
-    rotation = component.get_relative_rotation()
-    scale = component.get_relative_scale3d()
+    # UE 5.7's generated Python wrapper does not expose the C++
+    # GetRelativeLocation/GetRelativeRotation/GetRelativeScale3D helpers on
+    # StaticMeshComponent.  The reflected scene-component properties are the
+    # stable editor-scripting API and preserve the same pickup-local values.
+    location = component.get_editor_property("relative_location")
+    rotation = component.get_editor_property("relative_rotation")
+    scale = component.get_editor_property("relative_scale3d")
     return {
         "location_cm": [float(location.x), float(location.y), float(location.z)],
         "rotation_deg": [
