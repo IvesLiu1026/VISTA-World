@@ -242,7 +242,9 @@ def _load_and_revalidate_plan(
     allowed = {"build-plan.json", "blender.log", "scene", "render"}
     if {item.name for item in output_root.iterdir()} != allowed:
         raise RuntimeError("output root contains unexpected entries before assembly")
-    if any((output_root / name).iterdir() for name in ("scene", "render")):
+    if not forge._private_output_directories_are_empty(
+        output_root, ("scene", "render")
+    ):
         raise RuntimeError("output subdirectories are not fresh")
     return plan
 
