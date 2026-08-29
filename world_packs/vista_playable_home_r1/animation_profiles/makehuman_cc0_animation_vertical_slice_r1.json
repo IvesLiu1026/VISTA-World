@@ -1,0 +1,103 @@
+{
+  "schema_version": "vista.makehuman-cc0-animation-profile/v1",
+  "profile_id": "makehuman_cc0_animation_vertical_slice_r1",
+  "character_id": "makehuman_cc0_eurasian_female_arkit_v3",
+  "rig_contract": {
+    "armature_name": "VISTA_CC0_Hero_Rig_export",
+    "root_bone": "root",
+    "bone_count": 53,
+    "coordinate_system": "blender_m_z_up_ue_export_minus_y_forward"
+  },
+  "license_scope": {
+    "character_source_spdx": "CC0-1.0",
+    "motion_recipe_spdx": "CC0-1.0",
+    "external_binary_policy": "outside_git_only"
+  },
+  "provenance": {
+    "motion_origin": "project_authored_numeric_keyframes",
+    "contains_manny_derived_motion": false,
+    "contains_metahuman_motion": false,
+    "contains_city_sample_motion": false,
+    "contains_simworld_motion": false,
+    "contains_motion_capture": false
+  },
+  "clips": [
+    {
+      "clip_id": "idle",
+      "action_name": "VISTA_CC0_Idle_R8",
+      "ue_sequence_name": "AS_VistaCC0Idle",
+      "ue_montage_name": null,
+      "frame_start": 0,
+      "frame_end": 60,
+      "fps": 30,
+      "loop": true,
+      "root_motion_policy": "forbidden",
+      "target_height_cm": null,
+      "typed_notifies": [],
+      "recipe_id": "cc0_numeric_idle_breath_r1"
+    },
+    {
+      "clip_id": "walk",
+      "action_name": "VISTA_CC0_Walk_R8",
+      "ue_sequence_name": "AS_VistaCC0Walk",
+      "ue_montage_name": null,
+      "frame_start": 0,
+      "frame_end": 30,
+      "fps": 30,
+      "loop": true,
+      "root_motion_policy": "forbidden",
+      "target_height_cm": null,
+      "typed_notifies": [],
+      "recipe_id": "cc0_numeric_walk_in_place_r1"
+    },
+    {
+      "clip_id": "run",
+      "action_name": "VISTA_CC0_Run_R8",
+      "ue_sequence_name": "AS_VistaCC0Run",
+      "ue_montage_name": null,
+      "frame_start": 0,
+      "frame_end": 20,
+      "fps": 30,
+      "loop": true,
+      "root_motion_policy": "forbidden",
+      "target_height_cm": null,
+      "typed_notifies": [],
+      "recipe_id": "cc0_numeric_run_in_place_r1"
+    },
+    {
+      "clip_id": "mug_pickup_countertop",
+      "action_name": "VISTA_CC0_MugPickupCountertop_R8",
+      "ue_sequence_name": "AS_VistaCC0MugPickupCountertop",
+      "ue_montage_name": "AM_VistaCC0MugPickupCountertop",
+      "frame_start": 0,
+      "frame_end": 60,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target_height_cm": 90,
+      "typed_notifies": [
+        {"frame": 34, "kind": "contact", "signal": "vista_pickup_contact"},
+        {"frame": 59, "kind": "completion", "signal": "vista_pickup_completed"}
+      ],
+      "recipe_id": "cc0_numeric_mug_pickup_countertop_r1"
+    },
+    {
+      "clip_id": "mug_place_countertop",
+      "action_name": "VISTA_CC0_MugPlaceCountertop_R8",
+      "ue_sequence_name": "AS_VistaCC0MugPlaceCountertop",
+      "ue_montage_name": "AM_VistaCC0MugPlaceCountertop",
+      "frame_start": 0,
+      "frame_end": 60,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target_height_cm": 90,
+      "typed_notifies": [
+        {"frame": 34, "kind": "release", "signal": "vista_drop_release"},
+        {"frame": 59, "kind": "completion", "signal": "vista_drop_completed"}
+      ],
+      "recipe_id": "cc0_numeric_mug_place_countertop_r1"
+    }
+  ],
+  "content_digest": "3a596cb3088f1e2439b70c5c3c099e6ecbc521c7658af7eb52804fe5811654f2"
+}
