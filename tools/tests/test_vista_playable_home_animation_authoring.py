@@ -18,6 +18,11 @@ SOURCE = (
     / "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Private"
     / "VistaPlayableHomeAnimationLibrary.cpp"
 )
+NANITE_SOURCE = (
+    ROOT
+    / "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Private"
+    / "VistaPlayableHomeNaniteLibrary.cpp"
+)
 PROFILE = (
     ROOT
     / "world_packs/vista_playable_home_r1/animation_profiles"
@@ -136,6 +141,15 @@ class AnimationAuthoringContractTests(unittest.TestCase):
         )
         self.assertIn("MONTAGE_ALREADY_EXISTS", source)
         self.assertIn("UPackage::SavePackage", source)
+
+    def test_ue_5_7_editor_dependencies_are_explicit(self) -> None:
+        animation_source = SOURCE.read_text(encoding="utf-8")
+        nanite_source = NANITE_SOURCE.read_text(encoding="utf-8")
+        self.assertIn('#include "Animation/Skeleton.h"', animation_source)
+        for source in (animation_source, nanite_source):
+            self.assertIn(
+                '#include "Policies/CondensedJsonPrintPolicy.h"', source
+            )
 
 
 if __name__ == "__main__":
