@@ -23,12 +23,14 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Net/UnrealNetwork.h"
 #include "VistaAnimationComponent.h"
+#include "VistaActionExecutorComponent.h"
 #include "VistaCharacterProviderComponent.h"
 #include "VistaEventSubsystem.h"
 #include "VistaIndoorSpringArmComponent.h"
 #include "VistaInteractable.h"
 #include "VistaInteractionComponent.h"
 #include "VistaPickupActor.h"
+#include "VistaPlayableHomeRuntimeSubsystem.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVistaPlayableHomeCamera, Log, All);
 
@@ -168,13 +170,17 @@ AVistaPlayableHomeCharacter::AVistaPlayableHomeCharacter()
     FollowCamera->bUsePawnControlRotation = false;
 
     CarryAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("VistaCarryAnchor"));
-    CarryAnchor->SetupAttachment(FollowCamera);
-    CarryAnchor->SetRelativeLocation(FVector(115.0f, 20.0f, -25.0f));
+    CarryAnchor->SetupAttachment(GetMesh(), TEXT("hand_r"));
+    CarryAnchor->SetRelativeTransform(FTransform::Identity);
     CarryAnchor->ComponentTags.Add(TEXT("VistaCarryAnchor"));
+    CarryAnchor->ComponentTags.Add(TEXT("VistaValidatedCarryAnchor"));
 
     InteractionComponent = CreateDefaultSubobject<UVistaInteractionComponent>(TEXT("InteractionComponent"));
     AnimationComponent =
         CreateDefaultSubobject<UVistaAnimationComponent>(TEXT("VistaAnimationComponent"));
+    ActionExecutorComponent =
+        CreateDefaultSubobject<UVistaActionExecutorComponent>(
+            TEXT("VistaActionExecutorComponent"));
     CharacterProviderComponent =
         CreateDefaultSubobject<UVistaCharacterProviderComponent>(
             TEXT("VistaCharacterProviderComponent"));
@@ -194,6 +200,16 @@ void AVistaPlayableHomeCharacter::BeginPlay()
 
     ApplyRequestedCameraProfile();
     ConfigureIndoorViewLimits();
+    FName CarryAnchorCode;
+    if (!IsValid(UVistaActionExecutorComponent::PrepareCarryAnchor(
+            this, CarryAnchorCode)))
+    {
+        UE_LOG(
+            LogVistaPlayableHomeCamera,
+            Error,
+            TEXT("VISTA_CARRY_ANCHOR_REJECTED code=%s"),
+            *CarryAnchorCode.ToString());
+    }
 
     const APlayerController* PlayerController = Cast<APlayerController>(Controller);
     if (IsValid(PlayerController) && IsValid(DefaultMappingContext))
@@ -417,6 +433,10 @@ void AVistaPlayableHomeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReas
     RestoreIndoorViewLimits();
     SetSprinting(false);
     UnCrouch();
+    if (HasAuthority() && IsValid(ActionExecutorComponent))
+    {
+        ActionExecutorComponent->CancelActiveAction(TEXT("PLAYER_END_PLAY"));
+    }
     if (HasAuthority() && IsValid(HeldItem))
     {
         HeldItem->ReleaseFromCarrier();
@@ -606,22 +626,13 @@ FVistaInteractionResult AVistaPlayableHomeCharacter::PerformDefaultInteraction()
 
     if (IsValid(HeldItem) && Target != HeldItem)
     {
-        FVistaInteractionRequest PlaceRequest;
-        PlaceRequest.Affordance = EVistaAffordance::Place;
-        PlaceRequest.Requester = this;
-        PlaceRequest.PlacementAnchor = Target->GetRootComponent();
-        const FVistaInteractionResult Result =
-            IVistaInteractable::Execute_VistaInteract(HeldItem, PlaceRequest);
-        if (Result.IsSuccess())
-        {
-            if (UVistaEventSubsystem* Events = GetWorld()->GetSubsystem<UVistaEventSubsystem>())
-            {
-                Events->RecordSuccessfulInteraction(
-                    IVistaInteractable::Execute_VistaGetSemanticId(HeldItem),
-                    EVistaAffordance::Place);
-            }
-        }
-        return Result;
+        return BeginPhysicalInteraction(
+            HeldItem, EVistaAffordance::Place, Target);
+    }
+    const EVistaAffordance Affordance = GetDefaultInteractionAffordance(Target);
+    if (Affordance == EVistaAffordance::PickUp)
+    {
+        return BeginPhysicalInteraction(Target, Affordance);
     }
     return InteractionComponent->TryInteract(GetDefaultInteractionAffordance(Target));
 }
@@ -667,7 +678,52 @@ FVistaInteractionResult AVistaPlayableHomeCharacter::DropHeldItem()
             EVistaInteractionStatus::InvalidState, TEXT("NO_HELD_ITEM"));
     }
     const FVector ThrowVelocity = GetVelocity() + GetActorForwardVector() * 120.0f;
-    return HeldItem->ReleaseFromCarrier(ThrowVelocity);
+    return BeginPhysicalInteraction(
+        HeldItem, EVistaAffordance::Drop, nullptr, ThrowVelocity);
+}
+
+FVistaInteractionResult AVistaPlayableHomeCharacter::BeginPhysicalInteraction(
+    AActor* PhysicalTarget,
+    EVistaAffordance Affordance,
+    AActor* PlacementOwner,
+    const FVector& ReleaseVelocity)
+{
+    if (!IsValid(ActionExecutorComponent) || !IsValid(PhysicalTarget))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("ACTION_EXECUTOR_UNAVAILABLE"));
+    }
+    UVistaPlayableHomeRuntimeSubsystem* Runtime = IsValid(GetWorld())
+        ? GetWorld()->GetSubsystem<UVistaPlayableHomeRuntimeSubsystem>() : nullptr;
+    const FName CommandId = IsValid(Runtime)
+        ? Runtime->AllocatePhysicalActionCommandId() : NAME_None;
+    if (CommandId.IsNone())
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("ACTION_TICKET_UNAVAILABLE"));
+    }
+    FVistaPhysicalActionRequest Request;
+    Request.CommandId = CommandId;
+    Request.Requester = this;
+    Request.Target = PhysicalTarget;
+    Request.PlacementOwner = PlacementOwner;
+    Request.Affordance = Affordance;
+    Request.TimeoutSeconds = 10.0f;
+    Request.ReleaseVelocity = ReleaseVelocity;
+    FVistaActionTransactionRecord Record;
+    ActionExecutorComponent->BeginPhysicalInteraction(Request, Record);
+    const FVistaInteractionResult Result =
+        UVistaActionExecutorComponent::InteractionResultFromTransaction(Record);
+    if (!Result.IsSuccess())
+    {
+        return Result;
+    }
+    // UVistaActionExecutorComponent owns RecordSuccessfulInteraction and emits
+    // it only after the animation completion phase; this player entry returns
+    // the accepted ticket without duplicating that terminal event.
+    return Result;
 }
 
 USceneComponent* AVistaPlayableHomeCharacter::VistaGetCarryAnchor_Implementation() const
@@ -688,7 +744,8 @@ bool AVistaPlayableHomeCharacter::VistaTryClaimItem_Implementation(AActor* Item)
         return false;
     }
     HeldItem = Pickup;
-    return true;
+    ForceNetUpdate();
+    return HeldItem == Pickup;
 }
 
 void AVistaPlayableHomeCharacter::VistaReleaseItem_Implementation(AActor* Item)
@@ -696,6 +753,7 @@ void AVistaPlayableHomeCharacter::VistaReleaseItem_Implementation(AActor* Item)
     if (HeldItem == Item)
     {
         HeldItem = nullptr;
+        ForceNetUpdate();
     }
 }
 
