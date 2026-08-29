@@ -121,8 +121,17 @@ def test_command_and_environment_are_human_only_closed_and_non_networked(
     environment = launcher.sanitized_environment(tmp_path / "private")
     rendered = " ".join(command).lower()
 
-    assert command[0] == str(inputs.executable.path)
-    assert command[1] == str(inputs.project.path)
+    assert command[:7] == [
+        str(launcher.NETWORK_NAMESPACE_EXECUTABLE),
+        "--unshare-net",
+        "--die-with-parent",
+        "--dev-bind",
+        "/",
+        "/",
+        "--",
+    ]
+    assert command[7] == str(inputs.executable.path)
+    assert command[8] == str(inputs.project.path)
     assert "-VistaHumanOperatedVisualDemo" in command
     assert f"-VistaCharacterProvider={launcher.PROVIDER_ID}" in command
     assert "-graphicsadapter=0" in command
@@ -194,6 +203,7 @@ def test_default_cli_is_zero_write_dry_run_and_has_no_launch_side_effect(
         "network_readiness_probe": False,
         "local_zen_autolaunch_disabled": True,
         "apple_arkit_livelink_disabled": True,
+        "private_network_namespace": True,
         "agent_runtime_invoked": False,
         "human_operated_visual_demo_only": True,
         "prohibited_agent_adapter": True,
@@ -252,6 +262,31 @@ def test_launch_revalidates_all_pins_before_popen(tmp_path: Path) -> None:
     with (
         mock.patch.object(launcher, "LOCK_ROOT", tmp_path / "locks"),
         pytest.raises(launcher.HumanVisualDemoError, match="static tree"),
+    ):
+        launcher.run_human_visual_demo(
+            inputs, popen_factory=popen, startup_grace_seconds=0
+        )
+
+    popen.assert_not_called()
+
+
+def test_launch_rejects_network_namespace_wrapper_drift_before_popen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    receipt_path, _receipt = _write_receipt(tmp_path)
+    inputs = launcher.load_combined_receipt(receipt_path)
+    wrapper = tmp_path / "bwrap"
+    wrapper.write_bytes(b"not-the-pinned-wrapper\n")
+    wrapper.chmod(0o500)
+    monkeypatch.setattr(launcher, "NETWORK_NAMESPACE_EXECUTABLE", wrapper)
+    popen = mock.Mock()
+
+    with (
+        mock.patch.object(launcher, "LOCK_ROOT", tmp_path / "locks"),
+        pytest.raises(
+            launcher.HumanVisualDemoError,
+            match="private network namespace wrapper differs",
+        ),
     ):
         launcher.run_human_visual_demo(
             inputs, popen_factory=popen, startup_grace_seconds=0
