@@ -856,6 +856,13 @@ def component_name(component):
         return str(component.get_path_name()).rsplit(".", 1)[-1]
 
 
+def configured_pickup_presentation(component):
+    return (
+        component_name(component) == PICKUP_PRESENTATION_COMPONENT
+        and component.get_editor_property("static_mesh") is not None
+    )
+
+
 def bool_property(value, name, label):
     observed = value.get_editor_property(name)
     require(type(observed) is bool, label + " property is unavailable: " + name)
@@ -932,7 +939,7 @@ def apply_shadow_policy(actors):
             counts["pickup_actors"] += 1
             for component in static_mesh_components(actor):
                 name = component_name(component)
-                if name == PICKUP_PRESENTATION_COMPONENT:
+                if configured_pickup_presentation(component):
                     counts["pickup_presentations"] += 1
                     require(
                         bool_property(component, "visible", "pickup presentation")
@@ -1350,7 +1357,7 @@ def shadow_observations(actors):
                     category = "room_visible"
                 elif "hssd_visual_shell" in actor_roles:
                     category = "hssd_visible"
-                elif name == PICKUP_PRESENTATION_COMPONENT:
+                elif configured_pickup_presentation(component):
                     category = "pickup_presentation_visible"
                 elif name == PICKUP_PROXY_COMPONENT and not bool_property(
                     component, "visible", "pickup proxy"
@@ -1480,7 +1487,7 @@ def run():
             ),
             "pickup_actors": sum(PICKUP_ROLE in roles(actor) for actor in actors),
             "pickup_presentations": sum(
-                component_name(component) == PICKUP_PRESENTATION_COMPONENT
+                configured_pickup_presentation(component)
                 for actor in actors
                 if PICKUP_ROLE in roles(actor)
                 for component in static_mesh_components(actor)
