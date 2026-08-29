@@ -955,14 +955,30 @@ bool UVistaActionExecutorComponent::BeginPhysicalInteractionImpl(
             TEXT("PHYSICAL_AFFORDANCE_REQUIRED"),
             OutRecord);
     }
-    FName AnimationReadinessCode;
+    AActor* Requester = InputRequest.Requester;
+    AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(InputRequest.Target);
+    if (!IsValid(Requester) || !IsValid(Pickup) ||
+        !Requester->GetClass()->ImplementsInterface(UVistaItemCarrier::StaticClass()))
+    {
+        return RejectNewRequest(
+            InputRequest,
+            InputRequest,
+            TEXT("PHYSICAL_PARTICIPANT_INVALID"),
+            OutRecord);
+    }
+    UVistaAnimationComponent* RequesterAnimation =
+        Requester->FindComponentByClass<UVistaAnimationComponent>();
+    FName AnimationReadinessCode = IsValid(RequesterAnimation)
+        ? FName(TEXT("ANIMATION_NOT_APPROVED"))
+        : FName(TEXT("ANIMATION_COMPONENT_UNAVAILABLE"));
     const EVistaNpcActionType AnimationType =
         InputRequest.Affordance == EVistaAffordance::PickUp
             ? EVistaNpcActionType::PickUp
             : EVistaNpcActionType::Place;
-    bool bAnimationReady =
-        UVistaAnimationComponent::HasApprovedMutationAnimation(
-            AnimationType, AnimationReadinessCode);
+    bool bAnimationReady = IsValid(RequesterAnimation) &&
+        RequesterAnimation->HasApprovedMutationAnimation(
+            AnimationType,
+            AnimationReadinessCode);
 #if WITH_DEV_AUTOMATION_TESTS
     bAnimationReady = bAnimationReady ||
         bDevAutomationBypassesAnimationReadiness;
@@ -974,20 +990,7 @@ bool UVistaActionExecutorComponent::BeginPhysicalInteractionImpl(
         return RejectNewRequest(
             InputRequest,
             InputRequest,
-            AnimationReadinessCode.IsNone()
-                ? FName(TEXT("ANIMATION_NOT_APPROVED"))
-                : AnimationReadinessCode,
-            OutRecord);
-    }
-    AActor* Requester = InputRequest.Requester;
-    AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(InputRequest.Target);
-    if (!IsValid(Requester) || !IsValid(Pickup) ||
-        !Requester->GetClass()->ImplementsInterface(UVistaItemCarrier::StaticClass()))
-    {
-        return RejectNewRequest(
-            InputRequest,
-            InputRequest,
-            TEXT("PHYSICAL_PARTICIPANT_INVALID"),
+            AnimationReadinessCode,
             OutRecord);
     }
     if (!IsValid(GetWorld()) || Requester->GetWorld() != GetWorld() ||
@@ -1162,7 +1165,7 @@ bool UVistaActionExecutorComponent::BeginPhysicalInteractionImpl(
         ? Pickup->GetRootComponent()->GetAttachParent() : nullptr;
     Active.BeforeCarrier = Pickup->GetCarrier();
     Active.BeforeRequesterInventoryItem = RequesterInventoryItem;
-    Active.Animation = Requester->FindComponentByClass<UVistaAnimationComponent>();
+    Active.Animation = RequesterAnimation;
     Active.StartedAtSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
     Active.Record.CommandId = Request.CommandId;
     Active.Record.Affordance = Request.Affordance;

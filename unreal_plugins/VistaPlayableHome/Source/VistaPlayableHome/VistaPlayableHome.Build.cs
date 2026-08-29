@@ -18,6 +18,7 @@ public class VistaPlayableHome : ModuleRules
             "NavigationSystem",
             "GameplayTasks",
             "PhysicsCore",
+            "AnimGraphRuntime",
             "RHI",
             "Sockets",
             "Networking",

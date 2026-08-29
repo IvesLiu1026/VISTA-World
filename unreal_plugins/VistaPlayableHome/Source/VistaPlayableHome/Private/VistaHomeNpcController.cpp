@@ -95,9 +95,16 @@ bool AVistaHomeNpcController::ValidateAction(
     if (Action.Type == EVistaNpcActionType::PickUp ||
         Action.Type == EVistaNpcActionType::Place)
     {
-        if (!UVistaAnimationComponent::HasApprovedMutationAnimation(
-                Action.Type, OutCode))
+        const UVistaAnimationComponent* Animation = IsValid(GetPawn())
+            ? GetPawn()->FindComponentByClass<UVistaAnimationComponent>()
+            : nullptr;
+        if (!IsValid(Animation) ||
+            !Animation->HasApprovedMutationAnimation(Action.Type, OutCode))
         {
+            if (!IsValid(Animation))
+            {
+                OutCode = TEXT("ANIMATION_COMPONENT_UNAVAILABLE");
+            }
             return false;
         }
     }

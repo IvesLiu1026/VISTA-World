@@ -5,10 +5,19 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "VistaCharacterProviderComponent.h"
 
 namespace
 {
 constexpr const TCHAR* ProjectAnimationRoot = TEXT("/Game/VISTA/Animations/V1/");
+constexpr const TCHAR* MakeHumanCc0MontageRoot =
+    TEXT("/Game/VISTA/MakeHumanCC0/R8/Animations/Montages/");
+constexpr const TCHAR* MakeHumanCc0PickupMontage =
+    TEXT("/Game/VISTA/MakeHumanCC0/R8/Animations/Montages/"
+         "AM_VistaCC0MugPickupCountertop.AM_VistaCC0MugPickupCountertop");
+constexpr const TCHAR* MakeHumanCc0PlaceMontage =
+    TEXT("/Game/VISTA/MakeHumanCC0/R8/Animations/Montages/"
+         "AM_VistaCC0MugPlaceCountertop.AM_VistaCC0MugPlaceCountertop");
 
 TSoftObjectPtr<UAnimMontage> Montage(const TCHAR* ObjectPath)
 {
@@ -74,18 +83,70 @@ bool UVistaAnimationComponent::IsLegacyFallbackAction(EVistaNpcActionType Type)
 
 bool UVistaAnimationComponent::HasApprovedMutationAnimation(
     EVistaNpcActionType Type,
-    FName& OutCode)
+    FName& OutCode) const
 {
-    // ue_5_7_3_animation_v1 currently marks pickup and drop/place as
-    // blocked_on_license. Merely finding an object at the expected package path
-    // is not approval and must never turn a blocked source into runtime-ready.
     if (Type == EVistaNpcActionType::PickUp ||
         Type == EVistaNpcActionType::Place)
     {
+        // ue_5_7_3_animation_v1 remains blocked_on_license.  Only the exact
+        // MakeHuman R8 provider may select the separately authored CC0
+        // montages; package-path presence alone never opens this gate.
+        const UVistaCharacterProviderComponent* Provider = IsValid(GetOwner())
+            ? GetOwner()->FindComponentByClass<UVistaCharacterProviderComponent>()
+            : nullptr;
+        if (IsValid(Provider) && Provider->IsMakeHumanCc0R8Active())
+        {
+            OutCode = TEXT("ANIMATION_CC0_SOURCE_APPROVED");
+            return true;
+        }
         OutCode = TEXT("ANIMATION_SOURCE_LICENSE_UNAPPROVED");
         return false;
     }
     OutCode = TEXT("ANIMATION_SOURCE_APPROVED");
+    return true;
+}
+
+bool UVistaAnimationComponent::ResolveMontage(
+    const EVistaNpcActionType Type,
+    TSoftObjectPtr<UAnimMontage>& OutMontage,
+    FName& OutCode) const
+{
+    if (Type == EVistaNpcActionType::PickUp ||
+        Type == EVistaNpcActionType::Place)
+    {
+        const UVistaCharacterProviderComponent* Provider = IsValid(GetOwner())
+            ? GetOwner()->FindComponentByClass<UVistaCharacterProviderComponent>()
+            : nullptr;
+        if (!IsValid(Provider) || !Provider->IsMakeHumanCc0R8Active())
+        {
+            OutCode = TEXT("ANIMATION_CC0_PROVIDER_REQUIRED");
+            return false;
+        }
+        OutMontage = Montage(
+            Type == EVistaNpcActionType::PickUp
+                ? MakeHumanCc0PickupMontage
+                : MakeHumanCc0PlaceMontage);
+        const FString Path = OutMontage.ToSoftObjectPath().ToString();
+        if (!Path.StartsWith(MakeHumanCc0MontageRoot, ESearchCase::CaseSensitive))
+        {
+            OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
+            return false;
+        }
+        OutCode = TEXT("ANIMATION_MONTAGE_RESOLVED");
+        return true;
+    }
+
+    const TSoftObjectPtr<UAnimMontage>* Existing = MontageByAction.Find(Type);
+    if (Existing == nullptr ||
+        !Existing->ToSoftObjectPath().ToString().StartsWith(
+            ProjectAnimationRoot,
+            ESearchCase::CaseSensitive))
+    {
+        OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
+        return false;
+    }
+    OutMontage = *Existing;
+    OutCode = TEXT("ANIMATION_MONTAGE_RESOLVED");
     return true;
 }
 
@@ -153,17 +214,21 @@ bool UVistaAnimationComponent::StartNpcAction(
         return false;
     }
 
-    const TSoftObjectPtr<UAnimMontage>* MontageReference = MontageByAction.Find(Action.Type);
-    if (MontageReference == nullptr ||
-        !MontageReference->ToSoftObjectPath().ToString().StartsWith(
-            ProjectAnimationRoot, ESearchCase::CaseSensitive))
+    TSoftObjectPtr<UAnimMontage> MontageReference;
+    if (!ResolveMontage(Action.Type, MontageReference, OutCode))
     {
-        OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
         return false;
     }
-    UAnimMontage* ResolvedMontage = MontageReference->LoadSynchronous();
+    const FString RequiredRoot =
+        Action.Type == EVistaNpcActionType::PickUp ||
+            Action.Type == EVistaNpcActionType::Place
+        ? FString(MakeHumanCc0MontageRoot)
+        : FString(ProjectAnimationRoot);
+    UAnimMontage* ResolvedMontage = MontageReference.LoadSynchronous();
     if (!IsValid(ResolvedMontage) ||
-        !ResolvedMontage->GetPathName().StartsWith(ProjectAnimationRoot, ESearchCase::CaseSensitive))
+        !ResolvedMontage->GetPathName().StartsWith(
+            RequiredRoot,
+            ESearchCase::CaseSensitive))
     {
         OutCode = TEXT("ANIMATION_ASSET_UNAVAILABLE");
         return false;
