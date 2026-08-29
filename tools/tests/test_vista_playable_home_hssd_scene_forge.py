@@ -66,7 +66,7 @@ def _source_bundle(root: pathlib.Path) -> dict:
             )
         ],
         "profile_content_digest": profile["content_digest"],
-        "scene_plan_content_digest": f"{501:064x}",
+        "scene_plan_content_digest": forge.R2_SOURCE_SCENE_PLAN_CONTENT_DIGEST,
         "build_result_content_digest": f"{502:064x}",
         "asset_count": 26,
         "assets": assets,
@@ -172,7 +172,8 @@ def test_rotated_aabbs_support_portals_and_proxy_authority_are_explicit(
     unresolved = [
         item
         for item in support
-        if item["status"] == "surface_support_unresolved_blocks_physics_authority"
+        if item["status"]
+        == "surface_support_review_pending_faucet_fixture_non_derivable"
     ]
     assert [item["instance_id"] for item in unresolved] == [
         "hssd.r1/bathroom_laundry.faucet.01"
@@ -202,8 +203,13 @@ def test_rotated_aabbs_support_portals_and_proxy_authority_are_explicit(
         for entry in portal
         for instance_id in entry["conflicting_instance_ids"]
     }
-    assert "hssd.r1/living_room.slipper.01" in conflicting
-    assert "hssd.r1/living_room.rolling_chair.01" in conflicting
+    assert conflicting == set()
+    assert all(entry["status"] == "clearance_verified" for entry in portal)
+    assert all(
+        item["visual_proxy_alignment_delta_m"] <= 0.10
+        for item in proxies
+        if item["semantic_target_id"] is not None
+    )
     assert all(
         set(item["rotated_aabb_room_local_m"]) == {"min_m", "max_m"}
         and set(item["rotated_aabb_world_m"]) == {"min_m", "max_m"}
@@ -216,15 +222,107 @@ def test_contact_ledger_records_all_known_rotated_aabb_overlaps(
 ) -> None:
     contacts = _preflight(tmp_path, monkeypatch).plan["ledgers"]["contact"]
 
-    assert len(contacts) == 7
+    assert len(contacts) == 5
     assert {item["relation"] for item in contacts} == {
-        "soft_dressing_overlap_review_pending",
-        "tucked_seating_overlap_review_pending",
-        "storage_occlusion_conflict_blocks_playable_collision",
+        "soft_dressing_visual_contact_review_pending",
+        "tucked_seating_visual_contact_review_pending",
     }
     assert all(
         item["basis"] == "rotated_axis_aligned_bounds_intersection" for item in contacts
     )
+    assert all(
+        item["collision_effect"]
+        == "visual_contact_review_pending_does_not_block_transform_remediation"
+        for item in contacts
+    )
+
+
+def test_r2_remediation_is_pinned_deterministic_and_preserves_authority(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan = _preflight(tmp_path, monkeypatch).plan
+    remediation = plan["placement_remediation"]
+
+    assert remediation["revision"] == forge.R2_REMEDIATION_REVISION
+    assert remediation["transform_override_count"] == 17
+    assert remediation["blocker_counts_before"] == {
+        "protected_portal_conflict_assignments": 10,
+        "collision_blocking_overlap_pairs": 1,
+        "semantic_proxy_alignment_over_threshold": 2,
+        "hard_support_outliers": 7,
+        "wall_fixture_review_pending_items": 18,
+    }
+    assert remediation["blocker_counts_after"] == {
+        "protected_portal_conflict_assignments": 0,
+        "collision_blocking_overlap_pairs": 0,
+        "semantic_proxy_alignment_over_threshold": 0,
+        "hard_support_outliers": 2,
+        "wall_fixture_review_pending_items": 18,
+    }
+    assert remediation["remaining_review_pending"]["surface_fixture_instance_ids"] == [
+        "hssd.r1/bathroom_laundry.faucet.01"
+    ]
+    assert remediation["remaining_review_pending"][
+        "wall_proxy_alignment_preserved_instance_ids"
+    ] == ["hssd.r1/office.ladder.01"]
+    assert remediation["invariants"] == {
+        "source_asset_count": 26,
+        "placement_count": 60,
+        "semantic_proxy_count": 19,
+        "source_asset_and_license_bytes_unchanged": True,
+        "only_fixed_transform_fields_changed": True,
+    }
+
+    profile = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+    source = _source_bundle(tmp_path / "sealed-source")
+    first, first_overrides = forge._apply_r2_transform_remediation(profile, source)
+    second, second_overrides = forge._apply_r2_transform_remediation(profile, source)
+    assert first == second
+    assert first_overrides == second_overrides
+    assert forge._placements_digest(profile["placements"]) == (
+        forge.R2_SOURCE_PLACEMENTS_DIGEST
+    )
+    assert forge._restore_r2_source_rows(first["placements"]) == sorted(
+        profile["placements"], key=lambda item: item["instance_id"]
+    )
+
+    drifted_source = copy.deepcopy(source)
+    drifted_source["scene_plan_content_digest"] = "0" * 64
+    with pytest.raises(forge.SceneForgeError, match="SCENE_REMEDIATION_SOURCE_INVALID"):
+        forge._apply_r2_transform_remediation(profile, drifted_source)
+    drifted_profile = copy.deepcopy(profile)
+    drifted_profile["placements"][0]["placement_intent"]["role"] = "drifted"
+    with pytest.raises(forge.SceneForgeError, match="SCENE_REMEDIATION_SOURCE_INVALID"):
+        forge._apply_r2_transform_remediation(drifted_profile, source)
+
+
+def test_collision_containment_and_support_cycle_contracts_are_closed(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan = _preflight(tmp_path, monkeypatch).plan
+    rooms = {item["room_id"]: item for item in plan["rooms"]}
+
+    for placement in plan["placements"]:
+        bounds = rooms[placement["room_id"]]["bounds_m"]
+        aabb = placement["rotated_aabb_room_local_m"]
+        assert all(
+            aabb["min_m"][axis] >= bounds["min_m"][axis] - 1e-6
+            and aabb["max_m"][axis] <= bounds["max_m"][axis] + 1e-6
+            for axis in range(3)
+        )
+    collision = plan["ledgers"]["collision"]
+    assert len(collision) == 60
+    assert all(not item["blocking_contact_instance_ids"] for item in collision)
+    assert sum(item["runtime_authority"] == "unchanged_r1_proxy" for item in collision) == 19
+    assert sum(item["runtime_authority"] == "explicit_no_collision" for item in collision) == 21
+    assert sum(
+        item["runtime_authority"] == "none_until_ue_collision_receipt"
+        for item in collision
+    ) == 20
+
+    forge._validate_support_graph_acyclic({"cup": "table", "table": "floor"})
+    with pytest.raises(forge.SceneForgeError, match="SCENE_SUPPORT_CYCLE"):
+        forge._validate_support_graph_acyclic({"cup": "table", "table": "cup"})
 
 
 def test_resealed_aabb_or_ledger_drift_fails_closed(
