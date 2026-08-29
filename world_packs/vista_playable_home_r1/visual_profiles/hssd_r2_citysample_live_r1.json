@@ -1,0 +1,2156 @@
+{
+  "schema_version": "simworld.vista.playable-home-hssd-r2-citysample-live-profile/v1",
+  "profile_id": "hssd_r2_citysample_live_r1",
+  "source_lineage": {
+    "house_content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7",
+    "r6_combined_receipt_sha256": "6370e4e179a1f2485ddf3fab572a15426b7703eefa6ae6c6ea6d9ca7f7648870",
+    "r6_project_tree_sha256": "fdb1921eecb7c446c6a49ac2b8fdf174ab6177a3de6ecb4674da65f80b663106",
+    "r6_source_map_sha256": "2380c96c28af6239df800e050e0ea1aab328ab4018e61c3aaad0b6632eaef564",
+    "hssd_r2_host_receipt_sha256": "e911fc34a6b869f41ebc294f7f0f3c67db25abe853fcfb2af34b91e416c51115",
+    "hssd_r2_scene_receipt_sha256": "f7d225fb07a51f6eeb76e565df589a317f57c7618b489393c44b79b23a5f4a4d",
+    "hssd_r2_build_plan_sha256": "4b2ded463a0be4caf26cd326a06944ab171d93c917d5de530fd36ca9b3ae9de2",
+    "hssd_r2_build_plan_content_digest": "97bb05ad7df63a24c284eb840dc306950286c526257f673056b0eb6a50bb2de4",
+    "hssd_r2_canonical_projection_sha256": {
+      "contact": "e269c5285e0183fd4cb26e0da2d27b0ef6baee7bef96394b72a6aca040ab6af0",
+      "portal_clearance": "c943be917bb99aabadd265329d6e5cc467152448d5bf5ebcf1b5bbc9855b3869",
+      "portals": "143b823c88ded18e9d60b3043a35c11d69671c9ddf9b08064314cfd935788be2",
+      "proxy": "4cf15b6dfdd09b2de6e3f63547c3df8bc1510c170fd0cfbba2ac60c0d6e3c26a",
+      "support": "f999cbe5b26c010b23396fccca41bd6e0fe8f009a34dd7ee5fda6ca027215657",
+      "transform_override_targets": "af65fe4a3ae783d3b5085d8670f6ed3b6bee93e6951f1b6d5490acb5e88ee81a",
+      "transform_overrides": "72db1a9f6d02ef6a71bc2c63229ad2a919fdfbb153453989676b4db0d716b753"
+    }
+  },
+  "rooms": [
+    {
+      "room_id": "home.r1/room.bathroom_laundry",
+      "finish_policy": "complete_existing_generic_room_add_trim_and_wet_zone",
+      "source_bounds_m": {
+        "min_m": [
+          -1.5,
+          4,
+          0
+        ],
+        "max_m": [
+          1.5,
+          8,
+          3
+        ]
+      },
+      "architecture_actor": {
+        "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_0",
+        "class_path": "/Script/Engine.StaticMeshActor",
+        "mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bathroom_laundry/asset_bundle_bathroom_laundry.asset_bundle_bathroom_laundry",
+        "mutation_policy": "preserve_mesh_rebind_exact_three_material_slots_visible_cast_shadow",
+        "visible": true,
+        "collision_profile": "BlockAll",
+        "cast_shadow": true
+      },
+      "surface_materials": {
+        "floor": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bathroom_laundry/asset_bundle_bathroom_laundry/Materials/VISTA_M_floor_bathroom_tile.VISTA_M_floor_bathroom_tile",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+        },
+        "wall": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bathroom_laundry/asset_bundle_bathroom_laundry/Materials/VISTA_M_wall_warm_white.VISTA_M_wall_warm_white",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+        },
+        "ceiling": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bathroom_laundry/asset_bundle_bathroom_laundry/Materials/VISTA_M_ceiling_white.VISTA_M_ceiling_white",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+        },
+        "trim": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_trim_satin.VISTA_M_r2_trim_satin",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        }
+      },
+      "baseboards": {
+        "policy": "spawn_exact_no_collision_segments",
+        "expected_segment_count": 5,
+        "segments": [
+          {
+            "segment_id": "baseboard.bathroom.north",
+            "location_cm": [
+              0,
+              796,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              300,
+              8,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.bathroom.east",
+            "location_cm": [
+              146,
+              600,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              400,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.bathroom.west",
+            "location_cm": [
+              -146,
+              600,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              400,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.bathroom.south.west",
+            "location_cm": [
+              -100,
+              404,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              100,
+              8,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.bathroom.south.east",
+            "location_cm": [
+              100,
+              404,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              100,
+              8,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          }
+        ]
+      },
+      "door_trim": {
+        "policy": "spawn_exact_no_collision_segments",
+        "portal_id": "home.r1/portal.entry_hall-bathroom_laundry.01",
+        "expected_segment_count": 3,
+        "segments": [
+          {
+            "segment_id": "door_trim.bathroom.left",
+            "location_cm": [
+              -58,
+              400,
+              105
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              8,
+              210
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "door_trim.bathroom.right",
+            "location_cm": [
+              58,
+              400,
+              105
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              8,
+              210
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "door_trim.bathroom.header",
+            "location_cm": [
+              0,
+              400,
+              214
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              116,
+              8,
+              8
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          }
+        ]
+      },
+      "wet_zone": {
+        "enabled": true,
+        "policy": "spawn_exact_no_collision_wall_panels",
+        "material_role": "floor",
+        "expected_segment_count": 2,
+        "segments": [
+          {
+            "segment_id": "wet_zone.bathroom.north",
+            "location_cm": [
+              -65,
+              795,
+              120
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              155,
+              5,
+              180
+            ],
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "wet_zone.bathroom.west",
+            "location_cm": [
+              -147.5,
+              670,
+              120
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              5,
+              250,
+              180
+            ],
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          }
+        ]
+      },
+      "fixture_light_binding": {
+        "pair_id": "pair.bathroom_laundry.ceiling.01",
+        "fixture_id": "fixture.bathroom_laundry.ceiling.01",
+        "archetype_id": "flush_dome",
+        "fixture_actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_64",
+        "fixture_class_path": "/Script/Engine.StaticMeshActor",
+        "source_mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "output_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/SM_VISTA_R9_FLUSH_DOME.SM_VISTA_R9_FLUSH_DOME",
+        "final_transform": {
+          "location_cm": [
+            0,
+            600,
+            298
+          ],
+          "rotation_deg": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "expected_mesh_local_bounds_cm": {
+          "min_cm": [
+            -19,
+            -19,
+            -14
+          ],
+          "max_cm": [
+            19,
+            19,
+            0
+          ]
+        },
+        "expected_world_bounds_cm": {
+          "min_cm": [
+            -19,
+            581,
+            284
+          ],
+          "max_cm": [
+            19,
+            619,
+            298
+          ]
+        },
+        "mesh_bounds_tolerance_cm": 0.05,
+        "collision_profile": "NoCollision",
+        "cast_shadow": true,
+        "light": {
+          "light_id": "light.bathroom_laundry.ceiling.01",
+          "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.SpotLight_1",
+          "class_path": "/Script/Engine.SpotLight",
+          "type": "spot",
+          "transform": {
+            "location_cm": [
+              0,
+              600,
+              252
+            ],
+            "rotation_deg": [
+              0,
+              -90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "intensity": 1300,
+          "unit": "lumens",
+          "temperature_k": 4200,
+          "attenuation_radius_cm": 650,
+          "cast_shadow": true,
+          "use_temperature": true,
+          "mutation_policy": "preserve_exact_r4_observation"
+        }
+      }
+    },
+    {
+      "room_id": "home.r1/room.bedroom",
+      "finish_policy": "complete_existing_generic_room_add_trim",
+      "source_bounds_m": {
+        "min_m": [
+          -6.5,
+          0,
+          0
+        ],
+        "max_m": [
+          -1.5,
+          4,
+          3
+        ]
+      },
+      "architecture_actor": {
+        "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_1",
+        "class_path": "/Script/Engine.StaticMeshActor",
+        "mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bedroom/asset_bundle_bedroom.asset_bundle_bedroom",
+        "mutation_policy": "preserve_mesh_rebind_exact_three_material_slots_visible_cast_shadow",
+        "visible": true,
+        "collision_profile": "BlockAll",
+        "cast_shadow": true
+      },
+      "surface_materials": {
+        "floor": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bedroom/asset_bundle_bedroom/Materials/VISTA_M_floor_bedroom_carpet.VISTA_M_floor_bedroom_carpet",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+        },
+        "wall": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bedroom/asset_bundle_bedroom/Materials/VISTA_M_wall_warm_white.VISTA_M_wall_warm_white",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+        },
+        "ceiling": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bedroom/asset_bundle_bedroom/Materials/VISTA_M_ceiling_white.VISTA_M_ceiling_white",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+        },
+        "trim": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_trim_satin.VISTA_M_r2_trim_satin",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        }
+      },
+      "baseboards": {
+        "policy": "spawn_exact_no_collision_segments",
+        "expected_segment_count": 5,
+        "segments": [
+          {
+            "segment_id": "baseboard.bedroom.north",
+            "location_cm": [
+              -400,
+              396,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              500,
+              8,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.bedroom.south",
+            "location_cm": [
+              -400,
+              4,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              500,
+              8,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.bedroom.west",
+            "location_cm": [
+              -646,
+              200,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              400,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.bedroom.east.south",
+            "location_cm": [
+              -154,
+              75,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              150,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.bedroom.east.north",
+            "location_cm": [
+              -154,
+              325,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              150,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          }
+        ]
+      },
+      "door_trim": {
+        "policy": "spawn_exact_no_collision_segments",
+        "portal_id": "home.r1/portal.entry_hall-bedroom.01",
+        "expected_segment_count": 3,
+        "segments": [
+          {
+            "segment_id": "door_trim.bedroom.left",
+            "location_cm": [
+              -150,
+              142,
+              105
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              8,
+              210
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "door_trim.bedroom.right",
+            "location_cm": [
+              -150,
+              258,
+              105
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              8,
+              210
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "door_trim.bedroom.header",
+            "location_cm": [
+              -150,
+              200,
+              214
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              116,
+              8
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          }
+        ]
+      },
+      "wet_zone": {
+        "enabled": false,
+        "policy": "not_applicable",
+        "material_role": "floor",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "fixture_light_binding": {
+        "pair_id": "pair.bedroom.ceiling.01",
+        "fixture_id": "fixture.bedroom.ceiling.01",
+        "archetype_id": "flush_dome",
+        "fixture_actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_70",
+        "fixture_class_path": "/Script/Engine.StaticMeshActor",
+        "source_mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "output_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/SM_VISTA_R9_FLUSH_DOME.SM_VISTA_R9_FLUSH_DOME",
+        "final_transform": {
+          "location_cm": [
+            -400,
+            200,
+            298
+          ],
+          "rotation_deg": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "expected_mesh_local_bounds_cm": {
+          "min_cm": [
+            -19,
+            -19,
+            -14
+          ],
+          "max_cm": [
+            19,
+            19,
+            0
+          ]
+        },
+        "expected_world_bounds_cm": {
+          "min_cm": [
+            -419,
+            181,
+            284
+          ],
+          "max_cm": [
+            -381,
+            219,
+            298
+          ]
+        },
+        "mesh_bounds_tolerance_cm": 0.05,
+        "collision_profile": "NoCollision",
+        "cast_shadow": true,
+        "light": {
+          "light_id": "light.bedroom.ceiling.01",
+          "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.SpotLight_2",
+          "class_path": "/Script/Engine.SpotLight",
+          "type": "spot",
+          "transform": {
+            "location_cm": [
+              -400,
+              200,
+              252
+            ],
+            "rotation_deg": [
+              0,
+              -90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "intensity": 1050,
+          "unit": "lumens",
+          "temperature_k": 2700,
+          "attenuation_radius_cm": 750,
+          "cast_shadow": true,
+          "use_temperature": true,
+          "mutation_policy": "preserve_exact_r4_observation"
+        }
+      }
+    },
+    {
+      "room_id": "home.r1/room.entry_hall",
+      "finish_policy": "preserve_existing_r2_presentation_add_fixture_only",
+      "source_bounds_m": {
+        "min_m": [
+          -1.5,
+          -4,
+          0
+        ],
+        "max_m": [
+          1.5,
+          4,
+          3
+        ]
+      },
+      "architecture_actor": {
+        "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_6",
+        "class_path": "/Script/Engine.StaticMeshActor",
+        "mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/asset_bundle_entry_hall.asset_bundle_entry_hall",
+        "mutation_policy": "preserve_mesh_materials_set_visible_cast_shadow",
+        "visible": true,
+        "collision_profile": "NoCollision",
+        "cast_shadow": true
+      },
+      "surface_materials": {
+        "floor": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_slate_honed.VISTA_M_r2_slate_honed",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        },
+        "wall": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_plaster_warm.VISTA_M_r2_plaster_warm",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        },
+        "ceiling": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_ceiling_matte.VISTA_M_r2_ceiling_matte",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        },
+        "trim": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_trim_satin.VISTA_M_r2_trim_satin",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        }
+      },
+      "baseboards": {
+        "policy": "preserve_existing_r2_presentation_geometry",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "door_trim": {
+        "policy": "preserve_existing_r2_presentation_geometry",
+        "portal_id": "home.r1/room.entry_hall/entity.exit_door.01",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "wet_zone": {
+        "enabled": false,
+        "policy": "not_applicable",
+        "material_role": "floor",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "fixture_light_binding": {
+        "pair_id": "pair.entry_hall.ceiling.01",
+        "fixture_id": "fixture.entry_hall.ceiling.01",
+        "archetype_id": "pendant",
+        "fixture_actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_71",
+        "fixture_class_path": "/Script/Engine.StaticMeshActor",
+        "source_mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "output_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/SM_VISTA_R9_PENDANT.SM_VISTA_R9_PENDANT",
+        "final_transform": {
+          "location_cm": [
+            0,
+            -80,
+            298
+          ],
+          "rotation_deg": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "expected_mesh_local_bounds_cm": {
+          "min_cm": [
+            -18,
+            -18,
+            -48
+          ],
+          "max_cm": [
+            18,
+            18,
+            0
+          ]
+        },
+        "expected_world_bounds_cm": {
+          "min_cm": [
+            -18,
+            -98,
+            250
+          ],
+          "max_cm": [
+            18,
+            -62,
+            298
+          ]
+        },
+        "mesh_bounds_tolerance_cm": 0.05,
+        "collision_profile": "NoCollision",
+        "cast_shadow": true,
+        "light": {
+          "light_id": "light.entry_hall.ceiling.01",
+          "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.SpotLight_3",
+          "class_path": "/Script/Engine.SpotLight",
+          "type": "spot",
+          "transform": {
+            "location_cm": [
+              0,
+              -80,
+              252
+            ],
+            "rotation_deg": [
+              0,
+              -90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "intensity": 900,
+          "unit": "lumens",
+          "temperature_k": 3000,
+          "attenuation_radius_cm": 650,
+          "cast_shadow": true,
+          "use_temperature": true,
+          "mutation_policy": "preserve_exact_r4_observation"
+        }
+      }
+    },
+    {
+      "room_id": "home.r1/room.kitchen_dining",
+      "finish_policy": "preserve_existing_r2_presentation_add_fixture_only",
+      "source_bounds_m": {
+        "min_m": [
+          1.5,
+          -4,
+          0
+        ],
+        "max_m": [
+          6.5,
+          0,
+          3
+        ]
+      },
+      "architecture_actor": {
+        "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_7",
+        "class_path": "/Script/Engine.StaticMeshActor",
+        "mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/asset_bundle_kitchen_dining.asset_bundle_kitchen_dining",
+        "mutation_policy": "preserve_mesh_materials_set_visible_cast_shadow",
+        "visible": true,
+        "collision_profile": "NoCollision",
+        "cast_shadow": true
+      },
+      "surface_materials": {
+        "floor": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_kitchen_dining/kitchen_dining_presentation_bundle/Materials/VISTA_M_r_azzo_warm.VISTA_M_r_azzo_warm",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        },
+        "wall": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_kitchen_dining/kitchen_dining_presentation_bundle/Materials/VISTA_M_r_ster_warm.VISTA_M_r_ster_warm",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        },
+        "ceiling": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_kitchen_dining/kitchen_dining_presentation_bundle/Materials/VISTA_M_r_ing_matte.VISTA_M_r_ing_matte",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        },
+        "trim": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_kitchen_dining/kitchen_dining_presentation_bundle/Materials/VISTA_M_r_rim_satin.VISTA_M_r_rim_satin",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        }
+      },
+      "baseboards": {
+        "policy": "preserve_existing_r2_presentation_geometry",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "door_trim": {
+        "policy": "preserve_existing_r2_presentation_geometry",
+        "portal_id": "home.r1/portal.entry_hall-kitchen_dining.01",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "wet_zone": {
+        "enabled": false,
+        "policy": "not_applicable",
+        "material_role": "floor",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "fixture_light_binding": {
+        "pair_id": "pair.kitchen_dining.ceiling.01",
+        "fixture_id": "fixture.kitchen_dining.ceiling.01",
+        "archetype_id": "pendant",
+        "fixture_actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_72",
+        "fixture_class_path": "/Script/Engine.StaticMeshActor",
+        "source_mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "output_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/SM_VISTA_R9_PENDANT.SM_VISTA_R9_PENDANT",
+        "final_transform": {
+          "location_cm": [
+            400,
+            -200,
+            298
+          ],
+          "rotation_deg": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "expected_mesh_local_bounds_cm": {
+          "min_cm": [
+            -18,
+            -18,
+            -48
+          ],
+          "max_cm": [
+            18,
+            18,
+            0
+          ]
+        },
+        "expected_world_bounds_cm": {
+          "min_cm": [
+            382,
+            -218,
+            250
+          ],
+          "max_cm": [
+            418,
+            -182,
+            298
+          ]
+        },
+        "mesh_bounds_tolerance_cm": 0.05,
+        "collision_profile": "NoCollision",
+        "cast_shadow": true,
+        "light": {
+          "light_id": "light.kitchen_dining.ceiling.01",
+          "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.RectLight_2",
+          "class_path": "/Script/Engine.RectLight",
+          "type": "rect",
+          "transform": {
+            "location_cm": [
+              400,
+              -200,
+              252
+            ],
+            "rotation_deg": [
+              0,
+              -90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "intensity": 1800,
+          "unit": "lumens",
+          "temperature_k": 3500,
+          "attenuation_radius_cm": 900,
+          "cast_shadow": true,
+          "use_temperature": true,
+          "mutation_policy": "preserve_exact_r4_observation"
+        }
+      }
+    },
+    {
+      "room_id": "home.r1/room.living_room",
+      "finish_policy": "preserve_existing_r2_presentation_add_fixture_only",
+      "source_bounds_m": {
+        "min_m": [
+          -6.5,
+          -4,
+          0
+        ],
+        "max_m": [
+          -1.5,
+          0,
+          3
+        ]
+      },
+      "architecture_actor": {
+        "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_8",
+        "class_path": "/Script/Engine.StaticMeshActor",
+        "mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/asset_bundle_living_room.asset_bundle_living_room",
+        "mutation_policy": "preserve_mesh_materials_set_visible_cast_shadow",
+        "visible": true,
+        "collision_profile": "NoCollision",
+        "cast_shadow": true
+      },
+      "surface_materials": {
+        "floor": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_living_room/living_room_presentation_bundle/Materials/VISTA_M_r2_oak_natural.VISTA_M_r2_oak_natural",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        },
+        "wall": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_living_room/living_room_presentation_bundle/Materials/VISTA_M_r2_plaster_warm.VISTA_M_r2_plaster_warm",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        },
+        "ceiling": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_living_room/living_room_presentation_bundle/Materials/VISTA_M_r2_ceiling_matte.VISTA_M_r2_ceiling_matte",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        },
+        "trim": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_living_room/living_room_presentation_bundle/Materials/VISTA_M_r2_trim_satin.VISTA_M_r2_trim_satin",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        }
+      },
+      "baseboards": {
+        "policy": "preserve_existing_r2_presentation_geometry",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "door_trim": {
+        "policy": "preserve_existing_r2_presentation_geometry",
+        "portal_id": "home.r1/portal.entry_hall-living_room.01",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "wet_zone": {
+        "enabled": false,
+        "policy": "not_applicable",
+        "material_role": "floor",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "fixture_light_binding": {
+        "pair_id": "pair.living_room.ceiling.01",
+        "fixture_id": "fixture.living_room.ceiling.01",
+        "archetype_id": "linear_panel",
+        "fixture_actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_73",
+        "fixture_class_path": "/Script/Engine.StaticMeshActor",
+        "source_mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "output_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/SM_VISTA_R9_LINEAR_PANEL.SM_VISTA_R9_LINEAR_PANEL",
+        "final_transform": {
+          "location_cm": [
+            -400,
+            -200,
+            298
+          ],
+          "rotation_deg": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "expected_mesh_local_bounds_cm": {
+          "min_cm": [
+            -45,
+            -9,
+            -10
+          ],
+          "max_cm": [
+            45,
+            9,
+            0
+          ]
+        },
+        "expected_world_bounds_cm": {
+          "min_cm": [
+            -445,
+            -209,
+            288
+          ],
+          "max_cm": [
+            -355,
+            -191,
+            298
+          ]
+        },
+        "mesh_bounds_tolerance_cm": 0.05,
+        "collision_profile": "NoCollision",
+        "cast_shadow": true,
+        "light": {
+          "light_id": "light.living_room.ceiling.01",
+          "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.RectLight_3",
+          "class_path": "/Script/Engine.RectLight",
+          "type": "rect",
+          "transform": {
+            "location_cm": [
+              -400,
+              -200,
+              252
+            ],
+            "rotation_deg": [
+              0,
+              -90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "intensity": 1400,
+          "unit": "lumens",
+          "temperature_k": 2900,
+          "attenuation_radius_cm": 850,
+          "cast_shadow": true,
+          "use_temperature": true,
+          "mutation_policy": "preserve_exact_r4_observation"
+        }
+      }
+    },
+    {
+      "room_id": "home.r1/room.office",
+      "finish_policy": "complete_existing_generic_room_add_trim",
+      "source_bounds_m": {
+        "min_m": [
+          1.5,
+          0,
+          0
+        ],
+        "max_m": [
+          6.5,
+          4,
+          3
+        ]
+      },
+      "architecture_actor": {
+        "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_5",
+        "class_path": "/Script/Engine.StaticMeshActor",
+        "mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_office/asset_bundle_office.asset_bundle_office",
+        "mutation_policy": "preserve_mesh_rebind_exact_three_material_slots_visible_cast_shadow",
+        "visible": true,
+        "collision_profile": "BlockAll",
+        "cast_shadow": true
+      },
+      "surface_materials": {
+        "floor": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_office/asset_bundle_office/Materials/VISTA_M_floor_office_cork.VISTA_M_floor_office_cork",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+        },
+        "wall": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_office/asset_bundle_office/Materials/VISTA_M_wall_warm_white.VISTA_M_wall_warm_white",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+        },
+        "ceiling": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_office/asset_bundle_office/Materials/VISTA_M_ceiling_white.VISTA_M_ceiling_white",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+        },
+        "trim": {
+          "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_trim_satin.VISTA_M_r2_trim_satin",
+          "expected_class": "/Script/Engine.MaterialInstanceConstant",
+          "quality_disposition": "existing_r2_pbr_presentation_material"
+        }
+      },
+      "baseboards": {
+        "policy": "spawn_exact_no_collision_segments",
+        "expected_segment_count": 5,
+        "segments": [
+          {
+            "segment_id": "baseboard.office.north",
+            "location_cm": [
+              400,
+              396,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              500,
+              8,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.office.south",
+            "location_cm": [
+              400,
+              4,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              500,
+              8,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.office.east",
+            "location_cm": [
+              646,
+              200,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              400,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.office.west.south",
+            "location_cm": [
+              154,
+              75,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              150,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "baseboard.office.west.north",
+            "location_cm": [
+              154,
+              325,
+              6
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              150,
+              12
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          }
+        ]
+      },
+      "door_trim": {
+        "policy": "spawn_exact_no_collision_segments",
+        "portal_id": "home.r1/portal.entry_hall-office.01",
+        "expected_segment_count": 3,
+        "segments": [
+          {
+            "segment_id": "door_trim.office.left",
+            "location_cm": [
+              150,
+              142,
+              105
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              8,
+              210
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "door_trim.office.right",
+            "location_cm": [
+              150,
+              258,
+              105
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              8,
+              210
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          },
+          {
+            "segment_id": "door_trim.office.header",
+            "location_cm": [
+              150,
+              200,
+              214
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "dimensions_cm": [
+              8,
+              116,
+              8
+            ],
+            "material_role": "trim",
+            "collision_profile": "NoCollision",
+            "cast_shadow": true
+          }
+        ]
+      },
+      "wet_zone": {
+        "enabled": false,
+        "policy": "not_applicable",
+        "material_role": "floor",
+        "expected_segment_count": 0,
+        "segments": []
+      },
+      "fixture_light_binding": {
+        "pair_id": "pair.office.ceiling.01",
+        "fixture_id": "fixture.office.ceiling.01",
+        "archetype_id": "linear_panel",
+        "fixture_actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_74",
+        "fixture_class_path": "/Script/Engine.StaticMeshActor",
+        "source_mesh_object_path": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "output_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/SM_VISTA_R9_LINEAR_PANEL.SM_VISTA_R9_LINEAR_PANEL",
+        "final_transform": {
+          "location_cm": [
+            400,
+            200,
+            298
+          ],
+          "rotation_deg": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ]
+        },
+        "expected_mesh_local_bounds_cm": {
+          "min_cm": [
+            -45,
+            -9,
+            -10
+          ],
+          "max_cm": [
+            45,
+            9,
+            0
+          ]
+        },
+        "expected_world_bounds_cm": {
+          "min_cm": [
+            355,
+            191,
+            288
+          ],
+          "max_cm": [
+            445,
+            209,
+            298
+          ]
+        },
+        "mesh_bounds_tolerance_cm": 0.05,
+        "collision_profile": "NoCollision",
+        "cast_shadow": true,
+        "light": {
+          "light_id": "light.office.ceiling.01",
+          "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.RectLight_4",
+          "class_path": "/Script/Engine.RectLight",
+          "type": "rect",
+          "transform": {
+            "location_cm": [
+              400,
+              200,
+              252
+            ],
+            "rotation_deg": [
+              0,
+              -90,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          "intensity": 1500,
+          "unit": "lumens",
+          "temperature_k": 4000,
+          "attenuation_radius_cm": 800,
+          "cast_shadow": true,
+          "use_temperature": true,
+          "mutation_policy": "preserve_exact_r4_observation"
+        }
+      }
+    }
+  ],
+  "fixture_forge": {
+    "blender": {
+      "path": "/home/yhliu/.local/opt/blender-4.5.8-linux-x64/blender",
+      "version": "4.5.8 LTS",
+      "sha256": "86b39e16cf8043a93de6b4ac5e23399d790f662c644573f600398a3c3bd121eb",
+      "size_bytes": 163587256,
+      "execution_device": "CPU"
+    },
+    "recipe": {
+      "relative_path": "tools/blender/vista_playable_home_r9_fixtures/recipe.json",
+      "schema_version": "simworld.vista.playable-home-r9-fixture-recipe/v1",
+      "recipe_id": "vista_playable_home_r9_fixtures_r1",
+      "content_digest": "09d9b345f520ddf657ab3c6d3ff680f56c77941a3a63e9396296d9a7fb0fb045"
+    },
+    "archetype_ids": [
+      "flush_dome",
+      "linear_panel",
+      "pendant"
+    ],
+    "artifact_paths": [
+      "artifacts/flush_dome.glb",
+      "artifacts/linear_panel.glb",
+      "artifacts/pendant.glb"
+    ],
+    "preview_paths": [
+      "previews/flush_dome.png",
+      "previews/linear_panel.png",
+      "previews/pendant.png"
+    ],
+    "artifact_receipt_paths": [
+      "receipts/flush_dome.json",
+      "receipts/linear_panel.json",
+      "receipts/pendant.json"
+    ],
+    "inventory_path": "fixture-inventory.json",
+    "inventory_schema_version": "simworld.vista.playable-home-r9-fixture-inventory/v1",
+    "inventory_status": "fixture_inventory_sealed_not_ue_imported",
+    "inventory_top_level_keys": [
+      "artifact_count",
+      "artifacts",
+      "binary_payload_in_git",
+      "claims",
+      "content_digest",
+      "forge_plan_content_digest",
+      "profile",
+      "recipe",
+      "schema_version",
+      "status",
+      "toolchain",
+      "ue_package_inventory",
+      "worker_result_content_digest"
+    ],
+    "output_policy": "append_only_git_external_no_caller_output_override"
+  },
+  "fixture_imports": {
+    "package_root": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures",
+    "glb_inventory": [
+      {
+        "archetype_id": "flush_dome",
+        "glb_relative_path": "artifacts/flush_dome.glb",
+        "receipt_relative_path": "receipts/flush_dome.json",
+        "static_mesh_package_name": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/SM_VISTA_R9_FLUSH_DOME",
+        "static_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/SM_VISTA_R9_FLUSH_DOME.SM_VISTA_R9_FLUSH_DOME",
+        "material_package_names": [
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/Materials/M_VISTA_R9_FLUSH_DOME_BRUSHED_METAL",
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/Materials/M_VISTA_R9_FLUSH_DOME_OPAL_DIFFUSER"
+        ],
+        "material_object_paths": [
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/Materials/M_VISTA_R9_FLUSH_DOME_BRUSHED_METAL.M_VISTA_R9_FLUSH_DOME_BRUSHED_METAL",
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/Materials/M_VISTA_R9_FLUSH_DOME_OPAL_DIFFUSER.M_VISTA_R9_FLUSH_DOME_OPAL_DIFFUSER"
+        ]
+      },
+      {
+        "archetype_id": "linear_panel",
+        "glb_relative_path": "artifacts/linear_panel.glb",
+        "receipt_relative_path": "receipts/linear_panel.json",
+        "static_mesh_package_name": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/SM_VISTA_R9_LINEAR_PANEL",
+        "static_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/SM_VISTA_R9_LINEAR_PANEL.SM_VISTA_R9_LINEAR_PANEL",
+        "material_package_names": [
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/Materials/M_VISTA_R9_LINEAR_PANEL_BRUSHED_METAL",
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/Materials/M_VISTA_R9_LINEAR_PANEL_OPAL_DIFFUSER"
+        ],
+        "material_object_paths": [
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/Materials/M_VISTA_R9_LINEAR_PANEL_BRUSHED_METAL.M_VISTA_R9_LINEAR_PANEL_BRUSHED_METAL",
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/Materials/M_VISTA_R9_LINEAR_PANEL_OPAL_DIFFUSER.M_VISTA_R9_LINEAR_PANEL_OPAL_DIFFUSER"
+        ]
+      },
+      {
+        "archetype_id": "pendant",
+        "glb_relative_path": "artifacts/pendant.glb",
+        "receipt_relative_path": "receipts/pendant.json",
+        "static_mesh_package_name": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/SM_VISTA_R9_PENDANT",
+        "static_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/SM_VISTA_R9_PENDANT.SM_VISTA_R9_PENDANT",
+        "material_package_names": [
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/Materials/M_VISTA_R9_PENDANT_BRUSHED_METAL",
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/Materials/M_VISTA_R9_PENDANT_OPAL_DIFFUSER"
+        ],
+        "material_object_paths": [
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/Materials/M_VISTA_R9_PENDANT_BRUSHED_METAL.M_VISTA_R9_PENDANT_BRUSHED_METAL",
+          "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/Materials/M_VISTA_R9_PENDANT_OPAL_DIFFUSER.M_VISTA_R9_PENDANT_OPAL_DIFFUSER"
+        ]
+      }
+    ],
+    "exact_package_names": [
+      "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/Materials/M_VISTA_R9_FLUSH_DOME_BRUSHED_METAL",
+      "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/Materials/M_VISTA_R9_FLUSH_DOME_OPAL_DIFFUSER",
+      "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/flush_dome/SM_VISTA_R9_FLUSH_DOME",
+      "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/Materials/M_VISTA_R9_LINEAR_PANEL_BRUSHED_METAL",
+      "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/Materials/M_VISTA_R9_LINEAR_PANEL_OPAL_DIFFUSER",
+      "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/linear_panel/SM_VISTA_R9_LINEAR_PANEL",
+      "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/Materials/M_VISTA_R9_PENDANT_BRUSHED_METAL",
+      "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/Materials/M_VISTA_R9_PENDANT_OPAL_DIFFUSER",
+      "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/pendant/SM_VISTA_R9_PENDANT"
+    ],
+    "expected_package_count": 9,
+    "import_policy": {
+      "replace_existing_assets": false,
+      "automated_import_should_detect_type": true,
+      "generate_lightmap_uvs": true,
+      "import_collision": false,
+      "nanite": false,
+      "source_override_allowed": false
+    },
+    "binary_payload_in_git": false
+  },
+  "hssd_r2_inventory": {
+    "visual_slot_count": 60,
+    "visual_slot_instance_ids": [
+      "hssd.r1/bathroom_laundry.bathtub.01",
+      "hssd.r1/bathroom_laundry.cabinet.01",
+      "hssd.r1/bathroom_laundry.clothes.01",
+      "hssd.r1/bathroom_laundry.clothes.02",
+      "hssd.r1/bathroom_laundry.faucet.01",
+      "hssd.r1/bathroom_laundry.laundry_basket.01",
+      "hssd.r1/bathroom_laundry.laundry_basket.02",
+      "hssd.r1/bathroom_laundry.pot.01",
+      "hssd.r1/bathroom_laundry.slipper.01",
+      "hssd.r1/bathroom_laundry.washer.01",
+      "hssd.r1/bedroom.backpack.01",
+      "hssd.r1/bedroom.bed.01",
+      "hssd.r1/bedroom.cabinet.01",
+      "hssd.r1/bedroom.clothes.01",
+      "hssd.r1/bedroom.clothes.02",
+      "hssd.r1/bedroom.nightstand.01",
+      "hssd.r1/bedroom.nightstand.02",
+      "hssd.r1/bedroom.phone.01",
+      "hssd.r1/bedroom.slipper.01",
+      "hssd.r1/bedroom.slipper.02",
+      "hssd.r1/entry_hall.backpack.01",
+      "hssd.r1/entry_hall.backpack.02",
+      "hssd.r1/entry_hall.cabinet.01",
+      "hssd.r1/entry_hall.cardboard_box.01",
+      "hssd.r1/entry_hall.clothes.01",
+      "hssd.r1/entry_hall.phone.01",
+      "hssd.r1/entry_hall.pot.01",
+      "hssd.r1/entry_hall.shoe_bench.01",
+      "hssd.r1/entry_hall.slipper.01",
+      "hssd.r1/entry_hall.slipper.02",
+      "hssd.r1/kitchen_dining.coffee_cup.01",
+      "hssd.r1/kitchen_dining.coffee_cup.02",
+      "hssd.r1/kitchen_dining.coffee_cup.03",
+      "hssd.r1/kitchen_dining.coffee_cup.04",
+      "hssd.r1/kitchen_dining.dining_table.01",
+      "hssd.r1/kitchen_dining.fridge.01",
+      "hssd.r1/kitchen_dining.pot.01",
+      "hssd.r1/kitchen_dining.rolling_chair.01",
+      "hssd.r1/kitchen_dining.rolling_chair.02",
+      "hssd.r1/kitchen_dining.stove.01",
+      "hssd.r1/living_room.backpack.01",
+      "hssd.r1/living_room.coffee_cup.01",
+      "hssd.r1/living_room.coffee_cup.02",
+      "hssd.r1/living_room.coffee_table.01",
+      "hssd.r1/living_room.phone.01",
+      "hssd.r1/living_room.pot.01",
+      "hssd.r1/living_room.rolling_chair.01",
+      "hssd.r1/living_room.slipper.01",
+      "hssd.r1/living_room.slipper.02",
+      "hssd.r1/living_room.sofa.01",
+      "hssd.r1/office.backpack.01",
+      "hssd.r1/office.cabinet.01",
+      "hssd.r1/office.cardboard_box.01",
+      "hssd.r1/office.cardboard_box.02",
+      "hssd.r1/office.coffee_cup.01",
+      "hssd.r1/office.desk.01",
+      "hssd.r1/office.ladder.01",
+      "hssd.r1/office.phone.01",
+      "hssd.r1/office.pot.01",
+      "hssd.r1/office.rolling_chair.01"
+    ],
+    "static_shell_count": 57,
+    "dynamic_presentation_instance_ids": [
+      "hssd.r1/bedroom.phone.01",
+      "hssd.r1/kitchen_dining.coffee_cup.01",
+      "hssd.r1/kitchen_dining.pot.01"
+    ],
+    "transform_override_count": 17,
+    "transform_override_instance_ids": [
+      "hssd.r1/bathroom_laundry.clothes.02",
+      "hssd.r1/bathroom_laundry.laundry_basket.02",
+      "hssd.r1/bathroom_laundry.slipper.01",
+      "hssd.r1/bedroom.backpack.01",
+      "hssd.r1/bedroom.clothes.02",
+      "hssd.r1/entry_hall.backpack.02",
+      "hssd.r1/entry_hall.cabinet.01",
+      "hssd.r1/entry_hall.pot.01",
+      "hssd.r1/entry_hall.shoe_bench.01",
+      "hssd.r1/kitchen_dining.dining_table.01",
+      "hssd.r1/kitchen_dining.rolling_chair.01",
+      "hssd.r1/living_room.rolling_chair.01",
+      "hssd.r1/living_room.slipper.01",
+      "hssd.r1/living_room.sofa.01",
+      "hssd.r1/office.backpack.01",
+      "hssd.r1/office.cardboard_box.02",
+      "hssd.r1/office.pot.01"
+    ],
+    "protected_portal_count": 5,
+    "protected_portal_ids": [
+      "home.r1/portal.entry_hall-bathroom_laundry.01",
+      "home.r1/portal.entry_hall-bedroom.01",
+      "home.r1/portal.entry_hall-kitchen_dining.01",
+      "home.r1/portal.entry_hall-living_room.01",
+      "home.r1/portal.entry_hall-office.01"
+    ]
+  },
+  "collision_policy": {
+    "semantic_proxies": {
+      "count": 19,
+      "instance_ids": [
+        "hssd.r1/bathroom_laundry.bathtub.01",
+        "hssd.r1/bathroom_laundry.faucet.01",
+        "hssd.r1/bathroom_laundry.laundry_basket.01",
+        "hssd.r1/bathroom_laundry.washer.01",
+        "hssd.r1/bedroom.bed.01",
+        "hssd.r1/bedroom.nightstand.01",
+        "hssd.r1/bedroom.phone.01",
+        "hssd.r1/entry_hall.shoe_bench.01",
+        "hssd.r1/kitchen_dining.coffee_cup.01",
+        "hssd.r1/kitchen_dining.dining_table.01",
+        "hssd.r1/kitchen_dining.fridge.01",
+        "hssd.r1/kitchen_dining.pot.01",
+        "hssd.r1/kitchen_dining.stove.01",
+        "hssd.r1/living_room.coffee_table.01",
+        "hssd.r1/living_room.sofa.01",
+        "hssd.r1/office.cabinet.01",
+        "hssd.r1/office.desk.01",
+        "hssd.r1/office.ladder.01",
+        "hssd.r1/office.rolling_chair.01"
+      ],
+      "policy": "preserve_r6_query_only_authority",
+      "collision_mode": "QueryOnly",
+      "collision_profile": "Custom",
+      "responses": {
+        "Pawn": "Block",
+        "Visibility": "Block"
+      },
+      "hidden_in_game": true,
+      "simulate_physics": false,
+      "generate_overlap_events": false,
+      "can_ever_affect_navigation": false
+    },
+    "secondary_query_proxies": {
+      "count": 20,
+      "rows": [
+        {
+          "instance_id": "hssd.r1/bathroom_laundry.cabinet.01",
+          "world_bounds_m": {
+            "max_m": [
+              1.475,
+              6.199,
+              2.2
+            ],
+            "min_m": [
+              0.525,
+              5.601,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/bathroom_laundry.laundry_basket.02",
+          "world_bounds_m": {
+            "max_m": [
+              0.51231,
+              5.71231,
+              0.635
+            ],
+            "min_m": [
+              -0.11231,
+              5.08769,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/bathroom_laundry.pot.01",
+          "world_bounds_m": {
+            "max_m": [
+              -0.834875,
+              5.000925,
+              1.247817
+            ],
+            "min_m": [
+              -1.365125,
+              4.599075,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/bedroom.backpack.01",
+          "world_bounds_m": {
+            "max_m": [
+              -2.310794,
+              1.201049,
+              0.5
+            ],
+            "min_m": [
+              -2.889206,
+              0.798951,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/bedroom.cabinet.01",
+          "world_bounds_m": {
+            "max_m": [
+              -1.625,
+              3.199,
+              2.2
+            ],
+            "min_m": [
+              -2.575,
+              2.601,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/bedroom.nightstand.02",
+          "world_bounds_m": {
+            "max_m": [
+              -3.09,
+              2.06,
+              0.58
+            ],
+            "min_m": [
+              -3.71,
+              1.54,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/entry_hall.backpack.01",
+          "world_bounds_m": {
+            "max_m": [
+              -0.716361,
+              -2.829971,
+              0.5
+            ],
+            "min_m": [
+              -1.283639,
+              -3.170029,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/entry_hall.backpack.02",
+          "world_bounds_m": {
+            "max_m": [
+              -0.611661,
+              -1.006361,
+              0.5
+            ],
+            "min_m": [
+              -1.188339,
+              -1.393639,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/entry_hall.cabinet.01",
+          "world_bounds_m": {
+            "max_m": [
+              -0.525,
+              3.199,
+              2.2
+            ],
+            "min_m": [
+              -1.475,
+              2.601,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/entry_hall.cardboard_box.01",
+          "world_bounds_m": {
+            "max_m": [
+              1.065826,
+              3.013556,
+              0.3625
+            ],
+            "min_m": [
+              0.534174,
+              2.586444,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/entry_hall.pot.01",
+          "world_bounds_m": {
+            "max_m": [
+              1.196797,
+              1.454587,
+              1.247817
+            ],
+            "min_m": [
+              0.603203,
+              0.945413,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/kitchen_dining.rolling_chair.01",
+          "world_bounds_m": {
+            "max_m": [
+              2.494443,
+              -2.552147,
+              0.806976
+            ],
+            "min_m": [
+              1.905557,
+              -3.047853,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/kitchen_dining.rolling_chair.02",
+          "world_bounds_m": {
+            "max_m": [
+              4.494443,
+              -1.952147,
+              0.806976
+            ],
+            "min_m": [
+              3.905557,
+              -2.447853,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/living_room.backpack.01",
+          "world_bounds_m": {
+            "max_m": [
+              -1.711661,
+              -3.106361,
+              0.5
+            ],
+            "min_m": [
+              -2.288339,
+              -3.493639,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/living_room.pot.01",
+          "world_bounds_m": {
+            "max_m": [
+              -1.567684,
+              -0.222081,
+              1.247817
+            ],
+            "min_m": [
+              -2.132316,
+              -0.677919,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/living_room.rolling_chair.01",
+          "world_bounds_m": {
+            "max_m": [
+              -2.594546,
+              -0.045978,
+              1.098594
+            ],
+            "min_m": [
+              -3.905454,
+              -1.354022,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/office.backpack.01",
+          "world_bounds_m": {
+            "max_m": [
+              2.385554,
+              2.978119,
+              0.5
+            ],
+            "min_m": [
+              1.814446,
+              2.621881,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/office.cardboard_box.01",
+          "world_bounds_m": {
+            "max_m": [
+              6.265826,
+              1.013556,
+              2.5625
+            ],
+            "min_m": [
+              5.734174,
+              0.586444,
+              2.2
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/office.cardboard_box.02",
+          "world_bounds_m": {
+            "max_m": [
+              5.474358,
+              1.02542,
+              0.3625
+            ],
+            "min_m": [
+              4.925642,
+              0.57458,
+              0
+            ]
+          }
+        },
+        {
+          "instance_id": "hssd.r1/office.pot.01",
+          "world_bounds_m": {
+            "max_m": [
+              2.377824,
+              3.420536,
+              1.247817
+            ],
+            "min_m": [
+              1.822176,
+              2.979464,
+              0
+            ]
+          }
+        }
+      ],
+      "policy": "spawn_pinned_world_aabb_query_only",
+      "collision_mode": "QueryOnly",
+      "collision_profile": "Custom",
+      "responses": {
+        "Pawn": "Block",
+        "Visibility": "Block"
+      },
+      "hidden_in_game": true,
+      "simulate_physics": false,
+      "generate_overlap_events": false,
+      "can_ever_affect_navigation": false
+    },
+    "detail_no_collision": {
+      "count": 21,
+      "instance_ids": [
+        "hssd.r1/bathroom_laundry.clothes.01",
+        "hssd.r1/bathroom_laundry.clothes.02",
+        "hssd.r1/bathroom_laundry.slipper.01",
+        "hssd.r1/bedroom.clothes.01",
+        "hssd.r1/bedroom.clothes.02",
+        "hssd.r1/bedroom.slipper.01",
+        "hssd.r1/bedroom.slipper.02",
+        "hssd.r1/entry_hall.clothes.01",
+        "hssd.r1/entry_hall.phone.01",
+        "hssd.r1/entry_hall.slipper.01",
+        "hssd.r1/entry_hall.slipper.02",
+        "hssd.r1/kitchen_dining.coffee_cup.02",
+        "hssd.r1/kitchen_dining.coffee_cup.03",
+        "hssd.r1/kitchen_dining.coffee_cup.04",
+        "hssd.r1/living_room.coffee_cup.01",
+        "hssd.r1/living_room.coffee_cup.02",
+        "hssd.r1/living_room.phone.01",
+        "hssd.r1/living_room.slipper.01",
+        "hssd.r1/living_room.slipper.02",
+        "hssd.r1/office.coffee_cup.01",
+        "hssd.r1/office.phone.01"
+      ],
+      "policy": "explicit_no_collision",
+      "collision_mode": "NoCollision",
+      "simulate_physics": false,
+      "generate_overlap_events": false,
+      "can_ever_affect_navigation": false
+    },
+    "remaining_review_items": {
+      "wall_fixture_count": 18,
+      "wall_fixture_instance_ids": [
+        "hssd.r1/bathroom_laundry.cabinet.01",
+        "hssd.r1/bathroom_laundry.clothes.01",
+        "hssd.r1/bathroom_laundry.clothes.02",
+        "hssd.r1/bathroom_laundry.pot.01",
+        "hssd.r1/bedroom.cabinet.01",
+        "hssd.r1/bedroom.clothes.01",
+        "hssd.r1/bedroom.clothes.02",
+        "hssd.r1/entry_hall.backpack.01",
+        "hssd.r1/entry_hall.backpack.02",
+        "hssd.r1/entry_hall.cabinet.01",
+        "hssd.r1/entry_hall.clothes.01",
+        "hssd.r1/entry_hall.pot.01",
+        "hssd.r1/living_room.backpack.01",
+        "hssd.r1/living_room.pot.01",
+        "hssd.r1/office.backpack.01",
+        "hssd.r1/office.cabinet.01",
+        "hssd.r1/office.ladder.01",
+        "hssd.r1/office.pot.01"
+      ],
+      "surface_fixture_count": 1,
+      "surface_fixture_instance_ids": [
+        "hssd.r1/bathroom_laundry.faucet.01"
+      ],
+      "wall_proxy_alignment_count": 1,
+      "wall_proxy_alignment_instance_ids": [
+        "hssd.r1/office.ladder.01"
+      ],
+      "visual_contact_count": 5,
+      "visual_contacts": [
+        {
+          "basis": "rotated_axis_aligned_bounds_intersection",
+          "collision_effect": "visual_contact_review_pending_does_not_block_transform_remediation",
+          "first_instance_id": "hssd.r1/bathroom_laundry.clothes.01",
+          "relation": "soft_dressing_visual_contact_review_pending",
+          "room_id": "home.r1/room.bathroom_laundry",
+          "second_instance_id": "hssd.r1/bathroom_laundry.clothes.02"
+        },
+        {
+          "basis": "rotated_axis_aligned_bounds_intersection",
+          "collision_effect": "visual_contact_review_pending_does_not_block_transform_remediation",
+          "first_instance_id": "hssd.r1/bedroom.clothes.01",
+          "relation": "soft_dressing_visual_contact_review_pending",
+          "room_id": "home.r1/room.bedroom",
+          "second_instance_id": "hssd.r1/bedroom.clothes.02"
+        },
+        {
+          "basis": "rotated_axis_aligned_bounds_intersection",
+          "collision_effect": "visual_contact_review_pending_does_not_block_transform_remediation",
+          "first_instance_id": "hssd.r1/entry_hall.cabinet.01",
+          "relation": "soft_dressing_visual_contact_review_pending",
+          "room_id": "home.r1/room.entry_hall",
+          "second_instance_id": "hssd.r1/entry_hall.clothes.01"
+        },
+        {
+          "basis": "rotated_axis_aligned_bounds_intersection",
+          "collision_effect": "visual_contact_review_pending_does_not_block_transform_remediation",
+          "first_instance_id": "hssd.r1/kitchen_dining.dining_table.01",
+          "relation": "tucked_seating_visual_contact_review_pending",
+          "room_id": "home.r1/room.kitchen_dining",
+          "second_instance_id": "hssd.r1/kitchen_dining.rolling_chair.02"
+        },
+        {
+          "basis": "rotated_axis_aligned_bounds_intersection",
+          "collision_effect": "visual_contact_review_pending_does_not_block_transform_remediation",
+          "first_instance_id": "hssd.r1/office.desk.01",
+          "relation": "tucked_seating_visual_contact_review_pending",
+          "room_id": "home.r1/room.office",
+          "second_instance_id": "hssd.r1/office.rolling_chair.01"
+        }
+      ],
+      "policy": "human_review_pending_no_runtime_promotion"
+    },
+    "playable_collision_accepted": false
+  },
+  "claims": {
+    "runtime_visual_acceptance": false,
+    "interaction_accepted": false,
+    "playable_collision_accepted": false,
+    "photoreal_character_accepted": false,
+    "gta_level_quality": false
+  },
+  "content_digest": "5e42641a128c66225a02362328fef50b026c05c012009b42135a99ed173b366e"
+}
