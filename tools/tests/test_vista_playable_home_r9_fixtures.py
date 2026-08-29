@@ -138,14 +138,12 @@ def _write_artifact_fixture(root: pathlib.Path) -> tuple[dict, dict]:
         (root / directory).mkdir(parents=True, exist_ok=True)
     plan = {
         "content_digest": "a" * 64,
-        "profile": {
-            **forge.file_pin(forge.PROFILE_PATH),
-            "content_digest": profile["content_digest"],
-        },
-        "recipe": {
-            **forge.file_pin(forge.RECIPE_PATH),
-            "content_digest": recipe["content_digest"],
-        },
+        "profile": forge.repo_source_pin(
+            forge.PROFILE_PATH, content_digest_value=profile["content_digest"]
+        ),
+        "recipe": forge.repo_source_pin(
+            forge.RECIPE_PATH, content_digest_value=recipe["content_digest"]
+        ),
         "toolchain": _fake_toolchain(),
         "archetypes": [],
         "ue_package_inventory": {
@@ -179,8 +177,8 @@ def _write_artifact_fixture(root: pathlib.Path) -> tuple[dict, dict]:
             {
                 "schema_version": forge.ARTIFACT_RECEIPT_SCHEMA,
                 "plan_content_digest": plan["content_digest"],
-                "profile_content_digest": profile["content_digest"],
-                "recipe_content_digest": recipe["content_digest"],
+                "profile": copy.deepcopy(plan["profile"]),
+                "recipe": copy.deepcopy(plan["recipe"]),
                 "archetype_id": archetype_id,
                 "glb": {"path": paths["glb"], **glb},
                 "preview": {"path": paths["preview"], **preview},
@@ -220,8 +218,8 @@ def _write_artifact_fixture(root: pathlib.Path) -> tuple[dict, dict]:
         {
             "schema_version": forge.WORKER_RESULT_SCHEMA,
             "plan_content_digest": plan["content_digest"],
-            "profile_content_digest": profile["content_digest"],
-            "recipe_content_digest": recipe["content_digest"],
+            "profile": copy.deepcopy(plan["profile"]),
+            "recipe": copy.deepcopy(plan["recipe"]),
             "artifact_count": 3,
             "artifacts": worker_rows,
             "execution": {
@@ -451,6 +449,15 @@ def test_dry_run_is_deterministic_and_zero_write(
     assert first["status"] == "dry_run_validated_zero_write"
     assert first["will_write"] is False
     assert first["will_execute_blender"] is False
+    assert first["profile"]["relative_path"] == forge.PROFILE_RELATIVE_PATH.as_posix()
+    assert first["recipe"]["relative_path"] == forge.RECIPE_RELATIVE_PATH.as_posix()
+    assert "path" not in first["profile"]
+    assert "path" not in first["recipe"]
+    assert str(forge.REPOSITORY_ROOT) not in json.dumps(first, sort_keys=True)
+    request = forge._worker_request(first)
+    forge.validate_worker_request(request)
+    assert request["profile"] == first["profile"]
+    assert request["recipe"] == first["recipe"]
     assert not config.output_root.exists()
     assert list(tmp_path.iterdir()) == before
 
@@ -545,6 +552,49 @@ def test_inventory_is_canonical_current_byte_closed_and_detects_drift(
     target = tmp_path / observed["artifacts"][0]["glb"]["path"]
     target.write_bytes(target.read_bytes() + b"drift")
     with pytest.raises(forge.FixtureForgeError):
+        forge.validate_fixture_inventory_file(inventory_path)
+
+
+def test_inventory_source_identity_survives_equivalent_repo_relocation(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository_a = tmp_path / "checkout-a"
+    repository_b = tmp_path / "checkout-b"
+    for repository in (repository_a, repository_b):
+        for relative_path, source in (
+            (forge.PROFILE_RELATIVE_PATH, forge.PROFILE_PATH),
+            (forge.RECIPE_RELATIVE_PATH, forge.RECIPE_PATH),
+        ):
+            target = repository.joinpath(*relative_path.parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(source.read_bytes())
+
+    monkeypatch.setattr(forge, "REPOSITORY_ROOT", repository_a)
+    monkeypatch.setattr(
+        forge, "PROFILE_PATH", repository_a.joinpath(*forge.PROFILE_RELATIVE_PATH.parts)
+    )
+    monkeypatch.setattr(
+        forge, "RECIPE_PATH", repository_a.joinpath(*forge.RECIPE_RELATIVE_PATH.parts)
+    )
+    output_root = tmp_path / "external-run"
+    plan, worker_result = _write_artifact_fixture(output_root)
+    inventory = forge._build_inventory(plan, worker_result, output_root)
+    inventory_path = output_root / "fixture-inventory.json"
+    inventory_path.write_bytes(forge.canonical_json_bytes(inventory))
+    assert str(repository_a) not in inventory_path.read_text(encoding="utf-8")
+
+    monkeypatch.setattr(forge, "REPOSITORY_ROOT", repository_b)
+    monkeypatch.setattr(
+        forge, "PROFILE_PATH", repository_b.joinpath(*forge.PROFILE_RELATIVE_PATH.parts)
+    )
+    monkeypatch.setattr(
+        forge, "RECIPE_PATH", repository_b.joinpath(*forge.RECIPE_RELATIVE_PATH.parts)
+    )
+    assert forge.validate_fixture_inventory_file(inventory_path) == inventory
+
+    relocated_profile = repository_b.joinpath(*forge.PROFILE_RELATIVE_PATH.parts)
+    relocated_profile.write_bytes(relocated_profile.read_bytes() + b"\n ")
+    with pytest.raises(forge.FixtureForgeError, match="differs from current bytes"):
         forge.validate_fixture_inventory_file(inventory_path)
 
 

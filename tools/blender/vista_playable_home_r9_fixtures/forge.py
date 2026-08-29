@@ -27,12 +27,14 @@ from dataclasses import dataclass
 from typing import Any
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parents[3]
-PROFILE_PATH = (
-    REPOSITORY_ROOT
-    / "world_packs/vista_playable_home_r1/visual_profiles"
-    / "hssd_r2_citysample_live_r1.json"
+PROFILE_RELATIVE_PATH = pathlib.PurePosixPath(
+    "world_packs/vista_playable_home_r1/visual_profiles/hssd_r2_citysample_live_r1.json"
 )
+PROFILE_PATH = REPOSITORY_ROOT.joinpath(*PROFILE_RELATIVE_PATH.parts)
 PACKAGE_ROOT = pathlib.Path(__file__).resolve().parent
+RECIPE_RELATIVE_PATH = pathlib.PurePosixPath(
+    "tools/blender/vista_playable_home_r9_fixtures/recipe.json"
+)
 RECIPE_PATH = PACKAGE_ROOT / "recipe.json"
 WORKER_PATH = PACKAGE_ROOT / "blender_worker.py"
 DEFAULT_BLENDER = pathlib.Path("/home/yhliu/.local/opt/blender-4.5.8-linux-x64/blender")
@@ -248,6 +250,38 @@ def file_pin(path: pathlib.Path, *, maximum_bytes: int | None = None) -> dict:
     }
 
 
+def repo_source_pin(
+    path: pathlib.Path,
+    *,
+    content_digest_value: str,
+    repository_root: pathlib.Path | None = None,
+) -> dict:
+    root = REPOSITORY_ROOT if repository_root is None else pathlib.Path(repository_root)
+    candidate = pathlib.Path(path)
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError as exc:
+        raise FixtureForgeError(
+            "FIXTURE_SOURCE_IDENTITY_INVALID",
+            "repository source is outside the active repository root",
+        ) from exc
+    relative_path = pathlib.PurePosixPath(relative.as_posix())
+    if (
+        relative_path.is_absolute()
+        or ".." in relative_path.parts
+        or not relative_path.parts
+    ):
+        _fail("FIXTURE_SOURCE_IDENTITY_INVALID", "repository source path is unsafe")
+    _require_sha256(content_digest_value, "repository source content digest")
+    pin = file_pin(candidate)
+    return {
+        "relative_path": relative_path.as_posix(),
+        "sha256": pin["sha256"],
+        "size_bytes": pin["size_bytes"],
+        "content_digest": content_digest_value,
+    }
+
+
 def _require_keys(value: Mapping[str, Any], expected: set[str], label: str) -> None:
     if type(value) is not dict or set(value) != expected:
         _fail(
@@ -304,6 +338,33 @@ def _validate_file_pin(
     _require_positive_int(value["size_bytes"], f"{label}.size_bytes")
     if include_content_digest:
         _require_sha256(value["content_digest"], f"{label}.content_digest")
+
+
+def _validate_repo_source_pin(
+    value: Mapping[str, Any],
+    label: str,
+    *,
+    expected_relative_path: pathlib.PurePosixPath,
+    current_path: pathlib.Path,
+    current_content_digest: str,
+) -> None:
+    _require_keys(
+        value,
+        {"relative_path", "sha256", "size_bytes", "content_digest"},
+        label,
+    )
+    _require_string(
+        value["relative_path"], expected_relative_path.as_posix(), f"{label}.path"
+    )
+    _require_sha256(value["sha256"], f"{label}.sha256")
+    _require_positive_int(value["size_bytes"], f"{label}.size_bytes")
+    _require_sha256(value["content_digest"], f"{label}.content_digest")
+    expected = repo_source_pin(
+        current_path,
+        content_digest_value=current_content_digest,
+    )
+    if value != expected:
+        _fail("FIXTURE_SOURCE_IDENTITY_DRIFT", f"{label} differs from current bytes")
 
 
 def _require_int(value: Any, expected: int, label: str) -> None:
@@ -365,7 +426,8 @@ def _validate_bounds(value: Mapping[str, Any], label: str, *, suffix: str) -> No
         _fail("FIXTURE_PROFILE_INVALID", f"{label} bounds are not positive")
 
 
-def load_profile(path: pathlib.Path = PROFILE_PATH) -> dict:
+def load_profile(path: pathlib.Path | None = None) -> dict:
+    path = PROFILE_PATH if path is None else pathlib.Path(path)
     profile = load_json(path)
     _require_keys(
         profile,
@@ -895,7 +957,8 @@ def load_profile(path: pathlib.Path = PROFILE_PATH) -> dict:
     return profile
 
 
-def load_recipe(path: pathlib.Path = RECIPE_PATH) -> dict:
+def load_recipe(path: pathlib.Path | None = None) -> dict:
+    path = RECIPE_PATH if path is None else pathlib.Path(path)
     recipe = load_json(path)
     _require_keys(
         recipe,
@@ -1115,14 +1178,17 @@ class ForgeConfig:
 
 
 def _source_pins() -> list[dict]:
-    return [
-        {
-            "relative_path": path.relative_to(REPOSITORY_ROOT).as_posix(),
-            "sha256": file_pin(path)["sha256"],
-            "size_bytes": path.stat().st_size,
-        }
-        for path in EXPECTED_SOURCE_FILES
-    ]
+    pins = []
+    for path in EXPECTED_SOURCE_FILES:
+        pin = file_pin(path)
+        pins.append(
+            {
+                "relative_path": path.relative_to(REPOSITORY_ROOT).as_posix(),
+                "sha256": pin["sha256"],
+                "size_bytes": pin["size_bytes"],
+            }
+        )
+    return pins
 
 
 def build_plan(config: ForgeConfig) -> dict:
@@ -1140,14 +1206,12 @@ def build_plan(config: ForgeConfig) -> dict:
             "mode": mode,
             "attempt_name": config.attempt_name,
             "output_root": str(config.output_root),
-            "profile": {
-                **file_pin(PROFILE_PATH),
-                "content_digest": profile["content_digest"],
-            },
-            "recipe": {
-                **file_pin(RECIPE_PATH),
-                "content_digest": recipe["content_digest"],
-            },
+            "profile": repo_source_pin(
+                PROFILE_PATH, content_digest_value=profile["content_digest"]
+            ),
+            "recipe": repo_source_pin(
+                RECIPE_PATH, content_digest_value=recipe["content_digest"]
+            ),
             "builder_sources": _source_pins(),
             "toolchain": observed_toolchain,
             "archetypes": [
@@ -1228,6 +1292,22 @@ def validate_plan(plan: Mapping[str, Any], *, expected_mode: str | None = None) 
     _validate_digest(plan, "forge plan")
     if expected_mode is not None and plan["mode"] != expected_mode:
         _fail("FIXTURE_PLAN_INVALID", "plan mode differs")
+    profile = load_profile()
+    recipe = load_recipe()
+    _validate_repo_source_pin(
+        plan["profile"],
+        "plan profile pin",
+        expected_relative_path=PROFILE_RELATIVE_PATH,
+        current_path=PROFILE_PATH,
+        current_content_digest=profile["content_digest"],
+    )
+    _validate_repo_source_pin(
+        plan["recipe"],
+        "plan recipe pin",
+        expected_relative_path=RECIPE_RELATIVE_PATH,
+        current_path=RECIPE_PATH,
+        current_content_digest=recipe["content_digest"],
+    )
     applying = plan["mode"] == "apply"
     _require_bool(plan["will_write"], applying, "plan.will_write")
     _require_bool(plan["will_execute_blender"], applying, "plan.will_execute_blender")
@@ -1270,8 +1350,8 @@ def _worker_request(plan: Mapping[str, Any]) -> dict:
         {
             "schema_version": WORKER_REQUEST_SCHEMA,
             "plan_content_digest": plan["content_digest"],
-            "profile_content_digest": plan["profile"]["content_digest"],
-            "recipe_content_digest": plan["recipe"]["content_digest"],
+            "profile": copy.deepcopy(plan["profile"]),
+            "recipe": copy.deepcopy(plan["recipe"]),
             "output_root": plan["output_root"],
             "archetypes": copy.deepcopy(plan["archetypes"]),
             "execution_policy": copy.deepcopy(plan["execution_policy"]),
@@ -1286,8 +1366,8 @@ def validate_worker_request(value: Mapping[str, Any]) -> None:
         {
             "schema_version",
             "plan_content_digest",
-            "profile_content_digest",
-            "recipe_content_digest",
+            "profile",
+            "recipe",
             "output_root",
             "archetypes",
             "execution_policy",
@@ -1299,6 +1379,22 @@ def validate_worker_request(value: Mapping[str, Any]) -> None:
     if value["schema_version"] != WORKER_REQUEST_SCHEMA:
         _fail("FIXTURE_WORKER_REQUEST_INVALID", "worker request schema drifted")
     _validate_digest(value, "worker request")
+    profile = load_profile()
+    recipe = load_recipe()
+    _validate_repo_source_pin(
+        value["profile"],
+        "worker request profile pin",
+        expected_relative_path=PROFILE_RELATIVE_PATH,
+        current_path=PROFILE_PATH,
+        current_content_digest=profile["content_digest"],
+    )
+    _validate_repo_source_pin(
+        value["recipe"],
+        "worker request recipe pin",
+        expected_relative_path=RECIPE_RELATIVE_PATH,
+        current_path=RECIPE_PATH,
+        current_content_digest=recipe["content_digest"],
+    )
     _require_list(value["archetypes"], "worker request archetypes", count=3)
 
 
@@ -1536,8 +1632,8 @@ def _artifact_receipt(value: Mapping[str, Any], archetype: Mapping[str, Any]) ->
         {
             "schema_version",
             "plan_content_digest",
-            "profile_content_digest",
-            "recipe_content_digest",
+            "profile",
+            "recipe",
             "archetype_id",
             "glb",
             "preview",
@@ -1552,6 +1648,22 @@ def _artifact_receipt(value: Mapping[str, Any], archetype: Mapping[str, Any]) ->
     if value["schema_version"] != ARTIFACT_RECEIPT_SCHEMA:
         _fail("FIXTURE_RECEIPT_INVALID", "artifact receipt schema drifted")
     _validate_digest(value, "artifact receipt")
+    profile = load_profile()
+    recipe = load_recipe()
+    _validate_repo_source_pin(
+        value["profile"],
+        "artifact receipt profile pin",
+        expected_relative_path=PROFILE_RELATIVE_PATH,
+        current_path=PROFILE_PATH,
+        current_content_digest=profile["content_digest"],
+    )
+    _validate_repo_source_pin(
+        value["recipe"],
+        "artifact receipt recipe pin",
+        expected_relative_path=RECIPE_RELATIVE_PATH,
+        current_path=RECIPE_PATH,
+        current_content_digest=recipe["content_digest"],
+    )
     if value["archetype_id"] != archetype["archetype_id"]:
         _fail("FIXTURE_RECEIPT_INVALID", "artifact archetype drifted")
     _require_keys(
@@ -1664,8 +1776,8 @@ def _validate_worker_result(value: Mapping[str, Any]) -> None:
         {
             "schema_version",
             "plan_content_digest",
-            "profile_content_digest",
-            "recipe_content_digest",
+            "profile",
+            "recipe",
             "artifact_count",
             "artifacts",
             "execution",
@@ -1678,6 +1790,22 @@ def _validate_worker_result(value: Mapping[str, Any]) -> None:
     if value["schema_version"] != WORKER_RESULT_SCHEMA:
         _fail("FIXTURE_WORKER_RESULT_INVALID", "worker result schema drifted")
     _validate_digest(value, "worker result")
+    profile = load_profile()
+    recipe = load_recipe()
+    _validate_repo_source_pin(
+        value["profile"],
+        "worker result profile pin",
+        expected_relative_path=PROFILE_RELATIVE_PATH,
+        current_path=PROFILE_PATH,
+        current_content_digest=profile["content_digest"],
+    )
+    _validate_repo_source_pin(
+        value["recipe"],
+        "worker result recipe pin",
+        expected_relative_path=RECIPE_RELATIVE_PATH,
+        current_path=RECIPE_PATH,
+        current_content_digest=recipe["content_digest"],
+    )
     _require_int(value["artifact_count"], 3, "worker artifact count")
     artifacts = _require_list(value["artifacts"], "worker artifacts", count=3)
     for row in artifacts:
@@ -1823,6 +1951,11 @@ def _build_inventory(
         for item in profile["fixture_imports"]["glb_inventory"]
     }
     _validate_worker_result(worker_result)
+    if (
+        worker_result["profile"] != plan["profile"]
+        or worker_result["recipe"] != plan["recipe"]
+    ):
+        _fail("FIXTURE_WORKER_RESULT_INVALID", "worker source identities drifted")
     worker_by_id = {item["archetype_id"]: item for item in worker_result["artifacts"]}
     rows = []
     for plan_row in plan["archetypes"]:
@@ -1836,6 +1969,8 @@ def _build_inventory(
         receipt_raw = _read_regular_file(receipt_path)
         receipt = load_json(receipt_path)
         _artifact_receipt(receipt, recipe_row)
+        if receipt["profile"] != plan["profile"] or receipt["recipe"] != plan["recipe"]:
+            _fail("FIXTURE_RECEIPT_DRIFT", "artifact source identities drifted")
         if receipt["glb"] != {"path": plan_row["glb"], **glb}:
             _fail("FIXTURE_RECEIPT_DRIFT", "artifact GLB receipt differs from bytes")
         if receipt["preview"] != {"path": plan_row["preview"], **preview}:
@@ -1908,17 +2043,21 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
     if value["schema_version"] != INVENTORY_SCHEMA:
         _fail("FIXTURE_INVENTORY_INVALID", "fixture inventory schema drifted")
     _validate_digest(value, "fixture inventory")
-    _validate_file_pin(
+    profile = load_profile()
+    recipe = load_recipe()
+    _validate_repo_source_pin(
         value["profile"],
         "inventory profile pin",
-        expected_path=str(PROFILE_PATH),
-        include_content_digest=True,
+        expected_relative_path=PROFILE_RELATIVE_PATH,
+        current_path=PROFILE_PATH,
+        current_content_digest=profile["content_digest"],
     )
-    _validate_file_pin(
+    _validate_repo_source_pin(
         value["recipe"],
         "inventory recipe pin",
-        expected_path=str(RECIPE_PATH),
-        include_content_digest=True,
+        expected_relative_path=RECIPE_RELATIVE_PATH,
+        current_path=RECIPE_PATH,
+        current_content_digest=recipe["content_digest"],
     )
     _require_sha256(value["forge_plan_content_digest"], "forge plan digest")
     _require_sha256(value["worker_result_content_digest"], "worker result digest")
@@ -1989,7 +2128,6 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
     )
     if tuple(row["archetype_id"] for row in artifacts) != EXPECTED_ARCHETYPE_IDS:
         _fail("FIXTURE_INVENTORY_INVALID", "fixture artifact ordering drifted")
-    profile = load_profile()
     imports_by_id = {
         row["archetype_id"]: row for row in profile["fixture_imports"]["glb_inventory"]
     }
@@ -2082,16 +2220,6 @@ def validate_fixture_inventory_file(path: pathlib.Path) -> dict:
         ) from exc
     value = load_json(path)
     validate_fixture_inventory(value)
-    if value["profile"] != {
-        **file_pin(PROFILE_PATH),
-        "content_digest": load_profile()["content_digest"],
-    }:
-        _fail("FIXTURE_INVENTORY_DRIFT", "checked-in profile pin differs")
-    if value["recipe"] != {
-        **file_pin(RECIPE_PATH),
-        "content_digest": load_recipe()["content_digest"],
-    }:
-        _fail("FIXTURE_INVENTORY_DRIFT", "checked-in recipe pin differs")
     output_root = pathlib.Path(path).parent
     recipe = load_recipe()
     by_id = {item["archetype_id"]: item for item in recipe["archetypes"]}
