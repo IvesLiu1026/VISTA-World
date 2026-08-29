@@ -1463,11 +1463,24 @@
   ],
   "fixture_forge": {
     "blender": {
-      "path": "/home/yhliu/.local/opt/blender-4.5.8-linux-x64/blender",
+      "path": "/data/vista-authorities/blender-4.5.8-r1/distribution/blender",
       "version": "4.5.8 LTS",
       "sha256": "86b39e16cf8043a93de6b4ac5e23399d790f662c644573f600398a3c3bd121eb",
       "size_bytes": 163587256,
-      "execution_device": "CPU"
+      "execution_device": "CPU",
+      "authority": {
+        "authority_id": "blender-4.5.8-r1",
+        "root": "/data/vista-authorities/blender-4.5.8-r1",
+        "distribution_root": "/data/vista-authorities/blender-4.5.8-r1/distribution",
+        "manifest_path": "/data/vista-authorities/blender-4.5.8-r1/distribution-manifest.json",
+        "manifest_schema_version": "vista.immutable-blender-authority-manifest/v1",
+        "official_archive": {
+          "official_url": "https://download.blender.org/release/Blender4.5/blender-4.5.8-linux-x64.tar.xz",
+          "sha256": "8cc3997ca2148a43187ca625f150b41bd3ef7c2991988725a34b46cbf25ba82f",
+          "size_bytes": 377902300
+        },
+        "root_owned_nonwritable_required": true
+      }
     },
     "recipe": {
       "relative_path": "tools/blender/vista_playable_home_r9_fixtures/recipe.json",
@@ -1496,15 +1509,18 @@
       "receipts/pendant.json"
     ],
     "inventory_path": "fixture-inventory.json",
-    "inventory_schema_version": "simworld.vista.playable-home-r9-fixture-inventory/v2",
+    "inventory_schema_version": "simworld.vista.playable-home-r9-fixture-inventory/v3",
     "inventory_status": "fixture_inventory_sealed_snapshot_provenance_not_ue_imported",
     "inventory_top_level_keys": [
+      "archetypes",
       "artifact_count",
       "artifacts",
       "binary_payload_in_git",
       "claims",
       "content_digest",
+      "execution_policy",
       "forge_plan",
+      "output_root",
       "profile",
       "recipe",
       "schema_version",
@@ -1512,6 +1528,7 @@
       "status",
       "toolchain",
       "ue_package_inventory",
+      "worker_request",
       "worker_result"
     ],
     "output_policy": "append_only_git_external_no_caller_output_override"
@@ -2153,5 +2170,5 @@
     "photoreal_character_accepted": false,
     "gta_level_quality": false
   },
-  "content_digest": "f90659d60384edfaabdc34cdfd4a5b3aa0cd8d0226b59fe694e018a86874b314"
+  "content_digest": "105fc5270594b0667b8616f2fa5a583757f45c25017db49a263be2d7e68967f2"
 }
