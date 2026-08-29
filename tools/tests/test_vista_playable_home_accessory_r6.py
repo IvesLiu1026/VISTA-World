@@ -675,7 +675,7 @@ def _load_commandlet(monkeypatch: pytest.MonkeyPatch):
     return module, fake
 
 
-def test_component_observation_uses_ue57_reflection_for_mobility(
+def test_component_observation_uses_reflection_and_serialized_physics(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     commandlet, unreal = _load_commandlet(monkeypatch)
@@ -690,6 +690,16 @@ def test_component_observation_uses_ue57_reflection_for_mobility(
         def get_path_name(self):
             return "/Game/Fixture/phone.phone"
 
+    class BodyInstance:
+        def __init__(self, value=True, *, missing=False):
+            self.value = value
+            self.missing = missing
+
+        def get_editor_property(self, name):
+            if self.missing or name != "simulate_physics":
+                raise AttributeError(name)
+            return self.value
+
     class ReflectionOnlyComponent(unreal.StaticMeshComponent):
         def __init__(self):
             self.values = {
@@ -699,7 +709,7 @@ def test_component_observation_uses_ue57_reflection_for_mobility(
                 "relative_scale3d": unreal.Vector(1.0, 1.0, 1.0),
                 "visible": True,
                 "mobility": Mobility(),
-                "simulate_physics": False,
+                "body_instance": BodyInstance(True),
                 "generate_overlap_events": False,
                 "can_ever_affect_navigation": False,
                 "cast_shadow": True,
@@ -724,14 +734,26 @@ def test_component_observation_uses_ue57_reflection_for_mobility(
         def get_collision_profile_name(self):
             return "BlockAllDynamic"
 
+        def is_simulating_physics(self):
+            return False
+
     component = ReflectionOnlyComponent()
     assert not hasattr(component, "get_mobility")
-    assert not hasattr(component, "is_simulating_physics")
+    assert "simulate_physics" not in component.values
+    assert component.is_simulating_physics() is False
 
     observation = commandlet.component_observation(component, "PickupMesh")
 
     assert observation["mobility"] == "ComponentMobility.MOVABLE"
-    assert observation["simulate_physics"] is False
+    assert observation["simulate_physics"] is True
+
+    component.values["body_instance"] = BodyInstance(missing=True)
+    with pytest.raises(commandlet.CommandletFailure, match="property is unavailable"):
+        commandlet.component_observation(component, "PickupMesh")
+
+    component.values["body_instance"] = BodyInstance("true")
+    with pytest.raises(commandlet.CommandletFailure, match="boolean differs"):
+        commandlet.component_observation(component, "PickupMesh")
 
 
 def test_reflection_bounds_fit_is_deterministic_and_uniform(
