@@ -98,6 +98,15 @@ public:
         return PhysicalDisposition.Disposition;
     }
 
+#if WITH_DEV_AUTOMATION_TESTS
+    /** Exact replicated payload for non-Shipping multi-client proof code. */
+    FVistaPickupReplicatedDisposition
+    GetReplicatedDispositionForDevAutomation() const
+    {
+        return PhysicalDisposition;
+    }
+#endif
+
     virtual FVistaEntityRuntimeState VistaGetRuntimeState_Implementation() const override;
     virtual FVistaInteractionResult VistaApplyRuntimeState_Implementation(
         const FVistaEntityRuntimeState& State) override;
