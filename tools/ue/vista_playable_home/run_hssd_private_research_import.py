@@ -862,14 +862,34 @@ def _validate_terminal(
     attempt: pathlib.Path,
     execution: Mapping[str, Any],
     stdout_path: pathlib.Path,
+    *,
+    source_document_sha256: Mapping[str, str] | None = None,
+    source_content_digests: Mapping[str, str] | None = None,
+    source_profile_content_digest: str | None = None,
+    source_inventory_gate: str = "exact_r7_source_inventory_verified",
 ) -> dict[str, Any]:
+    document_sha256 = (
+        hssd.EXPECTED_DOCUMENT_SHA256
+        if source_document_sha256 is None
+        else source_document_sha256
+    )
+    content_digests = (
+        hssd.EXPECTED_CONTENT_DIGESTS
+        if source_content_digests is None
+        else source_content_digests
+    )
+    profile_content_digest = (
+        hssd.PROFILE_CONTENT_DIGEST
+        if source_profile_content_digest is None
+        else source_profile_content_digest
+    )
     receipt_path = pathlib.Path(execution["import_receipt"])
     result_path = attempt / hssd.IMPORT_RESULT_FILE
     execution_path = attempt / "hssd-execution.json"
     receipt = _strict_json_file(receipt_path, "HSSD import receipt")
     result = _strict_json_file(result_path, "HSSD import result")
     expected_gates = {
-        "exact_r7_source_inventory_verified",
+        source_inventory_gate,
         "compatibility_derivatives_revalidated",
         "diagnostic_nonpromotable_disposition_recorded",
         "namespace_fresh",
@@ -892,15 +912,13 @@ def _validate_terminal(
         "execution_manifest": str(execution_path),
         "execution_manifest_sha256": _sha256(execution_path),
         "source_run": execution["source_run"]["path"],
-        "build_plan_sha256": hssd.EXPECTED_DOCUMENT_SHA256["build-plan.json"],
-        "build_plan_content_digest": hssd.EXPECTED_CONTENT_DIGESTS["build-plan.json"],
-        "build_result_sha256": hssd.EXPECTED_DOCUMENT_SHA256["build-result.json"],
-        "build_result_content_digest": hssd.EXPECTED_CONTENT_DIGESTS[
-            "build-result.json"
-        ],
-        "scene_plan_sha256": hssd.EXPECTED_DOCUMENT_SHA256["scene-plan.json"],
-        "scene_plan_content_digest": hssd.EXPECTED_CONTENT_DIGESTS["scene-plan.json"],
-        "profile_content_digest": hssd.PROFILE_CONTENT_DIGEST,
+        "build_plan_sha256": document_sha256["build-plan.json"],
+        "build_plan_content_digest": content_digests["build-plan.json"],
+        "build_result_sha256": document_sha256["build-result.json"],
+        "build_result_content_digest": content_digests["build-result.json"],
+        "scene_plan_sha256": document_sha256["scene-plan.json"],
+        "scene_plan_content_digest": content_digests["scene-plan.json"],
+        "profile_content_digest": profile_content_digest,
         "compatibility_aggregate_receipt_sha256": execution["compatibility"][
             "aggregate_receipt_sha256"
         ],
