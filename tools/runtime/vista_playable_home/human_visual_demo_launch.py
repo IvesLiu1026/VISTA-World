@@ -464,8 +464,8 @@ ACCESSORY_R6_TRUSTED_SCRIPTS = {
     "commandlet": {
         "path": ACCESSORY_R6_TRUSTED_SOURCE_ROOT
         / "tools/ue/vista_playable_home/compose_accessory_r6_commandlet.py",
-        "sha256": "6f952553bcb0752399bce1df4253838643783e87410400b652be4e044ed321dc",
-        "size_bytes": 39_180,
+        "sha256": "48520d945ae3e8ee0f523184a9606841b9674d5f1b1fbf7133fdc47d3242b2e0",
+        "size_bytes": 39_710,
     },
 }
 ACCESSORY_R6_ACKNOWLEDGEMENTS = {
