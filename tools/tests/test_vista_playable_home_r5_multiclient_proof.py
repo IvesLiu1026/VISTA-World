@@ -1350,3 +1350,12 @@ def test_checked_in_projection_exactly_seals_current_trusted_source_inputs() -> 
         raw = (ROOT / entry["path"]).read_bytes()
         assert hashlib.sha256(raw).hexdigest() == entry["sha256"]
         assert len(raw) == entry["size_bytes"]
+
+
+def test_editor_visible_proof_components_have_explicit_uht_categories() -> None:
+    header = (
+        ROOT / "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/"
+        "Public/Tests/VistaR5MultiClientProofActors.h"
+    ).read_text()
+    assert header.count('UPROPERTY(VisibleAnywhere, Category = "VISTA|R5 Proof")') == 3
+    assert "UPROPERTY(VisibleAnywhere)" not in header
