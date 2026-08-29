@@ -44,6 +44,11 @@ PROJECT_STATIC_TREE_ALGORITHM = "sha256-path-nul-mode-size-content-v1"
 PROJECT_STATIC_ROOTS = ("Config", "Content", "Plugins")
 MUTABLE_PROJECT_DIRECTORIES = frozenset({"Saved", "Intermediate", "DerivedDataCache"})
 LOCK_ROOT = Path(f"/tmp/vista-human-visual-demo-locks-{os.geteuid()}")
+NETWORK_NAMESPACE_EXECUTABLE = Path("/usr/bin/bwrap")
+NETWORK_NAMESPACE_EXECUTABLE_SHA256 = (
+    "d78807229d616606e339c5988392b9e0ab4a6a6998fa51e4590837f426a12fca"
+)
+NETWORK_NAMESPACE_EXECUTABLE_BYTES = 72_160
 PENDING_STATUS = "human_visual_demo_pending"
 READY_STATUS = "human_visual_demo_process_survived_startup_grace"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -321,12 +326,24 @@ def _artifact_pin(payload: Any, label: str, *, executable: bool = False) -> Arti
     # explicitly reported out-of-scope boundary.
     if executable and _current_process_can_write(metadata):
         raise HumanVisualDemoError(
-            "Unreal executable must not be writable by the current process"
+            f"{label} must not be writable by the current process"
         )
     observed_digest, observed_size = _sha256_file(path, label)
     if (observed_digest, observed_size) != (digest, size_bytes):
         raise HumanVisualDemoError(f"{label} differs from its combined receipt pin")
     return ArtifactPin(path=path, sha256=digest, size_bytes=size_bytes)
+
+
+def _network_namespace_pin() -> ArtifactPin:
+    return _artifact_pin(
+        {
+            "path": str(NETWORK_NAMESPACE_EXECUTABLE),
+            "sha256": NETWORK_NAMESPACE_EXECUTABLE_SHA256,
+            "size_bytes": NETWORK_NAMESPACE_EXECUTABLE_BYTES,
+        },
+        "private network namespace wrapper",
+        executable=True,
+    )
 
 
 def _validate_static_directory(path: Path, label: str) -> None:
@@ -591,6 +608,13 @@ def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
 
 def build_command(inputs: HumanVisualDemoInputs) -> list[str]:
     return [
+        str(NETWORK_NAMESPACE_EXECUTABLE),
+        "--unshare-net",
+        "--die-with-parent",
+        "--dev-bind",
+        "/",
+        "/",
+        "--",
         str(inputs.executable.path),
         str(inputs.project.path),
         inputs.map_object_path,
@@ -661,6 +685,11 @@ def build_plan(inputs: HumanVisualDemoInputs) -> dict[str, Any]:
             "gpu": GPU,
             "width": WIDTH,
             "height": HEIGHT,
+            "network_namespace_wrapper": {
+                "path": str(NETWORK_NAMESPACE_EXECUTABLE),
+                "sha256": NETWORK_NAMESPACE_EXECUTABLE_SHA256,
+                "size_bytes": NETWORK_NAMESPACE_EXECUTABLE_BYTES,
+            },
         },
         "command": command,
         "environment_keys": sorted(sanitized_environment(Path("/private-runtime"))),
@@ -672,6 +701,7 @@ def build_plan(inputs: HumanVisualDemoInputs) -> dict[str, Any]:
             "network_readiness_probe": False,
             "local_zen_autolaunch_disabled": True,
             "apple_arkit_livelink_disabled": True,
+            "private_network_namespace": True,
             "agent_runtime_invoked": False,
             "human_operated_visual_demo_only": True,
             "prohibited_agent_adapter": True,
@@ -821,9 +851,15 @@ def run_human_visual_demo(
             inputs = revalidated
             if stopping_signal is not None:
                 return 128 + stopping_signal
+            namespace_wrapper = _network_namespace_pin()
+            command = build_command(inputs)
+            if command[0] != str(namespace_wrapper.path):
+                raise HumanVisualDemoError(
+                    "private network namespace wrapper binding changed"
+                )
             try:
                 process = popen_factory(
-                    build_command(inputs),
+                    command,
                     cwd=inputs.project.path.parent,
                     env=environment,
                     stdin=subprocess.DEVNULL,
