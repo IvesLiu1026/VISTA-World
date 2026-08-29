@@ -2103,7 +2103,13 @@ def _glb_json(path: pathlib.Path) -> tuple[dict, bytes, bytes]:
     if len(chunks) != 2 or chunks[0][0] != 0x4E4F534A or chunks[1][0] != 0x004E4942:
         _fail("FIXTURE_GLB_INVALID", "GLB must contain exact JSON and BIN chunks")
     try:
-        document = json.loads(chunks[0][1].rstrip(b" \t\r\n\x00").decode("utf-8"))
+        document = json.loads(
+            chunks[0][1].rstrip(b" \t\r\n\x00").decode("utf-8"),
+            parse_constant=_reject_constant,
+            object_pairs_hook=_reject_duplicate_keys,
+        )
+    except FixtureForgeError:
+        raise
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise FixtureForgeError("FIXTURE_GLB_INVALID", "GLB JSON is invalid") from exc
     if type(document) is not dict:
