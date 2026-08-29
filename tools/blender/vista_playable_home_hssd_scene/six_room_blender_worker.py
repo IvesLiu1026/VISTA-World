@@ -397,6 +397,8 @@ def _build_instances_and_secondary_proxies(
         instance = prototype.copy()
         instance.data = prototype.data
         instance.animation_data_clear()
+        if "vista_export_policy" in instance:
+            del instance["vista_export_policy"]
         instance.hide_render = False
         instance.hide_set(False)
         instance.name = (
