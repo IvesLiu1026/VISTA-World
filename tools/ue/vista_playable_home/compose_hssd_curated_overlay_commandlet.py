@@ -301,13 +301,23 @@ def repair_semantic_proxy_query_authority_and_hide(actor):
         component.set_simulate_physics(False)
         component.set_collision_profile_name(unreal.Name("Custom"))
         component.set_collision_enabled(unreal.CollisionEnabled.QUERY_ONLY)
-        component.set_collision_response_to_all_channels(
-            collision_response_value("Ignore")
-        )
-        for channel in curated.SEMANTIC_QUERY_BLOCK_CHANNELS:
-            component.set_collision_response_to_channel(
-                collision_channel(channel), collision_response_value("Block")
+        try:
+            component.set_collision_response_to_all_channels(
+                collision_response_value("Ignore")
             )
+        except Exception as exc:
+            raise RuntimeError(
+                "failed to write Ignore to all semantic proxy collision channels"
+            ) from exc
+        for channel in curated.SEMANTIC_QUERY_BLOCK_CHANNELS:
+            try:
+                component.set_collision_response_to_channel(
+                    collision_channel(channel), collision_response_value("Block")
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    "failed to write semantic proxy Block authority: " + channel
+                ) from exc
         component.set_visibility(False, True)
     actor.set_actor_hidden_in_game(True)
 
@@ -671,6 +681,7 @@ def run():
     semantic_before = []
     semantic_repaired = []
     semantic_reloaded = []
+    semantic_write_sequence_completed = []
     conflicts_before = []
     conflicts_reloaded = []
     allowed_contacts_before = []
@@ -714,6 +725,7 @@ def run():
                 + authority["semantic_target_id"],
             )
             semantic_repaired.append(repaired)
+            semantic_write_sequence_completed.append(authority["semantic_target_id"])
 
         for placement in execution["placements"]:
             stage = {
@@ -882,16 +894,11 @@ def run():
         "exact_2_semantic_proxies_found": len(semantic_before)
         == len(curated.CURATED_SEMANTIC_TARGET_IDS),
         "semantic_proxy_query_authority_repaired": semantic_repaired_verified,
-        "semantic_proxy_non_authority_channels_ignored": semantic_repaired_verified
-        and semantic_reloaded_verified
-        and all(
-            all(
-                response == "Ignore"
-                for channel, response in component["collision_responses"].items()
-                if channel not in curated.SEMANTIC_QUERY_BLOCK_CHANNELS
-            )
-            for observed in [*semantic_repaired, *semantic_reloaded]
-            for component in observed["components"]
+        "semantic_proxy_collision_write_sequence_completed": (
+            semantic_write_sequence_completed
+            == list(curated.CURATED_SEMANTIC_TARGET_IDS)
+            and semantic_repaired_verified
+            and semantic_reloaded_verified
         ),
         "semantic_proxy_visuals_hidden": semantic_repaired_verified
         and all(
@@ -926,6 +933,7 @@ def run():
             "semantic_proxies_before": semantic_before,
             "semantic_proxies_repaired": semantic_repaired,
             "semantic_proxies_reloaded": semantic_reloaded,
+            "semantic_collision_contract": curated.SEMANTIC_COLLISION_CONTRACT,
             "managed_existing_visuals_before": existing_before,
             "managed_existing_visuals_reloaded": existing_reloaded,
             "aabb_conflicts_before_save": conflicts_before,

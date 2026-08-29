@@ -271,22 +271,36 @@ PENDING_CLAIMS = {
     **CLAIMS,
     "curated_hssd_visuals_composed": False,
 }
-SEMANTIC_COLLISION_CHANNELS = (
-    "WorldStatic",
-    "WorldDynamic",
-    "Pawn",
-    "Visibility",
-    "Camera",
-    "PhysicsBody",
-    "Vehicle",
-    "Destructible",
-    *(f"EngineTraceChannel{index}" for index in range(1, 7)),
-    *(f"GameTraceChannel{index}" for index in range(1, 19)),
-)
 SEMANTIC_QUERY_BLOCK_CHANNELS = ("Pawn", "Visibility")
+# UE 5.7's Python ``CollisionChannel`` enum does not expose every reserved
+# EngineTraceChannel/GameTraceChannel slot.  The commandlet therefore observes
+# only the two channels that constitute semantic query authority.  This is an
+# observation boundary, not a weaker mutation: the commandlet still writes
+# Ignore to all channels before applying these two Block overrides.
+SEMANTIC_COLLISION_CHANNELS = SEMANTIC_QUERY_BLOCK_CHANNELS
 SEMANTIC_QUERY_COLLISION_RESPONSES = {
-    channel: "Block" if channel in SEMANTIC_QUERY_BLOCK_CHANNELS else "Ignore"
-    for channel in SEMANTIC_COLLISION_CHANNELS
+    channel: "Block" for channel in SEMANTIC_COLLISION_CHANNELS
+}
+SEMANTIC_COLLISION_CONTRACT = {
+    "ordered_writes": [
+        {
+            "method": "set_collision_response_to_all_channels",
+            "channel_scope": "all_channels",
+            "response": "Ignore",
+        },
+        *(
+            {
+                "method": "set_collision_response_to_channel",
+                "channel": channel,
+                "response": "Block",
+            }
+            for channel in SEMANTIC_QUERY_BLOCK_CHANNELS
+        ),
+    ],
+    "observable_channels": list(SEMANTIC_COLLISION_CHANNELS),
+    "observed_authority_responses": SEMANTIC_QUERY_COLLISION_RESPONSES,
+    "non_authority_channels_observed": False,
+    "non_authority_ignore_persistence_verified": False,
 }
 VISUAL_POLICY = {
     "visual_only": True,
@@ -299,7 +313,7 @@ VISUAL_POLICY = {
     "material_override": False,
     "semantic_proxy_collision_profile": "Custom",
     "semantic_proxy_collision_mode": "QueryOnly",
-    "semantic_proxy_collision_responses": SEMANTIC_QUERY_COLLISION_RESPONSES,
+    "semantic_proxy_collision_contract": SEMANTIC_COLLISION_CONTRACT,
     "aabb_penetration_tolerance_cm": 0.5,
     "aabb_conflict_scope_roles": ["hssd_visual_shell", "ycb_visual_only"],
     "allowed_curated_aabb_contact_pairs": [
@@ -890,12 +904,14 @@ def _semantic_authority_observation_valid(value: Any, semantic_target_id: str) -
 def _semantic_runtime_authority_observation_valid(
     value: Any, semantic_target_id: str
 ) -> bool:
-    """Validate the complete minimal query-only collision matrix we compose.
+    """Validate the exact query authority that UE Python can observe.
 
-    The Phase-2 receipt only observed Pawn and Visibility.  It is therefore
-    valid placement evidence, but it cannot prove that unobserved channels are
-    non-blocking.  The curated commandlet observes every built-in engine/game
-    channel and must independently establish this stricter runtime authority.
+    Pawn and Visibility are the only interaction-authority channels.  The
+    commandlet writes Ignore to all channels first, but UE 5.7 Python does not
+    expose every reserved channel for a post-write read.  Accordingly this
+    predicate proves the two Block overrides, not persistence of the
+    unobservable non-authority responses.  ``SEMANTIC_COLLISION_CONTRACT``
+    records that limitation explicitly.
     """
 
     if type(value) is not dict:
@@ -2250,8 +2266,8 @@ def _expected_scene_bindings(execution: Mapping[str, Any]) -> dict[str, Any]:
         "selected_package_seals_sha256": hashlib.sha256(
             _canonical_json(execution["selected_package_seals"])
         ).hexdigest(),
-        "semantic_collision_policy_sha256": hashlib.sha256(
-            _canonical_json(SEMANTIC_QUERY_COLLISION_RESPONSES)
+        "semantic_collision_contract_sha256": hashlib.sha256(
+            _canonical_json(SEMANTIC_COLLISION_CONTRACT)
         ).hexdigest(),
     }
 
@@ -2300,7 +2316,7 @@ def validate_terminal(
         "only_pinned_curated_aabb_contacts_observed",
         "exact_2_semantic_proxies_found",
         "semantic_proxy_query_authority_repaired",
-        "semantic_proxy_non_authority_channels_ignored",
+        "semantic_proxy_collision_write_sequence_completed",
         "semantic_proxy_visuals_hidden",
         "semantic_proxy_authority_reloaded",
         "screenshots_captured",
@@ -2323,6 +2339,7 @@ def validate_terminal(
         and receipt.get("room_counts") == CURATED_ROOM_COUNTS
         and receipt.get("license") == execution["license"]
         and receipt.get("claims") == CLAIMS
+        and receipt.get("semantic_collision_contract") == SEMANTIC_COLLISION_CONTRACT
         and type(semantic_before) is list
         and type(semantic_repaired) is list
         and type(semantic_reloaded) is list
@@ -2767,6 +2784,7 @@ def _build_success_host_receipt(
             "placement_count": len(scene["actors_reloaded"]),
             "semantic_proxy_authority_count": len(scene["semantic_proxies_reloaded"]),
             "semantic_proxy_query_authority_repaired_and_reloaded": True,
+            "semantic_collision_contract": copy.deepcopy(SEMANTIC_COLLISION_CONTRACT),
             "room_counts": dict(CURATED_ROOM_COUNTS),
             "content_namespace": HSSD_NAMESPACE,
             "external_hssd_payload_copied": False,
