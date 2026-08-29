@@ -31,6 +31,8 @@ def _inputs(tmp_path: Path) -> package.PackagePlanInputs:
         executable=source_lane.ArtifactPin(executable, "d" * 64, 1),
         map_object_path=package.MAP_PATH,
         map_package=source_lane.ArtifactPin(map_package, "e" * 64, 1),
+        receipt_schema_version=source_lane.COMBINED_RECEIPT_SCHEMA_V2,
+        realism_r4_upgrade=None,
     )
     run_uat = package.FileSeal(
         tmp_path / package.RUN_UAT_SUFFIX,

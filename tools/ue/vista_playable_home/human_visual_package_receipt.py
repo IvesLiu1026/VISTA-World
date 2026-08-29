@@ -776,6 +776,8 @@ def validate_plan_inputs(
     if (
         not hmac.compare_digest(source.receipt_sha256, supplied_source_sha)
         or source.receipt_content_digest != PINNED_SOURCE_CONTENT_DIGEST
+        or source.receipt_schema_version != source_lane.COMBINED_RECEIPT_SCHEMA_V2
+        or source.realism_r4_upgrade is not None
     ):
         _fail("SOURCE_RECEIPT_PIN_MISMATCH", "sealed R3 combined receipt differs")
     _validate_source_project(source.project.path)
