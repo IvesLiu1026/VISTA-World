@@ -51,8 +51,8 @@ PINNED_CONTENT_METADATA_PROJECTION_SHA256 = (
 )
 SANITIZED_CONFIG_PINS = {
     "Config/DefaultEngine.ini": (
-        "248f5102b5d2e79ed15d09df853049e7b4bb071f9ac834f4ff5b7d585c0c212e",
-        165,
+        "8bc06b2ab9052750b211412b6968f7489ed8fba65f1a9a274a64e8c1ee004d67",
+        369,
     ),
     "Config/DefaultGame.ini": (
         "33423326f1f164ae90d27ad3cd2b6ca5e721e06be626a4b58b613c2a392ce1a7",
@@ -880,6 +880,7 @@ def _validate_request(
     require(
         project.get("Plugins")
         == [
+            {"Enabled": False, "Name": "AndroidFileServer"},
             {"Enabled": True, "Name": "EditorScriptingUtilities"},
             {"Enabled": True, "Name": "HairStrands"},
             {"Enabled": True, "Name": "MassGameplay"},
