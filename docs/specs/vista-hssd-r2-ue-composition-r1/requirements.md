@@ -81,16 +81,24 @@ execute UE 5.7.3 with NullRHI/no network, save/reload the map and never mutate
 the live runtime or any prior attempt.
 
 No network SHALL mean a pinned Bubblewrap `--unshare-net` OS namespace in
-addition to UE transport flags. The final scene and host receipts SHALL bind
-that isolation contract. Concurrent transient mutation by another process with
-the same Unix UID is outside this lane's threat model; persistent drift is
-detected by the pre/post execution revalidation.
+addition to UE transport flags. Bubblewrap SHALL also create a PID namespace so
+its reaper/kernel lifecycle removes sandbox descendants when the direct UE
+process exits, and UE SHALL receive `-notraceserver`. After direct exit the host
+SHALL terminate any remaining host process group, require three same-FD
+stat/SHA-256-stable stdout and engine-log observations, and recheck all sealed
+log, execution, scene, map and receipt bytes immediately before publication.
+The final scene and host receipts SHALL bind that isolation and closure
+contract. A standalone host revalidator SHALL compare every receipt hash to the
+current artifacts, so persistent post-run drift fails closed. Transient writes
+from an unrelated same-UID process outside the sandbox remain outside the
+absolute threat model and receive only bounded stable-observation detection.
 
 ### R6 — Pure reviewability
 
 CPU-only tests SHALL cover exact plan binding, identity-preserving transform
 projection, drift rejection, dry-run zero-write behavior, terminal receipt
-binding and all negative claims without running UE, Blender, GPU or network.
+binding, after-return log mutation, every current host-artifact hash and all
+negative claims without running UE, Blender, GPU or network.
 
 ## Approval
 

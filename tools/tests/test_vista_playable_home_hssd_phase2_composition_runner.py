@@ -166,6 +166,15 @@ def test_dry_run_is_zero_write_and_keeps_nonacceptance_claims(
     assert plan["policy"] == runner.PHASE2_POLICY
     assert plan["policy"]["network_isolation"] == "bubblewrap_unshare_net"
     assert plan["toolchain"]["execution_isolation"] == runner.EXECUTION_ISOLATION
+    assert "--unshare-pid" in runner.BWRAP_PREFIX
+    assert "-notraceserver" in runner.UNREAL_ISOLATION_FLAGS
+    assert plan["toolchain"]["execution_isolation"]["required_unreal_flags"] == list(
+        runner.UNREAL_ISOLATION_FLAGS
+    )
+    assert (
+        plan["toolchain"]["execution_isolation"]["trace_server"]
+        == "disabled_by_-notraceserver"
+    )
     assert plan["policy"]["semantic_proxy_collision_seed_profile"] == "BlockAllDynamic"
     assert plan["policy"]["semantic_proxy_collision_profile"] == "Custom"
     assert plan["policy"]["semantic_proxy_collision_mode"] == "QueryOnly"
@@ -456,6 +465,7 @@ def _terminal_fixture(
             "sha256": expected_sha,
         }
     execution = {
+        "schema_version": runner.EXECUTION_SCHEMA,
         "attempt_root": str(attempt),
         "project_file": str(project_file),
         "project_sha256": runner._sha256(project_file),
@@ -669,10 +679,16 @@ def _terminal_fixture(
     (attempt / runner.SCENE_RESULT_FILE).write_text(
         json.dumps(result), encoding="utf-8"
     )
-    stdout = attempt / "stdout.log"
+    stdout = attempt / "unreal-compose-stdout.log"
     stdout.write_text(
         runner.SCENE_MARKER + json.dumps(result, sort_keys=True), encoding="utf-8"
     )
+    (attempt / "unreal-compose-engine.log").write_text(
+        "LogExit: Exiting.\n", encoding="utf-8"
+    )
+    map_package = attempt / "project" / pathlib.Path(runner.MAP_RELATIVE_FILE)
+    map_package.parent.mkdir(parents=True)
+    map_package.write_bytes(b"sealed-test-map")
     return attempt, execution, stdout, receipt_path
 
 
@@ -695,6 +711,132 @@ def _rewrite_terminal_receipt(
     stdout.write_text(
         runner.SCENE_MARKER + json.dumps(result, sort_keys=True), encoding="utf-8"
     )
+
+
+def _publish_host_fixture(
+    attempt: pathlib.Path,
+    execution: dict,
+    receipt_path: pathlib.Path,
+) -> dict:
+    artifact_paths = runner._host_artifact_paths(attempt)
+    artifact_snapshots = {
+        label: runner._sealed_file_snapshot(path, label)
+        for label, path in artifact_paths.items()
+    }
+    log_snapshots = {
+        label: artifact_snapshots[label] for label in ("stdout log", "engine log")
+    }
+    host = runner._build_host_receipt(
+        attempt,
+        execution,
+        runner._strict_json_file(receipt_path, "fixture scene receipt"),
+        project_projection_before_composition_sha256=(
+            runner.PHASE1_PROJECT_PROJECTION_SHA256
+        ),
+        artifact_snapshots=artifact_snapshots,
+        log_closure=runner._build_log_closure_record("absent", log_snapshots),
+    )
+    (attempt / runner.HOST_RECEIPT_FILE).write_bytes(runner._canonical_json(host))
+    return host
+
+
+def test_post_exit_log_stability_rejects_after_return_mutation(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stdout = tmp_path / "stdout.log"
+    engine = tmp_path / "engine.log"
+    stdout.write_bytes(b"direct process returned\n")
+    engine.write_bytes(b"engine exit\n")
+    sleep_calls = 0
+
+    def append_after_return(_seconds: float) -> None:
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls == 1:
+            with stdout.open("ab") as stream:
+                stream.write(b"detached trace server append\n")
+
+    monkeypatch.setattr(runner.time, "sleep", append_after_return)
+
+    with pytest.raises(runner.RunnerError, match="logs continued changing"):
+        runner._wait_for_stable_file_snapshots(
+            {"stdout log": stdout, "engine log": engine}
+        )
+
+
+def test_normal_exit_terminates_a_residual_process_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ExitedProcess:
+        pid = 424242
+
+        @staticmethod
+        def wait(*, timeout: float) -> int:
+            assert timeout == runner.PROCESS_GROUP_TERM_TIMEOUT_SECONDS
+            return 0
+
+    group_states = iter([True, False])
+    signals = []
+    monkeypatch.setattr(
+        runner,
+        "_process_group_exists",
+        lambda _process_group_id: next(group_states),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_signal_process_group",
+        lambda process_group_id, signum: signals.append((process_group_id, signum)),
+    )
+
+    assert runner._terminate_process_group(ExitedProcess()) == "terminated_sigterm"
+    assert signals == [(424242, runner.signal.SIGTERM)]
+
+
+def test_publication_snapshot_gate_rejects_last_moment_log_drift(
+    tmp_path: pathlib.Path,
+) -> None:
+    stdout = tmp_path / "stdout.log"
+    engine = tmp_path / "engine.log"
+    stdout.write_bytes(b"closed\n")
+    engine.write_bytes(b"closed\n")
+    paths = {"stdout log": stdout, "engine log": engine}
+    snapshots = {
+        label: runner._sealed_file_snapshot(path, label)
+        for label, path in paths.items()
+    }
+    with stdout.open("ab") as stream:
+        stream.write(b"late append\n")
+
+    with pytest.raises(runner.RunnerError, match="changed before publication"):
+        runner._assert_file_snapshots(paths, snapshots)
+
+
+@pytest.mark.parametrize(
+    "artifact_label",
+    [
+        "stdout log",
+        "engine log",
+        "execution manifest",
+        "scene receipt",
+        "map package",
+    ],
+)
+def test_host_receipt_revalidator_rejects_current_artifact_drift(
+    tmp_path: pathlib.Path,
+    artifact_label: str,
+) -> None:
+    attempt, execution, _stdout, receipt_path = _terminal_fixture(tmp_path)
+    _publish_host_fixture(attempt, execution, receipt_path)
+    assert runner.validate_host_receipt(attempt)["status"] == runner.SUCCESS_STATUS
+
+    with runner._host_artifact_paths(attempt)[artifact_label].open("ab") as stream:
+        stream.write(b"post-publication mutation")
+
+    with pytest.raises(
+        runner.RunnerError,
+        match="current " + artifact_label + " digest differs",
+    ):
+        runner.validate_host_receipt(attempt)
 
 
 def test_terminal_validation_requires_all_sixty_safe_reloaded_shells(
@@ -850,7 +992,9 @@ def test_runner_source_contains_nullrhi_containment_and_no_acceptance_claim() ->
     source = pathlib.Path(runner.__file__).read_text(encoding="utf-8")
 
     assert '"-nullrhi"' in source
+    assert '"-notraceserver"' in source
     assert '"--unshare-net"' in source
+    assert '"--unshare-pid"' in source
     assert '"bubblewrap_unshare_net"' in source
     assert '"CUDA_VISIBLE_DEVICES": ""' in source
     assert '"live_runtime_mutation": False' in source
@@ -859,5 +1003,7 @@ def test_runner_source_contains_nullrhi_containment_and_no_acceptance_claim() ->
     assert "os.path.lexists(attempt)" in source
     assert "phase1._read_pinned_regular_file" in source
     assert "phase1._write_exclusive" in source
+    assert "_wait_for_stable_file_snapshots" in source
+    assert "validate_host_receipt" in source
     assert '"gta_level": False' in source
     assert '"character_present": False' in source
