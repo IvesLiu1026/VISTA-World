@@ -911,7 +911,10 @@ def _semantic_runtime_authority_observation_valid(
     expose every reserved channel for a post-write read.  Accordingly this
     predicate proves the two Block overrides, not persistence of the
     unobservable non-authority responses.  ``SEMANTIC_COLLISION_CONTRACT``
-    records that limitation explicitly.
+    records that limitation explicitly.  Navigation, overlap generation, and
+    mobility are deliberately not normalized here: they are non-authority
+    semantic state, and ``_semantic_proxy_immutable_matches`` separately pins
+    their per-proxy Phase-2 values across repair and cold reload.
     """
 
     if type(value) is not dict:
@@ -943,12 +946,101 @@ def _semantic_runtime_authority_observation_valid(
             == set(SEMANTIC_COLLISION_CHANNELS)
             and component.get("collision_enabled") is True
             and component.get("simulate_physics") is False
-            and component.get("generate_overlap_events") is False
-            and component.get("can_ever_affect_navigation") is False
             and component.get("visible") is False
             for component in components
         )
     )
+
+
+def _semantic_proxy_authority_field_diff(
+    value: Any, expected: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    """Return a bounded, JSON-safe diff for post-repair authority fields.
+
+    Only the already-public semantic target id and collision/visibility policy
+    fields are included.  Arbitrary actor properties, environment values, and
+    exception payloads are intentionally excluded so a quarantined receipt
+    cannot become a secret-exfiltration path.
+    """
+
+    missing = {"state": "missing"}
+    differences: list[dict[str, Any]] = []
+
+    def add(field: str, expected_value: Any, actual_value: Any) -> None:
+        if actual_value != expected_value:
+            differences.append(
+                {
+                    "field": field,
+                    "expected": copy.deepcopy(expected_value),
+                    "actual": copy.deepcopy(actual_value),
+                }
+            )
+
+    if type(value) is not dict:
+        add("observation.type", "dict", type(value).__name__)
+        return differences
+
+    add(
+        "semantic_target_id",
+        expected.get("semantic_target_id", missing),
+        value.get("semantic_target_id", missing),
+    )
+    add("actor_hidden_in_game", True, value.get("actor_hidden_in_game", missing))
+    add(
+        "actor_collision_enabled",
+        True,
+        value.get("actor_collision_enabled", missing),
+    )
+
+    expected_components = expected.get("components")
+    actual_components = value.get("components")
+    expected_count = (
+        len(expected_components) if type(expected_components) is list else 1
+    )
+    actual_count = len(actual_components) if type(actual_components) is list else 0
+    add("components.count", expected_count, actual_count)
+    if (
+        type(expected_components) is not list
+        or type(actual_components) is not list
+        or len(expected_components) != len(actual_components)
+    ):
+        return differences
+
+    preserved_fields = (
+        "component_path",
+        "mesh_path",
+        "generate_overlap_events",
+        "can_ever_affect_navigation",
+        "mobility",
+    )
+    authority_values = {
+        "collision_profile": "Custom",
+        "collision_mode": "QueryOnly",
+        "collision_responses": SEMANTIC_QUERY_COLLISION_RESPONSES,
+        "collision_enabled": True,
+        "simulate_physics": False,
+        "visible": False,
+    }
+    for index, (actual, baseline) in enumerate(
+        zip(actual_components, expected_components, strict=True)
+    ):
+        prefix = f"components[{index}]"
+        if type(actual) is not dict or type(baseline) is not dict:
+            add(prefix + ".type", "dict", type(actual).__name__)
+            continue
+        for field in preserved_fields:
+            add(
+                prefix + "." + field,
+                baseline.get(field, missing),
+                actual.get(field, missing),
+            )
+        for field, expected_value in authority_values.items():
+            add(
+                prefix + "." + field,
+                expected_value,
+                actual.get(field, missing),
+            )
+    return differences
 
 
 def _lineage_pin_map(config: Config) -> dict[str, DocumentPin]:
