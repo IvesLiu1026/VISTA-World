@@ -401,6 +401,8 @@ def _build_one(
     glb_repeat = glb_path.with_suffix(".determinism.glb")
     _export_glb(bpy, mesh, glb_path)
     _export_glb(bpy, mesh, glb_repeat)
+    glb_path.chmod(0o600)
+    glb_repeat.chmod(0o600)
     first_glb = forge._read_regular_file(glb_path)
     second_glb = forge._read_regular_file(glb_repeat)
     if first_glb != second_glb:
@@ -413,6 +415,8 @@ def _build_one(
     preview_repeat = preview_path.with_suffix(".determinism.png")
     _render_preview(bpy, preview_path)
     _render_preview(bpy, preview_repeat)
+    preview_path.chmod(0o600)
+    preview_repeat.chmod(0o600)
     first_preview = forge._read_regular_file(preview_path)
     second_preview = forge._read_regular_file(preview_repeat)
     if first_preview != second_preview:
@@ -426,6 +430,8 @@ def _build_one(
             "plan_content_digest": request["plan_content_digest"],
             "profile": request["profile"],
             "recipe": request["recipe"],
+            "builder_sources": request["builder_sources"],
+            "source_snapshot_content_digest": request["source_snapshot_content_digest"],
             "archetype_id": archetype["archetype_id"],
             "glb": {"path": paths["glb"], **glb},
             "preview": {"path": paths["preview"], **preview},
@@ -463,6 +469,7 @@ def _build_one(
 
 
 def run(argv: Sequence[str] | None = None) -> pathlib.Path:
+    os.umask(0o077)
     try:
         import bpy  # type: ignore[import-not-found]
         import mathutils  # type: ignore[import-not-found]
@@ -493,14 +500,31 @@ def run(argv: Sequence[str] | None = None) -> pathlib.Path:
             "FIXTURE_WORKER_REQUEST_PATH_INVALID",
             "request must be the fixed output-root child",
         )
-    request = forge.load_json(request_path)
-    forge.validate_worker_request(request)
-    if request["output_root"] != str(output_root):
-        forge._fail("FIXTURE_WORKER_REQUEST_INVALID", "output root pin drifted")
-    recipe = forge.load_recipe()
-    forge.load_profile()
     expected_plan = forge.load_json(output_root / "forge-plan.json")
     forge.validate_plan(expected_plan, expected_mode="apply")
+    request = forge.load_json(request_path)
+    forge.validate_worker_request(request, expected_plan=expected_plan)
+    if request["output_root"] != str(output_root):
+        forge._fail("FIXTURE_WORKER_REQUEST_INVALID", "output root pin drifted")
+    expected_snapshot_root = output_root / forge.SOURCE_SNAPSHOT_ROOT.as_posix()
+    if (
+        REPOSITORY_ROOT != expected_snapshot_root
+        or forge.REPOSITORY_ROOT != expected_snapshot_root
+    ):
+        forge._fail(
+            "FIXTURE_WORKER_SOURCE_INVALID",
+            "worker and forge must execute from the sealed source snapshot",
+        )
+    if not os.statvfs(REPOSITORY_ROOT).f_flag & os.ST_RDONLY:
+        forge._fail(
+            "FIXTURE_WORKER_SOURCE_INVALID", "source snapshot mount is not read-only"
+        )
+    forge._validate_source_snapshot(
+        output_root, expected_sources=expected_plan["builder_sources"]
+    )
+    forge._validate_output_tree(output_root, stage="request")
+    recipe = forge.load_recipe()
+    forge.load_profile()
     if request["plan_content_digest"] != expected_plan["content_digest"]:
         forge._fail("FIXTURE_WORKER_REQUEST_INVALID", "forge plan pin drifted")
     if request["archetypes"] != expected_plan["archetypes"]:
@@ -522,6 +546,8 @@ def run(argv: Sequence[str] | None = None) -> pathlib.Path:
             "plan_content_digest": request["plan_content_digest"],
             "profile": request["profile"],
             "recipe": request["recipe"],
+            "builder_sources": request["builder_sources"],
+            "source_snapshot_content_digest": request["source_snapshot_content_digest"],
             "artifact_count": 3,
             "artifacts": artifact_rows,
             "execution": {
@@ -530,6 +556,8 @@ def run(argv: Sequence[str] | None = None) -> pathlib.Path:
                 "render_device": "CPU",
                 "network_namespace": "unshared_by_host",
                 "gpu_devices_visible": False,
+                "source_snapshot_root": forge.SOURCE_SNAPSHOT_ROOT.as_posix(),
+                "source_tree_read_only_bind": True,
             },
             "claims": {
                 "ue_imported": False,
@@ -541,6 +569,11 @@ def run(argv: Sequence[str] | None = None) -> pathlib.Path:
     )
     result_path = output_root / "worker-result.json"
     forge._write_exclusive(result_path, forge.canonical_json_bytes(result))
+    forge._validate_source_snapshot(
+        output_root, expected_sources=expected_plan["builder_sources"]
+    )
+    forge._validate_worker_result(result, expected_plan=expected_plan)
+    forge._validate_output_tree(output_root, stage="worker_payload")
     print(
         forge.canonical_json_bytes(
             {
