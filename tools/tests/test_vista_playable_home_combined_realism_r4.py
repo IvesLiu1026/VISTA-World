@@ -295,6 +295,44 @@ def test_commandlet_actor_allowlist_is_closed_and_only_one_destroy_site(
     assert "openai" not in source.lower()
 
 
+def test_commandlet_counts_only_configured_pickup_presentations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commandlet = _load_commandlet(monkeypatch)
+
+    class FakeComponent:
+        def __init__(self, name: str, static_mesh: object | None) -> None:
+            self._name = name
+            self._static_mesh = static_mesh
+
+        def get_name(self) -> str:
+            return self._name
+
+        def get_editor_property(self, name: str) -> object | None:
+            assert name == "static_mesh"
+            return self._static_mesh
+
+    configured = object()
+    component_slots = [
+        FakeComponent(commandlet.PICKUP_PRESENTATION_COMPONENT, configured)
+        for _ in range(commandlet.EXPECTED_SOURCE_COUNTS["pickup_presentations"])
+    ] + [
+        FakeComponent(commandlet.PICKUP_PRESENTATION_COMPONENT, None)
+        for _ in range(
+            commandlet.EXPECTED_SOURCE_COUNTS["pickup_actors"]
+            - commandlet.EXPECTED_SOURCE_COUNTS["pickup_presentations"]
+        )
+    ]
+
+    assert len(component_slots) == commandlet.EXPECTED_SOURCE_COUNTS["pickup_actors"]
+    assert sum(
+        commandlet.configured_pickup_presentation(component)
+        for component in component_slots
+    ) == commandlet.EXPECTED_SOURCE_COUNTS["pickup_presentations"]
+    source = COMMANDLET_SOURCE.read_text(encoding="utf-8")
+    assert source.count("configured_pickup_presentation(") == 4
+
+
 def _source_manifest(project: Path) -> dict[str, dict[str, object]]:
     return {
         relative: {
