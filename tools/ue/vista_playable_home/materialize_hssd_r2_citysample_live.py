@@ -16,7 +16,6 @@ import copy
 import dataclasses
 import hashlib
 import importlib
-import importlib.util
 import json
 import math
 import os
@@ -37,12 +36,15 @@ EXECUTION_SCHEMA = "simworld.vista.hssd-r2-citysample-live-execution/v1"
 RESULT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-result/v1"
 SCENE_RECEIPT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-scene-receipt/v1"
 HOST_RECEIPT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-host-receipt/v1"
+FIXTURE_EVIDENCE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-fixture-evidence/v1"
+COMPLETE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-complete/v1"
 COMBINED_RECEIPT_SCHEMA_V5 = "simworld.vista.human-visual-demo-combined-receipt/v5"
 UPGRADE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-upgrade/v1"
 UPGRADE_STATUS = "hssd_r2_citysample_live_saved_cold_reloaded"
 DRY_RUN_STATUS = "validated_zero_write_hssd_r2_citysample_live_plan"
 APPLY_PLAN_STATUS = "validated_hssd_r2_citysample_live_apply_plan_no_write"
 FAILURE_STATUS = "hssd_r2_citysample_live_attempt_quarantined_no_reuse"
+COMPLETE_STATUS = "hssd_r2_citysample_live_publication_complete"
 EXECUTION_STATUS = "authorized_apply_request"
 
 PROVIDER_ID = "citysample_crowd_visual_demo_v1"
@@ -129,6 +131,7 @@ HOST_RECEIPT_NAME = "hssd-r2-citysample-live-host-receipt.json"
 STDOUT_NAME = "unreal-hssd-r2-citysample-live-stdout.log"
 ENGINE_LOG_NAME = "unreal-hssd-r2-citysample-live-engine.log"
 FAILURE_NAME = "hssd-r2-citysample-live-host-failure.json"
+COMPLETE_NAME = "hssd-r2-citysample-live-host-complete.json"
 RESULT_SIDECAR_NAME = RESULT_NAME + ".sha256"
 SCENE_RECEIPT_SIDECAR_NAME = SCENE_RECEIPT_NAME + ".sha256"
 RESULT_MARKER = "VISTA_HSSD_R2_CITYSAMPLE_LIVE_RESULT:"
@@ -220,10 +223,12 @@ HOST_GATE_KEYS = frozenset(
     {
         "nullrhi_no_gpu",
         "private_network_namespace",
+        "host_credentials_and_sockets_hidden",
         "process_group_closed",
         "logs_stable_post_exit",
         "only_map_plus_fixture_packages_changed",
         "commandlet_receipts_revalidated",
+        "fixture_evidence_manifest_revalidated",
         "current_bytes_revalidated",
     }
 )
@@ -243,6 +248,8 @@ HOST_RECEIPT_KEYS = frozenset(
         "logs",
         "log_closure",
         "static_delta",
+        "fixture_evidence_manifest",
+        "containment",
         "current_byte_revalidation",
         "gates",
         "legal_scope",
@@ -259,7 +266,28 @@ CURRENT_BYTE_KEYS = frozenset(
         "map",
         "project_static_tree",
         "logs",
+        "fixture_evidence_manifest",
         "passed",
+    }
+)
+FIXTURE_EVIDENCE_KEYS = frozenset(
+    {"schema_version", "root", "files", "directories", "tree", "content_digest"}
+)
+FIXTURE_EVIDENCE_FILE_KEYS = frozenset(
+    {"relative_path", "path", "sha256", "size_bytes", "mode"}
+)
+FIXTURE_EVIDENCE_DIRECTORY_KEYS = frozenset({"relative_path", "path", "mode"})
+COMPLETE_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "attempt_root",
+        "combined_receipt",
+        "combined_receipt_sidecar",
+        "host_receipt",
+        "current_state",
+        "failure_absent",
+        "content_digest",
     }
 )
 UE_OBSERVATION_KEYS = frozenset(
@@ -274,6 +302,184 @@ UE_OBSERVATION_KEYS = frozenset(
         "collision",
         "world_before",
         "world_reloaded",
+    }
+)
+EXECUTION_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "attempt_root",
+        "project",
+        "materializer",
+        "commandlet",
+        "finish_profile",
+        "fixture_inventory",
+        "fixture_evidence_manifest",
+        "parent_combined_receipt",
+        "r6_accessory_result",
+        "hssd_r2_authority",
+        "source_project_static_tree",
+        "source_static_manifest",
+        "hssd_namespace",
+        "composition_contract",
+        "engine",
+        "map",
+        "result",
+        "legal_scope",
+        "acknowledgements",
+        "claims",
+        "acceptance",
+        "content_digest",
+    }
+)
+EXECUTION_RESULT_KEYS = frozenset(
+    {
+        "result_path",
+        "result_sidecar_path",
+        "scene_receipt_path",
+        "scene_receipt_sidecar_path",
+    }
+)
+COMPOSITION_KEYS = frozenset(
+    {
+        "migration",
+        "fixture_imports",
+        "collision_policy",
+        "finish_profile_content_digest",
+        "expected_counts",
+    }
+)
+SHELL_MIGRATION_OBSERVATION_KEYS = frozenset(
+    {
+        "reuse_before",
+        "reuse_after_save",
+        "deleted",
+        "spawn_after_save",
+        "static_reloaded",
+    }
+)
+DYNAMIC_OBSERVATION_KEYS = frozenset({"before", "after_save", "reloaded"})
+PRESERVED_OBSERVATION_KEYS = frozenset(
+    {"source_inventory", "reloaded_inventory", "unchanged_actor_paths"}
+)
+FINISH_OBSERVATION_KEYS = frozenset(
+    {
+        "architecture_before",
+        "architecture_after_save",
+        "architecture_reloaded",
+        "fixtures_before",
+        "fixtures_after_save",
+        "fixtures_reloaded",
+        "r4_lights_before",
+        "r4_lights_reloaded",
+        "segments_after_save",
+        "segments_reloaded",
+    }
+)
+COLLISION_OBSERVATION_KEYS = frozenset(
+    {
+        "policy_counts",
+        "semantic_static_before",
+        "semantic_static_after_save",
+        "semantic_static_reloaded",
+        "semantic_dynamic_instance_ids",
+        "secondary_after_save",
+        "secondary_reloaded",
+        "detail_reloaded",
+        "remaining_review_items",
+    }
+)
+ACTOR_OBSERVATION_KEYS = frozenset(
+    {
+        "actor_path",
+        "actor_class_path",
+        "tags",
+        "actor_label",
+        "actor_transform",
+        "actor_hidden_in_game",
+        "actor_collision_enabled",
+        "static_mesh_components",
+        "light_components",
+    }
+)
+STATIC_COMPONENT_OBSERVATION_KEYS = frozenset(
+    {
+        "component_path",
+        "component_name",
+        "mesh_object_path",
+        "relative_transform",
+        "visible",
+        "collision_mode",
+        "collision_profile_name",
+        "collision_responses",
+        "mobility",
+        "attach_parent_component_path",
+        "simulate_physics",
+        "generate_overlap_events",
+        "can_ever_affect_navigation",
+        "cast_shadow",
+        "cast_hidden_shadow",
+        "materials",
+    }
+)
+LIGHT_COMPONENT_OBSERVATION_KEYS = frozenset(
+    {
+        "component_path",
+        "component_name",
+        "visible",
+        "intensity",
+        "temperature_k",
+        "use_temperature",
+        "cast_shadow",
+        "mobility",
+        "attenuation_radius_cm",
+        "intensity_units",
+    }
+)
+SHELL_OBSERVATION_KEYS = frozenset(
+    {
+        "instance_id",
+        "room_id",
+        "source_asset_id",
+        "semantic_target_id",
+        "actor",
+        "actor_label",
+        "actor_transform",
+        "actor_hidden_in_game",
+        "actor_collision_enabled",
+        "component",
+    }
+)
+QUERY_PROXY_OBSERVATION_KEYS = frozenset(
+    {
+        "instance_id",
+        "actor",
+        "actor_label",
+        "actor_transform",
+        "actor_hidden_in_game",
+        "actor_collision_enabled",
+        "component",
+    }
+)
+FIXTURE_IMPORT_OBSERVATION_KEYS = frozenset(
+    {
+        "archetype_id",
+        "source_glb",
+        "mesh_object_path",
+        "material_object_paths",
+        "mesh_bounds_cm",
+        "simple_collision_count",
+        "has_navigation_data",
+        "nanite_enabled",
+        "package_artifacts",
+    }
+)
+WORLD_OBSERVATION_KEYS = frozenset(
+    {
+        "world_path",
+        "world_settings_path",
+        "default_game_mode",
+        "force_no_precomputed_lighting",
     }
 )
 PUBLICATION_OBSERVATIONS = {
@@ -339,13 +545,32 @@ BWRAP_PREFIX = (
     "--ro-bind",
     "/",
     "/",
+    "--tmpfs",
+    "/home",
+    "--tmpfs",
+    "/root",
+    "--tmpfs",
+    "/run",
     "--dev",
     "/dev",
     "--proc",
     "/proc",
     "--tmpfs",
     "/tmp",
+    "--tmpfs",
+    "/var/tmp",
 )
+BWRAP_PRIVATE_MASKS = ("/home", "/root", "/run", "/tmp", "/var/tmp")
+CREDENTIAL_HIDDEN_POLICY = {
+    "host_home": "masked_private_tmpfs",
+    "host_root": "masked_private_tmpfs",
+    "host_run_and_user_sockets": "masked_private_tmpfs",
+    "host_tmp": "masked_private_tmpfs",
+    "host_var_tmp": "masked_private_tmpfs",
+    "environment": "fixed_allowlist_without_proxy_display_or_credentials",
+    "attempt": "only_writable_host_bind",
+    "engine_and_static_host_root": "read_only",
+}
 UNREAL_FLAGS = (
     "-nullrhi",
     "-notraceserver",
@@ -1466,6 +1691,7 @@ def build_plan(
                 "private_dev": True,
                 "private_proc": True,
                 "private_tmp": True,
+                "credential_hidden_policy": copy.deepcopy(CREDENTIAL_HIDDEN_POLICY),
                 "required_unreal_flags": list(UNREAL_FLAGS),
                 "network_namespace": "unshared",
                 "pid_namespace": "unshared",
@@ -1795,6 +2021,174 @@ def _assert_copied_fixture_evidence(prepared: PreparedPlan) -> None:
     )
 
 
+def _fixture_evidence_manifest(prepared: PreparedPlan) -> dict[str, Any]:
+    """Seal every copied T2 byte and every directory needed to reach it."""
+
+    attempt = prepared.attempt_root
+    planned_files = {
+        FINISH_PROFILE_LOCAL_NAME: (
+            prepared.fixtures.profile_artifact.sha256,
+            prepared.fixtures.profile_artifact.size_bytes,
+            PRIVATE_FILE_MODE,
+        ),
+        FIXTURE_INVENTORY_LOCAL_NAME: (
+            prepared.fixtures.inventory_artifact.sha256,
+            prepared.fixtures.inventory_artifact.size_bytes,
+            PRIVATE_FILE_MODE,
+        ),
+        **{
+            item.relative_path: (item.sha256, item.size_bytes, item.mode)
+            for item in prepared.fixtures.evidence_files
+        },
+    }
+    _require(
+        len(planned_files) == len(prepared.fixtures.evidence_files) + 2,
+        "fixture evidence copied-file namespace collides",
+    )
+    source_directories = {
+        item.relative_path: item.mode for item in prepared.fixtures.evidence_directories
+    }
+    parent_directories: set[str] = set()
+    for relative in planned_files:
+        parts = _safe_relative_path(relative, "fixture evidence manifest")
+        for index in range(1, len(parts)):
+            parent_directories.add(pathlib.PurePosixPath(*parts[:index]).as_posix())
+    _require(
+        parent_directories == set(source_directories),
+        "fixture evidence parent directory inventory differs",
+    )
+
+    files: list[dict[str, Any]] = []
+    manifest: dict[str, dict[str, Any]] = {}
+    for relative, (expected_sha, expected_bytes, expected_mode) in sorted(
+        planned_files.items(), key=lambda item: item[0].encode("utf-8")
+    ):
+        path = attempt.joinpath(*_safe_relative_path(relative, "fixture evidence"))
+        artifact, _raw = _read_artifact(
+            path,
+            "current copied fixture evidence bundle file",
+            expected_sha256=expected_sha,
+            expected_bytes=expected_bytes,
+        )
+        mode = stat.S_IMODE(os.lstat(path).st_mode)
+        _require(
+            artifact.path == path and mode == expected_mode,
+            "current copied fixture evidence bundle mode differs",
+        )
+        row = {
+            "relative_path": relative,
+            "path": str(path),
+            "sha256": artifact.sha256,
+            "size_bytes": artifact.size_bytes,
+            "mode": mode,
+        }
+        files.append(row)
+        manifest[relative] = {
+            "sha256": artifact.sha256,
+            "size_bytes": artifact.size_bytes,
+            "mode": mode,
+        }
+
+    directories: list[dict[str, Any]] = []
+    for relative in sorted(parent_directories, key=lambda value: value.encode("utf-8")):
+        path = attempt.joinpath(*_safe_relative_path(relative, "fixture evidence"))
+        try:
+            metadata = os.lstat(path)
+        except OSError as exc:
+            raise R9PreflightError(
+                "current copied fixture evidence parent is unavailable"
+            ) from exc
+        mode = stat.S_IMODE(metadata.st_mode)
+        _require(
+            stat.S_ISDIR(metadata.st_mode)
+            and not stat.S_ISLNK(metadata.st_mode)
+            and path.resolve(strict=True) == path
+            and mode == source_directories[relative],
+            "current copied fixture evidence parent mode differs",
+        )
+        directories.append({"relative_path": relative, "path": str(path), "mode": mode})
+    return _seal_document(
+        {
+            "schema_version": FIXTURE_EVIDENCE_SCHEMA,
+            "root": str(attempt),
+            "files": files,
+            "directories": directories,
+            "tree": _manifest_tree(manifest),
+        }
+    )
+
+
+def _validate_fixture_evidence_manifest(
+    prepared: PreparedPlan, value: Any
+) -> dict[str, Any]:
+    _require(
+        type(value) is dict
+        and set(value) == FIXTURE_EVIDENCE_KEYS
+        and value.get("schema_version") == FIXTURE_EVIDENCE_SCHEMA
+        and value.get("root") == str(prepared.attempt_root)
+        and value.get("content_digest") == _content_digest(value),
+        "fixture evidence manifest identity or digest differs",
+    )
+    files = value.get("files")
+    directories = value.get("directories")
+    _require(
+        type(files) is list
+        and type(directories) is list
+        and all(
+            type(row) is dict and set(row) == FIXTURE_EVIDENCE_FILE_KEYS
+            for row in files
+        )
+        and all(
+            type(row) is dict and set(row) == FIXTURE_EVIDENCE_DIRECTORY_KEYS
+            for row in directories
+        )
+        and [row["relative_path"] for row in files]
+        == sorted(
+            (row["relative_path"] for row in files),
+            key=lambda item: item.encode("utf-8"),
+        )
+        and [row["relative_path"] for row in directories]
+        == sorted(
+            (row["relative_path"] for row in directories),
+            key=lambda item: item.encode("utf-8"),
+        )
+        and len({row["relative_path"] for row in files}) == len(files)
+        and len({row["relative_path"] for row in directories}) == len(directories),
+        "fixture evidence manifest rows differ",
+    )
+    for row in [*files, *directories]:
+        parts = _safe_relative_path(row["relative_path"], "fixture evidence manifest")
+        _require(
+            row["path"] == str(prepared.attempt_root.joinpath(*parts))
+            and type(row["mode"]) is int
+            and not isinstance(row["mode"], bool)
+            and 0 <= row["mode"] <= 0o7777,
+            "fixture evidence manifest path or mode differs",
+        )
+    for row in files:
+        _require(
+            type(row["sha256"]) is str
+            and SHA256_RE.fullmatch(row["sha256"]) is not None
+            and type(row["size_bytes"]) is int
+            and not isinstance(row["size_bytes"], bool)
+            and row["size_bytes"] >= 0,
+            "fixture evidence manifest file pin differs",
+        )
+    expected_parents = {
+        pathlib.PurePosixPath(*parts[:index]).as_posix()
+        for row in files
+        for parts in [_safe_relative_path(row["relative_path"], "fixture evidence")]
+        for index in range(1, len(parts))
+    }
+    _require(
+        {row["relative_path"] for row in directories} == expected_parents,
+        "fixture evidence manifest parent directory projection differs",
+    )
+    current = _fixture_evidence_manifest(prepared)
+    _require(value == current, "fixture evidence manifest current bytes differ")
+    return current
+
+
 def _assert_local_execution_inputs(
     prepared: PreparedPlan,
     *,
@@ -1817,13 +2211,23 @@ def _assert_local_execution_inputs(
             expected_bytes=artifact.size_bytes,
         )
         _require(observed.path == path, "current local execution input path differs")
-    execution, _raw = _read_artifact(
+    execution, execution_raw = _read_artifact(
         execution_path,
         "current execution manifest",
         expected_sha256=execution_sha256,
     )
     _require(execution.path == execution_path, "current execution path differs")
     _assert_copied_fixture_evidence(prepared)
+    execution_document = _strict_json(execution_raw, "current execution manifest")
+    _require(
+        execution_raw == _canonical_json(execution_document)
+        and execution_document.get("content_digest")
+        == _content_digest(execution_document),
+        "current execution manifest canonical bytes differ",
+    )
+    _validate_fixture_evidence_manifest(
+        prepared, execution_document.get("fixture_evidence_manifest")
+    )
 
 
 def _copy_project(
@@ -1877,6 +2281,7 @@ def _execution_document(
             "fixture_inventory": r4._artifact(
                 fixture_inventory, "copied R9 fixture inventory"
             ),
+            "fixture_evidence_manifest": _fixture_evidence_manifest(prepared),
             "parent_combined_receipt": _source_pin(prepared.source.r6_inputs),
             "r6_accessory_result": copy.deepcopy(
                 prepared.source.r6_inputs.accessory_r6_upgrade["result"]
@@ -2134,42 +2539,734 @@ def _fixture_package_paths(profile: Mapping[str, Any]) -> tuple[str, ...]:
     )
 
 
+def _exact_object(value: Any, keys: frozenset[str] | set[str], label: str) -> dict:
+    _require(type(value) is dict and set(value) == set(keys), label + " keys differ")
+    return value
+
+
+def _validate_transform(value: Any, label: str) -> None:
+    row = _exact_object(value, {"location_cm", "rotation_deg", "scale"}, label)
+    for key in ("location_cm", "rotation_deg", "scale"):
+        vector = row[key]
+        _require(
+            type(vector) is list
+            and len(vector) == 3
+            and all(
+                type(item) in {int, float} and math.isfinite(float(item))
+                for item in vector
+            ),
+            label + " " + key + " differs",
+        )
+    _require(all(item > 0 for item in row["scale"]), label + " scale differs")
+
+
+def _normalized_transform(value: Mapping[str, Any]) -> dict[str, list[float]]:
+    _validate_transform(value, "normalized transform")
+    result: dict[str, list[float]] = {}
+    for key in ("location_cm", "rotation_deg", "scale"):
+        values = []
+        for item in value[key]:
+            number = round(float(item), 6)
+            if key == "rotation_deg":
+                number = round(((number + 180.0) % 360.0) - 180.0, 6)
+            values.append(0.0 if number == 0.0 else number)
+        result[key] = values
+    _require(all(item > 0 for item in result["scale"]), "normalized scale differs")
+    return result
+
+
+def _transform_matches(actual: Mapping[str, Any], expected: Mapping[str, Any]) -> bool:
+    left = _normalized_transform(actual)
+    right = _normalized_transform(expected)
+    return all(
+        math.isclose(
+            left_value,
+            right_value,
+            rel_tol=0.0,
+            abs_tol=0.05 if key == "location_cm" else 0.0001,
+        )
+        for key in ("location_cm", "rotation_deg", "scale")
+        for left_value, right_value in zip(left[key], right[key])
+    )
+
+
+def _validate_actor_identity(value: Any, label: str) -> None:
+    row = _exact_object(value, {"actor_path", "actor_class_path", "tags"}, label)
+    _require(
+        type(row["actor_path"]) is str
+        and row["actor_path"].startswith(MAP_OBJECT_PATH + ".")
+        and type(row["actor_class_path"]) is str
+        and row["actor_class_path"].startswith("/Script/")
+        and type(row["tags"]) is list
+        and row["tags"] == sorted(row["tags"])
+        and len(row["tags"]) == len(set(row["tags"]))
+        and all(type(tag) is str and tag for tag in row["tags"]),
+        label + " values differ",
+    )
+
+
+def _validate_artifact_document(value: Any, label: str) -> None:
+    row = _exact_object(value, {"path", "sha256", "size_bytes"}, label)
+    _require(
+        type(row["path"]) is str
+        and pathlib.PurePath(row["path"]).is_absolute()
+        and os.path.normpath(row["path"]) == row["path"]
+        and type(row["sha256"]) is str
+        and SHA256_RE.fullmatch(row["sha256"]) is not None
+        and type(row["size_bytes"]) is int
+        and not isinstance(row["size_bytes"], bool)
+        and row["size_bytes"] >= 0,
+        label + " values differ",
+    )
+
+
+def _validate_tree_document(value: Any, label: str) -> None:
+    row = _exact_object(
+        value, {"algorithm", "file_count", "total_bytes", "tree_sha256"}, label
+    )
+    _require(
+        row["algorithm"] == r6_launcher.PROJECT_STATIC_TREE_ALGORITHM
+        and type(row["file_count"]) is int
+        and not isinstance(row["file_count"], bool)
+        and row["file_count"] > 0
+        and type(row["total_bytes"]) is int
+        and not isinstance(row["total_bytes"], bool)
+        and row["total_bytes"] > 0
+        and type(row["tree_sha256"]) is str
+        and SHA256_RE.fullmatch(row["tree_sha256"]) is not None,
+        label + " values differ",
+    )
+
+
+def _validate_static_component(value: Any, label: str) -> None:
+    row = _exact_object(value, STATIC_COMPONENT_OBSERVATION_KEYS, label)
+    _validate_transform(row["relative_transform"], label + " transform")
+    _require(
+        type(row["component_path"]) is str
+        and row["component_path"]
+        and type(row["component_name"]) is str
+        and row["component_name"]
+        and (row["mesh_object_path"] is None or type(row["mesh_object_path"]) is str)
+        and row["collision_mode"]
+        in {
+            "NoCollision",
+            "QueryOnly",
+            "PhysicsOnly",
+            "QueryAndPhysics",
+            "ProbeOnly",
+            "QueryAndProbe",
+        }
+        and type(row["collision_profile_name"]) is str
+        and type(row["collision_responses"]) is dict
+        and row["collision_responses"].keys() == {"Pawn", "Visibility"}
+        and all(
+            response in {"Ignore", "Overlap", "Block"}
+            for response in row["collision_responses"].values()
+        )
+        and all(
+            type(row[key]) is bool
+            for key in (
+                "visible",
+                "simulate_physics",
+                "generate_overlap_events",
+                "can_ever_affect_navigation",
+                "cast_shadow",
+                "cast_hidden_shadow",
+            )
+        )
+        and type(row["mobility"]) is str
+        and row["mobility"]
+        and (
+            row["attach_parent_component_path"] is None
+            or type(row["attach_parent_component_path"]) is str
+        )
+        and type(row["materials"]) is list
+        and all(item is None or type(item) is str for item in row["materials"]),
+        label + " values differ",
+    )
+
+
+def _validate_light_component(value: Any, label: str) -> None:
+    row = _exact_object(value, LIGHT_COMPONENT_OBSERVATION_KEYS, label)
+    _require(
+        type(row["component_path"]) is str
+        and row["component_path"]
+        and type(row["component_name"]) is str
+        and row["component_name"]
+        and all(
+            type(row[key]) is bool
+            for key in ("visible", "use_temperature", "cast_shadow")
+        )
+        and all(
+            type(row[key]) in {int, float} and math.isfinite(float(row[key]))
+            for key in ("intensity", "temperature_k")
+        )
+        and (
+            row["attenuation_radius_cm"] is None
+            or (
+                type(row["attenuation_radius_cm"]) in {int, float}
+                and math.isfinite(float(row["attenuation_radius_cm"]))
+            )
+        )
+        and type(row["mobility"]) is str
+        and row["mobility"]
+        and (row["intensity_units"] is None or type(row["intensity_units"]) is str),
+        label + " values differ",
+    )
+
+
+def _validate_actor_observation(value: Any, label: str) -> None:
+    row = _exact_object(value, ACTOR_OBSERVATION_KEYS, label)
+    _validate_actor_identity(
+        {key: row[key] for key in ("actor_path", "actor_class_path", "tags")},
+        label + " identity",
+    )
+    _validate_transform(row["actor_transform"], label + " transform")
+    _require(
+        type(row["actor_label"]) is str
+        and type(row["actor_hidden_in_game"]) is bool
+        and type(row["actor_collision_enabled"]) is bool
+        and type(row["static_mesh_components"]) is list
+        and type(row["light_components"]) is list,
+        label + " values differ",
+    )
+    for component in row["static_mesh_components"]:
+        _validate_static_component(component, label + " static component")
+    for component in row["light_components"]:
+        _validate_light_component(component, label + " light component")
+    for key in ("static_mesh_components", "light_components"):
+        paths = [component["component_path"] for component in row[key]]
+        _require(
+            paths == sorted(paths) and len(paths) == len(set(paths)),
+            label + " component identities differ",
+        )
+
+
+def _validate_shell(value: Any, placement: Mapping[str, Any], label: str) -> None:
+    row = _exact_object(value, SHELL_OBSERVATION_KEYS, label)
+    _validate_actor_identity(row["actor"], label + " actor")
+    _validate_transform(row["actor_transform"], label + " transform")
+    _validate_static_component(row["component"], label + " component")
+    _require(
+        row["instance_id"] == placement["instance_id"]
+        and row["room_id"] == placement["room_id"]
+        and row["source_asset_id"] == placement["source_asset_id"]
+        and row["semantic_target_id"] == placement["semantic_target_id"]
+        and row["actor_label"] == placement["actor_label"]
+        and row["actor"]["actor_class_path"] == STATIC_MESH_CLASS
+        and row["actor"]["tags"] == placement["tags"]
+        and _transform_matches(row["actor_transform"], placement["world_transform_cm"])
+        and row["actor_hidden_in_game"] is False
+        and row["actor_collision_enabled"] is False
+        and row["component"]["mesh_object_path"] == placement["object_path"]
+        and row["component"]["collision_mode"] == "NoCollision"
+        and row["component"]["collision_profile_name"] == "NoCollision"
+        and row["component"]["simulate_physics"] is False
+        and row["component"]["generate_overlap_events"] is False
+        and row["component"]["can_ever_affect_navigation"] is False
+        and row["component"]["visible"] is True
+        and row["component"]["cast_shadow"] is True,
+        label + " differs from migration placement",
+    )
+
+
+def _validate_query_proxy(value: Any, label: str) -> None:
+    row = _exact_object(value, QUERY_PROXY_OBSERVATION_KEYS, label)
+    _validate_actor_identity(row["actor"], label + " actor")
+    _validate_transform(row["actor_transform"], label + " transform")
+    _validate_static_component(row["component"], label + " component")
+    component = row["component"]
+    _require(
+        type(row["instance_id"]) is str
+        and row["instance_id"]
+        and type(row["actor_label"]) is str
+        and row["actor_label"]
+        and row["actor_hidden_in_game"] is True
+        and row["actor_collision_enabled"] is True
+        and component["mesh_object_path"] == "/Engine/BasicShapes/Cube.Cube"
+        and component["collision_mode"] == "QueryOnly"
+        and component["collision_profile_name"] == "Custom"
+        and component["collision_responses"] == {"Pawn": "Block", "Visibility": "Block"}
+        and component["simulate_physics"] is False
+        and component["generate_overlap_events"] is False
+        and component["can_ever_affect_navigation"] is False
+        and component["visible"] is False
+        and component["cast_shadow"] is False,
+        label + " query authority differs",
+    )
+
+
+def _validate_fixture_import(value: Any, label: str) -> None:
+    row = _exact_object(value, FIXTURE_IMPORT_OBSERVATION_KEYS, label)
+    _validate_artifact_document(row["source_glb"], label + " source GLB")
+    bounds = _exact_object(
+        row["mesh_bounds_cm"], {"min_cm", "max_cm"}, label + " bounds"
+    )
+    minimum, maximum = bounds["min_cm"], bounds["max_cm"]
+    _require(
+        type(row["archetype_id"]) is str
+        and row["archetype_id"]
+        and type(row["mesh_object_path"]) is str
+        and row["mesh_object_path"].startswith("/Game/VISTA/PlayableHome/")
+        and type(row["material_object_paths"]) is list
+        and len(row["material_object_paths"]) == 2
+        and row["material_object_paths"] == sorted(row["material_object_paths"])
+        and len(set(row["material_object_paths"])) == 2
+        and all(
+            type(path) is str and path.startswith("/Game/VISTA/PlayableHome/")
+            for path in row["material_object_paths"]
+        )
+        and type(minimum) is list
+        and type(maximum) is list
+        and len(minimum) == len(maximum) == 3
+        and all(
+            type(item) in {int, float} and math.isfinite(float(item))
+            for item in [*minimum, *maximum]
+        )
+        and all(right > left for left, right in zip(minimum, maximum))
+        and row["simple_collision_count"] == 0
+        and row["has_navigation_data"] is False
+        and row["nanite_enabled"] is False
+        and type(row["package_artifacts"]) is list
+        and len(row["package_artifacts"]) == 3,
+        label + " values differ",
+    )
+    for package in row["package_artifacts"]:
+        _exact_object(
+            package,
+            {"package_name", "path", "sha256", "size_bytes"},
+            label + " package",
+        )
+        _validate_artifact_document(
+            {key: package[key] for key in ("path", "sha256", "size_bytes")},
+            label + " package artifact",
+        )
+        _require(
+            type(package["package_name"]) is str
+            and package["package_name"].startswith("/Game/VISTA/PlayableHome/")
+            and pathlib.PurePosixPath(package["path"]).suffix == ".uasset",
+            label + " package values differ",
+        )
+    _require(
+        [package["package_name"] for package in row["package_artifacts"]]
+        == sorted(package["package_name"] for package in row["package_artifacts"]),
+        label + " package ordering differs",
+    )
+
+
+def _validate_semantic_proxy(value: Any, label: str) -> None:
+    row = _exact_object(
+        value, {"instance_id", "semantic_id", *ACTOR_OBSERVATION_KEYS}, label
+    )
+    actor = {key: row[key] for key in ACTOR_OBSERVATION_KEYS}
+    _validate_actor_observation(actor, label + " actor")
+    _require(
+        type(row["instance_id"]) is str
+        and row["instance_id"]
+        and type(row["semantic_id"]) is str
+        and row["semantic_id"]
+        and "VistaSemanticId=" + row["semantic_id"] in row["tags"]
+        and row["actor_hidden_in_game"] is True
+        and row["actor_collision_enabled"] is True
+        and len(row["static_mesh_components"]) == 1
+        and not row["light_components"],
+        label + " identity differs",
+    )
+    component = row["static_mesh_components"][0]
+    _require(
+        component["mesh_object_path"] is not None
+        and component["collision_mode"] == "QueryOnly"
+        and component["collision_profile_name"] == "Custom"
+        and component["collision_responses"] == {"Pawn": "Block", "Visibility": "Block"}
+        and component["simulate_physics"] is False
+        and component["generate_overlap_events"] is False
+        and component["can_ever_affect_navigation"] is False
+        and component["visible"] is False,
+        label + " query authority differs",
+    )
+
+
+def _validate_world(value: Any, label: str) -> None:
+    row = _exact_object(value, WORLD_OBSERVATION_KEYS, label)
+    _require(
+        row["world_path"] == MAP_OBJECT_PATH
+        and type(row["world_settings_path"]) is str
+        and row["world_settings_path"].startswith(MAP_OBJECT_PATH + ".")
+        and (row["default_game_mode"] is None or type(row["default_game_mode"]) is str)
+        and type(row["force_no_precomputed_lighting"]) is bool,
+        label + " values differ",
+    )
+
+
+def _unique_rows(value: Any, count: int, key: str, label: str) -> list[dict]:
+    _require(type(value) is list and len(value) == count, label + " count differs")
+    _require(
+        all(type(row) is dict and key in row for row in value)
+        and len({row[key] for row in value}) == count,
+        label + " identities differ",
+    )
+    return value
+
+
 def _validate_t4_contract(
     prepared: PreparedPlan,
     execution: Mapping[str, Any],
     result: Mapping[str, Any],
     scene: Mapping[str, Any],
 ) -> None:
-    commandlet = prepared.attempt_root / COMMANDLET_NAME
+    """Validate T4 data with trusted T5 code; never import copied Python."""
+
+    execution = _exact_object(dict(execution), EXECUTION_KEYS, "execution")
+    result = _exact_object(dict(result), RESULT_KEYS, "result")
+    scene = _exact_object(dict(scene), SCENE_RECEIPT_KEYS, "scene receipt")
     _require(
-        prepared.commandlet_artifact is not None,
-        "R9 commandlet contract artifact is absent",
+        execution["content_digest"] == _content_digest(execution)
+        and result["content_digest"] == _content_digest(result)
+        and scene["content_digest"] == _content_digest(scene),
+        "T4 canonical content digest differs",
     )
-    module_name = "_vista_r9_sealed_commandlet_" + prepared.commandlet_artifact.sha256
-    try:
-        specification = importlib.util.spec_from_file_location(module_name, commandlet)
-        _require(
-            specification is not None and specification.loader is not None,
-            "R9 commandlet contract loader is unavailable",
+    composition = _exact_object(
+        execution["composition_contract"], COMPOSITION_KEYS, "composition contract"
+    )
+    _require(
+        execution["schema_version"] == EXECUTION_SCHEMA
+        and execution["status"] == EXECUTION_STATUS
+        and execution["attempt_root"] == str(prepared.attempt_root)
+        and execution["legal_scope"] == LEGAL_SCOPE
+        and execution["acknowledgements"] == ACKNOWLEDGEMENTS
+        and execution["claims"] == CLAIMS
+        and execution["acceptance"] == ACCEPTANCE
+        and execution["fixture_evidence_manifest"]
+        == _fixture_evidence_manifest(prepared)
+        and composition
+        == {
+            "migration": prepared.migration,
+            "fixture_imports": prepared.fixtures.profile["fixture_imports"],
+            "collision_policy": prepared.fixtures.profile["collision_policy"],
+            "finish_profile_content_digest": PROFILE_CONTENT_DIGEST,
+            "expected_counts": COMPOSITION_EXPECTED_COUNTS,
+        }
+        and result["schema_version"] == RESULT_SCHEMA
+        and scene["schema_version"] == SCENE_RECEIPT_SCHEMA
+        and result["status"] == scene["status"] == UPGRADE_STATUS
+        and result["provider_id"] == scene["provider_id"] == PROVIDER_ID
+        and result["human_operated_visual_demo_only"] is True
+        and scene["human_operated_visual_demo_only"] is True
+        and result["prohibited_agent_adapter"] is True
+        and scene["prohibited_agent_adapter"] is True
+        and result["error"] is None
+        and result["legal_scope"] == scene["legal_scope"] == LEGAL_SCOPE
+        and result["claims"] == scene["claims"] == CLAIMS
+        and result["acceptance"] == scene["acceptance"] == ACCEPTANCE
+        and set(result["gates"]) == UE_RESULT_GATE_KEYS
+        and all(value is True for value in result["gates"].values()),
+        "T4 result, scene, composition, or UE gates differ",
+    )
+    outputs = _exact_object(
+        execution["result"], EXECUTION_RESULT_KEYS, "execution outputs"
+    )
+    attempt = prepared.attempt_root
+    _require(
+        outputs
+        == {
+            "result_path": str(attempt / RESULT_NAME),
+            "result_sidecar_path": str(attempt / RESULT_SIDECAR_NAME),
+            "scene_receipt_path": str(attempt / SCENE_RECEIPT_NAME),
+            "scene_receipt_sidecar_path": str(attempt / SCENE_RECEIPT_SIDECAR_NAME),
+        },
+        "T4 execution output binding differs",
+    )
+    execution_raw = _canonical_json(execution)
+    execution_sha = hashlib.sha256(execution_raw).hexdigest()
+    _validate_artifact_document(result["map_package"], "result map package")
+    _validate_tree_document(result["project_static_tree"], "result project tree")
+    project_pin = execution.get("project")
+    _require(
+        result["execution_sha256"] == execution_sha
+        and type(project_pin) is dict
+        and type(project_pin.get("path")) is str
+        and result["map_package"]["path"]
+        == str(
+            pathlib.Path(project_pin["path"]).parent / pathlib.Path(MAP_RELATIVE_PATH)
         )
-        module = importlib.util.module_from_spec(specification)
-        specification.loader.exec_module(module)
-        validator = getattr(module, "validate_result_document", None)
-        _require(callable(validator), "R9 commandlet pure result validator is absent")
-        _require(
-            getattr(module, "RESULT_KEYS", None) == RESULT_KEYS
-            and getattr(module, "SCENE_KEYS", None) == SCENE_RECEIPT_KEYS
-            and getattr(module, "OBSERVATION_KEYS", None) == UE_OBSERVATION_KEYS
-            and getattr(module, "RESULT_GATE_KEYS", None) == UE_RESULT_GATE_KEYS,
-            "R9 commandlet host contract constants differ",
+        and result["map_object_path"] == scene["map_object_path"] == MAP_OBJECT_PATH
+        and result["map_package"] == scene["map_package"]
+        and result["project_static_tree"] == scene["project_static_tree"]
+        and result["observations"] == scene["observations"],
+        "T4 result/scene projection differs",
+    )
+    observations = _exact_object(
+        result["observations"], UE_OBSERVATION_KEYS, "observations"
+    )
+    migration = prepared.migration
+    placements = {row["instance_id"]: row for row in migration["final_static_slots"]}
+    reuse_sources = {
+        row["r2_placement"]["instance_id"]: row["source_actor"]
+        for row in migration["reuse"]
+    }
+    expected_source = sorted(
+        [*migration["legacy_shells"], *migration["preserved_non_hssd_actor_inventory"]],
+        key=lambda row: row["actor_path"],
+    )
+    _require(
+        observations["source_actor_inventory"] == expected_source,
+        "T4 source actor evidence differs",
+    )
+    legacy = _unique_rows(
+        observations["legacy_shells_before"], 42, "actor_path", "legacy"
+    )
+    for row in legacy:
+        _validate_actor_identity(row, "legacy observation")
+    _require(
+        {row["actor_path"] for row in legacy}
+        == {row["actor_path"] for row in migration["legacy_shells"]},
+        "T4 legacy observations differ",
+    )
+    shell = _exact_object(
+        observations["shell_migration"],
+        SHELL_MIGRATION_OBSERVATION_KEYS,
+        "shell migration",
+    )
+    reuse_before = _unique_rows(shell["reuse_before"], 41, "actor_path", "reuse before")
+    for row in reuse_before:
+        _validate_actor_identity(row, "reuse before")
+    reuse_after = _unique_rows(
+        shell["reuse_after_save"], 41, "instance_id", "reuse after"
+    )
+    spawn_after = _unique_rows(
+        shell["spawn_after_save"], 16, "instance_id", "spawn after"
+    )
+    reloaded = _unique_rows(
+        shell["static_reloaded"], 57, "instance_id", "static reloaded"
+    )
+    _require(
+        {row["instance_id"] for row in [*reuse_after, *spawn_after]}
+        == {row["instance_id"] for row in reloaded}
+        == set(placements),
+        "T4 shell identities differ",
+    )
+    for row in [*reuse_after, *spawn_after, *reloaded]:
+        _validate_shell(row, placements[row["instance_id"]], "shell observation")
+    _require(
+        reuse_before
+        == sorted(reuse_sources.values(), key=lambda row: row["actor_path"])
+        and all(
+            row["actor"] == reuse_sources[row["instance_id"]] for row in reuse_after
         )
-        validator(execution, result, scene)
-    except R9PreflightError:
-        raise
-    except Exception as exc:
-        raise R9PreflightError(
-            "R9 commandlet pure result validation failed: " + str(exc)[:512]
-        ) from exc
+        and shell["deleted"] == migration["delete"]
+        and reloaded
+        == sorted([*reuse_after, *spawn_after], key=lambda row: row["instance_id"]),
+        "T4 shell migration evidence differs",
+    )
+    dynamic = _exact_object(
+        observations["dynamic_presentations"], DYNAMIC_OBSERVATION_KEYS, "dynamic"
+    )
+    for key in DYNAMIC_OBSERVATION_KEYS:
+        rows = _unique_rows(dynamic[key], 3, "instance_id", "dynamic " + key)
+        for row in rows:
+            _exact_object(
+                row, {"instance_id", "semantic_id", "observation"}, "dynamic row"
+            )
+        _require(
+            {row["instance_id"] for row in rows} == set(DYNAMIC_SLOT_BINDINGS)
+            and all(
+                row["semantic_id"] == DYNAMIC_SLOT_BINDINGS[row["instance_id"]]
+                for row in rows
+            ),
+            "T4 dynamic identities differ",
+        )
+    expected_dynamic = {
+        row["instance_id"]: row["preserved_r6_observation"]
+        for row in migration["dynamic_slots"]
+    }
+    _require(
+        dynamic["before"] == dynamic["after_save"] == dynamic["reloaded"]
+        and all(
+            row["observation"] == expected_dynamic[row["instance_id"]]
+            for row in dynamic["reloaded"]
+        ),
+        "T4 dynamic evidence drifted",
+    )
+    preserved = _exact_object(
+        observations["preserved_non_hssd"], PRESERVED_OBSERVATION_KEYS, "preserved"
+    )
+    unchanged = preserved["unchanged_actor_paths"]
+    preserved_paths = {
+        row["actor_path"] for row in migration["preserved_non_hssd_actor_inventory"]
+    }
+    _require(
+        preserved["source_inventory"] == migration["preserved_non_hssd_actor_inventory"]
+        and preserved["reloaded_inventory"]
+        == migration["preserved_non_hssd_actor_inventory"]
+        and type(unchanged) is list
+        and len(unchanged) == len(set(unchanged)) == 99
+        and unchanged == sorted(unchanged)
+        and set(unchanged).issubset(preserved_paths),
+        "T4 preserved actor evidence differs",
+    )
+    fixture_rows = _unique_rows(
+        observations["fixture_imports"], 3, "archetype_id", "fixtures"
+    )
+    for row in fixture_rows:
+        _validate_fixture_import(row, "fixture import")
+    _require(
+        [row["archetype_id"] for row in fixture_rows]
+        == ["flush_dome", "linear_panel", "pendant"]
+        and len({row["source_glb"]["path"] for row in fixture_rows}) == 3
+        and sorted(
+            package["package_name"]
+            for row in fixture_rows
+            for package in row["package_artifacts"]
+        )
+        == composition["fixture_imports"]["exact_package_names"],
+        "T4 fixture import evidence differs",
+    )
+    finish = _exact_object(
+        observations["six_room_finish"], FINISH_OBSERVATION_KEYS, "finish"
+    )
+    for key in (
+        "architecture_before",
+        "architecture_after_save",
+        "architecture_reloaded",
+        "fixtures_before",
+        "fixtures_after_save",
+        "fixtures_reloaded",
+        "r4_lights_before",
+        "r4_lights_reloaded",
+    ):
+        rows = _unique_rows(finish[key], 6, "actor_path", "finish " + key)
+        for row in rows:
+            _validate_actor_observation(row, "finish actor")
+    segments_after = _unique_rows(
+        finish["segments_after_save"], 26, "segment_id", "segments"
+    )
+    segments_reloaded = _unique_rows(
+        finish["segments_reloaded"], 26, "segment_id", "reloaded segments"
+    )
+    for row in [*segments_after, *segments_reloaded]:
+        _exact_object(row, {"segment_id", *ACTOR_OBSERVATION_KEYS}, "finish segment")
+        _validate_actor_observation(
+            {key: row[key] for key in ACTOR_OBSERVATION_KEYS}, "finish segment actor"
+        )
+    _require(
+        {row["actor_path"] for row in finish["architecture_before"]}
+        == {row["actor_path"] for row in finish["architecture_after_save"]}
+        == {row["actor_path"] for row in finish["architecture_reloaded"]}
+        and {row["actor_path"] for row in finish["fixtures_before"]}
+        == {row["actor_path"] for row in finish["fixtures_after_save"]}
+        == {row["actor_path"] for row in finish["fixtures_reloaded"]}
+        and {row["actor_path"] for row in finish["r4_lights_before"]}
+        == {row["actor_path"] for row in finish["r4_lights_reloaded"]}
+        and finish["architecture_after_save"] == finish["architecture_reloaded"]
+        and finish["fixtures_after_save"] == finish["fixtures_reloaded"]
+        and finish["r4_lights_before"] == finish["r4_lights_reloaded"]
+        and segments_after == segments_reloaded,
+        "T4 finish cold-reload evidence differs",
+    )
+    collision = _exact_object(
+        observations["collision"], COLLISION_OBSERVATION_KEYS, "collision"
+    )
+    _require(
+        collision["policy_counts"]
+        == {
+            "semantic_proxies": 19,
+            "secondary_query_proxies": 20,
+            "detail_no_collision": 21,
+        }
+        and collision["semantic_dynamic_instance_ids"] == sorted(DYNAMIC_SLOT_BINDINGS)
+        and collision["remaining_review_items"]
+        == composition["collision_policy"]["remaining_review_items"],
+        "T4 collision policy evidence differs",
+    )
+    policy_by_id = {
+        row["instance_id"]: row["collision_policy"]
+        for row in migration["collision"]["rows"]
+    }
+    semantic_ids = {
+        key
+        for key, policy in policy_by_id.items()
+        if policy == "retained_r1_semantic_proxy_authority_unchanged"
+    }
+    secondary_ids = {
+        key
+        for key, policy in policy_by_id.items()
+        if policy == "secondary_simple_aabb_candidate_review_pending"
+    }
+    detail_ids = {
+        key
+        for key, policy in policy_by_id.items()
+        if policy == "explicit_detail_no_collision"
+    }
+    static_semantic_ids = semantic_ids - set(DYNAMIC_SLOT_BINDINGS)
+    for key in (
+        "semantic_static_before",
+        "semantic_static_after_save",
+        "semantic_static_reloaded",
+    ):
+        rows = _unique_rows(collision[key], 16, "instance_id", "semantic " + key)
+        _require(
+            {row["instance_id"] for row in rows} == static_semantic_ids,
+            "T4 semantic identities differ",
+        )
+        for row in rows:
+            _validate_semantic_proxy(row, "semantic proxy")
+            _require(
+                row["semantic_id"]
+                == placements[row["instance_id"]]["semantic_target_id"],
+                "T4 semantic target binding differs",
+            )
+    secondary_after = _unique_rows(
+        collision["secondary_after_save"], 20, "instance_id", "secondary"
+    )
+    secondary_reloaded = _unique_rows(
+        collision["secondary_reloaded"], 20, "instance_id", "secondary reloaded"
+    )
+    _require(
+        {row["instance_id"] for row in secondary_after}
+        == {row["instance_id"] for row in secondary_reloaded}
+        == secondary_ids,
+        "T4 secondary identities differ",
+    )
+    for row in [*secondary_after, *secondary_reloaded]:
+        _validate_query_proxy(row, "secondary query proxy")
+    detail = _unique_rows(collision["detail_reloaded"], 21, "instance_id", "detail")
+    _require(
+        {row["instance_id"] for row in detail} == detail_ids,
+        "T4 detail identities differ",
+    )
+    for row in detail:
+        _validate_shell(row, placements[row["instance_id"]], "detail shell")
+    _require(
+        collision["semantic_static_before"]
+        == collision["semantic_static_after_save"]
+        == collision["semantic_static_reloaded"]
+        and collision["secondary_after_save"] == collision["secondary_reloaded"],
+        "T4 collision cold-reload evidence differs",
+    )
+    _validate_world(observations["world_before"], "world before")
+    _validate_world(observations["world_reloaded"], "world reloaded")
+    _require(
+        observations["world_before"] == observations["world_reloaded"],
+        "T4 world authority drifted",
+    )
+    result_raw = _canonical_json(result)
+    _validate_artifact_document(scene["result"], "scene result")
+    _validate_artifact_document(scene["execution"], "scene execution")
+    _require(
+        scene["result"]
+        == {
+            "path": outputs["result_path"],
+            "sha256": hashlib.sha256(result_raw).hexdigest(),
+            "size_bytes": len(result_raw),
+        }
+        and scene["execution"]
+        == {
+            "path": str(attempt / EXECUTION_NAME),
+            "sha256": execution_sha,
+            "size_bytes": len(execution_raw),
+        },
+        "T4 scene lineage pin differs",
+    )
 
 
 def _exact_static_delta(
@@ -2193,13 +3290,127 @@ def _exact_static_delta(
         and all(path in output_manifest for path in fixture_paths),
         "R9 static delta is not exactly map plus nine fixture packages",
     )
+    source_map = baseline_manifest[MAP_RELATIVE_PATH.as_posix()]
+    output_map = output_manifest[MAP_RELATIVE_PATH.as_posix()]
+    _require(
+        type(source_map) is dict
+        and type(output_map) is dict
+        and source_map.get("mode") == output_map.get("mode")
+        and source_map.get("sha256") != output_map.get("sha256")
+        and type(output_map.get("size_bytes")) is int
+        and output_map["size_bytes"] > 0
+        and isinstance(output_map.get("sha256"), str)
+        and SHA256_RE.fullmatch(output_map["sha256"]) is not None,
+        "R9 map must change bytes while preserving its source mode",
+    )
+    for relative in fixture_paths:
+        row = output_manifest[relative]
+        _require(
+            type(row) is dict
+            and row.get("mode") == PRIVATE_FILE_MODE
+            and type(row.get("size_bytes")) is int
+            and row["size_bytes"] > 0
+            and isinstance(row.get("sha256"), str)
+            and SHA256_RE.fullmatch(row["sha256"]) is not None,
+            "R9 fixture package must be a nonempty private sealed file",
+        )
     return {
         "policy": "exact_map_plus_sealed_fixture_package_inventory/v1",
         "changed_relative_paths": sorted(changed),
         "map_relative_path": MAP_RELATIVE_PATH.as_posix(),
         "fixture_package_relative_paths": list(fixture_paths),
         "changed_file_count": 10,
+        "map_mode_preserved": True,
+        "fixture_package_mode": format(PRIVATE_FILE_MODE, "04o"),
     }
+
+
+def _validate_fixture_import_host_bindings(
+    prepared: PreparedPlan,
+    observations: Any,
+    output_manifest: Mapping[str, Mapping[str, Any]],
+) -> None:
+    """Cross-bind UE claims to copied GLBs and current host UAsset bytes."""
+
+    rows = _unique_rows(observations, 3, "archetype_id", "fixture host bindings")
+    inventory_rows = prepared.fixtures.inventory.get("artifacts")
+    profile_rows = prepared.fixtures.profile.get("fixture_imports", {}).get(
+        "glb_inventory"
+    )
+    _require(
+        type(inventory_rows) is list
+        and len(inventory_rows) == 3
+        and type(profile_rows) is list
+        and len(profile_rows) == 3,
+        "fixture host authority inventory differs",
+    )
+    inventory_by_id = {row.get("archetype_id"): row for row in inventory_rows}
+    profile_by_id = {row.get("archetype_id"): row for row in profile_rows}
+    _require(
+        set(inventory_by_id)
+        == set(profile_by_id)
+        == {row["archetype_id"] for row in rows}
+        and None not in inventory_by_id,
+        "fixture host archetype authority differs",
+    )
+    for row in rows:
+        archetype_id = row["archetype_id"]
+        inventory = inventory_by_id[archetype_id]
+        profile = profile_by_id[archetype_id]
+        glb = inventory.get("glb")
+        _require(
+            type(glb) is dict
+            and glb.get("path") == profile.get("glb_relative_path")
+            and row["source_glb"]
+            == {
+                "path": str(
+                    prepared.attempt_root.joinpath(
+                        *_safe_relative_path(glb["path"], "fixture source GLB")
+                    )
+                ),
+                "sha256": glb.get("sha256"),
+                "size_bytes": glb.get("size_bytes"),
+            }
+            and row["mesh_object_path"] == profile.get("static_mesh_object_path")
+            and row["material_object_paths"]
+            == sorted(profile.get("material_object_paths", [])),
+            "fixture source GLB or object binding differs",
+        )
+        package_names = sorted(
+            [
+                profile.get("static_mesh_package_name"),
+                *profile.get("material_package_names", []),
+            ]
+        )
+        expected_packages = []
+        for package_name in package_names:
+            _require(
+                type(package_name) is str and package_name.startswith("/Game/"),
+                "fixture package authority differs",
+            )
+            relative = "Content/" + package_name.removeprefix("/Game/") + ".uasset"
+            pin = output_manifest.get(relative)
+            _require(
+                type(pin) is dict
+                and pin.get("mode") == PRIVATE_FILE_MODE
+                and type(pin.get("size_bytes")) is int
+                and pin["size_bytes"] > 0
+                and isinstance(pin.get("sha256"), str)
+                and SHA256_RE.fullmatch(pin["sha256"]) is not None,
+                "fixture package host bytes differ",
+            )
+            expected_packages.append(
+                {
+                    "package_name": package_name,
+                    "path": str(prepared.attempt_root / "project" / relative),
+                    "sha256": pin["sha256"],
+                    "size_bytes": pin["size_bytes"],
+                }
+            )
+        _require(
+            row["package_artifacts"] == expected_packages,
+            "fixture package artifact host binding differs",
+        )
 
 
 def _validate_commandlet_receipts(
@@ -2208,6 +3419,7 @@ def _validate_commandlet_receipts(
     execution_path: pathlib.Path,
     execution_sha256: str,
     project_tree: Mapping[str, Any],
+    project_manifest: Mapping[str, Mapping[str, Any]],
     stdout_path: pathlib.Path,
 ) -> tuple[dict[str, Any], dict[str, Any], Artifact, Artifact]:
     attempt = prepared.attempt_root
@@ -2281,6 +3493,9 @@ def _validate_commandlet_receipts(
         "R9 commandlet marker inventory differs",
     )
     _validate_t4_contract(prepared, execution, result, scene)
+    _validate_fixture_import_host_bindings(
+        prepared, result["observations"]["fixture_imports"], project_manifest
+    )
     return result, scene, result_artifact, scene_artifact
 
 
@@ -2329,6 +3544,7 @@ def _publication_state(
         execution_path=execution_path,
         execution_sha256=execution_sha256,
         project_tree=tree,
+        project_manifest=manifest,
         stdout_path=log_paths["stdout_log"],
     )
     map_path = attempt / "project" / pathlib.Path(MAP_RELATIVE_PATH)
@@ -2347,6 +3563,7 @@ def _publication_state(
             attempt / FIXTURE_INVENTORY_LOCAL_NAME,
             "R9 publication fixture inventory",
         ),
+        "fixture_evidence_manifest": _fixture_evidence_manifest(prepared),
         "materializer": r4._artifact(
             attempt / MATERIALIZER_NAME, "R9 publication materializer"
         ),
@@ -2379,6 +3596,7 @@ def _host_receipt(
         "map": copy.deepcopy(state["map"]),
         "project_static_tree": copy.deepcopy(state["project_static_tree"]),
         "logs": copy.deepcopy(state["logs"]),
+        "fixture_evidence_manifest": copy.deepcopy(state["fixture_evidence_manifest"]),
         "passed": True,
     }
     _require(set(current) == CURRENT_BYTE_KEYS, "R9 current-byte keys differ")
@@ -2416,6 +3634,13 @@ def _host_receipt(
                 "snapshots": closure_rows,
             },
             "static_delta": copy.deepcopy(state["static_delta"]),
+            "fixture_evidence_manifest": copy.deepcopy(
+                state["fixture_evidence_manifest"]
+            ),
+            "containment": {
+                "command_prefix": list(BWRAP_PREFIX),
+                "credential_hidden_policy": copy.deepcopy(CREDENTIAL_HIDDEN_POLICY),
+            },
             "current_byte_revalidation": current,
             "gates": {key: True for key in sorted(HOST_GATE_KEYS)},
             "legal_scope": copy.deepcopy(LEGAL_SCOPE),
@@ -2466,6 +3691,7 @@ def _combined_receipt(
         "hssd_r2_authority": copy.deepcopy(prepared.source.hssd_authority),
         "finish_profile": copy.deepcopy(state["finish_profile"]),
         "fixture_inventory": copy.deepcopy(state["fixture_inventory"]),
+        "fixture_evidence_manifest": copy.deepcopy(state["fixture_evidence_manifest"]),
         "execution": copy.deepcopy(state["execution"]),
         "result": copy.deepcopy(state["result"]),
         "scene_receipt": copy.deepcopy(state["scene_receipt"]),
@@ -2553,6 +3779,67 @@ def _validate_combined_receipt(
         "R9 v5 combined receipt current-byte validation differs",
     )
     return observed
+
+
+def _terminal_current_state(state: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "execution": copy.deepcopy(state["execution"]),
+        "result": copy.deepcopy(state["result"]),
+        "scene_receipt": copy.deepcopy(state["scene_receipt"]),
+        "map": copy.deepcopy(state["map"]),
+        "project_static_tree": copy.deepcopy(state["project_static_tree"]),
+        "logs": copy.deepcopy(state["logs"]),
+        "static_delta": copy.deepcopy(state["static_delta"]),
+        "fixture_evidence_manifest": copy.deepcopy(state["fixture_evidence_manifest"]),
+    }
+
+
+def _complete_document(
+    prepared: PreparedPlan,
+    state: Mapping[str, Any],
+    *,
+    combined_receipt: Mapping[str, Any],
+) -> dict[str, Any]:
+    attempt = prepared.attempt_root
+    combined_path = attempt / r6_launcher.COMBINED_RECEIPT_NAME
+    sidecar_path = attempt / r6_launcher.COMBINED_RECEIPT_SIDECAR_NAME
+    host_path = attempt / HOST_RECEIPT_NAME
+    _require(
+        not os.path.lexists(attempt / FAILURE_NAME)
+        and not os.path.lexists(attempt / COMPLETE_NAME),
+        "R9 terminal publication marker namespace is not fresh",
+    )
+    combined_artifact = r4._artifact(combined_path, "terminal combined receipt")
+    sidecar_artifact = r4._artifact(sidecar_path, "terminal combined sidecar")
+    host_artifact = r4._artifact(host_path, "terminal host receipt")
+    _require(
+        _canonical_document(
+            combined_path,
+            "terminal combined receipt",
+            expected_keys=r6_launcher.RECEIPT_KEYS
+            | {"hssd_r2_citysample_live_r1_upgrade"},
+        )[1]
+        == combined_receipt,
+        "terminal combined receipt bytes differ",
+    )
+    value = _seal_document(
+        {
+            "schema_version": COMPLETE_SCHEMA,
+            "status": COMPLETE_STATUS,
+            "attempt_root": str(attempt),
+            "combined_receipt": combined_artifact,
+            "combined_receipt_sidecar": sidecar_artifact,
+            "host_receipt": host_artifact,
+            "current_state": _terminal_current_state(state),
+            "failure_absent": True,
+        }
+    )
+    _require(
+        set(value) == COMPLETE_KEYS
+        and value["content_digest"] == _content_digest(value),
+        "R9 terminal COMPLETE document differs",
+    )
+    return value
 
 
 def apply_plan(
@@ -2708,11 +3995,24 @@ def apply_plan(
             and final["project_manifest"] == state["project_manifest"],
             "R9 publication bytes changed after the v5 receipt",
         )
-        return _validate_combined_receipt(
+        observed_combined = _validate_combined_receipt(
             prepared,
             expected=combined,
             state=final,
         )
+        _validate_host_receipt(prepared, expected=host, state=final)
+        complete = _complete_document(
+            prepared,
+            final,
+            combined_receipt=observed_combined,
+        )
+        # This O_EXCL write is deliberately the final operation.  COMPLETE is
+        # the acceptance boundary; every mutable byte was revalidated above.
+        r4._write_exclusive(
+            attempt / COMPLETE_NAME,
+            _canonical_json(complete),
+        )
+        return observed_combined
     except BaseException as exc:
         failure = _seal_document(
             {
@@ -2729,10 +4029,11 @@ def apply_plan(
                 "error": {"type": type(exc).__name__, "message": str(exc)[:512]},
             }
         )
-        try:
-            r4._write_exclusive(attempt / FAILURE_NAME, _canonical_json(failure))
-        except BaseException:  # noqa: BLE001,S110 - retain the original failure
-            pass
+        if not os.path.lexists(attempt / COMPLETE_NAME):
+            try:
+                r4._write_exclusive(attempt / FAILURE_NAME, _canonical_json(failure))
+            except BaseException:  # noqa: BLE001,S110 - retain the original failure
+                pass
         raise
 
 
