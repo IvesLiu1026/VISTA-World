@@ -97,16 +97,24 @@ Depends on: requirements.md, design.md
   - Requirements: R6, R7, R9
   - Validation: >=8 purposeful items/room, >=60 total, exact local HSSD revision,
     no public payload, walkability and semantic hero coverage
-  - Progress: the exact 26-model/60-placement R5 source and a Blender player-eye
-    living-room render exist. The first isolated UE 5.7 import is permanently
-    quarantined after seven assets because a no-op transmission extension made
-    Interchange select Transmission over ClearCoat and left the coffee-table
-    clear-coat texture unbound. The strict texture gate worked as intended.
-    The active slice is an attempt-bound R5-to-UE compatibility derivative that
-    removes only receipt-proven no-op transmission objects; it may not weaken
-    the import gate. One washer material has real transmission plus real
+  - Progress: the exact 26-model/60-placement HSSD source now has a deterministic
+    R2 transform layer. It reduces protected portal assignments from 10 to 0,
+    collision-blocking overlap pairs from 1 to 0 and semantic-proxy alignment
+    violations from 2 to 0 while retaining all six rooms. A fresh private
+    Blender 4.5.8 attempt `hssd-six-room-scene-r5-20260830t030529` produced a
+    13,380,140-byte review GLB, 14,580,958-byte source blend and two nonblank
+    1920x1080 renders; result digest
+    `b6471bc4be1aa510d6fbd5909b6120a8153c26befdef778133217f85529a5965`
+    remains `assembled_rendered_review_pending` and `accepted=false`. The faucet and
+    ladder remain two hard support outliers, all 18 wall fixtures remain without
+    fixture authority and 20 secondary collision candidates still require UE
+    receipts. The first isolated UE 5.7 import remains permanently quarantined
+    after seven assets because a no-op transmission extension made Interchange
+    select Transmission over ClearCoat and left the coffee-table clear-coat
+    texture unbound. One washer material has real transmission plus real
     clear-coat and remains an explicit full-fidelity blocker pending a custom
-    material bridge.
+    material bridge. The new Blender views verify composition, not GTA-level
+    fidelity, playable collision or Unreal runtime.
 
 - [ ] T11. Add a YCB interaction kit
   - Files: pinned acquisition/attribution manifests, pickup physics/socket profiles
@@ -186,6 +194,15 @@ Depends on: requirements.md, design.md
   `scene_assembly_status=plan_only_not_assembled` and is not accepted scene
   evidence. Static visual use is allowed only under CC-BY-NC-4.0; fridge, desk,
   nightstand, wardrobe and stove articulation remain explicitly pending.
+- HSSD six-room R2 placement evidence: external attempt
+  `hssd-six-room-scene-r5-20260830t030529` imports each of the 26 prototypes once
+  and emits 60 linked instances. The review GLB has 427,783 triangles, 100 PBR
+  materials and 82 base/normal/ORM texture-slot groups, with no exported camera,
+  light, prototype or proxy markers. Visual inspection shows a coherent,
+  nonblack living-room close-up and all six room shells, but also confirms sparse
+  dressing, bare architecture, no human character and insufficient close-range
+  texture/material fidelity. It is useful composition evidence, not GTA-quality
+  acceptance.
 - Runtime/GPU ownership: none; current live package remains untouched.
 
 ## Notes
