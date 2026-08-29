@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Build the closed, zero-write R9 R6-to-HSSD-R2 composition preflight.
+"""Plan or materialize the append-only R9 R6/HSSD-R2 composition.
 
-This module intentionally stops at the T3 boundary.  It validates the sealed
-R6 parent, the retained HSSD R2 v4 authority, the six-room finish profile and
-the project-authored fixture inventory, then derives one deterministic
-42 -> 41/1/16 -> 57+3 migration contract.  It never creates an attempt or
-starts Unreal.  ``apply_plan`` fails closed until the separately reviewed T4
-commandlet and T5 publisher exist.
+Dry-run is deterministic and zero-write.  Apply re-plans every sealed input,
+copies the exact R6 project and fixture-forge evidence into one fresh external
+attempt, and runs the fixed T4 commandlet under a private Bubblewrap network,
+PID, device and temporary-filesystem boundary.  Publication is permitted only
+after save/cold-reload evidence, process and log closure, the exact map plus
+nine fixture-package delta, and a final current-byte revalidation all pass.
 """
 
 from __future__ import annotations
@@ -16,13 +16,17 @@ import copy
 import dataclasses
 import hashlib
 import importlib
+import importlib.util
 import json
+import math
 import os
 import pathlib
 import re
 import stat
+import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+import time
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from tools.runtime.vista_playable_home import human_visual_demo_launch as r6_launcher
@@ -37,7 +41,9 @@ COMBINED_RECEIPT_SCHEMA_V5 = "simworld.vista.human-visual-demo-combined-receipt/
 UPGRADE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-upgrade/v1"
 UPGRADE_STATUS = "hssd_r2_citysample_live_saved_cold_reloaded"
 DRY_RUN_STATUS = "validated_zero_write_hssd_r2_citysample_live_plan"
-APPLY_BLOCKED_STATUS = "validated_apply_plan_t4_commandlet_unavailable"
+APPLY_PLAN_STATUS = "validated_hssd_r2_citysample_live_apply_plan_no_write"
+FAILURE_STATUS = "hssd_r2_citysample_live_attempt_quarantined_no_reuse"
+EXECUTION_STATUS = "authorized_apply_request"
 
 PROVIDER_ID = "citysample_crowd_visual_demo_v1"
 ENGINE_VERSION = "5.7.3-50162420+++UE5+Release-5.7"
@@ -100,13 +106,13 @@ PROFILE_PATH = (
     "hssd_r2_citysample_live_r1.json"
 )
 PROFILE_SCHEMA = "simworld.vista.playable-home-hssd-r2-citysample-live-profile/v1"
-PROFILE_SHA256 = "7805bb21089373991f94c025dde59e843bba76856c1ad2908da14e47e2f79ab9"
-PROFILE_BYTES = 70_265
+PROFILE_SHA256 = "065782f443fd659a20d9a2ed5419403b2cf0faf04e336f05b11fc38528e999cb"
+PROFILE_BYTES = 71_082
 PROFILE_CONTENT_DIGEST = (
-    "f90659d60384edfaabdc34cdfd4a5b3aa0cd8d0226b59fe694e018a86874b314"
+    "105fc5270594b0667b8616f2fa5a583757f45c25017db49a263be2d7e68967f2"
 )
 FIXTURE_INVENTORY_PATH = RUN_PARENT / "vista-r9-fixture-forge-r1/fixture-inventory.json"
-FIXTURE_INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v2"
+FIXTURE_INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v3"
 FIXTURE_INVENTORY_STATUS = (
     "fixture_inventory_sealed_snapshot_provenance_not_ue_imported"
 )
@@ -120,6 +126,193 @@ EXECUTION_NAME = "hssd-r2-citysample-live-execution.json"
 RESULT_NAME = "hssd-r2-citysample-live-result.json"
 SCENE_RECEIPT_NAME = "hssd-r2-citysample-live-scene-receipt.json"
 HOST_RECEIPT_NAME = "hssd-r2-citysample-live-host-receipt.json"
+STDOUT_NAME = "unreal-hssd-r2-citysample-live-stdout.log"
+ENGINE_LOG_NAME = "unreal-hssd-r2-citysample-live-engine.log"
+FAILURE_NAME = "hssd-r2-citysample-live-host-failure.json"
+RESULT_SIDECAR_NAME = RESULT_NAME + ".sha256"
+SCENE_RECEIPT_SIDECAR_NAME = SCENE_RECEIPT_NAME + ".sha256"
+RESULT_MARKER = "VISTA_HSSD_R2_CITYSAMPLE_LIVE_RESULT:"
+SCENE_RECEIPT_MARKER = "VISTA_HSSD_R2_CITYSAMPLE_LIVE_SCENE_RECEIPT:"
+PRIVATE_DIRECTORY_MODE = 0o700
+PRIVATE_FILE_MODE = 0o600
+TIMEOUT_SECONDS = 1_800
+LOG_CLOSURE_OBSERVATIONS = 3
+LOG_CLOSURE_INTERVAL_SECONDS = 0.2
+LOG_CLOSURE_POLICY = {
+    "observation_count": LOG_CLOSURE_OBSERVATIONS,
+    "interval_seconds": LOG_CLOSURE_INTERVAL_SECONDS,
+    "required_unchanged_fields": [
+        "device",
+        "inode",
+        "size_bytes",
+        "mtime_ns",
+        "ctime_ns",
+        "sha256",
+    ],
+}
+
+RESULT_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "provider_id",
+        "human_operated_visual_demo_only",
+        "prohibited_agent_adapter",
+        "execution_sha256",
+        "map_object_path",
+        "map_package",
+        "project_static_tree",
+        "observations",
+        "legal_scope",
+        "claims",
+        "acceptance",
+        "gates",
+        "error",
+        "content_digest",
+    }
+)
+SCENE_RECEIPT_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "provider_id",
+        "human_operated_visual_demo_only",
+        "prohibited_agent_adapter",
+        "execution",
+        "result",
+        "map_object_path",
+        "map_package",
+        "project_static_tree",
+        "observations",
+        "legal_scope",
+        "claims",
+        "acceptance",
+        "content_digest",
+    }
+)
+UE_RESULT_GATE_KEYS = frozenset(
+    {
+        "fixed_map_loaded",
+        "source_actor_inventory_exact",
+        "legacy_hssd_shell_inventory_exact",
+        "exact_41_legacy_shells_reused",
+        "exact_legacy_phone_shell_deleted",
+        "exact_16_missing_shells_spawned",
+        "visual_slots_57_plus_3_exact",
+        "non_hssd_actor_identities_preserved",
+        "unchanged_actor_state_preserved",
+        "fixture_glbs_imported_exact",
+        "fixture_packages_saved_exact",
+        "six_room_finish_exact",
+        "r4_light_authority_preserved",
+        "semantic_proxy_inventory_19_exact",
+        "secondary_query_proxy_inventory_20_exact",
+        "detail_no_collision_inventory_21_exact",
+        "pickup_authority_preserved",
+        "gameplay_authority_preserved",
+        "map_saved",
+        "map_cold_reloaded",
+        "reloaded_observations_exact",
+        "cold_reloaded_map_and_fixture_packages_sealed",
+    }
+)
+HOST_GATE_KEYS = frozenset(
+    {
+        "nullrhi_no_gpu",
+        "private_network_namespace",
+        "process_group_closed",
+        "logs_stable_post_exit",
+        "only_map_plus_fixture_packages_changed",
+        "commandlet_receipts_revalidated",
+        "current_bytes_revalidated",
+    }
+)
+HOST_RECEIPT_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "provider_id",
+        "human_operated_visual_demo_only",
+        "prohibited_agent_adapter",
+        "execution",
+        "result",
+        "scene_receipt",
+        "project",
+        "map",
+        "project_static_tree",
+        "logs",
+        "log_closure",
+        "static_delta",
+        "current_byte_revalidation",
+        "gates",
+        "legal_scope",
+        "claims",
+        "acceptance",
+        "content_digest",
+    }
+)
+CURRENT_BYTE_KEYS = frozenset(
+    {
+        "execution",
+        "result",
+        "scene_receipt",
+        "map",
+        "project_static_tree",
+        "logs",
+        "passed",
+    }
+)
+UE_OBSERVATION_KEYS = frozenset(
+    {
+        "source_actor_inventory",
+        "legacy_shells_before",
+        "shell_migration",
+        "dynamic_presentations",
+        "preserved_non_hssd",
+        "fixture_imports",
+        "six_room_finish",
+        "collision",
+        "world_before",
+        "world_reloaded",
+    }
+)
+PUBLICATION_OBSERVATIONS = {
+    "legacy_hssd_shells_observed": 42,
+    "reused_static_shells": 41,
+    "deleted_legacy_phone_shells": 1,
+    "spawned_static_shells": 16,
+    "final_static_hssd_shells": 57,
+    "dynamic_r2_slots": 3,
+    "total_r2_visual_slots": 60,
+    "preserved_non_hssd_actor_identities": 108,
+    "semantic_proxy_authorities": 19,
+    "secondary_query_proxies": 20,
+    "detail_no_collision_rows": 21,
+    "finished_rooms": 6,
+    "fixture_actor_bindings": 6,
+    "front_room_presentation_shadow_fixes": 3,
+    "map_saved_and_cold_reloaded": True,
+    "exact_map_plus_fixture_package_delta": True,
+    "current_byte_revalidation": True,
+}
+COMPOSITION_EXPECTED_COUNTS = {
+    "legacy_observed": 42,
+    "reused": 41,
+    "deleted": 1,
+    "spawned": 16,
+    "final_static": 57,
+    "dynamic": 3,
+    "final_visual_slots": 60,
+    "preserved_non_hssd": 108,
+    "semantic_proxies": 19,
+    "secondary_query_proxies": 20,
+    "detail_no_collision": 21,
+    "finish_segments": 26,
+    "fixture_archetypes": 3,
+    "fixture_packages": 9,
+    "fixture_actors": 6,
+    "r4_lights": 6,
+}
 
 UNREAL_EDITOR_CMD = pathlib.Path(
     "/mnt/NAS2/yhliu/UE_5.7.3_prebuilt/Engine/Binaries/Linux/UnrealEditor-Cmd"
@@ -217,9 +410,13 @@ PROFILE_KEYS = frozenset(
 FIXTURE_INVENTORY_KEYS = frozenset(
     {
         "schema_version",
+        "archetypes",
+        "execution_policy",
+        "output_root",
         "profile",
         "recipe",
         "forge_plan",
+        "worker_request",
         "worker_result",
         "source_snapshot",
         "toolchain",
@@ -243,6 +440,41 @@ class Artifact:
     path: pathlib.Path
     sha256: str
     size_bytes: int
+
+
+@dataclasses.dataclass(frozen=True)
+class FixtureEvidenceFile:
+    relative_path: str
+    source: pathlib.Path
+    sha256: str
+    size_bytes: int
+    mode: int
+    device: int
+    inode: int
+    mtime_ns: int
+
+
+@dataclasses.dataclass(frozen=True)
+class FixtureEvidenceDirectory:
+    relative_path: str
+    mode: int
+
+
+@dataclasses.dataclass(frozen=True)
+class StableFileSnapshot:
+    device: int
+    inode: int
+    size_bytes: int
+    mtime_ns: int
+    ctime_ns: int
+    sha256: str
+
+    def pin(self, path: pathlib.Path) -> dict[str, Any]:
+        return {
+            "path": str(path),
+            "sha256": self.sha256,
+            "size_bytes": self.size_bytes,
+        }
 
 
 @dataclasses.dataclass(frozen=True)
@@ -278,6 +510,8 @@ class FixtureState:
     profile_artifact: Artifact
     inventory: Mapping[str, Any]
     inventory_artifact: Artifact
+    evidence_files: tuple[FixtureEvidenceFile, ...] = ()
+    evidence_directories: tuple[FixtureEvidenceDirectory, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -287,8 +521,12 @@ class PreparedPlan:
     apply_requested: bool
     acknowledgements: Mapping[str, str | None]
     source: SourceState
+    source_records: tuple[r4.StaticRecord, ...]
     fixtures: FixtureState
     migration: Mapping[str, Any]
+    materializer_artifact: Artifact
+    commandlet_artifact: Artifact | None
+    toolchain: Mapping[str, Artifact]
     report: Mapping[str, Any]
     run_parent_identity: tuple[int, int]
 
@@ -402,6 +640,103 @@ def _artifact(value: Artifact) -> dict[str, Any]:
         "sha256": value.sha256,
         "size_bytes": value.size_bytes,
     }
+
+
+def _safe_relative_path(value: str, label: str) -> tuple[str, ...]:
+    pure = pathlib.PurePosixPath(value)
+    _require(
+        bool(value)
+        and not pure.is_absolute()
+        and all(part not in {"", ".", ".."} for part in pure.parts),
+        label + " relative path is unsafe",
+    )
+    return pure.parts
+
+
+def _collect_fixture_evidence(
+    inventory_path: pathlib.Path,
+) -> tuple[tuple[FixtureEvidenceFile, ...], tuple[FixtureEvidenceDirectory, ...]]:
+    """Close the forge bundle that must remain beside the renamed inventory."""
+
+    root = inventory_path.parent
+    try:
+        root_metadata = os.lstat(root)
+        resolved = root.resolve(strict=True)
+    except OSError as exc:
+        raise R9PreflightError("fixture evidence root is unavailable") from exc
+    _require(
+        resolved == root
+        and stat.S_ISDIR(root_metadata.st_mode)
+        and not stat.S_ISLNK(root_metadata.st_mode)
+        and root_metadata.st_uid == os.geteuid()
+        and not root_metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH),
+        "fixture evidence root identity or permissions differ",
+    )
+    files: list[FixtureEvidenceFile] = []
+    directories: list[FixtureEvidenceDirectory] = []
+
+    def visit(directory: pathlib.Path) -> None:
+        try:
+            entries = sorted(
+                os.scandir(directory), key=lambda entry: entry.name.encode("utf-8")
+            )
+        except (OSError, UnicodeError) as exc:
+            raise R9PreflightError("fixture evidence cannot be enumerated") from exc
+        for entry in entries:
+            candidate = pathlib.Path(entry.path)
+            try:
+                metadata = entry.stat(follow_symlinks=False)
+                relative = candidate.relative_to(root).as_posix()
+                relative.encode("utf-8")
+            except (OSError, UnicodeError, ValueError) as exc:
+                raise R9PreflightError("fixture evidence path differs") from exc
+            _safe_relative_path(relative, "fixture evidence")
+            _require(
+                not stat.S_ISLNK(metadata.st_mode)
+                and not metadata.st_mode & (stat.S_IWGRP | stat.S_IWOTH),
+                "fixture evidence contains a symlink or writable entry",
+            )
+            if stat.S_ISDIR(metadata.st_mode):
+                directories.append(
+                    FixtureEvidenceDirectory(relative, stat.S_IMODE(metadata.st_mode))
+                )
+                visit(candidate)
+                continue
+            _require(
+                stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1,
+                "fixture evidence contains a linked or special file",
+            )
+            if candidate == inventory_path:
+                continue
+            artifact, _raw = _read_artifact(candidate, "fixture evidence file")
+            files.append(
+                FixtureEvidenceFile(
+                    relative_path=relative,
+                    source=artifact.path,
+                    sha256=artifact.sha256,
+                    size_bytes=artifact.size_bytes,
+                    mode=stat.S_IMODE(metadata.st_mode),
+                    device=metadata.st_dev,
+                    inode=metadata.st_ino,
+                    mtime_ns=metadata.st_mtime_ns,
+                )
+            )
+
+    visit(root)
+    files.sort(key=lambda item: item.relative_path.encode("utf-8"))
+    directories.sort(
+        key=lambda item: (
+            len(pathlib.PurePosixPath(item.relative_path).parts),
+            item.relative_path.encode("utf-8"),
+        )
+    )
+    _require(
+        files
+        and len(files) == len({item.relative_path for item in files})
+        and len(directories) == len({item.relative_path for item in directories}),
+        "fixture evidence inventory is empty or duplicated",
+    )
+    return tuple(files), tuple(directories)
 
 
 def _canonical_document(
@@ -809,23 +1144,40 @@ def _fixture_state(config: Config) -> FixtureState:
         and inventory.get("profile", {}).get("sha256") == profile_artifact.sha256,
         "R9 finish profile or fixture inventory differs",
     )
-    forge = importlib.import_module(
-        "tools.blender.vista_playable_home_r9_fixtures.forge"
-    )
-    _require(
-        getattr(forge, "PROFILE_SCHEMA", None) == PROFILE_SCHEMA
-        and getattr(forge, "INVENTORY_SCHEMA", None) == FIXTURE_INVENTORY_SCHEMA,
-        "R9 fixture forge validator contract differs",
-    )
-    validated_profile = forge.load_profile(config.profile_path)
-    validated_inventory = forge.validate_fixture_inventory_file(
-        config.fixture_inventory_path
-    )
+    try:
+        forge = importlib.import_module(
+            "tools.blender.vista_playable_home_r9_fixtures.forge"
+        )
+        _require(
+            getattr(forge, "PROFILE_SCHEMA", None) == PROFILE_SCHEMA
+            and getattr(forge, "INVENTORY_SCHEMA", None) == FIXTURE_INVENTORY_SCHEMA,
+            "R9 fixture forge validator contract differs",
+        )
+        validated_profile = forge.load_profile(config.profile_path)
+        validated_inventory = forge.validate_fixture_inventory_file(
+            config.fixture_inventory_path
+        )
+    except R9PreflightError:
+        raise
+    except Exception as exc:
+        raise R9PreflightError(
+            "R9 fixture forge current-byte validation failed: " + str(exc)[:512]
+        ) from exc
     _require(
         validated_profile == profile and validated_inventory == inventory,
         "fixture forge validators returned different current bytes",
     )
-    return FixtureState(profile, profile_artifact, inventory, inventory_artifact)
+    evidence_files, evidence_directories = _collect_fixture_evidence(
+        config.fixture_inventory_path
+    )
+    return FixtureState(
+        profile,
+        profile_artifact,
+        inventory,
+        inventory_artifact,
+        evidence_files,
+        evidence_directories,
+    )
 
 
 def _tag_value(tags: Sequence[Any], prefix: str) -> str | None:
@@ -991,6 +1343,14 @@ def build_plan(
     parent_identity = _validate_attempt(selected, attempt_root)
     source = _source_state(selected)
     fixtures = _fixture_state(selected)
+    source_project = getattr(source.r6_inputs, "project", None)
+    source_records = (
+        r4._collect_static_records(source_project.path)
+        if source_project is not None
+        else ()
+    )
+    if apply:
+        _require(source_records, "apply planning requires the sealed R6 static tree")
     migration = build_migration_contract(
         source.r6_result["actor_inventory_reloaded"],
         source.placements,
@@ -1001,52 +1361,76 @@ def build_plan(
         selected.materializer_source, "R9 materializer"
     )
     commandlet_available = selected.commandlet_source.is_file()
-    commandlet = (
-        _artifact(_read_artifact(selected.commandlet_source, "R9 commandlet")[0])
+    commandlet_artifact = (
+        _read_artifact(selected.commandlet_source, "R9 commandlet")[0]
         if commandlet_available
+        else None
+    )
+    if apply:
+        _require(
+            commandlet_artifact is not None,
+            "apply planning requires the reviewed T4 commandlet",
+        )
+    commandlet = (
+        _artifact(commandlet_artifact)
+        if commandlet_artifact is not None
         else {
             "path": str(selected.commandlet_source),
             "sha256": None,
             "size_bytes": None,
         }
     )
+    toolchain_artifacts = {
+        "unreal_editor_cmd": _read_artifact(
+            selected.unreal_editor_cmd,
+            "UnrealEditor-Cmd",
+            expected_sha256=UNREAL_EDITOR_CMD_SHA256,
+            expected_bytes=UNREAL_EDITOR_CMD_BYTES,
+            executable=True,
+        )[0],
+        "build_version": _read_artifact(
+            selected.build_version,
+            "Build.version",
+            expected_sha256=BUILD_VERSION_SHA256,
+            expected_bytes=BUILD_VERSION_BYTES,
+        )[0],
+        "bwrap": _read_artifact(
+            selected.bwrap,
+            "Bubblewrap",
+            expected_sha256=BWRAP_SHA256,
+            expected_bytes=BWRAP_BYTES,
+            executable=True,
+        )[0],
+    }
     toolchain = {
-        "unreal_editor_cmd": _artifact(
-            _read_artifact(
-                selected.unreal_editor_cmd,
-                "UnrealEditor-Cmd",
-                expected_sha256=UNREAL_EDITOR_CMD_SHA256,
-                expected_bytes=UNREAL_EDITOR_CMD_BYTES,
-                executable=True,
-            )[0]
-        ),
-        "build_version": _artifact(
-            _read_artifact(
-                selected.build_version,
-                "Build.version",
-                expected_sha256=BUILD_VERSION_SHA256,
-                expected_bytes=BUILD_VERSION_BYTES,
-            )[0]
-        ),
-        "bwrap": _artifact(
-            _read_artifact(
-                selected.bwrap,
-                "Bubblewrap",
-                expected_sha256=BWRAP_SHA256,
-                expected_bytes=BWRAP_BYTES,
-                executable=True,
-            )[0]
-        ),
+        key: _artifact(value) for key, value in sorted(toolchain_artifacts.items())
+    }
+    fixture_evidence = {
+        "file_count": len(fixtures.evidence_files),
+        "total_bytes": sum(item.size_bytes for item in fixtures.evidence_files),
+        "files": [
+            {
+                "relative_path": item.relative_path,
+                "sha256": item.sha256,
+                "size_bytes": item.size_bytes,
+                "mode": item.mode,
+            }
+            for item in fixtures.evidence_files
+        ],
+        "directories": [
+            {"relative_path": item.relative_path, "mode": item.mode}
+            for item in fixtures.evidence_directories
+        ],
     }
     report = _seal_document(
         {
             "schema_version": PLAN_SCHEMA,
-            "status": APPLY_BLOCKED_STATUS if apply else DRY_RUN_STATUS,
-            "mode": "apply_preflight_zero_write" if apply else "dry_run_zero_write",
+            "status": APPLY_PLAN_STATUS if apply else DRY_RUN_STATUS,
+            "mode": "apply_requested_no_write_yet" if apply else "dry_run_zero_write",
             "attempt_root": str(attempt_root),
             "apply_requested": apply,
-            "will_write": False,
-            "will_execute_unreal": False,
+            "will_write": apply,
+            "will_execute_unreal": apply,
             "t4_commandlet_available": commandlet_available,
             "source": {
                 "r6_combined_receipt": _source_pin(source.r6_inputs),
@@ -1064,6 +1448,7 @@ def build_plan(
             },
             "finish_profile": _artifact(fixtures.profile_artifact),
             "fixture_inventory": _artifact(fixtures.inventory_artifact),
+            "fixture_evidence": fixture_evidence,
             "fixture_package_inventory": copy.deepcopy(
                 fixtures.inventory["ue_package_inventory"]
             ),
@@ -1104,8 +1489,12 @@ def build_plan(
         apply,
         supplied,
         source,
+        source_records,
         fixtures,
         migration,
+        materializer_artifact,
+        commandlet_artifact,
+        toolchain_artifacts,
         report,
         parent_identity,
     )
@@ -1179,10 +1568,1172 @@ def sanitized_environment(
     }
 
 
-def apply_plan(_prepared: PreparedPlan) -> dict[str, Any]:
-    raise R9PreflightError(
-        "T3 is deliberately zero-write; T4 commandlet and T5 publisher are unavailable"
+def _same_plan(left: PreparedPlan, right: PreparedPlan) -> bool:
+    return left == right
+
+
+def _assert_prepared_sources(prepared: PreparedPlan) -> None:
+    source = _source_state(prepared.config)
+    fixtures = _fixture_state(prepared.config)
+    project = getattr(source.r6_inputs, "project", None)
+    records = r4._collect_static_records(project.path) if project is not None else ()
+    materializer, _raw = _read_artifact(
+        prepared.config.materializer_source, "current R9 materializer"
     )
+    commandlet, _raw = _read_artifact(
+        prepared.config.commandlet_source, "current R9 commandlet"
+    )
+    toolchain = {
+        "unreal_editor_cmd": _read_artifact(
+            prepared.config.unreal_editor_cmd,
+            "current UnrealEditor-Cmd",
+            expected_sha256=UNREAL_EDITOR_CMD_SHA256,
+            expected_bytes=UNREAL_EDITOR_CMD_BYTES,
+            executable=True,
+        )[0],
+        "build_version": _read_artifact(
+            prepared.config.build_version,
+            "current Build.version",
+            expected_sha256=BUILD_VERSION_SHA256,
+            expected_bytes=BUILD_VERSION_BYTES,
+        )[0],
+        "bwrap": _read_artifact(
+            prepared.config.bwrap,
+            "current Bubblewrap",
+            expected_sha256=BWRAP_SHA256,
+            expected_bytes=BWRAP_BYTES,
+            executable=True,
+        )[0],
+    }
+    _require(
+        source == prepared.source
+        and records == prepared.source_records
+        and fixtures == prepared.fixtures
+        and materializer == prepared.materializer_artifact
+        and commandlet == prepared.commandlet_artifact
+        and toolchain == prepared.toolchain,
+        "R9 source/profile/fixture/script/tool state changed",
+    )
+
+
+def _copy_artifact(
+    source: Artifact, destination: pathlib.Path, label: str
+) -> dict[str, Any]:
+    current, raw = _read_artifact(
+        source.path,
+        label,
+        expected_sha256=source.sha256,
+        expected_bytes=source.size_bytes,
+    )
+    _require(current == source, label + " identity changed")
+    digest = r4._write_exclusive(destination, raw, mode=PRIVATE_FILE_MODE)
+    observed, _raw = _read_artifact(
+        destination,
+        "copied " + label,
+        expected_sha256=source.sha256,
+        expected_bytes=source.size_bytes,
+    )
+    _require(digest == source.sha256, "copied " + label + " digest differs")
+    return _artifact(observed)
+
+
+def _copy_fixture_evidence(prepared: PreparedPlan) -> None:
+    attempt = prepared.attempt_root
+    for directory in prepared.fixtures.evidence_directories:
+        parts = _safe_relative_path(directory.relative_path, "fixture evidence")
+        target = attempt.joinpath(*parts)
+        target.mkdir(mode=PRIVATE_DIRECTORY_MODE)
+        _require(
+            target.resolve(strict=True) == target
+            and stat.S_IMODE(os.lstat(target).st_mode) == PRIVATE_DIRECTORY_MODE,
+            "fixture evidence destination directory differs",
+        )
+    for record in prepared.fixtures.evidence_files:
+        try:
+            metadata = os.lstat(record.source)
+        except OSError as exc:
+            raise R9PreflightError("fixture evidence source disappeared") from exc
+        _require(
+            (
+                metadata.st_dev,
+                metadata.st_ino,
+                metadata.st_size,
+                metadata.st_mtime_ns,
+                stat.S_IMODE(metadata.st_mode),
+            )
+            == (
+                record.device,
+                record.inode,
+                record.size_bytes,
+                record.mtime_ns,
+                record.mode,
+            ),
+            "fixture evidence source identity changed: " + record.relative_path,
+        )
+        source = Artifact(record.source, record.sha256, record.size_bytes)
+        destination = attempt.joinpath(
+            *_safe_relative_path(record.relative_path, "fixture evidence")
+        )
+        current, raw = _read_artifact(
+            source.path,
+            "fixture evidence source",
+            expected_sha256=source.sha256,
+            expected_bytes=source.size_bytes,
+        )
+        _require(current == source, "fixture evidence bytes changed")
+        r4._write_exclusive(destination, raw, mode=record.mode)
+        copied, _raw = _read_artifact(
+            destination,
+            "copied fixture evidence",
+            expected_sha256=record.sha256,
+            expected_bytes=record.size_bytes,
+        )
+        _require(
+            stat.S_IMODE(os.lstat(copied.path).st_mode) == record.mode,
+            "copied fixture evidence mode differs",
+        )
+    for directory in sorted(
+        prepared.fixtures.evidence_directories,
+        key=lambda item: len(pathlib.PurePosixPath(item.relative_path).parts),
+        reverse=True,
+    ):
+        target = attempt.joinpath(
+            *_safe_relative_path(directory.relative_path, "fixture evidence")
+        )
+        os.chmod(target, directory.mode, follow_symlinks=False)
+
+
+def _assert_copied_fixture_evidence(prepared: PreparedPlan) -> None:
+    attempt = prepared.attempt_root
+    expected_files = {
+        item.relative_path: item for item in prepared.fixtures.evidence_files
+    }
+    expected_directories = {
+        item.relative_path: item for item in prepared.fixtures.evidence_directories
+    }
+    for relative, record in expected_files.items():
+        path = attempt.joinpath(*_safe_relative_path(relative, "fixture evidence"))
+        artifact, _raw = _read_artifact(
+            path,
+            "current copied fixture evidence",
+            expected_sha256=record.sha256,
+            expected_bytes=record.size_bytes,
+        )
+        _require(
+            artifact.path == path
+            and stat.S_IMODE(os.lstat(path).st_mode) == record.mode,
+            "current copied fixture evidence mode differs",
+        )
+    for relative, record in expected_directories.items():
+        path = attempt.joinpath(*_safe_relative_path(relative, "fixture evidence"))
+        try:
+            metadata = os.lstat(path)
+        except OSError as exc:
+            raise R9PreflightError(
+                "current copied fixture evidence directory is unavailable"
+            ) from exc
+        _require(
+            stat.S_ISDIR(metadata.st_mode)
+            and not stat.S_ISLNK(metadata.st_mode)
+            and stat.S_IMODE(metadata.st_mode) == record.mode,
+            "current copied fixture evidence directory mode differs",
+        )
+
+    top_namespaces = {
+        pathlib.PurePosixPath(relative).parts[0]
+        for relative in expected_directories
+        if pathlib.PurePosixPath(relative).parts
+    }
+    observed_files: set[str] = set()
+    observed_directories: set[str] = set()
+
+    def walk(directory: pathlib.Path) -> None:
+        try:
+            entries = sorted(
+                os.scandir(directory), key=lambda entry: entry.name.encode("utf-8")
+            )
+        except (OSError, UnicodeError) as exc:
+            raise R9PreflightError(
+                "current copied fixture evidence cannot be enumerated"
+            ) from exc
+        for entry in entries:
+            path = pathlib.Path(entry.path)
+            relative = path.relative_to(attempt).as_posix()
+            metadata = entry.stat(follow_symlinks=False)
+            _require(
+                not stat.S_ISLNK(metadata.st_mode),
+                "current copied fixture evidence contains a symlink",
+            )
+            if stat.S_ISDIR(metadata.st_mode):
+                observed_directories.add(relative)
+                walk(path)
+            else:
+                _require(
+                    stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1,
+                    "current copied fixture evidence contains a linked or special file",
+                )
+                observed_files.add(relative)
+
+    for namespace in sorted(top_namespaces):
+        root = attempt / namespace
+        observed_directories.add(namespace)
+        walk(root)
+    expected_namespace_files = {
+        relative
+        for relative in expected_files
+        if pathlib.PurePosixPath(relative).parts[0] in top_namespaces
+    }
+    expected_namespace_directories = {
+        relative
+        for relative in expected_directories
+        if pathlib.PurePosixPath(relative).parts[0] in top_namespaces
+    }
+    _require(
+        observed_files == expected_namespace_files
+        and observed_directories == expected_namespace_directories,
+        "current copied fixture evidence namespace gained or lost an entry",
+    )
+
+
+def _assert_local_execution_inputs(
+    prepared: PreparedPlan,
+    *,
+    execution_path: pathlib.Path,
+    execution_sha256: str,
+) -> None:
+    attempt = prepared.attempt_root
+    expected = {
+        attempt / MATERIALIZER_NAME: prepared.materializer_artifact,
+        attempt / COMMANDLET_NAME: prepared.commandlet_artifact,
+        attempt / FINISH_PROFILE_LOCAL_NAME: prepared.fixtures.profile_artifact,
+        attempt / FIXTURE_INVENTORY_LOCAL_NAME: prepared.fixtures.inventory_artifact,
+    }
+    for path, artifact in expected.items():
+        _require(artifact is not None, "planned local execution input is absent")
+        observed, _raw = _read_artifact(
+            path,
+            "current local execution input",
+            expected_sha256=artifact.sha256,
+            expected_bytes=artifact.size_bytes,
+        )
+        _require(observed.path == path, "current local execution input path differs")
+    execution, _raw = _read_artifact(
+        execution_path,
+        "current execution manifest",
+        expected_sha256=execution_sha256,
+    )
+    _require(execution.path == execution_path, "current execution path differs")
+    _assert_copied_fixture_evidence(prepared)
+
+
+def _copy_project(
+    prepared: PreparedPlan,
+) -> tuple[pathlib.Path, dict[str, Any], dict[str, Any]]:
+    project_root = prepared.attempt_root / "project"
+    project_root.mkdir(mode=PRIVATE_DIRECTORY_MODE)
+    project_fd = r4._open_directory(project_root)
+    try:
+        r4._mkdir_projection(project_fd, prepared.source_records)
+        methods = [
+            r4._copy_record(project_fd, record) for record in prepared.source_records
+        ]
+    finally:
+        os.close(project_fd)
+    _require(
+        len(methods) == len(prepared.source_records),
+        "R9 project copy accounting differs",
+    )
+    project = project_root / PROJECT_NAME
+    tree, manifest = r4._project_manifest(project)
+    _require(
+        tree == prepared.source.r6_inputs.project_static_tree
+        and manifest == prepared.source.source_manifest,
+        "copied R6 project differs from the sealed source tree",
+    )
+    return project, tree, manifest
+
+
+def _execution_document(
+    prepared: PreparedPlan,
+    *,
+    project: pathlib.Path,
+    materializer: pathlib.Path,
+    commandlet: pathlib.Path,
+    finish_profile: pathlib.Path,
+    fixture_inventory: pathlib.Path,
+    source_static_manifest: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    attempt = prepared.attempt_root
+    copied_source_map = project.parent / pathlib.Path(MAP_RELATIVE_PATH)
+    return _seal_document(
+        {
+            "schema_version": EXECUTION_SCHEMA,
+            "status": EXECUTION_STATUS,
+            "attempt_root": str(attempt),
+            "project": r4._artifact(project, "copied R9 project descriptor"),
+            "materializer": r4._artifact(materializer, "copied R9 materializer"),
+            "commandlet": r4._artifact(commandlet, "copied R9 commandlet"),
+            "finish_profile": r4._artifact(finish_profile, "copied R9 finish profile"),
+            "fixture_inventory": r4._artifact(
+                fixture_inventory, "copied R9 fixture inventory"
+            ),
+            "parent_combined_receipt": _source_pin(prepared.source.r6_inputs),
+            "r6_accessory_result": copy.deepcopy(
+                prepared.source.r6_inputs.accessory_r6_upgrade["result"]
+            ),
+            "hssd_r2_authority": copy.deepcopy(prepared.source.hssd_authority),
+            "source_project_static_tree": copy.deepcopy(
+                prepared.source.r6_inputs.project_static_tree
+            ),
+            "source_static_manifest": copy.deepcopy(dict(source_static_manifest)),
+            "hssd_namespace": copy.deepcopy(prepared.source.hssd_namespace),
+            "composition_contract": {
+                "migration": copy.deepcopy(prepared.migration),
+                "fixture_imports": copy.deepcopy(
+                    prepared.fixtures.profile["fixture_imports"]
+                ),
+                "collision_policy": copy.deepcopy(
+                    prepared.fixtures.profile["collision_policy"]
+                ),
+                "finish_profile_content_digest": PROFILE_CONTENT_DIGEST,
+                "expected_counts": copy.deepcopy(COMPOSITION_EXPECTED_COUNTS),
+            },
+            "engine": {
+                "version": ENGINE_VERSION,
+                "unreal_editor_cmd": _artifact(prepared.toolchain["unreal_editor_cmd"]),
+                "build_version": _artifact(prepared.toolchain["build_version"]),
+                "bwrap": _artifact(prepared.toolchain["bwrap"]),
+                "null_rhi": True,
+                "trace_server": "disabled",
+                "gpu": None,
+                "display": None,
+            },
+            "map": {
+                "object_path": MAP_OBJECT_PATH,
+                "relative_path": MAP_RELATIVE_PATH.as_posix(),
+                "source_package": r4._artifact(
+                    copied_source_map, "copied R6 source map"
+                ),
+            },
+            "result": {
+                "result_path": str(attempt / RESULT_NAME),
+                "result_sidecar_path": str(attempt / RESULT_SIDECAR_NAME),
+                "scene_receipt_path": str(attempt / SCENE_RECEIPT_NAME),
+                "scene_receipt_sidecar_path": str(attempt / SCENE_RECEIPT_SIDECAR_NAME),
+            },
+            "legal_scope": copy.deepcopy(LEGAL_SCOPE),
+            "acknowledgements": copy.deepcopy(dict(prepared.acknowledgements)),
+            "claims": copy.deepcopy(CLAIMS),
+            "acceptance": copy.deepcopy(ACCEPTANCE),
+        }
+    )
+
+
+def _stable_file_snapshot(path: pathlib.Path, label: str) -> StableFileSnapshot:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise R9PreflightError(label + " is unavailable") from exc
+    try:
+        before = os.fstat(descriptor)
+        _require(
+            stat.S_ISREG(before.st_mode) and before.st_nlink == 1,
+            label + " is not a single-link regular file",
+        )
+        digest = hashlib.sha256()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+        before_identity = (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        )
+        after_identity = (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        )
+        _require(before_identity == after_identity, label + " changed while sealed")
+        return StableFileSnapshot(*after_identity, digest.hexdigest())
+    finally:
+        os.close(descriptor)
+
+
+def _wait_for_stable_file_snapshots(
+    paths: Mapping[str, pathlib.Path],
+) -> dict[str, StableFileSnapshot]:
+    snapshots = {
+        label: _stable_file_snapshot(path, label) for label, path in paths.items()
+    }
+    for _ in range(1, LOG_CLOSURE_OBSERVATIONS):
+        time.sleep(LOG_CLOSURE_INTERVAL_SECONDS)
+        observed = {
+            label: _stable_file_snapshot(path, label) for label, path in paths.items()
+        }
+        _require(observed == snapshots, "post-exit Unreal logs continued changing")
+        snapshots = observed
+    return snapshots
+
+
+def _run_unreal(
+    prepared: PreparedPlan,
+    *,
+    project: pathlib.Path,
+    commandlet: pathlib.Path,
+    execution_path: pathlib.Path,
+    execution_sha256: str,
+    popen_factory: Callable[..., subprocess.Popen[Any]] = subprocess.Popen,
+    process_tree_waiter: Callable[..., int] = r4._wait_process_tree,
+    timeout_seconds: float = TIMEOUT_SECONDS,
+) -> tuple[dict[str, pathlib.Path], dict[str, StableFileSnapshot]]:
+    _require(
+        isinstance(timeout_seconds, (int, float))
+        and not isinstance(timeout_seconds, bool)
+        and math.isfinite(float(timeout_seconds))
+        and timeout_seconds > 0,
+        "Unreal timeout must be positive and finite",
+    )
+    _require(
+        not r4._snapshot_preexisting_descendants(),
+        "R9 supervisor has a preexisting child or descendant",
+    )
+    attempt = prepared.attempt_root
+    private_root = attempt / "runtime"
+    private_root.mkdir(mode=PRIVATE_DIRECTORY_MODE)
+    for name in (
+        "home",
+        "tmp",
+        "xdg-cache",
+        "xdg-config",
+        "xdg-data",
+        "user",
+        "ddc",
+    ):
+        (private_root / name).mkdir(mode=PRIVATE_DIRECTORY_MODE)
+    stdout_path = attempt / STDOUT_NAME
+    engine_log = attempt / ENGINE_LOG_NAME
+    descriptor = os.open(
+        stdout_path,
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_CLOEXEC", 0),
+        PRIVATE_FILE_MODE,
+    )
+    os.fchmod(descriptor, PRIVATE_FILE_MODE)
+    previous_handlers: Mapping[int, Any] = {}
+    previous_subreaper: bool | None = None
+    try:
+        with os.fdopen(descriptor, "wb") as output:
+            environment = sanitized_environment(
+                prepared,
+                execution_path=execution_path,
+                execution_sha256=execution_sha256,
+                private_root=private_root,
+            )
+            command = build_unreal_command(
+                prepared,
+                project=project,
+                commandlet=commandlet,
+                private_root=private_root,
+            )
+            previous_handlers, _mask = r4._signal_handlers()
+            try:
+                spawn_floor = r4._process_start_floor()
+                previous_subreaper = r4._set_child_subreaper(True)
+                process = popen_factory(
+                    command,
+                    cwd=project.parent,
+                    stdin=subprocess.DEVNULL,
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                    env=environment,
+                    start_new_session=True,
+                    shell=False,
+                    umask=0o077,
+                )
+                return_code = process_tree_waiter(
+                    process, timeout=timeout_seconds, spawn_floor=spawn_floor
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise R9PreflightError("Unreal R9 composition timed out") from exc
+            finally:
+                r4._restore_handlers(previous_handlers)
+            _require(return_code == 0, f"Unreal R9 composition exited {return_code}")
+    finally:
+        if previous_subreaper is not None:
+            r4._set_child_subreaper(previous_subreaper)
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+    _require(engine_log.is_file(), "Unreal R9 engine log is absent")
+    os.chmod(engine_log, PRIVATE_FILE_MODE, follow_symlinks=False)
+    paths = {"engine_log": engine_log, "stdout_log": stdout_path}
+    return paths, _wait_for_stable_file_snapshots(paths)
+
+
+def _marker_payloads(stdout_path: pathlib.Path, marker: str) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    try:
+        lines = stdout_path.read_text(encoding="utf-8", errors="strict").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise R9PreflightError("R9 stdout log is unavailable or not UTF-8") from exc
+    for line in lines:
+        if marker not in line:
+            continue
+        raw = line.split(marker, 1)[1].strip().encode("utf-8")
+        payloads.append(_strict_json(raw, "R9 commandlet marker"))
+    return payloads
+
+
+def _canonical_sidecar_document(
+    path: pathlib.Path,
+    sidecar: pathlib.Path,
+    label: str,
+    *,
+    expected_keys: frozenset[str],
+) -> tuple[Artifact, dict[str, Any]]:
+    artifact, document = _canonical_document(
+        path,
+        label,
+        expected_keys=expected_keys,
+    )
+    sidecar_artifact, sidecar_raw = _read_artifact(sidecar, label + " sidecar")
+    expected = f"{artifact.sha256}  {path.name}\n".encode("ascii")
+    _require(
+        sidecar_raw == expected and sidecar_artifact.size_bytes == len(expected),
+        label + " sidecar differs",
+    )
+    return artifact, document
+
+
+def _fixture_package_paths(profile: Mapping[str, Any]) -> tuple[str, ...]:
+    imports = profile.get("fixture_imports")
+    _require(type(imports) is dict, "fixture import contract is absent")
+    packages = imports.get("exact_package_names")
+    _require(
+        type(packages) is list
+        and len(packages) == 9
+        and packages == sorted(packages)
+        and len(set(packages)) == 9
+        and all(
+            type(value) is str and value.startswith("/Game/") for value in packages
+        ),
+        "fixture package allowlist differs",
+    )
+    return tuple(
+        "Content/" + value.removeprefix("/Game/") + ".uasset" for value in packages
+    )
+
+
+def _validate_t4_contract(
+    prepared: PreparedPlan,
+    execution: Mapping[str, Any],
+    result: Mapping[str, Any],
+    scene: Mapping[str, Any],
+) -> None:
+    commandlet = prepared.attempt_root / COMMANDLET_NAME
+    _require(
+        prepared.commandlet_artifact is not None,
+        "R9 commandlet contract artifact is absent",
+    )
+    module_name = "_vista_r9_sealed_commandlet_" + prepared.commandlet_artifact.sha256
+    try:
+        specification = importlib.util.spec_from_file_location(module_name, commandlet)
+        _require(
+            specification is not None and specification.loader is not None,
+            "R9 commandlet contract loader is unavailable",
+        )
+        module = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(module)
+        validator = getattr(module, "validate_result_document", None)
+        _require(callable(validator), "R9 commandlet pure result validator is absent")
+        _require(
+            getattr(module, "RESULT_KEYS", None) == RESULT_KEYS
+            and getattr(module, "SCENE_KEYS", None) == SCENE_RECEIPT_KEYS
+            and getattr(module, "OBSERVATION_KEYS", None) == UE_OBSERVATION_KEYS
+            and getattr(module, "RESULT_GATE_KEYS", None) == UE_RESULT_GATE_KEYS,
+            "R9 commandlet host contract constants differ",
+        )
+        validator(execution, result, scene)
+    except R9PreflightError:
+        raise
+    except Exception as exc:
+        raise R9PreflightError(
+            "R9 commandlet pure result validation failed: " + str(exc)[:512]
+        ) from exc
+
+
+def _exact_static_delta(
+    prepared: PreparedPlan,
+    *,
+    baseline_manifest: Mapping[str, Mapping[str, Any]],
+    output_manifest: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    fixture_paths = _fixture_package_paths(prepared.fixtures.profile)
+    allowed = {MAP_RELATIVE_PATH.as_posix(), *fixture_paths}
+    changed = {
+        relative
+        for relative in set(baseline_manifest) | set(output_manifest)
+        if baseline_manifest.get(relative) != output_manifest.get(relative)
+    }
+    _require(
+        changed == allowed
+        and MAP_RELATIVE_PATH.as_posix() in baseline_manifest
+        and MAP_RELATIVE_PATH.as_posix() in output_manifest
+        and all(path not in baseline_manifest for path in fixture_paths)
+        and all(path in output_manifest for path in fixture_paths),
+        "R9 static delta is not exactly map plus nine fixture packages",
+    )
+    return {
+        "policy": "exact_map_plus_sealed_fixture_package_inventory/v1",
+        "changed_relative_paths": sorted(changed),
+        "map_relative_path": MAP_RELATIVE_PATH.as_posix(),
+        "fixture_package_relative_paths": list(fixture_paths),
+        "changed_file_count": 10,
+    }
+
+
+def _validate_commandlet_receipts(
+    prepared: PreparedPlan,
+    *,
+    execution_path: pathlib.Path,
+    execution_sha256: str,
+    project_tree: Mapping[str, Any],
+    stdout_path: pathlib.Path,
+) -> tuple[dict[str, Any], dict[str, Any], Artifact, Artifact]:
+    attempt = prepared.attempt_root
+    result_artifact, result = _canonical_sidecar_document(
+        attempt / RESULT_NAME,
+        attempt / RESULT_SIDECAR_NAME,
+        "R9 commandlet result",
+        expected_keys=RESULT_KEYS,
+    )
+    map_path = attempt / "project" / pathlib.Path(MAP_RELATIVE_PATH)
+    map_artifact = r4._artifact(map_path, "R9 commandlet map")
+    _require(
+        result.get("schema_version") == RESULT_SCHEMA
+        and result.get("status") == UPGRADE_STATUS
+        and result.get("provider_id") == PROVIDER_ID
+        and result.get("human_operated_visual_demo_only") is True
+        and result.get("prohibited_agent_adapter") is True
+        and result.get("execution_sha256") == execution_sha256
+        and result.get("map_object_path") == MAP_OBJECT_PATH
+        and result.get("map_package") == map_artifact
+        and result.get("project_static_tree") == project_tree
+        and type(result.get("observations")) is dict
+        and set(result["observations"]) == UE_OBSERVATION_KEYS
+        and result.get("legal_scope") == LEGAL_SCOPE
+        and result.get("claims") == CLAIMS
+        and result.get("acceptance") == ACCEPTANCE
+        and result.get("error") is None,
+        "R9 commandlet result lineage or pending boundary differs",
+    )
+    gates = result.get("gates")
+    _require(
+        type(gates) is dict
+        and set(gates) == UE_RESULT_GATE_KEYS
+        and all(value is True for value in gates.values()),
+        "R9 commandlet UE gate inventory differs",
+    )
+    scene_artifact, scene = _canonical_sidecar_document(
+        attempt / SCENE_RECEIPT_NAME,
+        attempt / SCENE_RECEIPT_SIDECAR_NAME,
+        "R9 commandlet scene receipt",
+        expected_keys=SCENE_RECEIPT_KEYS,
+    )
+    execution_artifact = r4._artifact(execution_path, "R9 execution manifest")
+    _execution_artifact, execution = _canonical_document(
+        execution_path,
+        "R9 execution manifest",
+    )
+    _require(
+        execution_artifact["sha256"] == execution_sha256
+        and scene.get("schema_version") == SCENE_RECEIPT_SCHEMA
+        and scene.get("status") == UPGRADE_STATUS
+        and scene.get("provider_id") == PROVIDER_ID
+        and scene.get("human_operated_visual_demo_only") is True
+        and scene.get("prohibited_agent_adapter") is True
+        and scene.get("execution") == execution_artifact
+        and scene.get("result") == _artifact(result_artifact)
+        and scene.get("map_object_path") == MAP_OBJECT_PATH
+        and scene.get("map_package") == map_artifact
+        and scene.get("project_static_tree") == project_tree
+        and scene.get("observations") == result["observations"]
+        and scene.get("legal_scope") == LEGAL_SCOPE
+        and scene.get("claims") == CLAIMS
+        and scene.get("acceptance") == ACCEPTANCE,
+        "R9 commandlet scene receipt lineage differs",
+    )
+    _require(
+        _marker_payloads(stdout_path, RESULT_MARKER)
+        == [{"path": str(result_artifact.path), "sha256": result_artifact.sha256}]
+        and _marker_payloads(stdout_path, SCENE_RECEIPT_MARKER)
+        == [{"path": str(scene_artifact.path), "sha256": scene_artifact.sha256}],
+        "R9 commandlet marker inventory differs",
+    )
+    _validate_t4_contract(prepared, execution, result, scene)
+    return result, scene, result_artifact, scene_artifact
+
+
+def _log_pins(
+    paths: Mapping[str, pathlib.Path], snapshots: Mapping[str, StableFileSnapshot]
+) -> list[dict[str, Any]]:
+    _require(set(paths) == set(snapshots), "R9 log snapshot inventory differs")
+    return [snapshots[key].pin(paths[key]) for key in sorted(paths)]
+
+
+def _assert_log_snapshots(
+    paths: Mapping[str, pathlib.Path], snapshots: Mapping[str, StableFileSnapshot]
+) -> None:
+    observed = {
+        label: _stable_file_snapshot(path, label) for label, path in paths.items()
+    }
+    _require(observed == snapshots, "R9 post-exit log bytes changed")
+
+
+def _publication_state(
+    prepared: PreparedPlan,
+    *,
+    execution_path: pathlib.Path,
+    execution_sha256: str,
+    baseline_manifest: Mapping[str, Mapping[str, Any]],
+    log_paths: Mapping[str, pathlib.Path],
+    log_snapshots: Mapping[str, StableFileSnapshot],
+) -> dict[str, Any]:
+    _assert_prepared_sources(prepared)
+    _assert_local_execution_inputs(
+        prepared,
+        execution_path=execution_path,
+        execution_sha256=execution_sha256,
+    )
+    _assert_log_snapshots(log_paths, log_snapshots)
+    attempt = prepared.attempt_root
+    project = attempt / "project" / PROJECT_NAME
+    tree, manifest = r4._project_manifest(project)
+    delta = _exact_static_delta(
+        prepared,
+        baseline_manifest=baseline_manifest,
+        output_manifest=manifest,
+    )
+    result, scene, result_artifact, scene_artifact = _validate_commandlet_receipts(
+        prepared,
+        execution_path=execution_path,
+        execution_sha256=execution_sha256,
+        project_tree=tree,
+        stdout_path=log_paths["stdout_log"],
+    )
+    map_path = attempt / "project" / pathlib.Path(MAP_RELATIVE_PATH)
+    return {
+        "project": r4._artifact(project, "R9 publication project"),
+        "project_static_tree": tree,
+        "project_manifest": manifest,
+        "map": r4._artifact(map_path, "R9 publication map"),
+        "execution": r4._artifact(execution_path, "R9 publication execution"),
+        "result": _artifact(result_artifact),
+        "scene_receipt": _artifact(scene_artifact),
+        "finish_profile": r4._artifact(
+            attempt / FINISH_PROFILE_LOCAL_NAME, "R9 publication finish profile"
+        ),
+        "fixture_inventory": r4._artifact(
+            attempt / FIXTURE_INVENTORY_LOCAL_NAME,
+            "R9 publication fixture inventory",
+        ),
+        "materializer": r4._artifact(
+            attempt / MATERIALIZER_NAME, "R9 publication materializer"
+        ),
+        "commandlet": r4._artifact(
+            attempt / COMMANDLET_NAME, "R9 publication commandlet"
+        ),
+        "logs": _log_pins(log_paths, log_snapshots),
+        "static_delta": delta,
+        "result_document": result,
+        "scene_document": scene,
+    }
+
+
+def _state_without_manifest(state: Mapping[str, Any]) -> dict[str, Any]:
+    value = copy.deepcopy(dict(state))
+    value.pop("project_manifest", None)
+    return value
+
+
+def _host_receipt(
+    prepared: PreparedPlan,
+    state: Mapping[str, Any],
+    *,
+    log_snapshots: Mapping[str, StableFileSnapshot],
+) -> dict[str, Any]:
+    current = {
+        "execution": copy.deepcopy(state["execution"]),
+        "result": copy.deepcopy(state["result"]),
+        "scene_receipt": copy.deepcopy(state["scene_receipt"]),
+        "map": copy.deepcopy(state["map"]),
+        "project_static_tree": copy.deepcopy(state["project_static_tree"]),
+        "logs": copy.deepcopy(state["logs"]),
+        "passed": True,
+    }
+    _require(set(current) == CURRENT_BYTE_KEYS, "R9 current-byte keys differ")
+    closure_rows = {
+        key: {
+            "device": snapshot.device,
+            "inode": snapshot.inode,
+            "size_bytes": snapshot.size_bytes,
+            "mtime_ns": snapshot.mtime_ns,
+            "ctime_ns": snapshot.ctime_ns,
+            "sha256": snapshot.sha256,
+        }
+        for key, snapshot in sorted(log_snapshots.items())
+    }
+    return _seal_document(
+        {
+            "schema_version": HOST_RECEIPT_SCHEMA,
+            "status": UPGRADE_STATUS,
+            "provider_id": PROVIDER_ID,
+            "human_operated_visual_demo_only": True,
+            "prohibited_agent_adapter": True,
+            "execution": copy.deepcopy(state["execution"]),
+            "result": copy.deepcopy(state["result"]),
+            "scene_receipt": copy.deepcopy(state["scene_receipt"]),
+            "project": copy.deepcopy(state["project"]),
+            "map": {
+                "object_path": MAP_OBJECT_PATH,
+                "package": copy.deepcopy(state["map"]),
+            },
+            "project_static_tree": copy.deepcopy(state["project_static_tree"]),
+            "logs": copy.deepcopy(state["logs"]),
+            "log_closure": {
+                "policy": copy.deepcopy(LOG_CLOSURE_POLICY),
+                "residual_process_disposition": "absent_after_descendant_tracker",
+                "snapshots": closure_rows,
+            },
+            "static_delta": copy.deepcopy(state["static_delta"]),
+            "current_byte_revalidation": current,
+            "gates": {key: True for key in sorted(HOST_GATE_KEYS)},
+            "legal_scope": copy.deepcopy(LEGAL_SCOPE),
+            "claims": copy.deepcopy(CLAIMS),
+            "acceptance": copy.deepcopy(ACCEPTANCE),
+        }
+    )
+
+
+def _validate_host_receipt(
+    prepared: PreparedPlan,
+    *,
+    expected: Mapping[str, Any],
+    state: Mapping[str, Any],
+) -> dict[str, Any]:
+    path = prepared.attempt_root / HOST_RECEIPT_NAME
+    _artifact_value, observed = _canonical_document(
+        path,
+        "R9 host receipt",
+        expected_keys=HOST_RECEIPT_KEYS,
+    )
+    _require(
+        observed == expected
+        and observed.get("gates") == {key: True for key in sorted(HOST_GATE_KEYS)}
+        and observed.get("current_byte_revalidation", {}).get("passed") is True
+        and observed.get("static_delta") == state["static_delta"],
+        "R9 host receipt differs after current-byte validation",
+    )
+    return observed
+
+
+def _combined_receipt(
+    prepared: PreparedPlan,
+    state: Mapping[str, Any],
+    host_pin: Mapping[str, Any],
+) -> dict[str, Any]:
+    inputs = prepared.source.r6_inputs
+    upgrade = {
+        "schema_version": UPGRADE_SCHEMA,
+        "status": UPGRADE_STATUS,
+        "parent_combined_receipt": _source_pin(inputs),
+        "source_map": {
+            "path": str(inputs.map_package.path),
+            "sha256": inputs.map_package.sha256,
+            "size_bytes": inputs.map_package.size_bytes,
+        },
+        "source_project_static_tree": copy.deepcopy(inputs.project_static_tree),
+        "hssd_r2_authority": copy.deepcopy(prepared.source.hssd_authority),
+        "finish_profile": copy.deepcopy(state["finish_profile"]),
+        "fixture_inventory": copy.deepcopy(state["fixture_inventory"]),
+        "execution": copy.deepcopy(state["execution"]),
+        "result": copy.deepcopy(state["result"]),
+        "scene_receipt": copy.deepcopy(state["scene_receipt"]),
+        "host_receipt": copy.deepcopy(dict(host_pin)),
+        "materializer": copy.deepcopy(state["materializer"]),
+        "commandlet": copy.deepcopy(state["commandlet"]),
+        "unreal_editor_cmd": _artifact(prepared.toolchain["unreal_editor_cmd"]),
+        "build_version": _artifact(prepared.toolchain["build_version"]),
+        "bwrap": _artifact(prepared.toolchain["bwrap"]),
+        "map_object_path": MAP_OBJECT_PATH,
+        "output_project_static_tree": copy.deepcopy(state["project_static_tree"]),
+        "observations": copy.deepcopy(PUBLICATION_OBSERVATIONS),
+        "legal_scope": copy.deepcopy(LEGAL_SCOPE),
+        "claims": copy.deepcopy(CLAIMS),
+        "acceptance": copy.deepcopy(ACCEPTANCE),
+    }
+    return _seal_document(
+        {
+            "schema_version": COMBINED_RECEIPT_SCHEMA_V5,
+            "status": r6_launcher.COMBINED_RECEIPT_STATUS,
+            "provider_id": PROVIDER_ID,
+            "human_operated_visual_demo_only": True,
+            "prohibited_agent_adapter": True,
+            "project": copy.deepcopy(state["project"]),
+            "project_static_tree": copy.deepcopy(state["project_static_tree"]),
+            "source_provenance": copy.deepcopy(dict(inputs.source_provenance)),
+            "executable": {
+                "path": str(inputs.executable.path),
+                "sha256": inputs.executable.sha256,
+                "size_bytes": inputs.executable.size_bytes,
+            },
+            "map": {
+                "object_path": MAP_OBJECT_PATH,
+                "package": copy.deepcopy(state["map"]),
+            },
+            "legal_scope": copy.deepcopy(LEGAL_SCOPE),
+            "claims": copy.deepcopy(CLAIMS),
+            "hssd_r2_citysample_live_r1_upgrade": upgrade,
+        }
+    )
+
+
+def _validate_combined_receipt(
+    prepared: PreparedPlan,
+    *,
+    expected: Mapping[str, Any],
+    state: Mapping[str, Any],
+) -> dict[str, Any]:
+    attempt = prepared.attempt_root
+    receipt_path = attempt / r6_launcher.COMBINED_RECEIPT_NAME
+    artifact, observed = _canonical_document(
+        receipt_path,
+        "R9 v5 combined receipt",
+        expected_keys=r6_launcher.RECEIPT_KEYS | {"hssd_r2_citysample_live_r1_upgrade"},
+    )
+    sidecar_artifact, sidecar_raw = _read_artifact(
+        attempt / r6_launcher.COMBINED_RECEIPT_SIDECAR_NAME,
+        "R9 v5 combined receipt sidecar",
+    )
+    expected_sidecar = (
+        f"{artifact.sha256}  {r6_launcher.COMBINED_RECEIPT_NAME}\n".encode("ascii")
+    )
+    upgrade = observed.get("hssd_r2_citysample_live_r1_upgrade")
+    expected_upgrade = expected.get("hssd_r2_citysample_live_r1_upgrade")
+    _require(
+        type(upgrade) is dict and type(expected_upgrade) is dict,
+        "R9 v5 upgrade is absent",
+    )
+    host_pin = upgrade.get("host_receipt")
+    _require(type(host_pin) is dict, "R9 v5 host receipt pin is absent")
+    current_host = r4._artifact(
+        attempt / HOST_RECEIPT_NAME, "R9 v5 current host receipt"
+    )
+    _require(
+        sidecar_raw == expected_sidecar
+        and sidecar_artifact.size_bytes == len(expected_sidecar)
+        and observed == expected
+        and upgrade == expected_upgrade
+        and host_pin == current_host
+        and observed.get("project") == state["project"]
+        and observed.get("project_static_tree") == state["project_static_tree"]
+        and observed.get("map")
+        == {"object_path": MAP_OBJECT_PATH, "package": state["map"]}
+        and not (attempt / FAILURE_NAME).exists(),
+        "R9 v5 combined receipt current-byte validation differs",
+    )
+    return observed
+
+
+def apply_plan(
+    prepared: PreparedPlan,
+    *,
+    popen_factory: Callable[..., subprocess.Popen[Any]] = subprocess.Popen,
+    process_tree_waiter: Callable[..., int] = r4._wait_process_tree,
+    timeout_seconds: float = TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    _require(
+        prepared.apply_requested
+        and dict(prepared.acknowledgements) == ACKNOWLEDGEMENTS,
+        "exactly acknowledged R9 apply plan required",
+    )
+    expected = build_plan(
+        prepared.attempt_root,
+        apply=True,
+        acknowledgements=ACKNOWLEDGEMENTS,
+        config=prepared.config,
+    )
+    _require(_same_plan(prepared, expected), "R9 apply plan changed")
+    parent_metadata = os.lstat(prepared.config.run_parent)
+    _require(
+        (parent_metadata.st_dev, parent_metadata.st_ino)
+        == prepared.run_parent_identity,
+        "R9 run parent changed before apply",
+    )
+    attempt = prepared.attempt_root
+    attempt.mkdir(mode=PRIVATE_DIRECTORY_MODE)
+    try:
+        project, baseline_tree, baseline_manifest = _copy_project(prepared)
+        materializer = attempt / MATERIALIZER_NAME
+        commandlet = attempt / COMMANDLET_NAME
+        finish_profile = attempt / FINISH_PROFILE_LOCAL_NAME
+        fixture_inventory = attempt / FIXTURE_INVENTORY_LOCAL_NAME
+        _copy_artifact(
+            prepared.materializer_artifact, materializer, "planned R9 materializer"
+        )
+        _require(
+            prepared.commandlet_artifact is not None,
+            "reviewed R9 commandlet disappeared",
+        )
+        _copy_artifact(
+            prepared.commandlet_artifact, commandlet, "planned R9 commandlet"
+        )
+        _copy_artifact(
+            prepared.fixtures.profile_artifact,
+            finish_profile,
+            "planned R9 finish profile",
+        )
+        _copy_artifact(
+            prepared.fixtures.inventory_artifact,
+            fixture_inventory,
+            "planned R9 fixture inventory",
+        )
+        _copy_fixture_evidence(prepared)
+        execution = _execution_document(
+            prepared,
+            project=project,
+            materializer=materializer,
+            commandlet=commandlet,
+            finish_profile=finish_profile,
+            fixture_inventory=fixture_inventory,
+            source_static_manifest=baseline_manifest,
+        )
+        execution_path = attempt / EXECUTION_NAME
+        execution_raw = _canonical_json(execution)
+        execution_sha256 = r4._write_exclusive(execution_path, execution_raw)
+        _assert_prepared_sources(prepared)
+        _assert_local_execution_inputs(
+            prepared,
+            execution_path=execution_path,
+            execution_sha256=execution_sha256,
+        )
+        _require(
+            r4._project_manifest(project) == (baseline_tree, baseline_manifest),
+            "copied R6 project changed immediately before Unreal",
+        )
+        log_paths, log_snapshots = _run_unreal(
+            prepared,
+            project=project,
+            commandlet=commandlet,
+            execution_path=execution_path,
+            execution_sha256=execution_sha256,
+            popen_factory=popen_factory,
+            process_tree_waiter=process_tree_waiter,
+            timeout_seconds=timeout_seconds,
+        )
+        state = _publication_state(
+            prepared,
+            execution_path=execution_path,
+            execution_sha256=execution_sha256,
+            baseline_manifest=baseline_manifest,
+            log_paths=log_paths,
+            log_snapshots=log_snapshots,
+        )
+        host = _host_receipt(
+            prepared,
+            state,
+            log_snapshots=log_snapshots,
+        )
+        final_before_host = _publication_state(
+            prepared,
+            execution_path=execution_path,
+            execution_sha256=execution_sha256,
+            baseline_manifest=baseline_manifest,
+            log_paths=log_paths,
+            log_snapshots=log_snapshots,
+        )
+        _require(
+            _state_without_manifest(final_before_host) == _state_without_manifest(state)
+            and final_before_host["project_manifest"] == state["project_manifest"],
+            "R9 publication bytes changed before the host receipt",
+        )
+        host_path = attempt / HOST_RECEIPT_NAME
+        r4._write_exclusive(host_path, _canonical_json(host))
+        _validate_host_receipt(prepared, expected=host, state=state)
+        host_pin = r4._artifact(host_path, "published R9 host receipt")
+        combined = _combined_receipt(prepared, state, host_pin)
+        final_before_combined = _publication_state(
+            prepared,
+            execution_path=execution_path,
+            execution_sha256=execution_sha256,
+            baseline_manifest=baseline_manifest,
+            log_paths=log_paths,
+            log_snapshots=log_snapshots,
+        )
+        _require(
+            _state_without_manifest(final_before_combined)
+            == _state_without_manifest(state)
+            and final_before_combined["project_manifest"] == state["project_manifest"],
+            "R9 publication bytes changed before the v5 receipt",
+        )
+        receipt_path = attempt / r6_launcher.COMBINED_RECEIPT_NAME
+        receipt_raw = _canonical_json(combined)
+        receipt_sha256 = r4._write_exclusive(receipt_path, receipt_raw)
+        r4._write_exclusive(
+            attempt / r6_launcher.COMBINED_RECEIPT_SIDECAR_NAME,
+            (f"{receipt_sha256}  {r6_launcher.COMBINED_RECEIPT_NAME}\n").encode(
+                "ascii"
+            ),
+        )
+        final = _publication_state(
+            prepared,
+            execution_path=execution_path,
+            execution_sha256=execution_sha256,
+            baseline_manifest=baseline_manifest,
+            log_paths=log_paths,
+            log_snapshots=log_snapshots,
+        )
+        _require(
+            _state_without_manifest(final) == _state_without_manifest(state)
+            and final["project_manifest"] == state["project_manifest"],
+            "R9 publication bytes changed after the v5 receipt",
+        )
+        return _validate_combined_receipt(
+            prepared,
+            expected=combined,
+            state=final,
+        )
+    except BaseException as exc:
+        failure = _seal_document(
+            {
+                "schema_version": HOST_RECEIPT_SCHEMA,
+                "status": FAILURE_STATUS,
+                "attempt_root": str(attempt),
+                "quarantined": True,
+                "source_mutation": False,
+                "human_operated_visual_demo_only": True,
+                "prohibited_agent_adapter": True,
+                "legal_scope": copy.deepcopy(LEGAL_SCOPE),
+                "claims": copy.deepcopy(CLAIMS),
+                "acceptance": copy.deepcopy(ACCEPTANCE),
+                "error": {"type": type(exc).__name__, "message": str(exc)[:512]},
+            }
+        )
+        try:
+            r4._write_exclusive(attempt / FAILURE_NAME, _canonical_json(failure))
+        except BaseException:  # noqa: BLE001,S110 - retain the original failure
+            pass
+        raise
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -1209,11 +2760,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             apply=arguments.apply,
             acknowledgements=_cli_acknowledgements(arguments),
         )
-        if arguments.apply:
-            apply_plan(prepared)
-        print(_canonical_json(prepared.report).decode("utf-8"), end="")
+        result = apply_plan(prepared) if arguments.apply else prepared.report
+        print(_canonical_json(result).decode("utf-8"), end="")
         return 0
-    except (R9PreflightError, r6_launcher.HumanVisualDemoError) as exc:
+    except (
+        R9PreflightError,
+        r4.CombinedRealismR4Error,
+        r6_launcher.HumanVisualDemoError,
+    ) as exc:
         print("R9 HSSD/City Sample preflight refused: " + str(exc), file=sys.stderr)
         return 2
 
