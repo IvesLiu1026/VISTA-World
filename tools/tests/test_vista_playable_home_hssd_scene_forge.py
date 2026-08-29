@@ -428,6 +428,13 @@ def test_apply_executes_verified_fd_and_sealed_worker_sources() -> None:
     )
 
 
+def test_background_render_metrics_reload_the_saved_png() -> None:
+    worker_source = forge.WORKER_PATH.read_text(encoding="utf-8")
+
+    assert "bpy.data.images.load(str(output), check_existing=False)" in worker_source
+    assert 'bpy.data.images.get("Render Result")' not in worker_source
+
+
 def test_resealed_fixed_contract_drift_fails_closed(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
