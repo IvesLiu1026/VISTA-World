@@ -1,0 +1,112 @@
+{
+  "schema_version": "simworld.vista.playable-home-r9-fixture-recipe/v1",
+  "recipe_id": "vista_playable_home_r9_fixtures_r1",
+  "units": "meters",
+  "coordinate_system": {
+    "handedness": "right",
+    "up_axis": "z",
+    "forward_axis": "x",
+    "origin_policy": "ceiling_mount_center"
+  },
+  "seed": 20260830,
+  "materials": [
+    {
+      "role": "brushed_metal",
+      "base_color_rgba": [0.18, 0.2, 0.22, 1.0],
+      "metallic": 0.82,
+      "roughness": 0.26,
+      "emission_color_rgba": [0.0, 0.0, 0.0, 1.0],
+      "emission_strength": 0.0,
+      "alpha_mode": "OPAQUE"
+    },
+    {
+      "role": "opal_diffuser",
+      "base_color_rgba": [0.93, 0.88, 0.74, 1.0],
+      "metallic": 0.0,
+      "roughness": 0.32,
+      "emission_color_rgba": [1.0, 0.74, 0.42, 1.0],
+      "emission_strength": 0.18,
+      "alpha_mode": "OPAQUE"
+    }
+  ],
+  "archetypes": [
+    {
+      "archetype_id": "flush_dome",
+      "root_node_name": "VISTA_R9_FLUSH_DOME_ROOT",
+      "mesh_node_name": "VISTA_R9_FLUSH_DOME",
+      "mesh_name": "SM_VISTA_R9_FLUSH_DOME",
+      "material_names": [
+        "M_VISTA_R9_FLUSH_DOME_BRUSHED_METAL",
+        "M_VISTA_R9_FLUSH_DOME_OPAL_DIFFUSER"
+      ],
+      "expected_mesh_local_bounds_cm": {
+        "min_cm": [-19.0, -19.0, -14.0],
+        "max_cm": [19.0, 19.0, 0.0]
+      },
+      "expected_mesh_count": 1,
+      "expected_primitive_count": 2,
+      "expected_material_count": 2
+    },
+    {
+      "archetype_id": "linear_panel",
+      "root_node_name": "VISTA_R9_LINEAR_PANEL_ROOT",
+      "mesh_node_name": "VISTA_R9_LINEAR_PANEL",
+      "mesh_name": "SM_VISTA_R9_LINEAR_PANEL",
+      "material_names": [
+        "M_VISTA_R9_LINEAR_PANEL_BRUSHED_METAL",
+        "M_VISTA_R9_LINEAR_PANEL_OPAL_DIFFUSER"
+      ],
+      "expected_mesh_local_bounds_cm": {
+        "min_cm": [-45.0, -9.0, -10.0],
+        "max_cm": [45.0, 9.0, 0.0]
+      },
+      "expected_mesh_count": 1,
+      "expected_primitive_count": 2,
+      "expected_material_count": 2
+    },
+    {
+      "archetype_id": "pendant",
+      "root_node_name": "VISTA_R9_PENDANT_ROOT",
+      "mesh_node_name": "VISTA_R9_PENDANT",
+      "mesh_name": "SM_VISTA_R9_PENDANT",
+      "material_names": [
+        "M_VISTA_R9_PENDANT_BRUSHED_METAL",
+        "M_VISTA_R9_PENDANT_OPAL_DIFFUSER"
+      ],
+      "expected_mesh_local_bounds_cm": {
+        "min_cm": [-18.0, -18.0, -48.0],
+        "max_cm": [18.0, 18.0, 0.0]
+      },
+      "expected_mesh_count": 1,
+      "expected_primitive_count": 2,
+      "expected_material_count": 2
+    }
+  ],
+  "export": {
+    "format": "GLB",
+    "apply_modifiers": true,
+    "include_cameras": false,
+    "include_lights": false,
+    "include_animations": false,
+    "include_textures": false,
+    "y_up": true,
+    "double_export_byte_check": true
+  },
+  "preview": {
+    "engine": "CYCLES",
+    "device": "CPU",
+    "resolution_px": [256, 256],
+    "samples": 8,
+    "transparent_background": true,
+    "double_render_byte_check": true,
+    "minimum_nontransparent_pixels": 256,
+    "minimum_luminance_range": 0.02
+  },
+  "claims": {
+    "downloaded_textures_used": false,
+    "external_assets_used": false,
+    "gta_quality_accepted": false,
+    "visual_acceptance": false
+  },
+  "content_digest": "09d9b345f520ddf657ab3c6d3ff680f56c77941a3a63e9396296d9a7fb0fb045"
+}
