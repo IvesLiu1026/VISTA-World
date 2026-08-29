@@ -601,10 +601,17 @@ def build_command(inputs: HumanVisualDemoInputs) -> list[str]:
         f"-ResY={HEIGHT}",
         f"-graphicsadapter={GPU}",
         "-NoSplash",
+        "-NOSOUND",
         "-NoAnalytics",
         "-notraceserver",
+        "-ddc=InstalledNoZenLocalFallback",
+        "-SaveToUserDir",
         "-UDPMESSAGING_TRANSPORT_ENABLE=0",
         "-ini:Engine:[/Script/TcpMessaging.TcpMessagingSettings]:EnableTransport=False",
+        (
+            "-ini:Engine:[/Script/AppleARKit.AppleARKitSettings]:"
+            "bEnableLiveLinkForFaceTracking=False"
+        ),
         f"-VistaCharacterProvider={PROVIDER_ID}",
         "-VistaHumanOperatedVisualDemo",
     ]
@@ -663,6 +670,8 @@ def build_plan(inputs: HumanVisualDemoInputs) -> dict[str, Any]:
             "extra_ue_arguments": False,
             "vista_agent_tcp_listener_requested": False,
             "network_readiness_probe": False,
+            "local_zen_autolaunch_disabled": True,
+            "apple_arkit_livelink_disabled": True,
             "agent_runtime_invoked": False,
             "human_operated_visual_demo_only": True,
             "prohibited_agent_adapter": True,
