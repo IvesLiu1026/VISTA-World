@@ -5,6 +5,7 @@
 #include "VistaPickupActor.generated.h"
 
 class UStaticMeshComponent;
+class UStaticMesh;
 
 UCLASS(Blueprintable)
 class VISTAPLAYABLEHOME_API AVistaPickupActor final : public AVistaSemanticActor
@@ -17,8 +18,28 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Pickup")
     TObjectPtr<UStaticMeshComponent> Mesh;
 
+    /**
+     * Optional render-only child. PickupMesh remains the transform, collision,
+     * physics, attachment, and drop authority even while this mesh is visible.
+     */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Pickup|Presentation")
+    TObjectPtr<UStaticMeshComponent> PresentationMesh;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Pickup")
     bool bPortable = true;
+
+    /** Bind one presentation asset and its pickup-local transform as a closed unit. */
+    UFUNCTION(BlueprintCallable, Category = "VISTA|Pickup|Presentation")
+    bool ConfigurePresentationMesh(
+        UStaticMesh* StaticMesh,
+        const FTransform& RelativeTransform);
+
+    /** Restore the original PickupMesh presentation without changing pickup state. */
+    UFUNCTION(BlueprintCallable, Category = "VISTA|Pickup|Presentation")
+    void ClearPresentationMesh();
+
+    UFUNCTION(BlueprintPure, Category = "VISTA|Pickup|Presentation")
+    bool HasPresentationMesh() const;
 
     UFUNCTION(BlueprintPure, Category = "VISTA|Pickup")
     AActor* GetCarrier() const { return HeldBy; }
@@ -38,6 +59,7 @@ public:
         TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:
+    virtual void OnConstruction(const FTransform& Transform) override;
     virtual void BeginPlay() override;
 
 private:
@@ -50,4 +72,5 @@ private:
     FVistaInteractionResult TryAttachTo(AActor* Carrier);
     void ApplyAttachmentState();
     void NormalizePlacementState();
+    void RefreshPresentationState();
 };

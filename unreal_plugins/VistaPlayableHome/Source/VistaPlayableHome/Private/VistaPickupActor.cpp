@@ -2,6 +2,7 @@
 
 #include "Components/StaticMeshComponent.h"
 #include "Engine/CollisionProfile.h"
+#include "Engine/StaticMesh.h"
 #include "EngineUtils.h"
 #include "Net/UnrealNetwork.h"
 #include "VistaHomeNpcCharacter.h"
@@ -222,6 +223,17 @@ AVistaPickupActor::AVistaPickupActor()
     Mesh->SetCollisionProfileName(UCollisionProfile::PhysicsActor_ProfileName);
     Mesh->SetSimulatePhysics(true);
     Mesh->SetGenerateOverlapEvents(true);
+
+    PresentationMesh =
+        CreateDefaultSubobject<UStaticMeshComponent>(TEXT("PresentationMesh"));
+    PresentationMesh->SetupAttachment(Mesh);
+    PresentationMesh->SetMobility(EComponentMobility::Movable);
+    PresentationMesh->SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
+    PresentationMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    PresentationMesh->SetSimulatePhysics(false);
+    PresentationMesh->SetGenerateOverlapEvents(false);
+    PresentationMesh->SetCanEverAffectNavigation(false);
+    PresentationMesh->SetVisibility(false, false);
     AllowedAffordances = {
         EVistaAffordance::Inspect,
         EVistaAffordance::PickUp,
@@ -229,9 +241,49 @@ AVistaPickupActor::AVistaPickupActor()
         EVistaAffordance::Place};
 }
 
+bool AVistaPickupActor::ConfigurePresentationMesh(
+    UStaticMesh* StaticMesh,
+    const FTransform& RelativeTransform)
+{
+    if (!IsValid(PresentationMesh) || !IsValid(StaticMesh) ||
+        RelativeTransform.ContainsNaN())
+    {
+        return false;
+    }
+
+    PresentationMesh->SetStaticMesh(StaticMesh);
+    PresentationMesh->SetRelativeTransform(RelativeTransform);
+    RefreshPresentationState();
+    return true;
+}
+
+void AVistaPickupActor::ClearPresentationMesh()
+{
+    if (!IsValid(PresentationMesh))
+    {
+        return;
+    }
+    PresentationMesh->SetStaticMesh(nullptr);
+    PresentationMesh->SetRelativeTransform(FTransform::Identity);
+    Mesh->SetVisibility(true, false);
+    RefreshPresentationState();
+}
+
+bool AVistaPickupActor::HasPresentationMesh() const
+{
+    return IsValid(PresentationMesh) && IsValid(PresentationMesh->GetStaticMesh());
+}
+
+void AVistaPickupActor::OnConstruction(const FTransform& Transform)
+{
+    Super::OnConstruction(Transform);
+    RefreshPresentationState();
+}
+
 void AVistaPickupActor::BeginPlay()
 {
     Super::BeginPlay();
+    RefreshPresentationState();
     NormalizePlacementState();
 }
 
@@ -488,5 +540,29 @@ void AVistaPickupActor::NormalizePlacementState()
     else
     {
         RuntimeStateValues.Remove(TEXT("placed_at"));
+    }
+}
+
+void AVistaPickupActor::RefreshPresentationState()
+{
+    if (!IsValid(Mesh) || !IsValid(PresentationMesh))
+    {
+        return;
+    }
+
+    const bool bHasPresentation = HasPresentationMesh();
+    PresentationMesh->SetMobility(EComponentMobility::Movable);
+    PresentationMesh->SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
+    PresentationMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    PresentationMesh->SetSimulatePhysics(false);
+    PresentationMesh->SetGenerateOverlapEvents(false);
+    PresentationMesh->SetCanEverAffectNavigation(false);
+    PresentationMesh->SetVisibility(bHasPresentation, false);
+
+    // Do not hide the actor: the render-only child must follow every actor-level
+    // attach, detach, placement, and physics transform owned by PickupMesh.
+    if (bHasPresentation)
+    {
+        Mesh->SetVisibility(false, false);
     }
 }
