@@ -1,5 +1,5 @@
 {
-  "content_digest": "2f039dcc386c469f7253c6d1e80e4339a1eebd3689d2321fcd442dbb6679e520",
+  "content_digest": "6d7b3a8132028cc3545202dc77a078153ddb43b3ad23f69b99890db252bb5938",
   "schema": "vista.r5-multiclient-trusted-projection/v2",
   "source_files": [
     {
@@ -334,8 +334,8 @@
     },
     {
       "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Private/VistaPlayableHomeCc0AnimationLibrary.cpp",
-      "sha256": "9f5e98c49a96340e50bb921a136d6b11b8237aae0326917de5643415f7197399",
-      "size_bytes": 19354
+      "sha256": "c813bcbc01e6d6e9e2ed62a8ade9d1a21bb9b55693471d7e8329249f7907baa9",
+      "size_bytes": 19379
     },
     {
       "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Private/VistaPlayableHomeEditorModule.cpp",
