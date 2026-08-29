@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simworld.org/schemas/vista-playable-home-realism-r4-v1.schema.json",
+  "title": "VISTA Playable Home R4 Lighting and Shadow Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "house_revision",
+    "source_house_content_digest",
+    "base_visual_profile",
+    "renderer_contract",
+    "practical_fixture_light_pairs",
+    "post_process",
+    "shadow_policy",
+    "claims",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "simworld.vista.playable-home-realism-r4/v1"
+    },
+    "profile_id": {
+      "const": "realistic_interior_r4_lighting_shadows_v1"
+    },
+    "house_revision": {
+      "const": "vista_playable_home_r1"
+    },
+    "source_house_content_digest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "base_visual_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["visual_profile_id", "content_digest"],
+      "properties": {
+        "visual_profile_id": {
+          "const": "realistic_interior_r2"
+        },
+        "content_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "renderer_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dynamic_gi",
+        "reflections",
+        "anti_aliasing",
+        "shadow_method",
+        "hardware_ray_tracing",
+        "config_is_runtime_proof"
+      ],
+      "properties": {
+        "dynamic_gi": {"const": "software_lumen"},
+        "reflections": {"const": "lumen"},
+        "anti_aliasing": {"const": "tsr"},
+        "shadow_method": {"const": "virtual_shadow_maps"},
+        "hardware_ray_tracing": {"const": false},
+        "config_is_runtime_proof": {"const": false}
+      }
+    },
+    "practical_fixture_light_pairs": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pair_id", "room_id", "fixture", "light"],
+        "properties": {
+          "pair_id": {"$ref": "#/$defs/safeId"},
+          "room_id": {"$ref": "#/$defs/safeId"},
+          "fixture": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fixture_id",
+              "mesh_object_path",
+              "location_cm",
+              "rotation_deg",
+              "scale",
+              "cast_shadow"
+            ],
+            "properties": {
+              "fixture_id": {"$ref": "#/$defs/safeId"},
+              "mesh_object_path": {
+                "const": "/Engine/BasicShapes/Cylinder.Cylinder"
+              },
+              "location_cm": {"$ref": "#/$defs/vector3"},
+              "rotation_deg": {"$ref": "#/$defs/vector3"},
+              "scale": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 2
+                }
+              },
+              "cast_shadow": {"const": true}
+            }
+          },
+          "light": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "light_id",
+              "type",
+              "location_cm",
+              "rotation_deg",
+              "scale",
+              "intensity",
+              "unit",
+              "temperature_k",
+              "attenuation_radius_cm",
+              "cast_shadow"
+            ],
+            "properties": {
+              "light_id": {"$ref": "#/$defs/safeId"},
+              "type": {"enum": ["rect", "spot"]},
+              "location_cm": {"$ref": "#/$defs/vector3"},
+              "rotation_deg": {"$ref": "#/$defs/vector3"},
+              "scale": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "maximum": 2
+                }
+              },
+              "intensity": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100000
+              },
+              "unit": {"enum": ["lumens", "candelas"]},
+              "temperature_k": {
+                "type": "number",
+                "minimum": 1800,
+                "maximum": 6500
+              },
+              "attenuation_radius_cm": {
+                "type": "number",
+                "minimum": 200,
+                "maximum": 2000
+              },
+              "cast_shadow": {"const": true}
+            }
+          }
+        }
+      }
+    },
+    "post_process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "motion_blur_amount",
+        "chromatic_aberration_intensity",
+        "film_grain_intensity",
+        "bloom_intensity",
+        "vignette_intensity",
+        "exposure"
+      ],
+      "properties": {
+        "motion_blur_amount": {"const": 0},
+        "chromatic_aberration_intensity": {"const": 0},
+        "film_grain_intensity": {"const": 0},
+        "bloom_intensity": {
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 0.4
+        },
+        "vignette_intensity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.15
+        },
+        "exposure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "metering_mode",
+            "min_ev100",
+            "max_ev100",
+            "speed_up",
+            "speed_down"
+          ],
+          "properties": {
+            "metering_mode": {"const": "histogram"},
+            "min_ev100": {"type": "number", "minimum": 4, "maximum": 10},
+            "max_ev100": {"type": "number", "minimum": 8, "maximum": 14},
+            "speed_up": {"type": "number", "minimum": 0.1, "maximum": 5},
+            "speed_down": {"type": "number", "minimum": 0.1, "maximum": 3}
+          }
+        }
+      }
+    },
+    "shadow_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "visible_presentation_cast_shadow",
+        "visible_presentation_cast_hidden_shadow",
+        "hidden_collision_proxy_cast_shadow",
+        "hidden_collision_proxy_cast_hidden_shadow"
+      ],
+      "properties": {
+        "visible_presentation_cast_shadow": {"const": true},
+        "visible_presentation_cast_hidden_shadow": {"const": false},
+        "hidden_collision_proxy_cast_shadow": {"const": false},
+        "hidden_collision_proxy_cast_hidden_shadow": {"const": false}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_visual_acceptance",
+        "gta_quality_accepted",
+        "runtime_play_proof"
+      ],
+      "properties": {
+        "runtime_visual_acceptance": {"const": false},
+        "gta_quality_accepted": {"const": false},
+        "runtime_play_proof": {"const": "pending"}
+      }
+    },
+    "content_digest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "safeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "vector3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"type": "number"}
+    }
+  }
+}

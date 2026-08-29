@@ -2,9 +2,11 @@
 
 # Modified in VISTA-World on 2026-08-22: materialize closed EventSpec outcomes.
 
+import hashlib
 import json
 import math
 import os
+import stat
 import sys
 
 import unreal
@@ -17,14 +19,30 @@ from commandlet_common import (  # noqa: E402
     SCENE_MARKER,
     SCENE_RECEIPT_SCHEMA,
     SCENE_RESULT_FILE,
+    canonical_json,
     canonical_path,
     load_build_plan,
     load_execution,
     require,
     require_sha,
+    safe_attempt_child,
     sha256_file,
     write_exclusive_receipt,
 )
+
+
+REALISM_R4_PROFILE_SCHEMA = "simworld.vista.playable-home-realism-r4/v1"
+REALISM_R4_PROFILE_ID = "realistic_interior_r4_lighting_shadows_v1"
+REALISM_R4_SCENE_RECEIPT_SCHEMA = "simworld.vista.playable-home-ue-scene-receipt/v2"
+REALISM_R4_OBSERVATION_SCHEMA = "simworld.vista.playable-home-realism-r4-observation/v1"
+REALISM_R4_ROOM_IDS = {
+    "home.r1/room.entry_hall",
+    "home.r1/room.living_room",
+    "home.r1/room.kitchen_dining",
+    "home.r1/room.bedroom",
+    "home.r1/room.office",
+    "home.r1/room.bathroom_laundry",
+}
 
 
 def vector(values):
@@ -38,6 +56,47 @@ def rotation(values):
     # common [0, 0, 90] doorway transform must become a 90 degree yaw rather
     # than tipping the door onto its side with a 90 degree roll.
     return unreal.Rotator(pitch=values[1], yaw=values[2], roll=values[0])
+
+
+def normalized_number(value):
+    rounded = round(float(value), 3)
+    return 0.0 if rounded == -0.0 else rounded
+
+
+def normalized_angle(value):
+    normalized = (float(value) + 180.0) % 360.0 - 180.0
+    return normalized_number(normalized)
+
+
+def observed_actor_transform(actor):
+    location = actor.get_actor_location()
+    actor_rotation = actor.get_actor_rotation()
+    scale = actor.get_actor_scale3d()
+    return {
+        "location_cm": [
+            normalized_number(location.x),
+            normalized_number(location.y),
+            normalized_number(location.z),
+        ],
+        "rotation_deg": [
+            normalized_angle(actor_rotation.roll),
+            normalized_angle(actor_rotation.pitch),
+            normalized_angle(actor_rotation.yaw),
+        ],
+        "scale": [
+            normalized_number(scale.x),
+            normalized_number(scale.y),
+            normalized_number(scale.z),
+        ],
+    }
+
+
+def normalized_profile_transform(value):
+    return {
+        "location_cm": [normalized_number(item) for item in value["location_cm"]],
+        "rotation_deg": [normalized_angle(item) for item in value["rotation_deg"]],
+        "scale": [normalized_number(item) for item in value["scale"]],
+    }
 
 
 def transform(value):
@@ -127,6 +186,15 @@ def set_required(value, name, setting):
     )
 
 
+def required_bool_property(value, name, label):
+    try:
+        observed = value.get_editor_property(name)
+    except Exception as exc:
+        raise RuntimeError(label + " property is unavailable: " + name) from exc
+    require(isinstance(observed, bool), label + " property is not boolean: " + name)
+    return observed
+
+
 def static_mesh_component(actor):
     try:
         component = actor.get_editor_property("static_mesh_component")
@@ -147,6 +215,191 @@ def static_mesh_component(actor):
 def light_component(actor):
     components = actor.get_components_by_class(unreal.LightComponentBase)
     return components[0] if components else None
+
+
+def reject_json_constant(value):
+    raise RuntimeError("R4 materialized profile contains non-finite JSON: " + value)
+
+
+def reject_duplicate_json_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        require(key not in result, "R4 materialized profile contains duplicate keys")
+        result[key] = value
+    return result
+
+
+def load_materialized_r4_profile(execution):
+    descriptor = execution.get("realism_r4_profile")
+    require(
+        isinstance(descriptor, dict)
+        and set(descriptor)
+        == {
+            "path",
+            "sha256",
+            "source_sha256",
+            "schema_version",
+            "profile_id",
+            "content_digest",
+            "runtime_visual_acceptance",
+            "gta_quality_accepted",
+        },
+        "R4 materialized profile descriptor differs",
+    )
+    attempt_root = canonical_path(execution["attempt_root"])
+    path = safe_attempt_child(
+        descriptor["path"], attempt_root, "R4 materialized profile"
+    )
+    contracts_root = canonical_path(os.path.join(attempt_root, "contracts"))
+    require(
+        os.path.dirname(path) == contracts_root
+        and os.path.basename(path) == "realism-r4-profile.json"
+        and not os.path.islink(path),
+        "R4 materialized profile path is not the fixed contracts child",
+    )
+    expected_sha = require_sha(descriptor["sha256"], "R4 materialized profile")
+    require_sha(descriptor["source_sha256"], "R4 source profile")
+    try:
+        descriptor_fd = os.open(
+            path,
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
+    except OSError as exc:
+        raise RuntimeError("R4 materialized profile cannot be opened safely") from exc
+    try:
+        before = os.fstat(descriptor_fd)
+        require(
+            stat.S_ISREG(before.st_mode)
+            and before.st_nlink == 1
+            and before.st_size <= 4 * 1024 * 1024,
+            "R4 materialized profile has unsafe metadata",
+        )
+        chunks = []
+        while True:
+            block = os.read(descriptor_fd, 1024 * 1024)
+            if not block:
+                break
+            chunks.append(block)
+            require(
+                sum(len(chunk) for chunk in chunks) <= 4 * 1024 * 1024,
+                "R4 materialized profile is oversized",
+            )
+        raw = b"".join(chunks)
+        after = os.fstat(descriptor_fd)
+        require(
+            (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+            == (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+            and len(raw) == before.st_size,
+            "R4 materialized profile changed while being read",
+        )
+    finally:
+        os.close(descriptor_fd)
+    require(
+        hashlib.sha256(raw).hexdigest() == expected_sha,
+        "R4 materialized profile digest differs from execution",
+    )
+    try:
+        profile = json.loads(
+            raw.decode("utf-8", "strict"),
+            parse_constant=reject_json_constant,
+            object_pairs_hook=reject_duplicate_json_keys,
+        )
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("R4 materialized profile is not strict JSON") from exc
+    require(
+        isinstance(profile, dict) and raw == canonical_json(profile),
+        "R4 materialized profile is not canonical JSON",
+    )
+    body = dict(profile)
+    content_digest = body.pop("content_digest", None)
+    require(
+        isinstance(content_digest, str)
+        and hashlib.sha256(canonical_json(body)).hexdigest() == content_digest,
+        "R4 materialized profile content digest differs",
+    )
+    require(
+        descriptor["schema_version"] == REALISM_R4_PROFILE_SCHEMA
+        and descriptor["profile_id"] == REALISM_R4_PROFILE_ID
+        and descriptor["content_digest"] == content_digest
+        and descriptor["runtime_visual_acceptance"] is False
+        and descriptor["gta_quality_accepted"] is False,
+        "R4 materialized profile descriptor identity differs",
+    )
+    require(
+        profile == execution.get("realism_r4_composition"),
+        "R4 materialized profile differs from embedded composition",
+    )
+    return profile
+
+
+def validate_r4_profile(execution, spec):
+    profile = load_materialized_r4_profile(execution)
+    require(
+        profile.get("schema_version") == REALISM_R4_PROFILE_SCHEMA
+        and profile.get("profile_id") == REALISM_R4_PROFILE_ID
+        and profile.get("base_visual_profile", {}).get("visual_profile_id")
+        == spec.get("visual_profile_id")
+        and profile.get("base_visual_profile", {}).get("content_digest")
+        == spec.get("visual_profile_content_digest"),
+        "R4 execution profile identity differs",
+    )
+    renderer = profile.get("renderer_contract")
+    require(
+        renderer
+        == {
+            "dynamic_gi": "software_lumen",
+            "reflections": "lumen",
+            "anti_aliasing": "tsr",
+            "shadow_method": "virtual_shadow_maps",
+            "hardware_ray_tracing": False,
+            "config_is_runtime_proof": False,
+        },
+        "R4 renderer contract does not preserve software Lumen, TSR, and VSM",
+    )
+    pairs = profile.get("practical_fixture_light_pairs")
+    require(
+        isinstance(pairs, list)
+        and len(pairs) == 6
+        and {pair.get("room_id") for pair in pairs} == REALISM_R4_ROOM_IDS
+        and len({pair.get("pair_id") for pair in pairs}) == 6
+        and len({pair.get("fixture", {}).get("fixture_id") for pair in pairs}) == 6
+        and len({pair.get("light", {}).get("light_id") for pair in pairs}) == 6
+        and all(
+            pair.get("fixture", {}).get("cast_shadow") is True
+            and pair.get("light", {}).get("cast_shadow") is True
+            for pair in pairs
+        ),
+        "R4 profile does not contain six exact room fixture/light pairs",
+    )
+    post = profile.get("post_process")
+    require(
+        isinstance(post, dict)
+        and float(post.get("motion_blur_amount")) == 0.0
+        and float(post.get("chromatic_aberration_intensity")) == 0.0
+        and float(post.get("film_grain_intensity")) == 0.0
+        and 0.2 <= float(post.get("bloom_intensity")) <= 0.4
+        and 0.0 <= float(post.get("vignette_intensity")) <= 0.15
+        and float(post.get("exposure", {}).get("min_ev100"))
+        < float(post.get("exposure", {}).get("max_ev100")),
+        "R4 restrained post-process contract differs",
+    )
+    require(
+        profile.get("shadow_policy")
+        == {
+            "visible_presentation_cast_shadow": True,
+            "visible_presentation_cast_hidden_shadow": False,
+            "hidden_collision_proxy_cast_shadow": False,
+            "hidden_collision_proxy_cast_hidden_shadow": False,
+        }
+        and profile.get("claims")
+        == {
+            "runtime_visual_acceptance": False,
+            "gta_quality_accepted": False,
+            "runtime_play_proof": "pending",
+        },
+        "R4 shadow policy or non-acceptance claims differ",
+    )
+    return profile
 
 
 def configure_r2_review_camera(camera, operation):
@@ -184,7 +437,7 @@ def configure_r2_review_camera(camera, operation):
     set_required(component, "post_process_settings", settings)
 
 
-def spawn_r2_lighting(actor_subsystem, operation):
+def spawn_r2_lighting(actor_subsystem, operation, realism_r4_profile=None):
     require(
         operation.get("profile") == "neutral_day"
         and operation.get("light_mobility") == "movable"
@@ -244,7 +497,56 @@ def spawn_r2_lighting(actor_subsystem, operation):
     set_required(sky_component, "real_time_capture", True)
     set_required(sky_component, "intensity", sky_spec["sky_intensity"])
     created = [sun, sky, atmosphere]
-    for light_spec in operation["practical_lights"]:
+    r4_pairs = (
+        realism_r4_profile["practical_fixture_light_pairs"]
+        if realism_r4_profile is not None
+        else None
+    )
+    practical_inputs = (
+        [(pair, pair["light"]) for pair in r4_pairs]
+        if r4_pairs is not None
+        else [(None, light) for light in operation["practical_lights"]]
+    )
+    for pair, light_spec in practical_inputs:
+        if pair is not None:
+            fixture_spec = pair["fixture"]
+            fixture_mesh = unreal.load_asset(fixture_spec["mesh_object_path"])
+            require(
+                isinstance(fixture_mesh, unreal.StaticMesh),
+                "R4 practical fixture mesh is unavailable",
+            )
+            fixture = actor_subsystem.spawn_actor_from_class(
+                unreal.StaticMeshActor,
+                vector(fixture_spec["location_cm"]),
+                rotation(fixture_spec["rotation_deg"]),
+                transient=False,
+            )
+            require(fixture is not None, "failed to place R4 practical fixture")
+            fixture.set_actor_scale3d(vector(fixture_spec["scale"]))
+            fixture.set_actor_label(safe_label(fixture_spec["fixture_id"]))
+            set_tags(
+                fixture,
+                [
+                    "VistaRole=practical_fixture",
+                    "VistaRoom=" + pair["room_id"],
+                    "VistaR4Pair=" + pair["pair_id"],
+                    "VistaFixtureId=" + fixture_spec["fixture_id"],
+                    rig_tag,
+                ],
+            )
+            fixture_component = static_mesh_component(fixture)
+            require(
+                fixture_component is not None,
+                "R4 practical fixture has no StaticMeshComponent",
+            )
+            fixture_component.set_static_mesh(fixture_mesh)
+            fixture_component.set_collision_profile_name(unreal.Name("NoCollision"))
+            fixture_component.set_simulate_physics(False)
+            fixture_component.set_editor_property("generate_overlap_events", False)
+            fixture_component.set_mobility(unreal.ComponentMobility.STATIC)
+            fixture_component.set_cast_shadow(True)
+            fixture_component.set_cast_hidden_shadow(False)
+            created.append(fixture)
         actor_class = (
             unreal.RectLight if light_spec["type"] == "rect" else unreal.SpotLight
         )
@@ -255,8 +557,22 @@ def spawn_r2_lighting(actor_subsystem, operation):
             transient=False,
         )
         require(practical is not None, "failed to place r2 practical light")
+        if pair is not None:
+            practical.set_actor_scale3d(vector(light_spec["scale"]))
         practical.set_actor_label(safe_label(light_spec["light_id"]))
-        set_tags(practical, list(light_spec["tags"]) + [rig_tag])
+        light_tags = (
+            [
+                "VistaSemanticId=" + light_spec["light_id"],
+                "VistaRoom=" + pair["room_id"],
+                "VistaRole=lighting",
+                "VistaR4Pair=" + pair["pair_id"],
+                "VistaPracticalLightId=" + light_spec["light_id"],
+                "VistaFixtureId=" + pair["fixture"]["fixture_id"],
+            ]
+            if pair is not None
+            else list(light_spec["tags"])
+        )
+        set_tags(practical, light_tags + [rig_tag])
         component = light_component(practical)
         require(component is not None, "failed to resolve r2 practical light component")
         component.set_mobility(unreal.ComponentMobility.MOVABLE)
@@ -264,21 +580,47 @@ def spawn_r2_lighting(actor_subsystem, operation):
         set_required(component, "use_temperature", True)
         set_required(component, "temperature", light_spec["temperature_k"])
         set_required(component, "cast_shadows", True)
+        if pair is not None:
+            set_required(
+                component,
+                "attenuation_radius",
+                light_spec["attenuation_radius_cm"],
+            )
         unit_name = "LUMENS" if light_spec["unit"] == "lumens" else "CANDELAS"
         set_required(
             component, "intensity_units", getattr(unreal.LightUnits, unit_name)
         )
         created.append(practical)
 
-    exposure = operation["gameplay_exposure"]
+    post_profile = (
+        realism_r4_profile["post_process"] if realism_r4_profile is not None else None
+    )
+    exposure = (
+        post_profile["exposure"]
+        if post_profile is not None
+        else operation["gameplay_exposure"]
+    )
     post = actor_subsystem.spawn_actor_from_class(
         unreal.PostProcessVolume, unreal.Vector(), unreal.Rotator(), transient=False
     )
     require(post is not None, "failed to place r2 gameplay post process")
-    post.set_actor_label("VISTA_R2_PostProcess")
+    post.set_actor_label(
+        "VISTA_R4_PostProcess"
+        if realism_r4_profile is not None
+        else "VISTA_R2_PostProcess"
+    )
     set_tags(
         post,
-        ["VistaRole=post_process", rig_tag, "VistaExposureProfile=bounded_histogram"],
+        [
+            "VistaRole=post_process",
+            rig_tag,
+            "VistaExposureProfile=bounded_histogram",
+            *(
+                ["VistaRealismProfile=" + REALISM_R4_PROFILE_ID]
+                if realism_r4_profile is not None
+                else []
+            ),
+        ],
     )
     set_required(post, "unbound", True)
     set_required(post, "priority", 100.0)
@@ -298,6 +640,21 @@ def spawn_r2_lighting(actor_subsystem, operation):
     }
     for name, setting in required_exposure.items():
         set_required(settings, name, setting)
+    if post_profile is not None:
+        restrained_settings = {
+            "override_motion_blur_amount": True,
+            "motion_blur_amount": post_profile["motion_blur_amount"],
+            "override_scene_fringe_intensity": True,
+            "scene_fringe_intensity": post_profile["chromatic_aberration_intensity"],
+            "override_grain_intensity": True,
+            "grain_intensity": post_profile["film_grain_intensity"],
+            "override_bloom_intensity": True,
+            "bloom_intensity": post_profile["bloom_intensity"],
+            "override_vignette_intensity": True,
+            "vignette_intensity": post_profile["vignette_intensity"],
+        }
+        for name, setting in restrained_settings.items():
+            set_required(settings, name, setting)
     set_required(post, "settings", settings)
     created.append(post)
     return created
@@ -673,6 +1030,14 @@ def run():
     input_config_sha = sha256_file(input_config)
     spec = execution["composition_spec"]
     is_r2 = "visual_profile_id" in spec
+    has_r4_profile = "realism_r4_profile" in execution
+    has_r4_composition = "realism_r4_composition" in execution
+    require(
+        has_r4_profile == has_r4_composition,
+        "R4 execution profile/composition presence differs",
+    )
+    is_r4 = has_r4_composition
+    r4_profile = validate_r4_profile(execution, spec) if is_r4 else None
     map_path = spec["map_path"]
     require(
         not unreal.EditorAssetLibrary.does_asset_exist(map_path),
@@ -694,6 +1059,10 @@ def run():
     dynamic_lighting_verified = False
     deterministic_exposure_verified = False
     input_mappings_verified = False
+    r4_fixture_light_pairs_verified = False
+    r4_restrained_post_process_verified = False
+    r4_renderer_contract_preserved = False
+    r4_observation = None
     stage = {"phase": "compose_operations", "operation_id": None, "kind": None}
     try:
         for operation in spec["operations"]:
@@ -879,7 +1248,13 @@ def run():
                 created.append(post)
             elif kind == "place_realistic_lighting":
                 require(is_r2, "r2 lighting operation requires a visual profile")
-                created.extend(spawn_r2_lighting(actor_subsystem, operation))
+                created.extend(
+                    spawn_r2_lighting(
+                        actor_subsystem,
+                        operation,
+                        realism_r4_profile=r4_profile,
+                    )
+                )
             elif kind == "configure_game_mode":
                 game_mode_path = assets[operation["game_mode"]["asset_id"]][
                     "object_path"
@@ -1015,7 +1390,9 @@ def run():
             if operation["kind"] in {"place_lighting", "place_realistic_lighting"}
         )
         expected_light_count = 2 + len(
-            lighting_operation["practical_lights"]
+            r4_profile["practical_fixture_light_pairs"]
+            if is_r4
+            else lighting_operation["practical_lights"]
             if is_r2
             else lighting_operation["indoor_lights"]
         )
@@ -1094,7 +1471,11 @@ def run():
                 ),
                 "reloaded r2 sky lost captured-scene real-time intensity",
             )
-            exposure = lighting_operation["gameplay_exposure"]
+            exposure = (
+                r4_profile["post_process"]["exposure"]
+                if is_r4
+                else lighting_operation["gameplay_exposure"]
+            )
             require(
                 bool(post_settings.get_editor_property("override_auto_exposure_method"))
                 and post_settings.get_editor_property("auto_exposure_method")
@@ -1113,6 +1494,233 @@ def run():
                 == exposure["speed_down"],
                 "reloaded map lost bounded histogram exposure",
             )
+            if is_r4:
+                post_profile = r4_profile["post_process"]
+                effect_properties = {
+                    "motion_blur_amount": post_profile["motion_blur_amount"],
+                    "scene_fringe_intensity": post_profile[
+                        "chromatic_aberration_intensity"
+                    ],
+                    "grain_intensity": post_profile["film_grain_intensity"],
+                    "bloom_intensity": post_profile["bloom_intensity"],
+                    "vignette_intensity": post_profile["vignette_intensity"],
+                }
+                require(
+                    all(
+                        required_bool_property(
+                            post_settings,
+                            "override_" + name,
+                            "R4 post process",
+                        )
+                        and math.isclose(
+                            float(post_settings.get_editor_property(name)),
+                            float(expected),
+                            rel_tol=0.0,
+                            abs_tol=1e-6,
+                        )
+                        for name, expected in effect_properties.items()
+                    ),
+                    "reloaded map lost restrained R4 post process",
+                )
+                fixture_inventory = [
+                    actor
+                    for actor in reloaded
+                    if unreal.Name("VistaRole=practical_fixture")
+                    in actor.get_editor_property("tags")
+                ]
+                practical_light_inventory = [
+                    actor
+                    for actor in reloaded
+                    if any(
+                        str(tag).startswith("VistaPracticalLightId=")
+                        for tag in actor.get_editor_property("tags")
+                    )
+                ]
+                require(
+                    len(fixture_inventory) == 6 and len(practical_light_inventory) == 6,
+                    "reloaded R4 fixture/light inventory is not exactly six pairs",
+                )
+                expected_light_classes = {
+                    "rect": "/Script/Engine.RectLight",
+                    "spot": "/Script/Engine.SpotLight",
+                }
+                expected_light_units = {
+                    "lumens": unreal.LightUnits.LUMENS,
+                    "candelas": unreal.LightUnits.CANDELAS,
+                }
+                pair_observations = []
+                observed_fixture_paths = set()
+                observed_light_paths = set()
+                for pair in sorted(
+                    r4_profile["practical_fixture_light_pairs"],
+                    key=lambda value: value["pair_id"],
+                ):
+                    pair_tag = unreal.Name("VistaR4Pair=" + pair["pair_id"])
+                    fixture_tag = unreal.Name(
+                        "VistaFixtureId=" + pair["fixture"]["fixture_id"]
+                    )
+                    light_tag = unreal.Name(
+                        "VistaPracticalLightId=" + pair["light"]["light_id"]
+                    )
+                    fixture_matches = [
+                        actor
+                        for actor in reloaded
+                        if pair_tag in actor.get_editor_property("tags")
+                        and fixture_tag in actor.get_editor_property("tags")
+                        and unreal.Name("VistaRole=practical_fixture")
+                        in actor.get_editor_property("tags")
+                    ]
+                    light_matches = [
+                        actor
+                        for actor in vista_lights
+                        if pair_tag in actor.get_editor_property("tags")
+                        and light_tag in actor.get_editor_property("tags")
+                    ]
+                    require(
+                        len(fixture_matches) == 1 and len(light_matches) == 1,
+                        "reloaded R4 fixture/light pair is not exact",
+                    )
+                    fixture_actor = fixture_matches[0]
+                    practical_actor = light_matches[0]
+                    fixture_actor_path = str(fixture_actor.get_path_name())
+                    practical_actor_path = str(practical_actor.get_path_name())
+                    require(
+                        fixture_actor_path not in observed_fixture_paths
+                        and practical_actor_path not in observed_light_paths,
+                        "reloaded R4 fixture/light actor is reused",
+                    )
+                    fixture_component = static_mesh_component(fixture_actor)
+                    practical_component = light_component(practical_actor)
+                    fixture_mesh = (
+                        fixture_component.get_editor_property("static_mesh")
+                        if fixture_component is not None
+                        else None
+                    )
+                    fixture_cast_shadow = required_bool_property(
+                        fixture_component, "cast_shadow", "R4 fixture"
+                    )
+                    fixture_cast_hidden_shadow = required_bool_property(
+                        fixture_component, "cast_hidden_shadow", "R4 fixture"
+                    )
+                    light_cast_shadow = required_bool_property(
+                        practical_component, "cast_shadows", "R4 practical light"
+                    )
+                    fixture_visible = required_bool_property(
+                        fixture_component, "visible", "R4 fixture"
+                    )
+                    light_use_temperature = required_bool_property(
+                        practical_component,
+                        "use_temperature",
+                        "R4 practical light",
+                    )
+                    fixture_transform = observed_actor_transform(fixture_actor)
+                    practical_transform = observed_actor_transform(practical_actor)
+                    light_spec = pair["light"]
+                    observed_intensity = normalized_number(
+                        practical_component.get_editor_property("intensity")
+                    )
+                    observed_temperature = normalized_number(
+                        practical_component.get_editor_property("temperature")
+                    )
+                    observed_attenuation = normalized_number(
+                        practical_component.get_editor_property("attenuation_radius")
+                    )
+                    observed_light_unit = practical_component.get_editor_property(
+                        "intensity_units"
+                    )
+                    require(
+                        fixture_component is not None
+                        and practical_component is not None
+                        and str(fixture_actor.get_class().get_path_name())
+                        == "/Script/Engine.StaticMeshActor"
+                        and str(practical_actor.get_class().get_path_name())
+                        == expected_light_classes[light_spec["type"]]
+                        and fixture_transform
+                        == normalized_profile_transform(pair["fixture"])
+                        and practical_transform
+                        == normalized_profile_transform(light_spec)
+                        and isinstance(fixture_mesh, unreal.StaticMesh)
+                        and str(fixture_mesh.get_path_name())
+                        == pair["fixture"]["mesh_object_path"]
+                        and str(fixture_component.get_collision_profile_name())
+                        == "NoCollision"
+                        and fixture_visible is True
+                        and fixture_cast_shadow is True
+                        and fixture_cast_hidden_shadow is False
+                        and light_cast_shadow is True,
+                        "reloaded R4 fixture/light transform or component policy differs",
+                    )
+                    require(
+                        observed_intensity == normalized_number(light_spec["intensity"])
+                        and observed_light_unit
+                        == expected_light_units[light_spec["unit"]]
+                        and light_use_temperature is True
+                        and observed_temperature
+                        == normalized_number(light_spec["temperature_k"])
+                        and observed_attenuation
+                        == normalized_number(light_spec["attenuation_radius_cm"]),
+                        "reloaded R4 practical light photometric policy differs",
+                    )
+                    observed_fixture_paths.add(fixture_actor_path)
+                    observed_light_paths.add(practical_actor_path)
+                    pair_observations.append(
+                        {
+                            "pair_id": pair["pair_id"],
+                            "room_id": pair["room_id"],
+                            "fixture": {
+                                "fixture_id": pair["fixture"]["fixture_id"],
+                                "actor_path": fixture_actor_path,
+                                "actor_class_path": str(
+                                    fixture_actor.get_class().get_path_name()
+                                ),
+                                "world_transform_cm": fixture_transform,
+                                "mesh_object_path": str(fixture_mesh.get_path_name()),
+                                "collision_profile": str(
+                                    fixture_component.get_collision_profile_name()
+                                ),
+                                "visible": fixture_visible,
+                                "cast_shadow": fixture_cast_shadow,
+                                "cast_hidden_shadow": fixture_cast_hidden_shadow,
+                            },
+                            "light": {
+                                "light_id": light_spec["light_id"],
+                                "actor_path": practical_actor_path,
+                                "actor_class_path": str(
+                                    practical_actor.get_class().get_path_name()
+                                ),
+                                "type": light_spec["type"],
+                                "world_transform_cm": practical_transform,
+                                "intensity": observed_intensity,
+                                "unit": light_spec["unit"],
+                                "use_temperature": light_use_temperature,
+                                "temperature_k": observed_temperature,
+                                "attenuation_radius_cm": observed_attenuation,
+                                "cast_shadow": light_cast_shadow,
+                            },
+                        }
+                    )
+                require(
+                    observed_fixture_paths
+                    == {str(actor.get_path_name()) for actor in fixture_inventory}
+                    and observed_light_paths
+                    == {
+                        str(actor.get_path_name())
+                        for actor in practical_light_inventory
+                    },
+                    "reloaded R4 fixture/light inventory contains unbound actors",
+                )
+                r4_fixture_light_pairs_verified = True
+                r4_restrained_post_process_verified = True
+                r4_renderer_contract_preserved = True
+                r4_observation = {
+                    "schema_version": REALISM_R4_OBSERVATION_SCHEMA,
+                    "profile_id": r4_profile["profile_id"],
+                    "profile_content_digest": r4_profile["content_digest"],
+                    "renderer_contract": r4_profile["renderer_contract"],
+                    "fixture_light_pairs": pair_observations,
+                    "post_process": r4_profile["post_process"],
+                    "claims": r4_profile["claims"],
+                }
             camera_operations = [
                 operation
                 for operation in spec["operations"]
@@ -1202,8 +1810,39 @@ def run():
             status = "failed_unsaved_quarantined"
 
     actors = [actor_record(actor) for actor in actor_subsystem.get_all_level_actors()]
+    gates = {
+        "map_saved": status == "saved_reloaded_candidate",
+        "map_reloaded": reload_verified,
+        "semantic_tags_verified": reload_verified,
+        "player_start_verified": reload_verified,
+        "game_mode_configured": reload_verified,
+        "navmesh_bounds_verified": reload_verified,
+        "dynamic_lighting_verified": dynamic_lighting_verified,
+        "deterministic_exposure_verified": deterministic_exposure_verified,
+        "input_mappings_verified": input_mappings_verified,
+        "quarantined": status != "saved_reloaded_candidate",
+        "runtime_play_proof": "pending",
+    }
+    if is_r4:
+        gates.update(
+            {
+                "realism_r4_fixture_light_pairs_verified": (
+                    r4_fixture_light_pairs_verified
+                ),
+                "realism_r4_restrained_post_process_verified": (
+                    r4_restrained_post_process_verified
+                ),
+                "realism_r4_renderer_contract_preserved": (
+                    r4_renderer_contract_preserved
+                ),
+                "human_visual_acceptance": "pending",
+                "gta_quality_accepted": False,
+            }
+        )
     receipt = {
-        "schema_version": SCENE_RECEIPT_SCHEMA,
+        "schema_version": (
+            REALISM_R4_SCENE_RECEIPT_SCHEMA if is_r4 else SCENE_RECEIPT_SCHEMA
+        ),
         "status": status,
         "error": error,
         "bindings": {
@@ -1220,20 +1859,10 @@ def run():
         "content_namespace": spec["content_namespace"],
         "map_path": map_path,
         "actor_inventory": sorted(actors, key=lambda item: item["path"]),
-        "gates": {
-            "map_saved": status == "saved_reloaded_candidate",
-            "map_reloaded": reload_verified,
-            "semantic_tags_verified": reload_verified,
-            "player_start_verified": reload_verified,
-            "game_mode_configured": reload_verified,
-            "navmesh_bounds_verified": reload_verified,
-            "dynamic_lighting_verified": dynamic_lighting_verified,
-            "deterministic_exposure_verified": deterministic_exposure_verified,
-            "input_mappings_verified": input_mappings_verified,
-            "quarantined": status != "saved_reloaded_candidate",
-            "runtime_play_proof": "pending",
-        },
+        "gates": gates,
     }
+    if is_r4:
+        receipt["realism_r4_observation"] = r4_observation
     receipt_sha = write_exclusive_receipt(
         execution["scene_receipt"], execution["attempt_root"], receipt
     )
