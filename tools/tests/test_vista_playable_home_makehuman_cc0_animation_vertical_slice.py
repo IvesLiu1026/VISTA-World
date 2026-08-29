@@ -538,12 +538,16 @@ def test_profile_json_has_no_private_paths_or_binary_payloads() -> None:
         lambda plan: plan["toolchain"]["bwrap"].__setitem__("path", "/tmp/bwrap"),
         lambda plan: plan["toolchain"]["bwrap"].__setitem__("size_bytes", 2),
         lambda plan: plan["toolchain"]["worker"].__setitem__("path", "/tmp/worker.py"),
-        lambda plan: plan["toolchain"]["worker"].__setitem__("git_blob_verified", True),
+        lambda plan: plan["toolchain"]["worker"].__setitem__(
+            "git_blob_verified",
+            not plan["toolchain"]["worker"]["git_blob_verified"],
+        ),
         lambda plan: plan["toolchain"]["sandbox_wrapper"].__setitem__(
             "path", "/tmp/wrapper.py"
         ),
         lambda plan: plan["toolchain"]["sandbox_wrapper"].__setitem__(
-            "git_blob_verified", True
+            "git_blob_verified",
+            not plan["toolchain"]["sandbox_wrapper"]["git_blob_verified"],
         ),
         lambda plan: plan["toolchain"].__setitem__("network_policy", "host_network"),
         lambda plan: plan["toolchain"].__setitem__("gpu_policy", "all_devices"),
