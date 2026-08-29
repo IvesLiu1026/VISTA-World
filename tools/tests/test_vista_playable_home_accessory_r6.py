@@ -675,6 +675,65 @@ def _load_commandlet(monkeypatch: pytest.MonkeyPatch):
     return module, fake
 
 
+def test_component_observation_uses_ue57_reflection_for_mobility(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commandlet, unreal = _load_commandlet(monkeypatch)
+    no_collision = object()
+    unreal.CollisionEnabled = types.SimpleNamespace(NO_COLLISION=no_collision)
+
+    class Mobility:
+        def __str__(self):
+            return "ComponentMobility.MOVABLE"
+
+    class Mesh(unreal.StaticMesh):
+        def get_path_name(self):
+            return "/Game/Fixture/phone.phone"
+
+    class ReflectionOnlyComponent(unreal.StaticMeshComponent):
+        def __init__(self):
+            self.values = {
+                "static_mesh": Mesh(),
+                "relative_location": unreal.Vector(1.0, 2.0, 3.0),
+                "relative_rotation": unreal.Rotator(4.0, 5.0, 6.0),
+                "relative_scale3d": unreal.Vector(1.0, 1.0, 1.0),
+                "visible": True,
+                "mobility": Mobility(),
+                "simulate_physics": False,
+                "generate_overlap_events": False,
+                "can_ever_affect_navigation": False,
+                "cast_shadow": True,
+                "cast_hidden_shadow": False,
+            }
+
+        def get_editor_property(self, name):
+            return self.values[name]
+
+        def get_attach_parent(self):
+            return None
+
+        def get_path_name(self):
+            return "/Game/Fixture/Map.Map:PersistentLevel.PickupMesh"
+
+        def get_name(self):
+            return "PickupMesh"
+
+        def get_collision_enabled(self):
+            return no_collision
+
+        def get_collision_profile_name(self):
+            return "BlockAllDynamic"
+
+    component = ReflectionOnlyComponent()
+    assert not hasattr(component, "get_mobility")
+    assert not hasattr(component, "is_simulating_physics")
+
+    observation = commandlet.component_observation(component, "PickupMesh")
+
+    assert observation["mobility"] == "ComponentMobility.MOVABLE"
+    assert observation["simulate_physics"] is False
+
+
 def test_reflection_bounds_fit_is_deterministic_and_uniform(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
