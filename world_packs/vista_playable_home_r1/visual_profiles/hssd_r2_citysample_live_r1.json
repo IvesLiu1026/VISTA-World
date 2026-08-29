@@ -1496,22 +1496,23 @@
       "receipts/pendant.json"
     ],
     "inventory_path": "fixture-inventory.json",
-    "inventory_schema_version": "simworld.vista.playable-home-r9-fixture-inventory/v1",
-    "inventory_status": "fixture_inventory_sealed_not_ue_imported",
+    "inventory_schema_version": "simworld.vista.playable-home-r9-fixture-inventory/v2",
+    "inventory_status": "fixture_inventory_sealed_snapshot_provenance_not_ue_imported",
     "inventory_top_level_keys": [
       "artifact_count",
       "artifacts",
       "binary_payload_in_git",
       "claims",
       "content_digest",
-      "forge_plan_content_digest",
+      "forge_plan",
       "profile",
       "recipe",
       "schema_version",
+      "source_snapshot",
       "status",
       "toolchain",
       "ue_package_inventory",
-      "worker_result_content_digest"
+      "worker_result"
     ],
     "output_policy": "append_only_git_external_no_caller_output_override"
   },
@@ -2152,5 +2153,5 @@
     "photoreal_character_accepted": false,
     "gta_level_quality": false
   },
-  "content_digest": "5e42641a128c66225a02362328fef50b026c05c012009b42135a99ed173b366e"
+  "content_digest": "f90659d60384edfaabdc34cdfd4a5b3aa0cd8d0226b59fe694e018a86874b314"
 }

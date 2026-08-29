@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import copy
+import ctypes
+import fcntl
 import hashlib
 import json
 import math
@@ -43,11 +45,12 @@ DEFAULT_RUN_PARENT = pathlib.Path("/data/sysx/vista-world/runs/vista-action-worl
 
 PROFILE_SCHEMA = "simworld.vista.playable-home-hssd-r2-citysample-live-profile/v1"
 RECIPE_SCHEMA = "simworld.vista.playable-home-r9-fixture-recipe/v1"
-PLAN_SCHEMA = "simworld.vista.playable-home-r9-fixture-forge-plan/v1"
-WORKER_REQUEST_SCHEMA = "simworld.vista.playable-home-r9-fixture-worker-request/v1"
-ARTIFACT_RECEIPT_SCHEMA = "simworld.vista.playable-home-r9-fixture-artifact-receipt/v1"
-WORKER_RESULT_SCHEMA = "simworld.vista.playable-home-r9-fixture-worker-result/v1"
-INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v1"
+PLAN_SCHEMA = "simworld.vista.playable-home-r9-fixture-forge-plan/v2"
+WORKER_REQUEST_SCHEMA = "simworld.vista.playable-home-r9-fixture-worker-request/v2"
+ARTIFACT_RECEIPT_SCHEMA = "simworld.vista.playable-home-r9-fixture-artifact-receipt/v2"
+WORKER_RESULT_SCHEMA = "simworld.vista.playable-home-r9-fixture-worker-result/v2"
+INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v2"
+SOURCE_SNAPSHOT_SCHEMA = "simworld.vista.playable-home-r9-fixture-source-snapshot/v1"
 
 PINNED_BLENDER_VERSION = "4.5.8 LTS"
 PINNED_BLENDER_SHA256 = (
@@ -57,7 +60,7 @@ PINNED_BLENDER_BYTES = 163_587_256
 PINNED_BWRAP_SHA256 = "d78807229d616606e339c5988392b9e0ab4a6a6998fa51e4590837f426a12fca"
 PINNED_BWRAP_BYTES = 72_160
 PINNED_PROFILE_CONTENT_DIGEST = (
-    "5e42641a128c66225a02362328fef50b026c05c012009b42135a99ed173b366e"
+    "f90659d60384edfaabdc34cdfd4a5b3aa0cd8d0226b59fe694e018a86874b314"
 )
 PINNED_RECIPE_CONTENT_DIGEST = (
     "09d9b345f520ddf657ab3c6d3ff680f56c77941a3a63e9396296d9a7fb0fb045"
@@ -72,13 +75,18 @@ EXPECTED_ARTIFACT_RELATIVE_PATHS = {
     }
     for archetype_id in EXPECTED_ARCHETYPE_IDS
 }
-EXPECTED_SOURCE_FILES = (
-    PACKAGE_ROOT / "__init__.py",
-    PACKAGE_ROOT / "__main__.py",
-    WORKER_PATH,
-    pathlib.Path(__file__).resolve(),
-    RECIPE_PATH,
+BUILDER_SOURCE_RELATIVE_PATHS = (
+    pathlib.PurePosixPath("tools/blender/vista_playable_home_r9_fixtures/__init__.py"),
+    pathlib.PurePosixPath("tools/blender/vista_playable_home_r9_fixtures/__main__.py"),
+    pathlib.PurePosixPath(
+        "tools/blender/vista_playable_home_r9_fixtures/blender_worker.py"
+    ),
+    pathlib.PurePosixPath("tools/blender/vista_playable_home_r9_fixtures/forge.py"),
+    RECIPE_RELATIVE_PATH,
+    PROFILE_RELATIVE_PATH,
 )
+SOURCE_SNAPSHOT_ROOT = pathlib.PurePosixPath("source-snapshot")
+SOURCE_SNAPSHOT_MANIFEST_PATH = pathlib.PurePosixPath("source-snapshot.json")
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _SAFE_ATTEMPT_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,95}$")
@@ -253,7 +261,7 @@ def file_pin(path: pathlib.Path, *, maximum_bytes: int | None = None) -> dict:
 def repo_source_pin(
     path: pathlib.Path,
     *,
-    content_digest_value: str,
+    content_digest_value: str | None,
     repository_root: pathlib.Path | None = None,
 ) -> dict:
     root = REPOSITORY_ROOT if repository_root is None else pathlib.Path(repository_root)
@@ -272,7 +280,8 @@ def repo_source_pin(
         or not relative_path.parts
     ):
         _fail("FIXTURE_SOURCE_IDENTITY_INVALID", "repository source path is unsafe")
-    _require_sha256(content_digest_value, "repository source content digest")
+    if content_digest_value is not None:
+        _require_sha256(content_digest_value, "repository source content digest")
     pin = file_pin(candidate)
     return {
         "relative_path": relative_path.as_posix(),
@@ -346,7 +355,7 @@ def _validate_repo_source_pin(
     *,
     expected_relative_path: pathlib.PurePosixPath,
     current_path: pathlib.Path,
-    current_content_digest: str,
+    current_content_digest: str | None,
 ) -> None:
     _require_keys(
         value,
@@ -358,7 +367,11 @@ def _validate_repo_source_pin(
     )
     _require_sha256(value["sha256"], f"{label}.sha256")
     _require_positive_int(value["size_bytes"], f"{label}.size_bytes")
-    _require_sha256(value["content_digest"], f"{label}.content_digest")
+    if current_content_digest is None:
+        if value["content_digest"] is not None:
+            _fail("FIXTURE_SCHEMA_INVALID", f"{label}.content_digest must be null")
+    else:
+        _require_sha256(value["content_digest"], f"{label}.content_digest")
     expected = repo_source_pin(
         current_path,
         content_digest_value=current_content_digest,
@@ -567,9 +580,29 @@ def load_profile(path: pathlib.Path | None = None) -> dict:
     )
     _require_string(
         fixture_forge["inventory_status"],
-        "fixture_inventory_sealed_not_ue_imported",
+        "fixture_inventory_sealed_snapshot_provenance_not_ue_imported",
         "inventory status",
     )
+    expected_inventory_keys = sorted(
+        {
+            "schema_version",
+            "profile",
+            "recipe",
+            "forge_plan",
+            "worker_result",
+            "source_snapshot",
+            "toolchain",
+            "artifact_count",
+            "artifacts",
+            "ue_package_inventory",
+            "binary_payload_in_git",
+            "claims",
+            "status",
+            "content_digest",
+        }
+    )
+    if fixture_forge["inventory_top_level_keys"] != expected_inventory_keys:
+        _fail("FIXTURE_PROFILE_INVALID", "inventory top-level key contract drifted")
     _require_string(
         fixture_forge["output_policy"],
         "append_only_git_external_no_caller_output_override",
@@ -1167,6 +1200,70 @@ def _verify_toolchain() -> dict:
     }
 
 
+def _sealed_file_snapshot(
+    path: pathlib.Path, *, expected_sha256: str, expected_size_bytes: int
+) -> int:
+    raw = _read_regular_file(path, maximum_bytes=expected_size_bytes + 1)
+    if (
+        len(raw) != expected_size_bytes
+        or hashlib.sha256(raw).hexdigest() != expected_sha256
+    ):
+        _fail("FIXTURE_TOOLCHAIN_DRIFT", f"toolchain source drifted: {path}")
+    flags = getattr(os, "MFD_CLOEXEC", 0x0001) | getattr(
+        os, "MFD_ALLOW_SEALING", 0x0002
+    )
+    try:
+        if hasattr(os, "memfd_create"):
+            descriptor = os.memfd_create("vista-r9-sealed-toolchain", flags)
+        else:
+            libc = ctypes.CDLL(None, use_errno=True)
+            memfd_create = libc.memfd_create
+            memfd_create.argtypes = (ctypes.c_char_p, ctypes.c_uint)
+            memfd_create.restype = ctypes.c_int
+            descriptor = memfd_create(b"vista-r9-sealed-toolchain", flags)
+            if descriptor < 0:
+                errno = ctypes.get_errno()
+                raise OSError(errno, os.strerror(errno))
+        offset = 0
+        while offset < len(raw):
+            offset += os.write(descriptor, raw[offset:])
+        os.fchmod(descriptor, 0o500)
+        os.fsync(descriptor)
+        seals = (
+            getattr(fcntl, "F_SEAL_SEAL", 0x0001)
+            | getattr(fcntl, "F_SEAL_SHRINK", 0x0002)
+            | getattr(fcntl, "F_SEAL_GROW", 0x0004)
+            | getattr(fcntl, "F_SEAL_WRITE", 0x0008)
+        )
+        fcntl.fcntl(descriptor, getattr(fcntl, "F_ADD_SEALS", 1033), seals)
+        observed_seals = fcntl.fcntl(descriptor, getattr(fcntl, "F_GET_SEALS", 1034))
+        if observed_seals & seals != seals:
+            _fail("FIXTURE_TOOLCHAIN_SNAPSHOT_FAILED", "memfd seals are incomplete")
+        observed = hashlib.sha256()
+        cursor = 0
+        while cursor < expected_size_bytes:
+            chunk = os.pread(
+                descriptor, min(1024 * 1024, expected_size_bytes - cursor), cursor
+            )
+            if not chunk:
+                _fail("FIXTURE_TOOLCHAIN_SNAPSHOT_FAILED", "sealed memfd is truncated")
+            observed.update(chunk)
+            cursor += len(chunk)
+        if observed.hexdigest() != expected_sha256:
+            _fail("FIXTURE_TOOLCHAIN_SNAPSHOT_FAILED", "sealed memfd bytes drifted")
+        return descriptor
+    except FixtureForgeError:
+        if "descriptor" in locals():
+            os.close(descriptor)
+        raise
+    except OSError as exc:
+        if "descriptor" in locals():
+            os.close(descriptor)
+        raise FixtureForgeError(
+            "FIXTURE_TOOLCHAIN_SNAPSHOT_FAILED", "unable to seal toolchain memfd"
+        ) from exc
+
+
 @dataclass(frozen=True)
 class ForgeConfig:
     attempt_name: str
@@ -1177,18 +1274,109 @@ class ForgeConfig:
         return DEFAULT_RUN_PARENT / self.attempt_name
 
 
-def _source_pins() -> list[dict]:
-    pins = []
-    for path in EXPECTED_SOURCE_FILES:
-        pin = file_pin(path)
-        pins.append(
-            {
-                "relative_path": path.relative_to(REPOSITORY_ROOT).as_posix(),
-                "sha256": pin["sha256"],
-                "size_bytes": pin["size_bytes"],
-            }
+def _builder_source_content_digest(
+    relative_path: pathlib.PurePosixPath,
+    *,
+    profile: Mapping[str, Any],
+    recipe: Mapping[str, Any],
+) -> str | None:
+    if relative_path == PROFILE_RELATIVE_PATH:
+        return profile["content_digest"]
+    if relative_path == RECIPE_RELATIVE_PATH:
+        return recipe["content_digest"]
+    return None
+
+
+def _source_pins(
+    *, profile: Mapping[str, Any], recipe: Mapping[str, Any]
+) -> list[dict]:
+    return [
+        repo_source_pin(
+            REPOSITORY_ROOT.joinpath(*relative_path.parts),
+            content_digest_value=_builder_source_content_digest(
+                relative_path, profile=profile, recipe=recipe
+            ),
         )
-    return pins
+        for relative_path in BUILDER_SOURCE_RELATIVE_PATHS
+    ]
+
+
+def _validate_builder_sources(
+    value: Any,
+    *,
+    profile: Mapping[str, Any],
+    recipe: Mapping[str, Any],
+) -> list[dict]:
+    rows = _require_list(
+        value,
+        "builder sources",
+        count=len(BUILDER_SOURCE_RELATIVE_PATHS),
+    )
+    for row, relative_path in zip(rows, BUILDER_SOURCE_RELATIVE_PATHS, strict=True):
+        _validate_repo_source_pin(
+            row,
+            f"builder source {relative_path}",
+            expected_relative_path=relative_path,
+            current_path=REPOSITORY_ROOT.joinpath(*relative_path.parts),
+            current_content_digest=_builder_source_content_digest(
+                relative_path, profile=profile, recipe=recipe
+            ),
+        )
+    return rows
+
+
+def _expected_archetype_plan(recipe: Mapping[str, Any]) -> list[dict]:
+    return [
+        {
+            "archetype_id": item["archetype_id"],
+            **EXPECTED_ARTIFACT_RELATIVE_PATHS[item["archetype_id"]],
+            "mesh_name": item["mesh_name"],
+            "material_names": item["material_names"],
+            "expected_mesh_local_bounds_cm": item["expected_mesh_local_bounds_cm"],
+        }
+        for item in recipe["archetypes"]
+    ]
+
+
+def _expected_ue_package_inventory(profile: Mapping[str, Any]) -> dict:
+    return {
+        "package_root": profile["fixture_imports"]["package_root"],
+        "exact_package_names": profile["fixture_imports"]["exact_package_names"],
+        "expected_package_count": 9,
+    }
+
+
+def _expected_execution_policy() -> dict:
+    return {
+        "headless": True,
+        "factory_startup": True,
+        "autoexec_disabled": True,
+        "network_namespace": "unshared",
+        "pid_namespace": "unshared",
+        "gpu_devices_visible": False,
+        "display_environment_forwarded": False,
+        "preview_device": "CPU",
+        "toolchain_probe_executes_blender_binary": True,
+        "toolchain_probe_generation_executed": False,
+        "immutable_source_snapshot": True,
+        "blender_binary_execution": "sealed_memfd_read_only_bind_fd",
+        "caller_selected_binary": False,
+        "caller_selected_script": False,
+        "caller_selected_assets": False,
+    }
+
+
+def _expected_snapshot_policy() -> dict:
+    return {
+        "root": SOURCE_SNAPSHOT_ROOT.as_posix(),
+        "manifest_path": SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix(),
+        "schema_version": SOURCE_SNAPSHOT_SCHEMA,
+        "source_count": len(BUILDER_SOURCE_RELATIVE_PATHS),
+        "file_mode": "0400",
+        "directory_mode": "0500",
+        "mount_policy": "nested_read_only_bind",
+        "execution_policy": "pythonpath_and_worker_from_snapshot_only",
+    }
 
 
 def build_plan(config: ForgeConfig) -> dict:
@@ -1212,42 +1400,15 @@ def build_plan(config: ForgeConfig) -> dict:
             "recipe": repo_source_pin(
                 RECIPE_PATH, content_digest_value=recipe["content_digest"]
             ),
-            "builder_sources": _source_pins(),
+            "builder_sources": _source_pins(profile=profile, recipe=recipe),
+            "source_snapshot": _expected_snapshot_policy(),
             "toolchain": observed_toolchain,
-            "archetypes": [
-                {
-                    "archetype_id": item["archetype_id"],
-                    **EXPECTED_ARTIFACT_RELATIVE_PATHS[item["archetype_id"]],
-                    "mesh_name": item["mesh_name"],
-                    "material_names": item["material_names"],
-                    "expected_mesh_local_bounds_cm": item[
-                        "expected_mesh_local_bounds_cm"
-                    ],
-                }
-                for item in recipe["archetypes"]
-            ],
-            "ue_package_inventory": {
-                "package_root": profile["fixture_imports"]["package_root"],
-                "exact_package_names": profile["fixture_imports"][
-                    "exact_package_names"
-                ],
-                "expected_package_count": 9,
-            },
-            "execution_policy": {
-                "headless": True,
-                "factory_startup": True,
-                "autoexec_disabled": True,
-                "network_namespace": "unshared",
-                "pid_namespace": "unshared",
-                "gpu_devices_visible": False,
-                "display_environment_forwarded": False,
-                "preview_device": "CPU",
-                "caller_selected_binary": False,
-                "caller_selected_script": False,
-                "caller_selected_assets": False,
-            },
+            "archetypes": _expected_archetype_plan(recipe),
+            "ue_package_inventory": _expected_ue_package_inventory(profile),
+            "execution_policy": _expected_execution_policy(),
             "will_write": config.apply,
-            "will_execute_blender": config.apply,
+            "will_execute_toolchain_probe": True,
+            "will_execute_blender_generation": config.apply,
             "binary_payload_in_git": False,
             "claims": {
                 "visual_acceptance": False,
@@ -1255,9 +1416,9 @@ def build_plan(config: ForgeConfig) -> dict:
                 "gta_quality_accepted": False,
             },
             "status": (
-                "authorized_apply_preflight"
+                "authorized_apply_preflight_toolchain_probe_executed"
                 if config.apply
-                else "dry_run_validated_zero_write"
+                else "dry_run_validated_zero_write_toolchain_probe_executed"
             ),
         }
     )
@@ -1274,12 +1435,14 @@ def validate_plan(plan: Mapping[str, Any], *, expected_mode: str | None = None) 
             "profile",
             "recipe",
             "builder_sources",
+            "source_snapshot",
             "toolchain",
             "archetypes",
             "ue_package_inventory",
             "execution_policy",
             "will_write",
-            "will_execute_blender",
+            "will_execute_toolchain_probe",
+            "will_execute_blender_generation",
             "binary_payload_in_git",
             "claims",
             "status",
@@ -1292,6 +1455,17 @@ def validate_plan(plan: Mapping[str, Any], *, expected_mode: str | None = None) 
     _validate_digest(plan, "forge plan")
     if expected_mode is not None and plan["mode"] != expected_mode:
         _fail("FIXTURE_PLAN_INVALID", "plan mode differs")
+    if plan["mode"] not in {"dry_run", "apply"}:
+        _fail("FIXTURE_PLAN_INVALID", "plan mode is unsupported")
+    if type(plan["attempt_name"]) is not str or not _SAFE_ATTEMPT_RE.fullmatch(
+        plan["attempt_name"]
+    ):
+        _fail("FIXTURE_PLAN_INVALID", "plan attempt name is unsafe")
+    _require_string(
+        plan["output_root"],
+        str(DEFAULT_RUN_PARENT / plan["attempt_name"]),
+        "plan output root",
+    )
     profile = load_profile()
     recipe = load_recipe()
     _validate_repo_source_pin(
@@ -1308,13 +1482,37 @@ def validate_plan(plan: Mapping[str, Any], *, expected_mode: str | None = None) 
         current_path=RECIPE_PATH,
         current_content_digest=recipe["content_digest"],
     )
+    _validate_builder_sources(plan["builder_sources"], profile=profile, recipe=recipe)
+    if plan["source_snapshot"] != _expected_snapshot_policy():
+        _fail("FIXTURE_PLAN_INVALID", "source snapshot policy drifted")
+    if plan["toolchain"] != _verify_toolchain():
+        _fail("FIXTURE_PLAN_INVALID", "current toolchain differs from plan")
+    if plan["archetypes"] != _expected_archetype_plan(recipe):
+        _fail("FIXTURE_PLAN_INVALID", "archetype plan drifted")
+    if plan["ue_package_inventory"] != _expected_ue_package_inventory(profile):
+        _fail("FIXTURE_PLAN_INVALID", "UE package allowlist drifted")
+    if plan["execution_policy"] != _expected_execution_policy():
+        _fail("FIXTURE_PLAN_INVALID", "execution policy drifted")
     applying = plan["mode"] == "apply"
     _require_bool(plan["will_write"], applying, "plan.will_write")
-    _require_bool(plan["will_execute_blender"], applying, "plan.will_execute_blender")
+    _require_bool(plan["will_execute_toolchain_probe"], True, "plan toolchain probe")
+    _require_bool(
+        plan["will_execute_blender_generation"], applying, "plan Blender generation"
+    )
     _require_bool(plan["binary_payload_in_git"], False, "plan.binary_payload_in_git")
-    _require_list(plan["archetypes"], "plan.archetypes", count=3)
-    for value in plan["claims"].values():
-        _require_bool(value, False, "plan claim")
+    _require_keys(
+        plan["claims"],
+        {"visual_acceptance", "ue_imported", "gta_quality_accepted"},
+        "plan claims",
+    )
+    for key, value in plan["claims"].items():
+        _require_bool(value, False, f"plan claim {key}")
+    expected_status = (
+        "authorized_apply_preflight_toolchain_probe_executed"
+        if applying
+        else "dry_run_validated_zero_write_toolchain_probe_executed"
+    )
+    _require_string(plan["status"], expected_status, "plan status")
 
 
 def _write_exclusive(path: pathlib.Path, raw: bytes, *, mode: int = 0o600) -> None:
@@ -1345,6 +1543,252 @@ def _safe_child(root: pathlib.Path, relative: str) -> pathlib.Path:
     return root.joinpath(*candidate.parts)
 
 
+def _snapshot_directory_paths() -> set[str]:
+    directories = {SOURCE_SNAPSHOT_ROOT.as_posix()}
+    for source_path in BUILDER_SOURCE_RELATIVE_PATHS:
+        parent = SOURCE_SNAPSHOT_ROOT / source_path.parent
+        while parent != SOURCE_SNAPSHOT_ROOT.parent:
+            directories.add(parent.as_posix())
+            if parent == SOURCE_SNAPSHOT_ROOT:
+                break
+            parent = parent.parent
+    return directories
+
+
+def _expected_output_tree(stage: str) -> dict[str, tuple[str, int]]:
+    stages = {"prepared", "snapshot", "request", "worker_payload", "worker", "final"}
+    if stage not in stages:
+        _fail("FIXTURE_OUTPUT_STAGE_INVALID", f"unsupported output stage: {stage}")
+    expected: dict[str, tuple[str, int]] = {
+        "artifacts": ("directory", 0o700),
+        "previews": ("directory", 0o700),
+        "receipts": ("directory", 0o700),
+        SOURCE_SNAPSHOT_ROOT.as_posix(): ("directory", 0o700),
+    }
+    if stage == "prepared":
+        return expected
+    for directory in _snapshot_directory_paths():
+        expected[directory] = ("directory", 0o500)
+    for relative_path in BUILDER_SOURCE_RELATIVE_PATHS:
+        expected[(SOURCE_SNAPSHOT_ROOT / relative_path).as_posix()] = (
+            "file",
+            0o400,
+        )
+    expected[SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix()] = ("file", 0o600)
+    if stage == "snapshot":
+        return expected
+    expected["forge-plan.json"] = ("file", 0o600)
+    expected["worker-request.json"] = ("file", 0o600)
+    if stage == "request":
+        return expected
+    for paths in EXPECTED_ARTIFACT_RELATIVE_PATHS.values():
+        expected[paths["glb"]] = ("file", 0o600)
+        expected[paths["preview"]] = ("file", 0o600)
+        expected[paths["receipt"]] = ("file", 0o600)
+    expected["worker-result.json"] = ("file", 0o600)
+    if stage == "worker_payload":
+        return expected
+    expected["blender-worker.log"] = ("file", 0o600)
+    if stage == "worker":
+        return expected
+    expected["fixture-inventory.json"] = ("file", 0o600)
+    return expected
+
+
+def _validate_output_tree(output_root: pathlib.Path, *, stage: str) -> None:
+    root = pathlib.Path(output_root)
+    try:
+        root_stat = os.lstat(root)
+    except OSError as exc:
+        raise FixtureForgeError(
+            "FIXTURE_OUTPUT_TREE_INVALID", "output root is unavailable"
+        ) from exc
+    if not stat.S_ISDIR(root_stat.st_mode) or stat.S_IMODE(root_stat.st_mode) != 0o700:
+        _fail("FIXTURE_OUTPUT_TREE_INVALID", "output root must be a 0700 directory")
+    observed: dict[str, tuple[str, int]] = {}
+
+    def walk(directory: pathlib.Path) -> None:
+        try:
+            entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
+        except OSError as exc:
+            raise FixtureForgeError(
+                "FIXTURE_OUTPUT_TREE_INVALID", f"unable to scan {directory}"
+            ) from exc
+        for entry in entries:
+            path = pathlib.Path(entry.path)
+            relative = path.relative_to(root).as_posix()
+            entry_stat = entry.stat(follow_symlinks=False)
+            mode = stat.S_IMODE(entry_stat.st_mode)
+            if stat.S_ISLNK(entry_stat.st_mode):
+                _fail("FIXTURE_OUTPUT_TREE_INVALID", f"symlink prohibited: {relative}")
+            if stat.S_ISDIR(entry_stat.st_mode):
+                observed[relative] = ("directory", mode)
+                walk(path)
+            elif stat.S_ISREG(entry_stat.st_mode):
+                if entry_stat.st_nlink != 1:
+                    _fail(
+                        "FIXTURE_OUTPUT_TREE_INVALID",
+                        f"hard-linked file prohibited: {relative}",
+                    )
+                observed[relative] = ("file", mode)
+            else:
+                _fail(
+                    "FIXTURE_OUTPUT_TREE_INVALID",
+                    f"special file prohibited: {relative}",
+                )
+
+    walk(root)
+    expected = _expected_output_tree(stage)
+    if observed != expected:
+        missing = sorted(set(expected) - set(observed))
+        extra = sorted(set(observed) - set(expected))
+        mode_drift = sorted(
+            path
+            for path in set(expected) & set(observed)
+            if expected[path] != observed[path]
+        )
+        _fail(
+            "FIXTURE_OUTPUT_TREE_INVALID",
+            f"stage={stage} missing={missing} extra={extra} mode_drift={mode_drift}",
+        )
+
+
+def _snapshot_manifest(plan: Mapping[str, Any]) -> dict:
+    return seal_document(
+        {
+            "schema_version": SOURCE_SNAPSHOT_SCHEMA,
+            "source_count": len(BUILDER_SOURCE_RELATIVE_PATHS),
+            "sources": copy.deepcopy(plan["builder_sources"]),
+            "file_mode": "0400",
+            "directory_mode": "0500",
+            "status": "exact_source_snapshot_sealed_for_read_only_bind",
+        }
+    )
+
+
+def _validate_source_snapshot(
+    output_root: pathlib.Path, *, expected_sources: Sequence[Mapping[str, Any]]
+) -> dict:
+    manifest_path = _safe_child(output_root, SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix())
+    manifest = load_json(manifest_path)
+    _require_keys(
+        manifest,
+        {
+            "schema_version",
+            "source_count",
+            "sources",
+            "file_mode",
+            "directory_mode",
+            "status",
+            "content_digest",
+        },
+        "source snapshot manifest",
+    )
+    _require_string(
+        manifest["schema_version"], SOURCE_SNAPSHOT_SCHEMA, "snapshot schema"
+    )
+    _validate_digest(manifest, "source snapshot manifest")
+    _require_int(
+        manifest["source_count"],
+        len(BUILDER_SOURCE_RELATIVE_PATHS),
+        "snapshot source count",
+    )
+    if manifest["sources"] != list(expected_sources):
+        _fail("FIXTURE_SOURCE_SNAPSHOT_DRIFT", "snapshot source inventory drifted")
+    _require_string(manifest["file_mode"], "0400", "snapshot file mode")
+    _require_string(manifest["directory_mode"], "0500", "snapshot directory mode")
+    _require_string(
+        manifest["status"],
+        "exact_source_snapshot_sealed_for_read_only_bind",
+        "snapshot status",
+    )
+    for row, relative_path in zip(
+        manifest["sources"], BUILDER_SOURCE_RELATIVE_PATHS, strict=True
+    ):
+        source_path = _safe_child(
+            output_root, (SOURCE_SNAPSHOT_ROOT / relative_path).as_posix()
+        )
+        observed = file_pin(source_path)
+        if (
+            observed["sha256"] != row["sha256"]
+            or observed["size_bytes"] != row["size_bytes"]
+        ):
+            _fail(
+                "FIXTURE_SOURCE_SNAPSHOT_DRIFT",
+                f"snapshot bytes drifted: {relative_path}",
+            )
+        if row["content_digest"] is not None:
+            document = load_json(source_path)
+            _validate_digest(document, f"snapshot {relative_path}")
+            if document["content_digest"] != row["content_digest"]:
+                _fail(
+                    "FIXTURE_SOURCE_SNAPSHOT_DRIFT",
+                    f"snapshot content digest drifted: {relative_path}",
+                )
+    return manifest
+
+
+def _create_source_snapshot(
+    output_root: pathlib.Path, plan: Mapping[str, Any]
+) -> pathlib.Path:
+    profile = load_profile()
+    recipe = load_recipe()
+    _validate_builder_sources(plan["builder_sources"], profile=profile, recipe=recipe)
+    snapshot_root = _safe_child(output_root, SOURCE_SNAPSHOT_ROOT.as_posix())
+    for row, relative_path in zip(
+        plan["builder_sources"], BUILDER_SOURCE_RELATIVE_PATHS, strict=True
+    ):
+        live_path = REPOSITORY_ROOT.joinpath(*relative_path.parts)
+        raw = _read_regular_file(live_path)
+        if (
+            hashlib.sha256(raw).hexdigest() != row["sha256"]
+            or len(raw) != row["size_bytes"]
+        ):
+            _fail("FIXTURE_SOURCE_CHANGED", f"source drifted: {relative_path}")
+        target = snapshot_root.joinpath(*relative_path.parts)
+        target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        _write_exclusive(target, raw, mode=0o400)
+    directories = sorted(
+        (path for path in snapshot_root.rglob("*") if path.is_dir()),
+        key=lambda path: len(path.parts),
+        reverse=True,
+    )
+    for directory in directories:
+        directory.chmod(0o500)
+    snapshot_root.chmod(0o500)
+    manifest_path = _safe_child(output_root, SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix())
+    _write_exclusive(
+        manifest_path,
+        canonical_json_bytes(_snapshot_manifest(plan)),
+    )
+    _validate_source_snapshot(output_root, expected_sources=plan["builder_sources"])
+    _validate_output_tree(output_root, stage="snapshot")
+    return manifest_path
+
+
+def _document_pin(path: pathlib.Path, *, relative_path: str) -> dict:
+    raw = _read_regular_file(path)
+    document = load_json(path)
+    _validate_digest(document, relative_path)
+    return {
+        "path": relative_path,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "size_bytes": len(raw),
+        "content_digest": document["content_digest"],
+    }
+
+
+def _load_pinned_document(
+    output_root: pathlib.Path, pin: Mapping[str, Any], *, label: str
+) -> dict:
+    path = _safe_child(output_root, pin["path"])
+    document = load_json(path)
+    observed = _document_pin(path, relative_path=pin["path"])
+    if observed != pin:
+        _fail("FIXTURE_INVENTORY_DRIFT", f"{label} bytes differ from inventory")
+    return document
+
+
 def _worker_request(plan: Mapping[str, Any]) -> dict:
     return seal_document(
         {
@@ -1352,15 +1796,22 @@ def _worker_request(plan: Mapping[str, Any]) -> dict:
             "plan_content_digest": plan["content_digest"],
             "profile": copy.deepcopy(plan["profile"]),
             "recipe": copy.deepcopy(plan["recipe"]),
+            "builder_sources": copy.deepcopy(plan["builder_sources"]),
+            "source_snapshot": copy.deepcopy(plan["source_snapshot"]),
+            "source_snapshot_content_digest": _snapshot_manifest(plan)[
+                "content_digest"
+            ],
             "output_root": plan["output_root"],
             "archetypes": copy.deepcopy(plan["archetypes"]),
             "execution_policy": copy.deepcopy(plan["execution_policy"]),
-            "status": "ready_for_fixed_blender_worker",
+            "status": "ready_for_fixed_snapshot_worker",
         }
     )
 
 
-def validate_worker_request(value: Mapping[str, Any]) -> None:
+def validate_worker_request(
+    value: Mapping[str, Any], *, expected_plan: Mapping[str, Any] | None = None
+) -> None:
     _require_keys(
         value,
         {
@@ -1368,6 +1819,9 @@ def validate_worker_request(value: Mapping[str, Any]) -> None:
             "plan_content_digest",
             "profile",
             "recipe",
+            "builder_sources",
+            "source_snapshot",
+            "source_snapshot_content_digest",
             "output_root",
             "archetypes",
             "execution_policy",
@@ -1379,6 +1833,14 @@ def validate_worker_request(value: Mapping[str, Any]) -> None:
     if value["schema_version"] != WORKER_REQUEST_SCHEMA:
         _fail("FIXTURE_WORKER_REQUEST_INVALID", "worker request schema drifted")
     _validate_digest(value, "worker request")
+    _require_sha256(value["plan_content_digest"], "request plan digest")
+    output_root = pathlib.Path(value["output_root"])
+    if (
+        not output_root.is_absolute()
+        or output_root.parent != DEFAULT_RUN_PARENT
+        or not _SAFE_ATTEMPT_RE.fullmatch(output_root.name)
+    ):
+        _fail("FIXTURE_WORKER_REQUEST_INVALID", "request output root drifted")
     profile = load_profile()
     recipe = load_recipe()
     _validate_repo_source_pin(
@@ -1395,10 +1857,30 @@ def validate_worker_request(value: Mapping[str, Any]) -> None:
         current_path=RECIPE_PATH,
         current_content_digest=recipe["content_digest"],
     )
-    _require_list(value["archetypes"], "worker request archetypes", count=3)
+    _validate_builder_sources(value["builder_sources"], profile=profile, recipe=recipe)
+    if value["source_snapshot"] != _expected_snapshot_policy():
+        _fail("FIXTURE_WORKER_REQUEST_INVALID", "snapshot policy drifted")
+    _require_string(
+        value["source_snapshot_content_digest"],
+        _snapshot_manifest({"builder_sources": value["builder_sources"]})[
+            "content_digest"
+        ],
+        "request snapshot content digest",
+    )
+    if value["archetypes"] != _expected_archetype_plan(recipe):
+        _fail("FIXTURE_WORKER_REQUEST_INVALID", "request archetypes drifted")
+    if value["execution_policy"] != _expected_execution_policy():
+        _fail("FIXTURE_WORKER_REQUEST_INVALID", "request execution policy drifted")
+    _require_string(
+        value["status"], "ready_for_fixed_snapshot_worker", "worker request status"
+    )
+    if expected_plan is not None:
+        expected = _worker_request(expected_plan)
+        if value != expected:
+            _fail("FIXTURE_WORKER_REQUEST_INVALID", "request differs from forge plan")
 
 
-def _glb_json(path: pathlib.Path) -> tuple[dict, bytes]:
+def _glb_json(path: pathlib.Path) -> tuple[dict, bytes, bytes]:
     raw = _read_regular_file(path, maximum_bytes=64 * 1024 * 1024)
     if len(raw) < 20:
         _fail("FIXTURE_GLB_INVALID", "GLB is too small")
@@ -1425,20 +1907,101 @@ def _glb_json(path: pathlib.Path) -> tuple[dict, bytes]:
         raise FixtureForgeError("FIXTURE_GLB_INVALID", "GLB JSON is invalid") from exc
     if type(document) is not dict:
         _fail("FIXTURE_GLB_INVALID", "GLB JSON root must be an object")
-    return document, raw
+    return document, raw, chunks[1][1]
+
+
+def _position_accessor_bounds(
+    document: Mapping[str, Any], binary: bytes, accessor_index: int
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    accessors = document.get("accessors", [])
+    buffer_views = document.get("bufferViews", [])
+    buffers = document.get("buffers", [])
+    if len(buffers) != 1 or type(buffers[0].get("byteLength")) is not int:
+        _fail("FIXTURE_GLB_INVALID", "GLB must contain one declared binary buffer")
+    declared_buffer_bytes = buffers[0]["byteLength"]
+    if (
+        declared_buffer_bytes < 0
+        or len(binary) - declared_buffer_bytes not in {0, 1, 2, 3}
+        or any(binary[declared_buffer_bytes:])
+    ):
+        _fail("FIXTURE_GLB_INVALID", "GLB BIN chunk padding or length is invalid")
+    if not 0 <= accessor_index < len(accessors):
+        _fail("FIXTURE_GLB_INVALID", "GLB POSITION accessor is out of range")
+    accessor = accessors[accessor_index]
+    if (
+        accessor.get("componentType") != 5126
+        or accessor.get("type") != "VEC3"
+        or accessor.get("normalized", False) is not False
+        or "sparse" in accessor
+        or type(accessor.get("count")) is not int
+        or accessor["count"] <= 0
+        or type(accessor.get("bufferView")) is not int
+    ):
+        _fail("FIXTURE_GLB_INVALID", "POSITION accessor must be dense float32 VEC3")
+    view_index = accessor["bufferView"]
+    if not 0 <= view_index < len(buffer_views):
+        _fail("FIXTURE_GLB_INVALID", "POSITION buffer view is out of range")
+    view = buffer_views[view_index]
+    if (
+        view.get("buffer") != 0
+        or type(view.get("byteLength")) is not int
+        or view["byteLength"] <= 0
+        or view.get("byteStride", 12) != 12
+        or view.get("target", 34962) != 34962
+    ):
+        _fail("FIXTURE_GLB_INVALID", "POSITION buffer view contract drifted")
+    view_offset = view.get("byteOffset", 0)
+    accessor_offset = accessor.get("byteOffset", 0)
+    if type(view_offset) is not int or type(accessor_offset) is not int:
+        _fail("FIXTURE_GLB_INVALID", "POSITION byte offsets must be integers")
+    start = view_offset + accessor_offset
+    required = accessor["count"] * 12
+    if (
+        start < 0
+        or accessor_offset < 0
+        or accessor_offset + required > view["byteLength"]
+        or start + required > declared_buffer_bytes
+    ):
+        _fail("FIXTURE_GLB_INVALID", "POSITION bytes exceed declared buffer bounds")
+    positions = [
+        struct.unpack_from("<fff", binary, start + index * 12)
+        for index in range(accessor["count"])
+    ]
+    if any(not math.isfinite(value) for position in positions for value in position):
+        _fail("FIXTURE_GLB_INVALID", "POSITION bytes contain non-finite values")
+    actual_min = tuple(
+        min(position[axis] for position in positions) for axis in range(3)
+    )
+    actual_max = tuple(
+        max(position[axis] for position in positions) for axis in range(3)
+    )
+    declared_min = _finite_triplet(accessor.get("min"), "GLB accessor min")
+    declared_max = _finite_triplet(accessor.get("max"), "GLB accessor max")
+    for observed, declared in zip(actual_min + actual_max, declared_min + declared_max):
+        if abs(observed - declared) > 1e-6:
+            _fail("FIXTURE_GLB_INVALID", "POSITION accessor bounds differ from bytes")
+    return actual_min, actual_max
 
 
 def inspect_glb(path: pathlib.Path, archetype: Mapping[str, Any]) -> dict:
-    document, raw = _glb_json(path)
-    if document.get("scene") != 0 or len(document.get("scenes", [])) != 1:
+    document, raw, binary = _glb_json(path)
+    scenes = document.get("scenes", [])
+    if document.get("scene") != 0 or len(scenes) != 1:
         _fail("FIXTURE_GLB_INVALID", "GLB must have one active scene")
     if document.get("cameras") not in (None, []):
         _fail("FIXTURE_GLB_INVALID", "GLB unexpectedly contains cameras")
     extensions = document.get("extensionsRequired", [])
     if extensions:
         _fail("FIXTURE_GLB_INVALID", "GLB requires unsupported extensions")
-    if "KHR_lights_punctual" in document.get("extensionsUsed", []):
+    if "KHR_lights_punctual" in document.get(
+        "extensionsUsed", []
+    ) or "KHR_lights_punctual" in document.get("extensions", {}):
         _fail("FIXTURE_GLB_INVALID", "GLB unexpectedly contains lights")
+    if document.get("animations") not in (None, []) or document.get("skins") not in (
+        None,
+        [],
+    ):
+        _fail("FIXTURE_GLB_INVALID", "GLB unexpectedly contains animation or skins")
     if any(document.get(key) for key in ("textures", "images", "samplers")):
         _fail("FIXTURE_GLB_INVALID", "GLB unexpectedly contains textures")
     nodes = document.get("nodes", [])
@@ -1449,6 +2012,27 @@ def inspect_glb(path: pathlib.Path, archetype: Mapping[str, Any]) -> dict:
     expected_node_names = {archetype["root_node_name"], archetype["mesh_node_name"]}
     if {node.get("name") for node in nodes} != expected_node_names:
         _fail("FIXTURE_GLB_INVALID", "GLB node names drifted")
+    root_index = next(
+        index
+        for index, node in enumerate(nodes)
+        if node.get("name") == archetype["root_node_name"]
+    )
+    mesh_node_index = 1 - root_index
+    root_node = nodes[root_index]
+    mesh_node = nodes[mesh_node_index]
+    if scenes[0].get("nodes") != [root_index]:
+        _fail("FIXTURE_GLB_INVALID", "GLB scene must contain only the fixture root")
+    if root_node.get("children") != [mesh_node_index] or "mesh" in root_node:
+        _fail("FIXTURE_GLB_INVALID", "GLB root hierarchy drifted")
+    if mesh_node.get("mesh") != 0 or mesh_node.get("children") not in (None, []):
+        _fail("FIXTURE_GLB_INVALID", "GLB mesh hierarchy drifted")
+    for node in nodes:
+        if any(key in node for key in ("matrix", "translation", "rotation", "scale")):
+            _fail("FIXTURE_GLB_INVALID", "GLB node TRS/matrix must be absent identity")
+        if any(key in node for key in ("camera", "skin")):
+            _fail("FIXTURE_GLB_INVALID", "GLB node camera/skin binding is prohibited")
+        if "KHR_lights_punctual" in node.get("extensions", {}):
+            _fail("FIXTURE_GLB_INVALID", "GLB node light binding is prohibited")
     if meshes[0].get("name") != archetype["mesh_name"]:
         _fail("FIXTURE_GLB_INVALID", "GLB mesh name drifted")
     if [item.get("name") for item in materials] != archetype["material_names"]:
@@ -1464,16 +2048,16 @@ def inspect_glb(path: pathlib.Path, archetype: Mapping[str, Any]) -> dict:
         1,
     ]:
         _fail("FIXTURE_GLB_INVALID", "GLB primitive/material closure drifted")
-    accessors = document.get("accessors", [])
+    if meshes[0].get("weights") not in (None, []):
+        _fail("FIXTURE_GLB_INVALID", "GLB morph weights are prohibited")
     bounds_rows = []
     for primitive in primitives:
+        if primitive.get("mode", 4) != 4 or primitive.get("targets") not in (None, []):
+            _fail("FIXTURE_GLB_INVALID", "GLB primitive mode/morph targets drifted")
         position_index = primitive.get("attributes", {}).get("POSITION")
-        if type(position_index) is not int or not 0 <= position_index < len(accessors):
+        if type(position_index) is not int:
             _fail("FIXTURE_GLB_INVALID", "GLB POSITION accessor is invalid")
-        accessor = accessors[position_index]
-        minimum = _finite_triplet(accessor.get("min"), "GLB accessor min")
-        maximum = _finite_triplet(accessor.get("max"), "GLB accessor max")
-        bounds_rows.append((minimum, maximum))
+        bounds_rows.append(_position_accessor_bounds(document, binary, position_index))
     gltf_min = [min(row[0][axis] for row in bounds_rows) for axis in range(3)]
     gltf_max = [max(row[1][axis] for row in bounds_rows) for axis in range(3)]
     blender_min_cm = [
@@ -1488,10 +2072,13 @@ def inspect_glb(path: pathlib.Path, archetype: Mapping[str, Any]) -> dict:
     ]
     expected = archetype["expected_mesh_local_bounds_cm"]
     tolerance = 0.05
+    bounds_deltas = []
     for observed, target in zip(blender_min_cm, expected["min_cm"], strict=True):
+        bounds_deltas.append(abs(observed - target))
         if abs(observed - target) > tolerance:
             _fail("FIXTURE_GLB_BOUNDS_DRIFT", "GLB minimum bounds drifted")
     for observed, target in zip(blender_max_cm, expected["max_cm"], strict=True):
+        bounds_deltas.append(abs(observed - target))
         if abs(observed - target) > tolerance:
             _fail("FIXTURE_GLB_BOUNDS_DRIFT", "GLB maximum bounds drifted")
     return {
@@ -1509,6 +2096,9 @@ def inspect_glb(path: pathlib.Path, archetype: Mapping[str, Any]) -> dict:
             "min_cm": [round(value, 6) for value in blender_min_cm],
             "max_cm": [round(value, 6) for value in blender_max_cm],
         },
+        "contracted_mesh_local_bounds_cm": copy.deepcopy(expected),
+        "bounds_tolerance_cm": tolerance,
+        "maximum_bounds_delta_cm": round(max(bounds_deltas), 8),
         "required_extensions": [],
     }
 
@@ -1634,6 +2224,8 @@ def _artifact_receipt(value: Mapping[str, Any], archetype: Mapping[str, Any]) ->
             "plan_content_digest",
             "profile",
             "recipe",
+            "builder_sources",
+            "source_snapshot_content_digest",
             "archetype_id",
             "glb",
             "preview",
@@ -1648,6 +2240,7 @@ def _artifact_receipt(value: Mapping[str, Any], archetype: Mapping[str, Any]) ->
     if value["schema_version"] != ARTIFACT_RECEIPT_SCHEMA:
         _fail("FIXTURE_RECEIPT_INVALID", "artifact receipt schema drifted")
     _validate_digest(value, "artifact receipt")
+    _require_sha256(value["plan_content_digest"], "receipt plan digest")
     profile = load_profile()
     recipe = load_recipe()
     _validate_repo_source_pin(
@@ -1663,6 +2256,14 @@ def _artifact_receipt(value: Mapping[str, Any], archetype: Mapping[str, Any]) ->
         expected_relative_path=RECIPE_RELATIVE_PATH,
         current_path=RECIPE_PATH,
         current_content_digest=recipe["content_digest"],
+    )
+    _validate_builder_sources(value["builder_sources"], profile=profile, recipe=recipe)
+    _require_string(
+        value["source_snapshot_content_digest"],
+        _snapshot_manifest({"builder_sources": value["builder_sources"]})[
+            "content_digest"
+        ],
+        "receipt snapshot content digest",
     )
     if value["archetype_id"] != archetype["archetype_id"]:
         _fail("FIXTURE_RECEIPT_INVALID", "artifact archetype drifted")
@@ -1681,6 +2282,9 @@ def _artifact_receipt(value: Mapping[str, Any], archetype: Mapping[str, Any]) ->
             "light_count",
             "texture_count",
             "mesh_local_bounds_cm",
+            "contracted_mesh_local_bounds_cm",
+            "bounds_tolerance_cm",
+            "maximum_bounds_delta_cm",
             "required_extensions",
         },
         "artifact receipt GLB",
@@ -1770,7 +2374,9 @@ def _artifact_receipt(value: Mapping[str, Any], archetype: Mapping[str, Any]) ->
     )
 
 
-def _validate_worker_result(value: Mapping[str, Any]) -> None:
+def _validate_worker_result(
+    value: Mapping[str, Any], *, expected_plan: Mapping[str, Any] | None = None
+) -> None:
     _require_keys(
         value,
         {
@@ -1778,6 +2384,8 @@ def _validate_worker_result(value: Mapping[str, Any]) -> None:
             "plan_content_digest",
             "profile",
             "recipe",
+            "builder_sources",
+            "source_snapshot_content_digest",
             "artifact_count",
             "artifacts",
             "execution",
@@ -1790,6 +2398,7 @@ def _validate_worker_result(value: Mapping[str, Any]) -> None:
     if value["schema_version"] != WORKER_RESULT_SCHEMA:
         _fail("FIXTURE_WORKER_RESULT_INVALID", "worker result schema drifted")
     _validate_digest(value, "worker result")
+    _require_sha256(value["plan_content_digest"], "worker plan digest")
     profile = load_profile()
     recipe = load_recipe()
     _validate_repo_source_pin(
@@ -1805,6 +2414,14 @@ def _validate_worker_result(value: Mapping[str, Any]) -> None:
         expected_relative_path=RECIPE_RELATIVE_PATH,
         current_path=RECIPE_PATH,
         current_content_digest=recipe["content_digest"],
+    )
+    _validate_builder_sources(value["builder_sources"], profile=profile, recipe=recipe)
+    _require_string(
+        value["source_snapshot_content_digest"],
+        _snapshot_manifest({"builder_sources": value["builder_sources"]})[
+            "content_digest"
+        ],
+        "worker result snapshot digest",
     )
     _require_int(value["artifact_count"], 3, "worker artifact count")
     artifacts = _require_list(value["artifacts"], "worker artifacts", count=3)
@@ -1831,6 +2448,8 @@ def _validate_worker_result(value: Mapping[str, Any]) -> None:
             "render_device",
             "network_namespace",
             "gpu_devices_visible",
+            "source_snapshot_root",
+            "source_tree_read_only_bind",
         },
         "worker execution",
     )
@@ -1849,6 +2468,16 @@ def _validate_worker_result(value: Mapping[str, Any]) -> None:
     _require_bool(
         value["execution"]["gpu_devices_visible"], False, "worker GPU visibility"
     )
+    _require_string(
+        value["execution"]["source_snapshot_root"],
+        SOURCE_SNAPSHOT_ROOT.as_posix(),
+        "worker snapshot root",
+    )
+    _require_bool(
+        value["execution"]["source_tree_read_only_bind"],
+        True,
+        "worker source read-only bind",
+    )
     _require_keys(
         value["claims"],
         {"ue_imported", "visual_acceptance", "gta_quality_accepted"},
@@ -1861,10 +2490,21 @@ def _validate_worker_result(value: Mapping[str, Any]) -> None:
         "three_fixture_artifacts_sealed_not_ue_imported",
         "worker result status",
     )
+    if expected_plan is not None:
+        if value["plan_content_digest"] != expected_plan["content_digest"]:
+            _fail("FIXTURE_WORKER_RESULT_INVALID", "worker plan digest drifted")
+        for key in ("profile", "recipe", "builder_sources"):
+            if value[key] != expected_plan[key]:
+                _fail(
+                    "FIXTURE_WORKER_RESULT_INVALID",
+                    f"worker {key} source identity drifted",
+                )
 
 
-def _subprocess_environment() -> dict[str, str]:
-    return {
+def _subprocess_environment(
+    snapshot_root: pathlib.Path | None = None,
+) -> dict[str, str]:
+    environment = {
         "PATH": "/usr/bin:/bin",
         "HOME": "/tmp",
         "TMPDIR": "/tmp",
@@ -1884,9 +2524,18 @@ def _subprocess_environment() -> dict[str, str]:
         "BLENDER_USER_CONFIG": "/tmp/blender-config",
         "BLENDER_USER_SCRIPTS": "/tmp/blender-scripts",
     }
+    if snapshot_root is not None:
+        environment["PYTHONPATH"] = str(snapshot_root)
+    return environment
 
 
-def _worker_command(output_root: pathlib.Path) -> list[str]:
+def _worker_command(output_root: pathlib.Path, *, blender_fd: int) -> list[str]:
+    snapshot_root = _safe_child(output_root, SOURCE_SNAPSHOT_ROOT.as_posix())
+    snapshot_worker = snapshot_root.joinpath(
+        *pathlib.PurePosixPath(
+            "tools/blender/vista_playable_home_r9_fixtures/blender_worker.py"
+        ).parts
+    )
     return [
         str(DEFAULT_BWRAP),
         "--die-with-parent",
@@ -1899,6 +2548,12 @@ def _worker_command(output_root: pathlib.Path) -> list[str]:
         "--bind",
         str(output_root),
         str(output_root),
+        "--ro-bind-fd",
+        str(blender_fd),
+        str(DEFAULT_BLENDER),
+        "--ro-bind",
+        str(snapshot_root),
+        str(snapshot_root),
         "--dev",
         "/dev",
         "--proc",
@@ -1906,13 +2561,15 @@ def _worker_command(output_root: pathlib.Path) -> list[str]:
         "--tmpfs",
         "/tmp",
         "--chdir",
-        str(REPOSITORY_ROOT),
+        str(snapshot_root),
         str(DEFAULT_BLENDER),
         "--background",
         "--factory-startup",
         "--disable-autoexec",
+        "--python-exit-code",
+        "1",
         "--python",
-        str(WORKER_PATH),
+        str(snapshot_worker),
         "--",
         "--request",
         str(output_root / "worker-request.json"),
@@ -1931,12 +2588,18 @@ def _prepare_output_root(config: ForgeConfig) -> pathlib.Path:
     output_root = config.output_root
     try:
         output_root.mkdir(mode=0o700)
-        for relative in ("artifacts", "previews", "receipts"):
+        for relative in (
+            "artifacts",
+            "previews",
+            "receipts",
+            SOURCE_SNAPSHOT_ROOT.as_posix(),
+        ):
             (output_root / relative).mkdir(mode=0o700)
     except OSError as exc:
         raise FixtureForgeError(
             "FIXTURE_OUTPUT_CREATE_FAILED", "fresh output root could not be created"
         ) from exc
+    _validate_output_tree(output_root, stage="prepared")
     return output_root
 
 
@@ -1945,15 +2608,17 @@ def _build_inventory(
 ) -> dict:
     profile = load_profile()
     recipe = load_recipe()
+    validate_plan(plan, expected_mode="apply")
     archetypes_by_id = {item["archetype_id"]: item for item in recipe["archetypes"]}
     import_by_id = {
         item["archetype_id"]: item
         for item in profile["fixture_imports"]["glb_inventory"]
     }
-    _validate_worker_result(worker_result)
+    _validate_worker_result(worker_result, expected_plan=plan)
     if (
         worker_result["profile"] != plan["profile"]
         or worker_result["recipe"] != plan["recipe"]
+        or worker_result["builder_sources"] != plan["builder_sources"]
     ):
         _fail("FIXTURE_WORKER_RESULT_INVALID", "worker source identities drifted")
     worker_by_id = {item["archetype_id"]: item for item in worker_result["artifacts"]}
@@ -1969,7 +2634,13 @@ def _build_inventory(
         receipt_raw = _read_regular_file(receipt_path)
         receipt = load_json(receipt_path)
         _artifact_receipt(receipt, recipe_row)
-        if receipt["profile"] != plan["profile"] or receipt["recipe"] != plan["recipe"]:
+        if (
+            receipt["profile"] != plan["profile"]
+            or receipt["recipe"] != plan["recipe"]
+            or receipt["builder_sources"] != plan["builder_sources"]
+            or receipt["source_snapshot_content_digest"]
+            != worker_result["source_snapshot_content_digest"]
+        ):
             _fail("FIXTURE_RECEIPT_DRIFT", "artifact source identities drifted")
         if receipt["glb"] != {"path": plan_row["glb"], **glb}:
             _fail("FIXTURE_RECEIPT_DRIFT", "artifact GLB receipt differs from bytes")
@@ -1998,13 +2669,33 @@ def _build_inventory(
                 "ue_import": copy.deepcopy(import_by_id[archetype_id]),
             }
         )
+    plan_path = output_root / "forge-plan.json"
+    result_path = output_root / "worker-result.json"
+    if load_json(plan_path) != plan or load_json(result_path) != worker_result:
+        _fail("FIXTURE_INVENTORY_INVALID", "plan/result mappings differ from bytes")
+    snapshot_manifest = _validate_source_snapshot(
+        output_root, expected_sources=plan["builder_sources"]
+    )
+    _validate_output_tree(output_root, stage="worker")
     return seal_document(
         {
             "schema_version": INVENTORY_SCHEMA,
             "profile": copy.deepcopy(plan["profile"]),
             "recipe": copy.deepcopy(plan["recipe"]),
-            "forge_plan_content_digest": plan["content_digest"],
-            "worker_result_content_digest": worker_result["content_digest"],
+            "forge_plan": _document_pin(plan_path, relative_path="forge-plan.json"),
+            "worker_result": _document_pin(
+                result_path, relative_path="worker-result.json"
+            ),
+            "source_snapshot": {
+                "manifest": _document_pin(
+                    output_root / SOURCE_SNAPSHOT_MANIFEST_PATH,
+                    relative_path=SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix(),
+                ),
+                "source_count": len(BUILDER_SOURCE_RELATIVE_PATHS),
+                "sources": copy.deepcopy(plan["builder_sources"]),
+                "tree_content_digest": snapshot_manifest["content_digest"],
+                "status": "exact_source_snapshot_current_bytes_validated",
+            },
             "toolchain": copy.deepcopy(plan["toolchain"]),
             "artifact_count": 3,
             "artifacts": rows,
@@ -2015,7 +2706,7 @@ def _build_inventory(
                 "visual_acceptance": False,
                 "gta_quality_accepted": False,
             },
-            "status": "fixture_inventory_sealed_not_ue_imported",
+            "status": "fixture_inventory_sealed_snapshot_provenance_not_ue_imported",
         }
     )
 
@@ -2027,8 +2718,9 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
             "schema_version",
             "profile",
             "recipe",
-            "forge_plan_content_digest",
-            "worker_result_content_digest",
+            "forge_plan",
+            "worker_result",
+            "source_snapshot",
             "toolchain",
             "artifact_count",
             "artifacts",
@@ -2059,8 +2751,55 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
         current_path=RECIPE_PATH,
         current_content_digest=recipe["content_digest"],
     )
-    _require_sha256(value["forge_plan_content_digest"], "forge plan digest")
-    _require_sha256(value["worker_result_content_digest"], "worker result digest")
+    _validate_file_pin(
+        value["forge_plan"],
+        "inventory forge plan",
+        expected_path="forge-plan.json",
+        include_content_digest=True,
+    )
+    _validate_file_pin(
+        value["worker_result"],
+        "inventory worker result",
+        expected_path="worker-result.json",
+        include_content_digest=True,
+    )
+    _require_keys(
+        value["source_snapshot"],
+        {"manifest", "source_count", "sources", "tree_content_digest", "status"},
+        "inventory source snapshot",
+    )
+    _validate_file_pin(
+        value["source_snapshot"]["manifest"],
+        "inventory source snapshot manifest",
+        expected_path=SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix(),
+        include_content_digest=True,
+    )
+    _require_int(
+        value["source_snapshot"]["source_count"],
+        len(BUILDER_SOURCE_RELATIVE_PATHS),
+        "inventory source count",
+    )
+    _validate_builder_sources(
+        value["source_snapshot"]["sources"], profile=profile, recipe=recipe
+    )
+    expected_snapshot_digest = _snapshot_manifest(
+        {"builder_sources": value["source_snapshot"]["sources"]}
+    )["content_digest"]
+    _require_string(
+        value["source_snapshot"]["tree_content_digest"],
+        expected_snapshot_digest,
+        "inventory snapshot tree digest",
+    )
+    _require_string(
+        value["source_snapshot"]["manifest"]["content_digest"],
+        expected_snapshot_digest,
+        "inventory snapshot manifest digest",
+    )
+    _require_string(
+        value["source_snapshot"]["status"],
+        "exact_source_snapshot_current_bytes_validated",
+        "inventory snapshot status",
+    )
     _require_keys(value["toolchain"], {"blender", "bubblewrap"}, "toolchain")
     _require_keys(
         value["toolchain"]["blender"],
@@ -2122,6 +2861,8 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
         "private_dev_without_gpu_nodes",
         "toolchain device policy",
     )
+    if value["toolchain"] != _verify_toolchain():
+        _fail("FIXTURE_INVENTORY_INVALID", "current toolchain differs")
     _require_int(value["artifact_count"], 3, "fixture inventory artifact count")
     artifacts = _require_list(
         value["artifacts"], "fixture inventory artifacts", count=3
@@ -2154,6 +2895,9 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
                 "light_count",
                 "texture_count",
                 "mesh_local_bounds_cm",
+                "contracted_mesh_local_bounds_cm",
+                "bounds_tolerance_cm",
+                "maximum_bounds_delta_cm",
                 "required_extensions",
             },
             "inventory GLB",
@@ -2203,7 +2947,10 @@ def validate_fixture_inventory(value: Mapping[str, Any]) -> None:
     )
     for key, claim in value["claims"].items():
         _require_bool(claim, False, f"inventory claim {key}")
-    if value["status"] != "fixture_inventory_sealed_not_ue_imported":
+    if (
+        value["status"]
+        != "fixture_inventory_sealed_snapshot_provenance_not_ue_imported"
+    ):
         _fail("FIXTURE_INVENTORY_INVALID", "fixture inventory status drifted")
 
 
@@ -2221,6 +2968,31 @@ def validate_fixture_inventory_file(path: pathlib.Path) -> dict:
     value = load_json(path)
     validate_fixture_inventory(value)
     output_root = pathlib.Path(path).parent
+    _validate_output_tree(output_root, stage="final")
+    plan = _load_pinned_document(output_root, value["forge_plan"], label="forge plan")
+    validate_plan(plan, expected_mode="apply")
+    worker_result = _load_pinned_document(
+        output_root, value["worker_result"], label="worker result"
+    )
+    _validate_worker_result(worker_result, expected_plan=plan)
+    snapshot_manifest = _load_pinned_document(
+        output_root,
+        value["source_snapshot"]["manifest"],
+        label="source snapshot manifest",
+    )
+    observed_snapshot = _validate_source_snapshot(
+        output_root, expected_sources=plan["builder_sources"]
+    )
+    if snapshot_manifest != observed_snapshot:
+        _fail("FIXTURE_INVENTORY_DRIFT", "snapshot manifest mapping drifted")
+    if value["profile"] != plan["profile"] or value["recipe"] != plan["recipe"]:
+        _fail("FIXTURE_INVENTORY_DRIFT", "inventory source pins differ from plan")
+    if value["toolchain"] != plan["toolchain"]:
+        _fail("FIXTURE_INVENTORY_DRIFT", "inventory toolchain differs from plan")
+    if value["ue_package_inventory"] != plan["ue_package_inventory"]:
+        _fail("FIXTURE_INVENTORY_DRIFT", "inventory packages differ from plan")
+    if value["source_snapshot"]["sources"] != plan["builder_sources"]:
+        _fail("FIXTURE_INVENTORY_DRIFT", "inventory source tree differs from plan")
     recipe = load_recipe()
     by_id = {item["archetype_id"]: item for item in recipe["archetypes"]}
     for row in value["artifacts"]:
@@ -2238,6 +3010,13 @@ def validate_fixture_inventory_file(path: pathlib.Path) -> dict:
         receipt_raw = _read_regular_file(receipt_path)
         receipt = load_json(receipt_path)
         _artifact_receipt(receipt, by_id[row["archetype_id"]])
+        if (
+            receipt["plan_content_digest"] != plan["content_digest"]
+            or receipt["builder_sources"] != plan["builder_sources"]
+            or receipt["source_snapshot_content_digest"]
+            != snapshot_manifest["content_digest"]
+        ):
+            _fail("FIXTURE_INVENTORY_DRIFT", "artifact provenance differs")
         expected_pin = row["artifact_receipt"]
         if (
             hashlib.sha256(receipt_raw).hexdigest() != expected_pin["sha256"]
@@ -2254,11 +3033,20 @@ def apply_forge(config: ForgeConfig) -> pathlib.Path:
     plan = build_plan(config)
     validate_plan(plan, expected_mode="apply")
     output_root = _prepare_output_root(config)
+    _create_source_snapshot(output_root, plan)
     request = _worker_request(plan)
-    validate_worker_request(request)
+    validate_worker_request(request, expected_plan=plan)
     _write_exclusive(output_root / "forge-plan.json", canonical_json_bytes(plan))
     _write_exclusive(output_root / "worker-request.json", canonical_json_bytes(request))
-    command = _worker_command(output_root)
+    _validate_source_snapshot(output_root, expected_sources=plan["builder_sources"])
+    _validate_output_tree(output_root, stage="request")
+    snapshot_root = _safe_child(output_root, SOURCE_SNAPSHOT_ROOT.as_posix())
+    blender_fd = _sealed_file_snapshot(
+        DEFAULT_BLENDER,
+        expected_sha256=PINNED_BLENDER_SHA256,
+        expected_size_bytes=PINNED_BLENDER_BYTES,
+    )
+    command = _worker_command(output_root, blender_fd=blender_fd)
     try:
         completed = subprocess.run(
             command,
@@ -2266,24 +3054,31 @@ def apply_forge(config: ForgeConfig) -> pathlib.Path:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=20 * 60,
-            env=_subprocess_environment(),
+            env=_subprocess_environment(snapshot_root),
             start_new_session=True,
+            pass_fds=(blender_fd,),
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise FixtureForgeError(
             "FIXTURE_WORKER_FAILED", "fixed Blender worker did not complete"
         ) from exc
+    finally:
+        os.close(blender_fd)
     _write_exclusive(output_root / "blender-worker.log", completed.stdout)
     if completed.returncode != 0:
         _fail("FIXTURE_WORKER_FAILED", f"Blender exited {completed.returncode}")
+    validate_plan(plan, expected_mode="apply")
+    _validate_source_snapshot(output_root, expected_sources=plan["builder_sources"])
+    _validate_output_tree(output_root, stage="worker")
     worker_result_path = output_root / "worker-result.json"
     worker_result = load_json(worker_result_path)
-    _validate_worker_result(worker_result)
+    _validate_worker_result(worker_result, expected_plan=plan)
     if worker_result["plan_content_digest"] != plan["content_digest"]:
         _fail("FIXTURE_WORKER_RESULT_INVALID", "worker result plan pin drifted")
     inventory = _build_inventory(plan, worker_result, output_root)
     inventory_path = output_root / "fixture-inventory.json"
     _write_exclusive(inventory_path, canonical_json_bytes(inventory))
+    _validate_output_tree(output_root, stage="final")
     validate_fixture_inventory_file(inventory_path)
     return inventory_path
 
