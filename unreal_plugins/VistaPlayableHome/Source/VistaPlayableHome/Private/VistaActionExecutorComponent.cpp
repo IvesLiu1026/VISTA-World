@@ -888,6 +888,23 @@ bool UVistaActionExecutorComponent::BeginPhysicalInteraction(
     const FVistaPhysicalActionRequest& InputRequest,
     FVistaActionTransactionRecord& OutRecord)
 {
+    return BeginPhysicalInteractionImpl(InputRequest, OutRecord, false);
+}
+
+#if WITH_DEV_AUTOMATION_TESTS
+bool UVistaActionExecutorComponent::BeginPhysicalInteractionForDevAutomation(
+    const FVistaPhysicalActionRequest& InputRequest,
+    FVistaActionTransactionRecord& OutRecord)
+{
+    return BeginPhysicalInteractionImpl(InputRequest, OutRecord, true);
+}
+#endif
+
+bool UVistaActionExecutorComponent::BeginPhysicalInteractionImpl(
+    const FVistaPhysicalActionRequest& InputRequest,
+    FVistaActionTransactionRecord& OutRecord,
+    const bool bDevAutomationBypassesAnimationReadiness)
+{
     check(IsInGameThread());
     if (InputRequest.CommandId.IsNone())
     {
@@ -943,8 +960,16 @@ bool UVistaActionExecutorComponent::BeginPhysicalInteraction(
         InputRequest.Affordance == EVistaAffordance::PickUp
             ? EVistaNpcActionType::PickUp
             : EVistaNpcActionType::Place;
-    if (!UVistaAnimationComponent::HasApprovedMutationAnimation(
-            AnimationType, AnimationReadinessCode))
+    bool bAnimationReady =
+        UVistaAnimationComponent::HasApprovedMutationAnimation(
+            AnimationType, AnimationReadinessCode);
+#if WITH_DEV_AUTOMATION_TESTS
+    bAnimationReady = bAnimationReady ||
+        bDevAutomationBypassesAnimationReadiness;
+#else
+    static_cast<void>(bDevAutomationBypassesAnimationReadiness);
+#endif
+    if (!bAnimationReady)
     {
         return RejectNewRequest(
             InputRequest,
@@ -1200,6 +1225,80 @@ bool UVistaActionExecutorComponent::BeginPhysicalInteraction(
     OutRecord = ActiveAction->Record;
     return true;
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+bool UVistaActionExecutorComponent::DrivePhysicalInteractionForDevAutomation(
+    const bool bFailAfterContact,
+    FVistaActionTransactionRecord& OutRecord)
+{
+    check(IsInGameThread());
+    if (!ActiveAction.IsSet())
+    {
+        OutRecord = FVistaActionTransactionRecord();
+        OutRecord.Code = TEXT("DEV_AUTOMATION_ACTION_REQUIRED");
+        OutRecord.Status = EVistaActionTransactionStatus::Failed;
+        return false;
+    }
+
+    const FName CommandId = ActiveAction->Record.CommandId;
+    AdvanceApproach();
+    if (!ActiveAction.IsSet() ||
+        ActiveAction->Record.Phase != EVistaActionPhase::Align)
+    {
+        return GetTransaction(CommandId, OutRecord) && OutRecord.IsTerminal();
+    }
+    AdvanceAlign();
+    if (!ActiveAction.IsSet() ||
+        ActiveAction->Record.Phase != EVistaActionPhase::Animate)
+    {
+        return GetTransaction(CommandId, OutRecord) && OutRecord.IsTerminal();
+    }
+    if (!Transition(
+            EVistaActionPhase::ContactCommit,
+            TEXT("DEV_AUTOMATION_CONTACT_COMMIT")))
+    {
+        FinishFailure(
+            EVistaActionTransactionStatus::Failed,
+            TEXT("ACTION_LEDGER_PUBLISH_FAILED"));
+        GetTransaction(CommandId, OutRecord);
+        return false;
+    }
+
+    FName ContactCode;
+    if (!CommitContact(ContactCode))
+    {
+        FinishFailure(
+            EVistaActionTransactionStatus::Failed,
+            ContactCode.IsNone()
+                ? FName(TEXT("DEV_AUTOMATION_CONTACT_FAILED"))
+                : ContactCode);
+        GetTransaction(CommandId, OutRecord);
+        return false;
+    }
+    if (bFailAfterContact)
+    {
+        FinishFailure(
+            EVistaActionTransactionStatus::Failed,
+            TEXT("DEV_AUTOMATION_FORCED_POST_CONTACT_FAILURE"));
+    }
+    else
+    {
+        CompleteSuccess();
+    }
+    if (!GetTransaction(CommandId, OutRecord))
+    {
+        OutRecord = FVistaActionTransactionRecord();
+        OutRecord.CommandId = CommandId;
+        OutRecord.Code = TEXT("DEV_AUTOMATION_LEDGER_RECORD_MISSING");
+        OutRecord.Status = EVistaActionTransactionStatus::Failed;
+        return false;
+    }
+    return bFailAfterContact
+        ? OutRecord.Status == EVistaActionTransactionStatus::Failed &&
+            OutRecord.bRollbackAttempted && OutRecord.bRolledBack
+        : OutRecord.Status == EVistaActionTransactionStatus::Succeeded;
+}
+#endif
 
 void UVistaActionExecutorComponent::TickComponent(
     float DeltaTime,

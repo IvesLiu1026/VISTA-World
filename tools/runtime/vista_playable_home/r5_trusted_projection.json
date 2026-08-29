@@ -1,0 +1,493 @@
+{
+  "content_digest": "e7f46a17f72b6a6a7a4826a6be1a3b4ae1f46e9d36b165366f065a2b19a7aa5a",
+  "schema": "vista.r5-multiclient-trusted-projection/v2",
+  "source_files": [
+    {
+      "path": "tools/runtime/vista_playable_home/provision_immutable_engine_authority.sh",
+      "sha256": "f46f5aa5cd0e1a084d6548812da2bd2aa9c7bf9d801fab10f7d0c07f601e9849",
+      "size_bytes": 5723
+    },
+    {
+      "path": "tools/runtime/vista_playable_home/r5_engine_authority_admin.py",
+      "sha256": "4ca08f3f88ab7249255ebc9c551d725efa888a8527fe6b1b2d8a02acf395259e",
+      "size_bytes": 5855
+    },
+    {
+      "path": "tools/runtime/vista_playable_home/r5_multiclient_proof.py",
+      "sha256": "6e5fc66963b539e74bcb0a050a02e75e84f61a168fa6c6c2145776f3fb0b99b8",
+      "size_bytes": 85787
+    },
+    {
+      "path": "tools/runtime/vista_playable_home/r5_runtime_capture.py",
+      "sha256": "b7b8ea440b4961eac98af1fb7ee677579eb3a316c12942363cf1537409b5eb49",
+      "size_bytes": 6849
+    },
+    {
+      "path": "tools/runtime/vista_playable_home/r5_trusted_project/Config/DefaultEngine.ini",
+      "sha256": "4ac520535f7ae0e3bf3e7bdafc131b37b0376ec76f17d7e652812a57050ef41a",
+      "size_bytes": 162
+    },
+    {
+      "path": "tools/runtime/vista_playable_home/r5_trusted_project/Source/VistaR5Proof.Target.cs",
+      "sha256": "4c51cdbab03a1796a44f74b5bc6e956e5d6f169b7ce6287e8be18db218f5c323",
+      "size_bytes": 351
+    },
+    {
+      "path": "tools/runtime/vista_playable_home/r5_trusted_project/Source/VistaR5Proof/VistaR5Proof.Build.cs",
+      "sha256": "aab5f26e79dd8f6abf442ca20f4649c92ee2880753a53dbe5fc626c982e3f904",
+      "size_bytes": 345
+    },
+    {
+      "path": "tools/runtime/vista_playable_home/r5_trusted_project/Source/VistaR5Proof/VistaR5Proof.cpp",
+      "sha256": "a22b2be3eca988acc88fc9c2d5426128aa0f588f951c9ebc7dfb090e1efb7f74",
+      "size_bytes": 134
+    },
+    {
+      "path": "tools/runtime/vista_playable_home/r5_trusted_project/Source/VistaR5ProofEditor.Target.cs",
+      "sha256": "e0621949fd384cf1356fb472412f8089f904eab46f68cac5d422e9189e15f39d",
+      "size_bytes": 365
+    },
+    {
+      "path": "tools/runtime/vista_playable_home/r5_trusted_project/VistaR5Proof.uproject",
+      "sha256": "d22a589313e8c4a8dac87d9cfc5109fa919879d7348728daa077ccff201a680f",
+      "size_bytes": 366
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Config/DefaultVistaPlayableHome.ini",
+      "sha256": "2a9bb8ef060cf4b8b4142a461b193726d78e105b7baa4cbe506ce0b228c94e0c",
+      "size_bytes": 80
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Config/FilterPlugin.ini",
+      "sha256": "38632d6fdf9f91ea2638aeb49bc511e061578b8449c7350adec8c9dc6c860345",
+      "size_bytes": 63
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaActionExecutorComponent.cpp",
+      "sha256": "47620981abd9135e5e8b198b33bb3d353018b95d6dd7d8000bc2e44340477536",
+      "size_bytes": 72576
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaAnimationComponent.cpp",
+      "sha256": "1dcd2f805cf192b6d95f1d77db0be9769cd6dcc4a64673b4075a0970951eae11",
+      "size_bytes": 11821
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaAnimationSignalNotify.cpp",
+      "sha256": "8c2be942d073cd6898becabd080effa5f6ffac35a73f358f68b01e581a4537d0",
+      "size_bytes": 685
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaCharacterProviderComponent.cpp",
+      "sha256": "f9f756a2afacfb312b6ec8104e62d06ae79695a3ae4925a1c3f4b18c36586c84",
+      "size_bytes": 33499
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaContainerActor.cpp",
+      "sha256": "16e014fc942738b1b70ef326ee36d5ec642d7bea211f549b686059bd9436aff0",
+      "size_bytes": 3292
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaDoorActor.cpp",
+      "sha256": "f44407e4ba775ee5e5d68c1a6e5fc2e574fe491423b32c682ffbc9ad0a4bd4c7",
+      "size_bytes": 11771
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaEventDefinitionActor.cpp",
+      "sha256": "4e3b5807672eb03ef4345cd1b8728f3d6d4a11791398e83cae62213e7d13c093",
+      "size_bytes": 201
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaEventSubsystem.cpp",
+      "sha256": "799b8a19471b6efdd3e66b8d3ff9a5fe87e76e74ffa2ec660acdfaff13c92a22",
+      "size_bytes": 35362
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaHomeNpcCharacter.cpp",
+      "sha256": "e1a624d03eece157d083a5980d4e7094f671759f3710974866df3c29758f7d1f",
+      "size_bytes": 7962
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaHomeNpcController.cpp",
+      "sha256": "ddbc6e7740b2bd3a6ce1a41b21577e236013cb6835edb5896b2a7c4513230b4c",
+      "size_bytes": 23417
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaIndoorSpringArmComponent.cpp",
+      "sha256": "bbdf5c55692665386059c47291bf2ce0fbe49163cf00f6a11172011a0b2a1c44",
+      "size_bytes": 2729
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaInteractionComponent.cpp",
+      "sha256": "430b960d502bbddcbbe9b8da78f20a263b09e164c7bf90a1e7a07bee031d06de",
+      "size_bytes": 3534
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPickupActor.cpp",
+      "sha256": "5487f9029e297d38d08bbf2ba18f97665336fff581f5b02d0a2609b0be66f7b0",
+      "size_bytes": 51933
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeCharacter.cpp",
+      "sha256": "f795391e4724a5061764f48b6e945da5efc36ec2da2d2134482a9efabde6b16e",
+      "size_bytes": 27662
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeGameMode.cpp",
+      "sha256": "4702546aa85c517c74499594f57c5610dcc2907fcc9a9bb4d12998391a16e838",
+      "size_bytes": 1893
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeHUD.cpp",
+      "sha256": "43202b45b2b770e121a5b0a9eb96ee238abbb87cba46fd66ed8569387e20455f",
+      "size_bytes": 10759
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeModule.cpp",
+      "sha256": "c737b6b86c1140707a392fb55ecee964342d909be5c2d0a7e9762ae4a1694e53",
+      "size_bytes": 1041
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeRuntimeSubsystem.cpp",
+      "sha256": "2974a290151c4126d1719c64086c3122dea216b814d057d287af87521a25282c",
+      "size_bytes": 22425
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeTypes.cpp",
+      "sha256": "5b6ca6942c567edf1bc8b705e4d065261e879efd603520748fbe8fcccd68a65b",
+      "size_bytes": 699
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaSemanticActor.cpp",
+      "sha256": "6b5adcccca356710816557494f8083dc54459bf8440d2478177220218d1bc57a",
+      "size_bytes": 3642
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaSemanticPropActor.cpp",
+      "sha256": "f27e6ec30ab1aa2e2a17dfb0e0b975cc48e854d8604357a971667836316ddb42",
+      "size_bytes": 354
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaStatefulApplianceActor.cpp",
+      "sha256": "4a990e0a6e4005097c748b1203e193d7cffa403068ef76bbee7a6b056ea61b6f",
+      "size_bytes": 3285
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaWorldTcpAdapter.cpp",
+      "sha256": "70882d2542a505b73a7a74bd788d9249ccbfe1a3c216a7ca0fc9396e37aacd6e",
+      "size_bytes": 45607
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaWorldTcpAdapter.h",
+      "sha256": "783a88394f18b6b6b137cd352e7085b38507fb6cf814f647b3f0251c0977c16a",
+      "size_bytes": 549
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaActionExecutorComponent.h",
+      "sha256": "c15400e67da6551e88758b6892922e6f310ff793a51b4a42fd8c4b8d18a57604",
+      "size_bytes": 6851
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaAnimationComponent.h",
+      "sha256": "26134ed3a8ac6b1392e2769a91269d2cc8b50a2fdca11e4f1f71f5ccacf4453c",
+      "size_bytes": 2488
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaAnimationSignalNotify.h",
+      "sha256": "a39f39e9e3bba846a908ffd0b48f27d4441a3c03c4960a5941f7e56118c985a4",
+      "size_bytes": 686
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaCharacterProviderComponent.h",
+      "sha256": "92e7a566cf4a682a4e08adb8b317b65ef4532b02c7148148e0f5318be73efab2",
+      "size_bytes": 4875
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaContainerActor.h",
+      "sha256": "10f386c4a8c2cf0a4fe740cc09f90a4960c8cf175150e1b297a0585d9e09c071",
+      "size_bytes": 1313
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaDoorActor.h",
+      "sha256": "c99818b574545246396ec40e7d358393fb71e9dac6491fdbf1f5b1e172d00207",
+      "size_bytes": 2525
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaEventDefinitionActor.h",
+      "sha256": "dabe6c8defc37f684a428a069bdb08c35e027fc9bdfc1dcce4e073ea8447c234",
+      "size_bytes": 532
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaEventSubsystem.h",
+      "sha256": "13c212c1e3fef2521b446bdb2fb6ff3a99f792ec81dfa73c19540b2992dc21e9",
+      "size_bytes": 4496
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaHomeNpcCharacter.h",
+      "sha256": "95ffcefb7adf97c260ed75b626d0e672c3cf3964d6a78f8b359518cd39c43d55",
+      "size_bytes": 3397
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaHomeNpcController.h",
+      "sha256": "f7e66cf0d99f1652c6c1ec6781bde3d87b07c1fcda913bed104acaea64954851",
+      "size_bytes": 4366
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaIndoorSpringArmComponent.h",
+      "sha256": "75b08818e91d33b3ea8fe54febd8a7f54ea61584aede94b257d05305601e6186",
+      "size_bytes": 1656
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaInteractable.h",
+      "sha256": "fba88f6dd5e6bd37245b0d7c26b43001be6a960cb91d39d2aa18b5264ce57b21",
+      "size_bytes": 1121
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaInteractionComponent.h",
+      "sha256": "de65d98ce33b79f1e63d7c69c9c07bd4637e8e1e9d3053f40010f607730332cf",
+      "size_bytes": 1955
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaItemCarrier.h",
+      "sha256": "483abfb9b6ad15b9f029805ccebade5f741587e400250407ef219597deffd4b4",
+      "size_bytes": 833
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaPickupActor.h",
+      "sha256": "271c4dbc973a5144633a0510e7cf540590b372a3785702a7e89d33a66ae97a46",
+      "size_bytes": 6570
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaPlayableHomeCharacter.h",
+      "sha256": "09552d2227c28b8ca2d079fda0af29c1ec3f629a1f36f19be271c653f3c28cf1",
+      "size_bytes": 8566
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaPlayableHomeGameMode.h",
+      "sha256": "3133850b48648532c5f7d8ee154ef71931bf667e4c1caeb40ff8c961a834a1ac",
+      "size_bytes": 658
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaPlayableHomeHUD.h",
+      "sha256": "f21255b1a7ea2965540806201157cb3f9cd8850e50dd0a8f243343152fe7661e",
+      "size_bytes": 266
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaPlayableHomeModule.h",
+      "sha256": "a71faba200ca7ac8884e0d779a3ded5a5a5e94cc631d125d2cb9a4a18e9eda31",
+      "size_bytes": 353
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaPlayableHomeRuntimeSubsystem.h",
+      "sha256": "34076091aa6e1d262f36f281b3a796899be609cf3dd0d18485285867b86301b7",
+      "size_bytes": 10183
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaPlayableHomeTypes.h",
+      "sha256": "dc309c0d020f4395df4ec7b8a9511ccef1df7e61ef25f96f4d3ca3267b4f5d39",
+      "size_bytes": 18967
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaSemanticActor.h",
+      "sha256": "0dc5ef90d32704edde465740111d1726f5886d7eb69a82c8d838d6aabceae176",
+      "size_bytes": 1629
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaSemanticPropActor.h",
+      "sha256": "3ccb04452329a206218d54cbfb25b295da488b02686e3b2540fdb3db3954f2e4",
+      "size_bytes": 521
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaStatefulApplianceActor.h",
+      "sha256": "1e4097a285f2a1ef614eb69e415bef6952e765890a68a407759f7b5b83f33b1f",
+      "size_bytes": 1546
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/VistaPlayableHome.Build.cs",
+      "sha256": "3405290db1aa8b97d4909057b2b9b76ef96f4c462540d6313e0b616a4144f1ce",
+      "size_bytes": 791
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Private/Tests/VistaR5MultiClientProof.cpp",
+      "sha256": "4aecf7c1fb1426576b82d3d68175842c72d9b3b3cb9255265d6bbaa6dd3ee3ed",
+      "size_bytes": 55705
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Private/Tests/VistaR5MultiClientProofActors.cpp",
+      "sha256": "46624e1b46d9ec75273c4e7377fbd733de32f50089a85c759ff08d39e3be9d3e",
+      "size_bytes": 4566
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Private/VistaPlayableHomeAnimationLibrary.cpp",
+      "sha256": "751ca1ba465b46e26de89c9bde26151bb10c6c08764920d8cd9a82a87d710938",
+      "size_bytes": 7991
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Private/VistaPlayableHomeEditorModule.cpp",
+      "sha256": "272df574cc547ebd5b2b587a7bb6659d9f7eab69c8ae6b97dfc87e826db48f0c",
+      "size_bytes": 98
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Private/VistaPlayableHomeNaniteLibrary.cpp",
+      "sha256": "de03e223ab11eaecea7d4c16d0dacb1d27a293d28651aca55dc19153c8c27d5e",
+      "size_bytes": 29169
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Public/Tests/VistaR5MultiClientProofActors.h",
+      "sha256": "6c0077254a6cb6d5f25de6b795069872b87bb4f750e67a89a468dc822c222418",
+      "size_bytes": 2698
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Public/VistaPlayableHomeAnimationLibrary.h",
+      "sha256": "09d70fa1439cb5108ce83acc7a0c364ae3014e4f6baded3c9f7c5559852a4d5e",
+      "size_bytes": 1122
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/Public/VistaPlayableHomeNaniteLibrary.h",
+      "sha256": "c74e9f429d6632f7573c062aa4a395df116485ff9cc0f8af93e8f114ca6373c0",
+      "size_bytes": 1020
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor/VistaPlayableHomeEditor.Build.cs",
+      "sha256": "ef9550f558e36d89fc30c90d1343ca81a16daef6c991261f75f44c2198aff157",
+      "size_bytes": 861
+    },
+    {
+      "path": "unreal_plugins/VistaPlayableHome/VistaPlayableHome.uplugin",
+      "sha256": "79bb6c12dd1d4359a5e1a02552995151fbf1f7bb0f3fb978d065880b444484d3",
+      "size_bytes": 867
+    }
+  ],
+  "toolchain": {
+    "bwrap": {
+      "path": "/usr/bin/bwrap",
+      "sha256": "d78807229d616606e339c5988392b9e0ab4a6a6998fa51e4590837f426a12fca",
+      "size_bytes": 72160
+    },
+    "critical_file_expectations": [
+      {
+        "executable": true,
+        "label": "unreal_editor_cmd",
+        "path": "Engine/Binaries/Linux/UnrealEditor-Cmd",
+        "sha256": "66a4391f345d5984af224feb0df15fbd26ba0e2dd1436cac7e85809c9a88d674",
+        "size_bytes": 459320
+      },
+      {
+        "executable": false,
+        "label": "build_version",
+        "path": "Engine/Build/Build.version",
+        "sha256": "ffe01f6d1e96ef86cd06158cfb561150971823fc77e5c8df352910bcf4d365ef",
+        "size_bytes": 215
+      },
+      {
+        "executable": false,
+        "label": "installed_build_marker",
+        "path": "Engine/Build/InstalledBuild.txt",
+        "sha256": "54c76dab44960cadb4719b2b0e59a32ff3a768ac199663b4de40a0c75dce781d",
+        "size_bytes": 6
+      },
+      {
+        "executable": false,
+        "label": "cqtest_primary_source",
+        "path": "Engine/Source/Developer/CQTest/Private/Components/PIENetworkComponent.cpp",
+        "sha256": "1b993a876c25279cf3985dab6ed5dee9978d3f1a0d50d781a751d15fe929a987",
+        "size_bytes": 8853
+      },
+      {
+        "executable": false,
+        "label": "cqtest_binary",
+        "path": "Engine/Binaries/Linux/libUnrealEditor-CQTest.so",
+        "sha256": "b3817858bc3a5164772a2609b0be292a8359ad74dd974e366cc112437ab2b170",
+        "size_bytes": 217240
+      },
+      {
+        "executable": false,
+        "label": "unreal_core_binary",
+        "path": "Engine/Binaries/Linux/libUnrealEditor-Core.so",
+        "sha256": "1baae28f56ca22e79a6bb68f113baa2bc37ae2090422b4ad95596d8c13978dd1",
+        "size_bytes": 23275872
+      },
+      {
+        "executable": false,
+        "label": "unreal_core_uobject_binary",
+        "path": "Engine/Binaries/Linux/libUnrealEditor-CoreUObject.so",
+        "sha256": "0e95132f0ba5948e7dc4907d752d62b9fde085c94cfd742e2e58fdc714634c56",
+        "size_bytes": 12963608
+      },
+      {
+        "executable": false,
+        "label": "unreal_engine_binary",
+        "path": "Engine/Binaries/Linux/libUnrealEditor-Engine.so",
+        "sha256": "b91ed49d859792101e2002d53ab6445b3dac75fd35603f0fd55db29998a9df1b",
+        "size_bytes": 92508824
+      },
+      {
+        "executable": false,
+        "label": "unreal_editor_module_binary",
+        "path": "Engine/Binaries/Linux/libUnrealEditor-UnrealEd.so",
+        "sha256": "a267c9519f3c3ffcce75d125e561eef4bab46f15f018a8fac09585c160eeda32",
+        "size_bytes": 43113776
+      },
+      {
+        "executable": false,
+        "label": "unreal_json_binary",
+        "path": "Engine/Binaries/Linux/libUnrealEditor-Json.so",
+        "sha256": "1da7c31e25a0e8c6a6a402501131013ff1811d125fb397812095f5f2feea2b02",
+        "size_bytes": 1097568
+      },
+      {
+        "executable": false,
+        "label": "unreal_editor_modules",
+        "path": "Engine/Binaries/Linux/UnrealEditor.modules",
+        "sha256": "e100b80b47e8a11a68c9d082f2e199642c2b7f0cb5fbbe99072a2e6fec606e6a",
+        "size_bytes": 29678
+      },
+      {
+        "executable": true,
+        "label": "run_ubt",
+        "path": "Engine/Build/BatchFiles/RunUBT.sh",
+        "sha256": "1ec2bef59f75d03fdb28c4a56c72a52eb646fff625c0c8988f814b85bb5db2c9",
+        "size_bytes": 1429
+      },
+      {
+        "executable": true,
+        "label": "ubt_linux_environment",
+        "path": "Engine/Build/BatchFiles/Linux/SetupEnvironment.sh",
+        "sha256": "4c5ca84d5b296ef57f868b4a34d181740df5efb860591001f6109bbd0ceca331",
+        "size_bytes": 795
+      },
+      {
+        "executable": false,
+        "label": "ubt_binary",
+        "path": "Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.dll",
+        "sha256": "9fdba0a5d367148218233314f12e2d27640504c77497c7911bfb915d4c9889e2",
+        "size_bytes": 3030528
+      },
+      {
+        "executable": false,
+        "label": "ubt_deps",
+        "path": "Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.deps.json",
+        "sha256": "66d2d54593443dd8d4bdba0005d6d9822b6a237d774fd48b4e76e44a76018a78",
+        "size_bytes": 86059
+      },
+      {
+        "executable": false,
+        "label": "ubt_runtimeconfig",
+        "path": "Engine/Binaries/DotNET/UnrealBuildTool/UnrealBuildTool.runtimeconfig.json",
+        "sha256": "d3531540a412f186faa17ea00491a3ea870f4fe4ea6669a3be0e254fda098606",
+        "size_bytes": 691
+      },
+      {
+        "executable": true,
+        "label": "bundled_dotnet",
+        "path": "Engine/Binaries/ThirdParty/DotNet/8.0.412/linux-x64/dotnet",
+        "sha256": "16248f01cb85154458b2cbbf8ce78a160e5e5e3f0befa6c34023dcb07ba1e2f6",
+        "size_bytes": 68264
+      }
+    ],
+    "engine_manifest": "/data/vista-authorities/ue-5.7.3-r1/engine-full-tree-manifest.json",
+    "engine_manifest_sha256": "IMMUTABLE_ENGINE_AUTHORITY_REQUIRED",
+    "engine_root": "/data/vista-authorities/ue-5.7.3-r1/engine",
+    "engine_tree_root_digest": "IMMUTABLE_ENGINE_AUTHORITY_REQUIRED"
+  }
+}

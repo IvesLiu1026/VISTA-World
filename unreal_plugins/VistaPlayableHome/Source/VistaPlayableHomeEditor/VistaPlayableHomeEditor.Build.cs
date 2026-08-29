@@ -18,8 +18,17 @@ public class VistaPlayableHomeEditor : ModuleRules
         {
             "AssetRegistry",
             "AssetTools",
+            "CQTest",
+            "EngineSettings",
             "Json",
-            "MaterialEditor"
+            "LevelEditor",
+            "MaterialEditor",
+            "Slate",
+            "UnrealEd",
+            "VistaPlayableHome"
         });
+
+        // PIENetworkComponent.h directly exposes Iris replication types.
+        SetupIrisSupport(Target);
     }
 }
