@@ -2003,6 +2003,43 @@ def _validate_result_manifest(
         )
 
 
+def validate_materialized_output(
+    output_root: pathlib.Path,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Revalidate one sealed six-room materialization without mutating it.
+
+    This is the deliberately small public consumer boundary for downstream
+    assemblers.  It rechecks the closed build and scene contracts, every asset
+    receipt, every normalized GLB byte stream, and all cross-document digests.
+    """
+
+    root = _canonical_directory(pathlib.Path(output_root), label="materialized root")
+    build_plan = load_json(root / "build-plan.json")
+    scene_plan = load_json(root / "scene-plan.json")
+    build_result = load_json(root / "build-result.json")
+    validate_build_plan(build_plan, expected_mode="execute")
+    validate_scene_plan(scene_plan)
+    scene_reference = build_plan["scene_plan"]
+    if (
+        scene_plan.get("content_digest") != scene_reference.get("content_digest")
+        or scene_plan.get("placement_count") != scene_reference.get("placement_count")
+        or scene_plan.get("profile_content_digest")
+        != build_plan["profile"]["content_digest"]
+        or scene_plan.get("house_id") != build_plan["house"]["house_id"]
+        or scene_plan.get("house_revision") != build_plan["house"]["revision"]
+    ):
+        _fail(
+            "MATERIALIZED_SCENE_IDENTITY_INVALID",
+            "scene-plan differs from its sealed build-plan reference",
+        )
+    _validate_result_manifest(build_result, root, build_plan)
+    return (
+        copy.deepcopy(build_plan),
+        copy.deepcopy(scene_plan),
+        copy.deepcopy(build_result),
+    )
+
+
 def apply_forge(preflight: ForgePreflight) -> dict[str, Any]:
     """Create a fresh external attempt and run the fixed Blender worker."""
 
