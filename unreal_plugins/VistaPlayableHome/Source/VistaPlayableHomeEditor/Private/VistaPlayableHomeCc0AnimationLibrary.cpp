@@ -308,19 +308,19 @@ FString UVistaPlayableHomeCc0AnimationLibrary::AuthorMakeHumanCc0R8RuntimeAssets
         UVistaMakeHumanCc0AnimInstance::StaticClass());
     SpeedCreator.Finalize();
 
-    const UEdGraphSchema* Schema = Graph->GetSchema();
+    const UEdGraphSchema* GraphSchema = Graph->GetSchema();
     UEdGraphPin* SpeedOut = SpeedNode->FindPin(SpeedProperty->GetFName());
     UEdGraphPin* BlendX = BlendNode->FindPin(TEXT("X"));
     UEdGraphPin* BlendPose = BlendNode->FindPin(TEXT("Pose"));
     UEdGraphPin* SlotSource = SlotNode->FindPin(TEXT("Source"));
     UEdGraphPin* SlotPose = SlotNode->FindPin(TEXT("Pose"));
     UEdGraphPin* RootResult = IsValid(Root) ? Root->FindPin(TEXT("Result")) : nullptr;
-    if (Schema == nullptr || SpeedOut == nullptr || BlendX == nullptr ||
+    if (GraphSchema == nullptr || SpeedOut == nullptr || BlendX == nullptr ||
         BlendPose == nullptr || SlotSource == nullptr || SlotPose == nullptr ||
         RootResult == nullptr ||
-        !Schema->TryCreateConnection(SpeedOut, BlendX) ||
-        !Schema->TryCreateConnection(BlendPose, SlotSource) ||
-        !Schema->TryCreateConnection(SlotPose, RootResult))
+        !GraphSchema->TryCreateConnection(SpeedOut, BlendX) ||
+        !GraphSchema->TryCreateConnection(BlendPose, SlotSource) ||
+        !GraphSchema->TryCreateConnection(SlotPose, RootResult))
     {
         return Result(TEXT("failed"), TEXT("ANIM_GRAPH_CONNECTION_FAILED"));
     }
