@@ -387,7 +387,7 @@ REALISM_R4_POST_OVERRIDE_FLAGS = frozenset(
         "override_auto_exposure_speed_down",
         "override_motion_blur_amount",
         "override_scene_fringe_intensity",
-        "override_grain_intensity",
+        "override_film_grain_intensity",
         "override_bloom_intensity",
         "override_vignette_intensity",
     }

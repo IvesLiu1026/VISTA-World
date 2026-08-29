@@ -293,6 +293,17 @@ def test_commandlet_actor_allowlist_is_closed_and_only_one_destroy_site(
     assert "Sunshine" not in source
     assert "import socket" not in source
     assert "openai" not in source.lower()
+    assert '"override_film_grain_intensity": True' in source
+    assert (
+        '"film_grain_intensity": post_profile["film_grain_intensity"]' in source
+    )
+    assert 'settings.get_editor_property("film_grain_intensity")' in source
+    assert '"override_grain_intensity"' not in source
+    assert 'settings.get_editor_property("grain_intensity")' not in source
+    assert "override_film_grain_intensity" in (
+        launcher.REALISM_R4_POST_OVERRIDE_FLAGS
+    )
+    assert "override_grain_intensity" not in launcher.REALISM_R4_POST_OVERRIDE_FLAGS
 
 
 def test_commandlet_counts_only_configured_pickup_presentations(
