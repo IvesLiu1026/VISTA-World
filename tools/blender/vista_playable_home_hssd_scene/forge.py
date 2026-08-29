@@ -34,7 +34,7 @@ from tools.blender.vista_playable_home_hssd_private_research import (
 )
 
 
-PLAN_SCHEMA = "simworld.vista.hssd-six-room-scene-forge-plan/v1"
+PLAN_SCHEMA = "simworld.vista.hssd-six-room-scene-forge-plan/v2"
 ARTIFACT_RECEIPT_SCHEMA = "simworld.vista.hssd-six-room-artifact-receipt/v1"
 INSPECTION_RECEIPT_SCHEMA = "simworld.vista.hssd-six-room-inspection-receipt/v1"
 RESULT_SCHEMA = "simworld.vista.hssd-six-room-scene-result/v1"
@@ -48,6 +48,16 @@ FLOOR_CONTACT_TOLERANCE_M = 0.035
 SURFACE_CONTACT_TOLERANCE_M = 0.025
 WALL_ANCHOR_REVIEW_DISTANCE_M = 0.35
 PROXY_ALIGNMENT_REVIEW_THRESHOLD_M = 0.10
+R2_REMEDIATION_REVISION = "hssd_six_room_playability_r2"
+R2_SOURCE_PROFILE_CONTENT_DIGEST = (
+    "f4d761968ba38582888e52ea208c6c38bb404cda749fd05e54cf90d5d32eda03"
+)
+R2_SOURCE_SCENE_PLAN_CONTENT_DIGEST = (
+    "f347572aa945112ffef3705a6c198a05d230ddab02e5807c9c553726e290dc28"
+)
+R2_SOURCE_PLACEMENTS_DIGEST = (
+    "b447d965bd0b2ae852c447624832c3d8a0da332fdfef6b3486da6c78d6abfac8"
+)
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_FILE_MODE = 0o600
 BLENDER_TIMEOUT_SECONDS = 3 * 60 * 60
@@ -114,6 +124,126 @@ _PROHIBITED_KEYS = frozenset(
 )
 _DETAIL_NO_COLLISION_CATEGORIES = frozenset(
     {"coffee_cup", "phone", "flip_flops", "clothes", "faucet"}
+)
+
+_PLACEMENT_BASE_KEYS = (
+    "instance_id",
+    "room_id",
+    "source_asset_id",
+    "transform",
+    "placement_intent",
+    "semantic_target_id",
+    "normalization_policy",
+    "interaction_policy",
+)
+
+# Each tuple binds the exact sealed R1 transform to one fixed R2 policy transform.
+# The source mesh, source receipt, semantic target, placement count and authority
+# remain unchanged.  Tuples keep this module-level authority immutable; callers
+# never supply remediation coordinates.
+_R2_TRANSFORM_REMEDIATIONS = (
+    (
+        "hssd.r1/bathroom_laundry.clothes.02",
+        ((0.65, -0.9, 1.25), (0.0, 0.0, 15.0), (1.0, 1.0, 1.0)),
+        ((1.0, -0.9, 1.25), (0.0, 0.0, 15.0), (1.0, 1.0, 1.0)),
+        "move the visual hanger to the fixed laundry-wall strip outside the bathroom portal approach",
+    ),
+    (
+        "hssd.r1/bathroom_laundry.laundry_basket.02",
+        ((0.2, -1.0, 0.0), (0.0, 0.0, -15.0), (1.0, 1.0, 1.0)),
+        ((0.2, -0.6, 0.0), (0.0, 0.0, -15.0), (1.0, 1.0, 1.0)),
+        "move the secondary basket behind the protected bathroom entry approach",
+    ),
+    (
+        "hssd.r1/bathroom_laundry.slipper.01",
+        ((-0.5, -0.8, 0.03), (0.0, 0.0, 18.0), (1.0, 1.0, 1.0)),
+        ((-0.7, -0.8, 0.03), (0.0, 0.0, 18.0), (1.0, 1.0, 1.0)),
+        "move no-collision floor detail clear of the bathroom portal width",
+    ),
+    (
+        "hssd.r1/bedroom.backpack.01",
+        ((1.4, -1.0, 0.05), (0.0, 0.0, -20.0), (1.0, 1.0, 1.0)),
+        ((1.4, -1.0, 0.0), (0.0, 0.0, -20.0), (1.0, 1.0, 1.0)),
+        "restore the floor-supported bag to the sealed room floor plane",
+    ),
+    (
+        "hssd.r1/bedroom.clothes.02",
+        ((-1.35, 1.1, 1.25), (0.0, 0.0, -12.0), (1.0, 1.0, 1.0)),
+        ((-1.35, 1.45, 1.25), (0.0, 0.0, -12.0), (1.0, 1.0, 1.0)),
+        "place the visual hanger in the fixed rear-wall strip",
+    ),
+    (
+        "hssd.r1/entry_hall.backpack.02",
+        ((-0.9, -2.5, 0.0), (0.0, 0.0, 18.0), (1.0, 1.0, 1.0)),
+        ((-0.9, -1.2, 0.0), (0.0, 0.0, 18.0), (1.0, 1.0, 1.0)),
+        "move the second hall bag along the same wall and outside the living-room portal approach",
+    ),
+    (
+        "hssd.r1/entry_hall.cabinet.01",
+        ((-0.95, 2.9, 0.0), (0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
+        ((-1.0, 2.9, 0.0), (0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
+        "inset the cabinet by five centimetres to clear the bathroom portal width",
+    ),
+    (
+        "hssd.r1/entry_hall.pot.01",
+        ((0.9, 1.75, 0.0), (0.0, 0.0, -20.0), (1.0, 1.0, 1.0)),
+        ((0.9, 1.2, 0.0), (0.0, 0.0, -20.0), (1.0, 1.0, 1.0)),
+        "move the planter down the same wall and outside the office portal approach",
+    ),
+    (
+        "hssd.r1/entry_hall.shoe_bench.01",
+        ((0.8, -3.1, 0.0), (0.0, 0.0, 180.0), (1.0, 1.0, 1.0)),
+        ((0.9, -3.1, 0.0), (0.0, 0.0, 180.0), (0.95, 1.0, 1.0)),
+        "align the semantic visual to the retained bench proxy within 0.10 m while preserving room containment",
+    ),
+    (
+        "hssd.r1/kitchen_dining.dining_table.01",
+        ((-0.8, -0.2, 0.0), (0.0, 0.0, 0.0), (1.0, 1.0, 1.0)),
+        ((-0.7, -0.2, 0.0), (0.0, 0.0, 0.0), (0.95, 1.0, 1.0)),
+        "apply a bounded five-percent presentation fit and 0.10 m proxy-aligned inset to clear the kitchen portal",
+    ),
+    (
+        "hssd.r1/kitchen_dining.rolling_chair.01",
+        ((-1.8, -0.2, 0.0), (0.0, 0.0, 90.0), (1.0, 1.0, 1.0)),
+        ((-1.8, -0.8, 0.0), (0.0, 0.0, 90.0), (1.0, 1.0, 1.0)),
+        "move the visual dining chair behind the protected kitchen approach",
+    ),
+    (
+        "hssd.r1/living_room.rolling_chair.01",
+        ((1.7, 0.5, 0.0), (0.0, 0.0, 145.0), (1.0, 1.0, 1.0)),
+        ((0.75, 1.3, 0.0), (0.0, 0.0, 145.0), (1.0, 1.0, 1.0)),
+        "move the accent chair to the fixed conversation corner outside the hall approach",
+    ),
+    (
+        "hssd.r1/living_room.slipper.01",
+        ((1.4, -0.5, 0.03), (0.0, 0.0, 25.0), (1.0, 1.0, 1.0)),
+        ((1.4, -0.8, 0.03), (0.0, 0.0, 25.0), (1.0, 1.0, 1.0)),
+        "move no-collision floor detail behind the protected hall approach",
+    ),
+    (
+        "hssd.r1/living_room.sofa.01",
+        ((-1.35, 1.1, 0.0), (0.0, 0.0, -90.0), (1.0, 1.0, 1.0)),
+        ((-1.51, 1.2, 0.0), (0.0, 0.0, -90.0), (1.0, 1.0, 1.0)),
+        "align the sofa visual to the retained proxy within 0.09 m without leaving the room",
+    ),
+    (
+        "hssd.r1/office.backpack.01",
+        ((-1.8, 0.8, 0.0), (0.0, 0.0, 14.0), (1.0, 1.0, 1.0)),
+        ((-1.9, 0.8, 0.0), (0.0, 0.0, 14.0), (1.0, 1.0, 1.0)),
+        "move the visual bag into the fixed office wall strip",
+    ),
+    (
+        "hssd.r1/office.cardboard_box.02",
+        ((1.5, -1.2, 0.0), (0.0, 0.0, -8.0), (1.0, 1.0, 1.0)),
+        ((1.2, -1.2, 0.0), (0.0, 0.0, -8.0), (1.0, 1.0, 1.0)),
+        "separate the floor box from the cabinet collision candidate",
+    ),
+    (
+        "hssd.r1/office.pot.01",
+        ((-1.8, 1.2, 0.0), (0.0, 0.0, 10.0), (1.0, 1.0, 1.0)),
+        ((-1.9, 1.2, 0.0), (0.0, 0.0, 10.0), (1.0, 1.0, 1.0)),
+        "move the planter into the fixed office wall strip",
+    ),
 )
 
 
@@ -707,6 +837,121 @@ def _contains_xy(aabb: Mapping[str, Sequence[float]], point: Sequence[float]) ->
     )
 
 
+def _placements_digest(placements: Sequence[Mapping[str, Any]]) -> str:
+    rows = sorted(
+        (copy.deepcopy(dict(item)) for item in placements),
+        key=lambda item: item["instance_id"],
+    )
+    return hashlib.sha256(canonical_json(rows, newline=False)).hexdigest()
+
+
+def _transform_tuple(
+    transform: Mapping[str, Sequence[float]],
+) -> tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]]:
+    return (
+        tuple(float(value) for value in transform["location_m"]),
+        tuple(float(value) for value in transform["rotation_deg"]),
+        tuple(float(value) for value in transform["scale"]),
+    )
+
+
+def _transform_document(
+    transform: tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...]],
+) -> dict[str, Any]:
+    def scalar(value: float) -> int | float:
+        return int(value) if float(value).is_integer() else float(value)
+
+    return {
+        "coordinate_frame": "room_local_m",
+        "location_m": [scalar(value) for value in transform[0]],
+        "rotation_deg": [scalar(value) for value in transform[1]],
+        "scale": [scalar(value) for value in transform[2]],
+    }
+
+
+def _apply_r2_transform_remediation(
+    scene_plan: Mapping[str, Any], source: Mapping[str, Any]
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Apply the fixed transform-policy table to exactly the pinned R1 rows."""
+
+    if (
+        source.get("profile_content_digest") != R2_SOURCE_PROFILE_CONTENT_DIGEST
+        or source.get("scene_plan_content_digest")
+        != R2_SOURCE_SCENE_PLAN_CONTENT_DIGEST
+    ):
+        _fail(
+            "SCENE_REMEDIATION_SOURCE_INVALID",
+            "R2 remediation requires the exact sealed profile and scene plan",
+        )
+    rows = sorted(
+        (copy.deepcopy(dict(item)) for item in scene_plan.get("placements", [])),
+        key=lambda item: item.get("instance_id", ""),
+    )
+    if (
+        len(rows) != EXPECTED_PLACEMENT_COUNT
+        or any(set(item) != set(_PLACEMENT_BASE_KEYS) for item in rows)
+        or _placements_digest(rows) != R2_SOURCE_PLACEMENTS_DIGEST
+    ):
+        _fail(
+            "SCENE_REMEDIATION_SOURCE_INVALID",
+            "R2 remediation placement authority differs",
+        )
+    table = {item[0]: item[1:] for item in _R2_TRANSFORM_REMEDIATIONS}
+    if len(table) != len(_R2_TRANSFORM_REMEDIATIONS):
+        _fail("SCENE_REMEDIATION_POLICY_INVALID", "duplicate remediation id")
+    observed: set[str] = set()
+    overrides: list[dict[str, Any]] = []
+    for row in rows:
+        entry = table.get(row["instance_id"])
+        if entry is None:
+            continue
+        expected_source, target, rationale = entry
+        if _transform_tuple(row["transform"]) != expected_source:
+            _fail(
+                "SCENE_REMEDIATION_SOURCE_INVALID",
+                f"source transform differs: {row['instance_id']}",
+            )
+        row["transform"] = _transform_document(target)
+        observed.add(row["instance_id"])
+        overrides.append(
+            {
+                "instance_id": row["instance_id"],
+                "source_transform": _transform_document(expected_source),
+                "remediated_transform": _transform_document(target),
+                "rationale": rationale,
+                "authority": "fixed_r2_transform_policy_only",
+            }
+        )
+    if observed != set(table):
+        _fail("SCENE_REMEDIATION_SOURCE_INVALID", "remediation coverage differs")
+    return {"placements": rows}, overrides
+
+
+def _restore_r2_source_rows(placements: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    rows = [
+        {key: copy.deepcopy(item[key]) for key in _PLACEMENT_BASE_KEYS}
+        for item in placements
+    ]
+    table = {item[0]: item[1:] for item in _R2_TRANSFORM_REMEDIATIONS}
+    observed: set[str] = set()
+    for row in rows:
+        entry = table.get(row["instance_id"])
+        if entry is None:
+            continue
+        source_transform, target_transform, _ = entry
+        if _transform_tuple(row["transform"]) != target_transform:
+            _fail(
+                "SCENE_REMEDIATION_BINDING_INVALID",
+                f"remediated transform differs: {row['instance_id']}",
+            )
+        row["transform"] = _transform_document(source_transform)
+        observed.add(row["instance_id"])
+    rows.sort(key=lambda item: item["instance_id"])
+    if observed != set(table) or _placements_digest(rows) != R2_SOURCE_PLACEMENTS_DIGEST:
+        _fail("SCENE_REMEDIATION_BINDING_INVALID", "source reconstruction differs")
+    return rows
+
+
 def _source_bundle(
     root: pathlib.Path,
     build_plan: Mapping[str, Any],
@@ -885,11 +1130,14 @@ def _support_ledger(
             "support_instance_id": None,
             "wall_anchor": None,
             "contact_gap_m": None,
+            "derivation": "",
+            "runtime_authority": "none_geometric_review_only",
             "status": "",
         }
         if mode == "floor":
             gap = float(aabb["min_m"][2]) - float(room["bounds_m"]["min_m"][2])
             entry["contact_gap_m"] = _clean_number(gap)
+            entry["derivation"] = "rotated_aabb_bottom_to_sealed_room_floor"
             entry["status"] = (
                 "floor_contact_verified"
                 if abs(gap) <= FLOOR_CONTACT_TOLERANCE_M
@@ -912,10 +1160,19 @@ def _support_ledger(
                 _, support_id, gap = sorted(candidates)[0]
                 entry["support_instance_id"] = support_id
                 entry["contact_gap_m"] = _clean_number(gap)
+                entry["derivation"] = (
+                    "rotated_aabb_vertical_contact_and_xy_center_containment"
+                )
                 entry["status"] = "surface_support_derived_and_verified"
                 support_graph[item["instance_id"]] = support_id
             else:
-                entry["status"] = "surface_support_unresolved_blocks_physics_authority"
+                entry["derivation"] = "no_derivable_support_surface"
+                entry["status"] = (
+                    "surface_support_review_pending_faucet_fixture_non_derivable"
+                    if item["instance_id"]
+                    == "hssd.r1/bathroom_laundry.faucet.01"
+                    else "surface_support_unresolved_blocks_physics_authority"
+                )
         elif mode == "wall_edge":
             bounds = room["bounds_m"]
             distances = {
@@ -930,16 +1187,22 @@ def _support_ledger(
                 "distance_m": _clean_number(distance),
                 "authority": "derived_review_only_no_wall_fixture_authority",
             }
+            entry["derivation"] = "nearest_sealed_room_boundary_distance_only"
             entry["status"] = (
-                "wall_edge_near_boundary_review_pending"
+                "wall_anchor_review_pending_no_fixture_authority"
                 if distance <= WALL_ANCHOR_REVIEW_DISTANCE_M
-                else "wall_anchor_unresolved_blocks_physics_authority"
+                else "wall_anchor_review_pending_retained_proxy_alignment"
             )
         else:
             _fail("SCENE_SUPPORT_MODE_INVALID", f"unsupported support mode: {mode}")
         item["support_policy"] = copy.deepcopy(entry)
         ledger.append(entry)
 
+    _validate_support_graph_acyclic(support_graph)
+    return ledger
+
+
+def _validate_support_graph_acyclic(support_graph: Mapping[str, str]) -> None:
     for start in support_graph:
         seen: set[str] = set()
         current = start
@@ -948,7 +1211,6 @@ def _support_ledger(
                 _fail("SCENE_SUPPORT_CYCLE", f"support cycle contains {current}")
             seen.add(current)
             current = support_graph[current]
-    return ledger
 
 
 def _contact_relation(first: Mapping[str, Any], second: Mapping[str, Any]) -> str:
@@ -966,9 +1228,9 @@ def _contact_relation(first: Mapping[str, Any], second: Mapping[str, Any]) -> st
         "hssd.static.dining_table",
         "hssd.static.desk",
     }:
-        return "tucked_seating_overlap_review_pending"
+        return "tucked_seating_visual_contact_review_pending"
     if "hssd.static.clothes" in categories:
-        return "soft_dressing_overlap_review_pending"
+        return "soft_dressing_visual_contact_review_pending"
     if categories == {"hssd.static.cabinet", "hssd.static.storage_box"}:
         return "storage_occlusion_conflict_blocks_playable_collision"
     return "unresolved_overlap_blocks_playable_collision"
@@ -985,16 +1247,178 @@ def _contact_ledger(placements: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 second["rotated_aabb_room_local_m"],
             ):
                 continue
+            relation = _contact_relation(first, second)
             ledger.append(
                 {
                     "room_id": first["room_id"],
                     "first_instance_id": first["instance_id"],
                     "second_instance_id": second["instance_id"],
-                    "relation": _contact_relation(first, second),
+                    "relation": relation,
                     "basis": "rotated_axis_aligned_bounds_intersection",
+                    "collision_effect": (
+                        "blocks_collision_promotion"
+                        if relation.endswith("blocks_playable_collision")
+                        else "visual_contact_review_pending_does_not_block_transform_remediation"
+                    ),
                 }
             )
     return ledger
+
+
+def _collision_ledger(
+    placements: Sequence[Mapping[str, Any]], contacts: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    blocking_by_id: dict[str, list[str]] = {
+        item["instance_id"]: [] for item in placements
+    }
+    for contact in contacts:
+        if contact["collision_effect"] != "blocks_collision_promotion":
+            continue
+        first = contact["first_instance_id"]
+        second = contact["second_instance_id"]
+        blocking_by_id[first].append(second)
+        blocking_by_id[second].append(first)
+    ledger = []
+    for item in placements:
+        proxy = item["proxy_policy"]
+        if proxy["kind"] == "r1_semantic_proxy_preserved_authoritative":
+            policy = "retained_r1_semantic_proxy_authority_unchanged"
+            authority = "unchanged_r1_proxy"
+        elif proxy["kind"] == "detail_no_collision":
+            policy = "explicit_detail_no_collision"
+            authority = "explicit_no_collision"
+        else:
+            policy = "secondary_simple_aabb_candidate_review_pending"
+            authority = "none_until_ue_collision_receipt"
+        ledger.append(
+            {
+                "instance_id": item["instance_id"],
+                "collision_policy": policy,
+                "runtime_authority": authority,
+                "blocking_contact_instance_ids": sorted(
+                    blocking_by_id[item["instance_id"]]
+                ),
+            }
+        )
+    return ledger
+
+
+def _blocker_counts(
+    support: Sequence[Mapping[str, Any]],
+    contacts: Sequence[Mapping[str, Any]],
+    portal_clearance: Sequence[Mapping[str, Any]],
+    proxies: Sequence[Mapping[str, Any]],
+) -> dict[str, int]:
+    return {
+        "protected_portal_conflict_assignments": sum(
+            len(item["conflicting_instance_ids"]) for item in portal_clearance
+        ),
+        "collision_blocking_overlap_pairs": sum(
+            item["collision_effect"] == "blocks_collision_promotion"
+            for item in contacts
+        ),
+        "semantic_proxy_alignment_over_threshold": sum(
+            item["alignment_status"] == "review_pending_visual_proxy_misalignment"
+            for item in proxies
+        ),
+        "hard_support_outliers": sum(
+            item["status"]
+            in {
+                "floor_contact_review_pending_no_physics_authority",
+                "surface_support_review_pending_faucet_fixture_non_derivable",
+                "surface_support_unresolved_blocks_physics_authority",
+                "wall_anchor_review_pending_retained_proxy_alignment",
+            }
+            for item in support
+        ),
+        "wall_fixture_review_pending_items": sum(
+            item["support_mode"] == "wall_edge" for item in support
+        ),
+    }
+
+
+def _remediation_contract(
+    *,
+    overrides: Sequence[Mapping[str, Any]],
+    before_support: Sequence[Mapping[str, Any]],
+    before_contacts: Sequence[Mapping[str, Any]],
+    before_portals: Sequence[Mapping[str, Any]],
+    before_proxies: Sequence[Mapping[str, Any]],
+    after_support: Sequence[Mapping[str, Any]],
+    after_contacts: Sequence[Mapping[str, Any]],
+    after_portals: Sequence[Mapping[str, Any]],
+    after_proxies: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    before = _blocker_counts(
+        before_support, before_contacts, before_portals, before_proxies
+    )
+    after = _blocker_counts(
+        after_support, after_contacts, after_portals, after_proxies
+    )
+    if (
+        after["protected_portal_conflict_assignments"] != 0
+        or after["collision_blocking_overlap_pairs"] != 0
+        or after["semantic_proxy_alignment_over_threshold"] != 0
+    ):
+        _fail(
+            "SCENE_REMEDIATION_INCOMPLETE",
+            "avoidable portal, overlap, or proxy blockers remain",
+        )
+    surface_pending = sorted(
+        item["instance_id"]
+        for item in after_support
+        if item["status"]
+        == "surface_support_review_pending_faucet_fixture_non_derivable"
+    )
+    wall_pending = sorted(
+        item["instance_id"]
+        for item in after_support
+        if item["support_mode"] == "wall_edge"
+    )
+    wall_outliers = sorted(
+        item["instance_id"]
+        for item in after_support
+        if item["status"]
+        == "wall_anchor_review_pending_retained_proxy_alignment"
+    )
+    if surface_pending != ["hssd.r1/bathroom_laundry.faucet.01"] or wall_outliers != [
+        "hssd.r1/office.ladder.01"
+    ]:
+        _fail(
+            "SCENE_REMEDIATION_BOUNDARY_INVALID",
+            "non-derivable faucet or wall boundary differs",
+        )
+    return {
+        "revision": R2_REMEDIATION_REVISION,
+        "source_authority": {
+            "profile_content_digest": R2_SOURCE_PROFILE_CONTENT_DIGEST,
+            "scene_plan_content_digest": R2_SOURCE_SCENE_PLAN_CONTENT_DIGEST,
+            "placements_digest": R2_SOURCE_PLACEMENTS_DIGEST,
+            "policy": "exact_pinned_external_materialization_read_only",
+        },
+        "transform_override_count": len(overrides),
+        "transform_overrides": copy.deepcopy(list(overrides)),
+        "invariants": {
+            "source_asset_count": EXPECTED_SOURCE_COUNT,
+            "placement_count": EXPECTED_PLACEMENT_COUNT,
+            "semantic_proxy_count": EXPECTED_SEMANTIC_PROXY_COUNT,
+            "source_asset_and_license_bytes_unchanged": True,
+            "only_fixed_transform_fields_changed": True,
+        },
+        "review_thresholds_m": {
+            "proxy_alignment_max": PROXY_ALIGNMENT_REVIEW_THRESHOLD_M,
+            "floor_contact_tolerance": FLOOR_CONTACT_TOLERANCE_M,
+            "surface_contact_tolerance": SURFACE_CONTACT_TOLERANCE_M,
+        },
+        "blocker_counts_before": before,
+        "blocker_counts_after": after,
+        "remaining_review_pending": {
+            "surface_fixture_instance_ids": surface_pending,
+            "wall_fixture_instance_ids": wall_pending,
+            "wall_proxy_alignment_preserved_instance_ids": wall_outliers,
+            "policy": "no_physics_or_runtime_promotion_without_external_receipt",
+        },
+    }
 
 
 def _portal_ledger(
@@ -1200,7 +1624,11 @@ def _preflight_gates_contract() -> dict[str, bool]:
         "six_room_coverage_recorded": True,
         "rotated_aabbs_inside_rooms": True,
         "support_relations_recorded": True,
-        "portal_conflicts_recorded": True,
+        "r2_fixed_transform_remediation_applied": True,
+        "avoidable_portal_conflicts_eliminated": True,
+        "collision_blocking_overlaps_eliminated": True,
+        "semantic_proxy_alignment_threshold_enforced": True,
+        "non_derivable_support_boundaries_recorded": True,
         "r1_proxy_authority_preserved": True,
         "prototype_instancing_closed": True,
         "external_payloads_remain_outside_git": True,
@@ -1314,12 +1742,34 @@ def build_preflight(config: SceneForgeConfig) -> SceneForgePreflight:
         raise SceneForgeError("SCENE_SOURCE_REVALIDATION_FAILED", str(exc)) from exc
     house = contract_scene.load_house(HOUSE_PATH.resolve(strict=True))
     source = _source_bundle(source_root, build_plan, scene_plan, build_result)
-    placements = _placement_geometry(scene_plan, source, house)
+    remediated_scene_plan, overrides = _apply_r2_transform_remediation(
+        scene_plan, source
+    )
+    portals = _portal_contract(house)
+
+    baseline_placements = _placement_geometry(scene_plan, source, house)
+    baseline_support = _support_ledger(baseline_placements, house)
+    baseline_contacts = _contact_ledger(baseline_placements)
+    baseline_portal_clearance = _portal_ledger(baseline_placements, portals)
+    baseline_proxies = _proxy_ledger(baseline_placements, house)
+
+    placements = _placement_geometry(remediated_scene_plan, source, house)
     support = _support_ledger(placements, house)
     contacts = _contact_ledger(placements)
-    portals = _portal_contract(house)
     portal_clearance = _portal_ledger(placements, portals)
     proxies = _proxy_ledger(placements, house)
+    collision = _collision_ledger(placements, contacts)
+    remediation = _remediation_contract(
+        overrides=overrides,
+        before_support=baseline_support,
+        before_contacts=baseline_contacts,
+        before_portals=baseline_portal_clearance,
+        before_proxies=baseline_proxies,
+        after_support=support,
+        after_contacts=contacts,
+        after_portals=portal_clearance,
+        after_proxies=proxies,
+    )
     room_counts: dict[str, int] = {}
     for item in placements:
         room_counts[item["room_id"]] = room_counts.get(item["room_id"], 0) + 1
@@ -1355,12 +1805,14 @@ def build_preflight(config: SceneForgeConfig) -> SceneForgePreflight:
                 "instance_policy": "linked_mesh_and_material_datablocks",
                 "prototype_export_policy": "excluded_from_review_glb_and_renders",
             },
+            "placement_remediation": remediation,
             "placements": placements,
             "ledgers": {
                 "support": support,
                 "contact": contacts,
                 "portal_clearance": portal_clearance,
                 "proxy": proxies,
+                "collision": collision,
             },
             "render": _render_contract(),
             "output": _output_contract(output_root),
@@ -1434,6 +1886,7 @@ def validate_scene_build_plan(plan: Mapping[str, Any]) -> None:
             "rooms",
             "portals",
             "prototype_policy",
+            "placement_remediation",
             "placements",
             "ledgers",
             "render",
@@ -1472,7 +1925,10 @@ def validate_scene_build_plan(plan: Mapping[str, Any]) -> None:
     rooms = plan.get("rooms")
     portals = plan.get("portals")
     ledgers = plan.get("ledgers")
-    if not all(isinstance(item, dict) for item in (source, prototype, ledgers)):
+    remediation = plan.get("placement_remediation")
+    if not all(
+        isinstance(item, dict) for item in (source, prototype, ledgers, remediation)
+    ):
         _fail("SCENE_PLAN_STRUCTURE_INVALID", "plan subcontracts must be objects")
     if not all(isinstance(item, list) for item in (placements, rooms, portals)):
         _fail("SCENE_PLAN_STRUCTURE_INVALID", "plan collections must be arrays")
@@ -1480,6 +1936,7 @@ def validate_scene_build_plan(plan: Mapping[str, Any]) -> None:
         isinstance(source, dict)
         and isinstance(prototype, dict)
         and isinstance(ledgers, dict)
+        and isinstance(remediation, dict)
     )
     assert (
         isinstance(placements, list)
@@ -1570,23 +2027,21 @@ def validate_scene_build_plan(plan: Mapping[str, Any]) -> None:
     }
     if any(set(item) != placement_keys for item in placements):
         _fail("SCENE_PLACEMENT_POLICY_INVALID", "placement fields differ")
-    base_keys = (
-        "instance_id",
-        "room_id",
-        "source_asset_id",
-        "transform",
-        "placement_intent",
-        "semantic_target_id",
-        "normalization_policy",
-        "interaction_policy",
+    remediated_base_rows = [
+        {key: copy.deepcopy(item[key]) for key in _PLACEMENT_BASE_KEYS}
+        for item in placements
+    ]
+    source_rows = _restore_r2_source_rows(placements)
+    expected_remediated_scene, expected_overrides = _apply_r2_transform_remediation(
+        {"placements": source_rows}, source
     )
+    if remediated_base_rows != expected_remediated_scene["placements"]:
+        _fail(
+            "SCENE_REMEDIATION_BINDING_INVALID",
+            "placement rows are not the fixed R2 projection",
+        )
     expected_placements = _placement_geometry(
-        {
-            "placements": [
-                {key: copy.deepcopy(item[key]) for key in base_keys}
-                for item in placements
-            ]
-        },
+        expected_remediated_scene,
         source,
         house,
     )
@@ -1594,6 +2049,29 @@ def validate_scene_build_plan(plan: Mapping[str, Any]) -> None:
     expected_contacts = _contact_ledger(expected_placements)
     expected_portal_clearance = _portal_ledger(expected_placements, expected_portals)
     expected_proxies = _proxy_ledger(expected_placements, house)
+    expected_collision = _collision_ledger(expected_placements, expected_contacts)
+    baseline_placements = _placement_geometry(
+        {"placements": source_rows}, source, house
+    )
+    baseline_support = _support_ledger(baseline_placements, house)
+    baseline_contacts = _contact_ledger(baseline_placements)
+    baseline_portal_clearance = _portal_ledger(
+        baseline_placements, expected_portals
+    )
+    baseline_proxies = _proxy_ledger(baseline_placements, house)
+    expected_remediation = _remediation_contract(
+        overrides=expected_overrides,
+        before_support=baseline_support,
+        before_contacts=baseline_contacts,
+        before_portals=baseline_portal_clearance,
+        before_proxies=baseline_proxies,
+        after_support=expected_support,
+        after_contacts=expected_contacts,
+        after_portals=expected_portal_clearance,
+        after_proxies=expected_proxies,
+    )
+    if remediation != expected_remediation:
+        _fail("SCENE_REMEDIATION_BINDING_INVALID", "R2 remediation receipt differs")
     geometry_keys = {
         "prototype_glb_relative_path",
         "prototype_glb_sha256",
@@ -1616,6 +2094,7 @@ def validate_scene_build_plan(plan: Mapping[str, Any]) -> None:
         "contact": expected_contacts,
         "portal_clearance": expected_portal_clearance,
         "proxy": expected_proxies,
+        "collision": expected_collision,
     }:
         _fail("SCENE_LEDGER_BINDING_INVALID", "derived placement ledgers differ")
     if rooms != _room_contract(house, expected_placements):
@@ -1667,12 +2146,13 @@ def validate_scene_build_plan(plan: Mapping[str, Any]) -> None:
         _fail("SCENE_ROOM_COVERAGE_INVALID", "declared room counts differ")
     _exact_keys(
         ledgers,
-        {"support", "contact", "portal_clearance", "proxy"},
+        {"support", "contact", "portal_clearance", "proxy", "collision"},
         label="scene ledgers",
     )
     if (
         len(ledgers["support"]) != EXPECTED_PLACEMENT_COUNT
         or len(ledgers["proxy"]) != EXPECTED_PLACEMENT_COUNT
+        or len(ledgers["collision"]) != EXPECTED_PLACEMENT_COUNT
         or len(ledgers["portal_clearance"]) != len(portals)
         or {item["instance_id"] for item in ledgers["support"]} != set(placement_ids)
         or {item["instance_id"] for item in ledgers["proxy"]} != set(placement_ids)
