@@ -40,14 +40,14 @@ HOST_RECEIPT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-host-receipt/v1"
 FINISH_PROFILE_SCHEMA = (
     "simworld.vista.playable-home-hssd-r2-citysample-live-profile/v1"
 )
-FIXTURE_INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v1"
+FIXTURE_INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v2"
 FINISH_PROFILE_CONTENT_DIGEST = (
-    "5e42641a128c66225a02362328fef50b026c05c012009b42135a99ed173b366e"
+    "f90659d60384edfaabdc34cdfd4a5b3aa0cd8d0226b59fe694e018a86874b314"
 )
 FINISH_PROFILE_SHA256 = (
-    "7de515303934928162ff20d56c52c1276ccc051694994ac32b4c9d2d15e0fe1a"
+    "7805bb21089373991f94c025dde59e843bba76856c1ad2908da14e47e2f79ab9"
 )
-FINISH_PROFILE_BYTES = 70_250
+FINISH_PROFILE_BYTES = 70_265
 ENGINE_VERSION = "5.7.3-50162420+++UE5+Release-5.7"
 HSSD_NAMESPACE_RELATIVE = (
     "Content/VISTA/PlayableHome/hssd_private_research_r5_phase1_diagnostic/"
@@ -278,8 +278,9 @@ FIXTURE_INVENTORY_KEYS = frozenset(
         "schema_version",
         "profile",
         "recipe",
-        "forge_plan_content_digest",
-        "worker_result_content_digest",
+        "forge_plan",
+        "worker_result",
+        "source_snapshot",
         "toolchain",
         "artifact_count",
         "artifacts",
@@ -686,6 +687,115 @@ def _validate_finish_profile(
         raise base.HumanVisualDemoError("R9 finish profile current bytes changed")
 
 
+def _load_t2_relative_document(
+    root: Path,
+    payload: Any,
+    *,
+    expected_path: str,
+    label: str,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise base.HumanVisualDemoError(f"{label} pin must be an object")
+    base._require_exact_keys(
+        payload,
+        frozenset({"path", "sha256", "size_bytes", "content_digest"}),
+        f"{label} pin",
+    )
+    if payload.get("path") != expected_path:
+        raise base.HumanVisualDemoError(f"{label} relative path differs")
+    relative = Path(expected_path)
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        raise base.HumanVisualDemoError(f"{label} relative path is unsafe")
+    path = root.joinpath(*relative.parts)
+    absolute_pin = {
+        "path": str(path),
+        "sha256": payload.get("sha256"),
+        "size_bytes": payload.get("size_bytes"),
+    }
+    _pin, raw = _read_receipt_pinned_file(absolute_pin, label)
+    document = _document_from_raw(raw, label, contract="t2_inventory")
+    if document.get("content_digest") != payload.get("content_digest"):
+        raise base.HumanVisualDemoError(f"{label} content-digest pin differs")
+    return document
+
+
+def _validate_t2_evidence_tree(root: Path, forge: Any) -> None:
+    expected_files: dict[str, int] = {
+        "forge-plan.json": 0o600,
+        "worker-result.json": 0o600,
+        forge.SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix(): 0o600,
+    }
+    expected_directories: dict[str, int] = {
+        "artifacts": 0o700,
+        "previews": 0o700,
+        "receipts": 0o700,
+        forge.SOURCE_SNAPSHOT_ROOT.as_posix(): 0o500,
+    }
+    for paths in forge.EXPECTED_ARTIFACT_RELATIVE_PATHS.values():
+        for relative in paths.values():
+            expected_files[relative] = 0o600
+    for relative_path in forge.BUILDER_SOURCE_RELATIVE_PATHS:
+        relative = forge.SOURCE_SNAPSHOT_ROOT / relative_path
+        expected_files[relative.as_posix()] = 0o400
+        parent = relative.parent
+        while parent != forge.SOURCE_SNAPSHOT_ROOT.parent:
+            expected_directories[parent.as_posix()] = 0o500
+            if parent == forge.SOURCE_SNAPSHOT_ROOT:
+                break
+            parent = parent.parent
+
+    observed_files: dict[str, int] = {}
+    observed_directories: dict[str, int] = {}
+
+    def walk(directory: Path) -> None:
+        try:
+            entries = sorted(os.scandir(directory), key=lambda row: row.name)
+        except OSError as exc:
+            raise base.HumanVisualDemoError(
+                "R9 fixture evidence tree is unavailable"
+            ) from exc
+        for entry in entries:
+            path = Path(entry.path)
+            relative = path.relative_to(root).as_posix()
+            metadata = entry.stat(follow_symlinks=False)
+            mode = stat.S_IMODE(metadata.st_mode)
+            if stat.S_ISLNK(metadata.st_mode):
+                raise base.HumanVisualDemoError(
+                    "R9 fixture evidence tree contains a symlink"
+                )
+            if stat.S_ISDIR(metadata.st_mode):
+                observed_directories[relative] = mode
+                walk(path)
+            elif stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1:
+                observed_files[relative] = mode
+            else:
+                raise base.HumanVisualDemoError(
+                    "R9 fixture evidence tree contains a linked or special file"
+                )
+
+    for namespace in ("artifacts", "previews", "receipts", "source-snapshot"):
+        metadata = os.lstat(root / namespace)
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+            raise base.HumanVisualDemoError(
+                "R9 fixture evidence namespace is not a real directory"
+            )
+        observed_directories[namespace] = stat.S_IMODE(metadata.st_mode)
+        walk(root / namespace)
+    for relative in (
+        "forge-plan.json",
+        "worker-result.json",
+        forge.SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix(),
+    ):
+        metadata = os.lstat(root / relative)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
+            raise base.HumanVisualDemoError(
+                "R9 fixture root evidence file policy differs"
+            )
+        observed_files[relative] = stat.S_IMODE(metadata.st_mode)
+    if observed_files != expected_files or observed_directories != expected_directories:
+        raise base.HumanVisualDemoError("R9 fixture evidence tree differs")
+
+
 def _validate_fixture_inventory(
     document: Mapping[str, Any],
     pin: base.ArtifactPin,
@@ -728,43 +838,57 @@ def _validate_fixture_inventory(
 
     root = pin.path.parent
     try:
-        forge_plan = forge.load_json(root / "forge-plan.json")
+        forge_plan = _load_t2_relative_document(
+            root,
+            document["forge_plan"],
+            expected_path="forge-plan.json",
+            label="R9 fixture forge plan",
+        )
         forge.validate_plan(forge_plan, expected_mode="apply")
-        worker_result = forge.load_json(root / "worker-result.json")
-        forge._validate_worker_result(worker_result)
+        worker_result = _load_t2_relative_document(
+            root,
+            document["worker_result"],
+            expected_path="worker-result.json",
+            label="R9 fixture worker result",
+        )
+        forge._validate_worker_result(worker_result, expected_plan=forge_plan)
+        snapshot_manifest = _load_t2_relative_document(
+            root,
+            document["source_snapshot"]["manifest"],
+            expected_path=forge.SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix(),
+            label="R9 fixture source snapshot manifest",
+        )
+        observed_snapshot = forge._validate_source_snapshot(
+            root, expected_sources=forge_plan["builder_sources"]
+        )
+        _validate_t2_evidence_tree(root, forge)
     except Exception as exc:
+        if isinstance(exc, base.HumanVisualDemoError):
+            raise
         raise base.HumanVisualDemoError(
-            f"R9 fixture plan/worker validation failed: {exc}"
+            f"R9 fixture plan/worker/snapshot validation failed: {exc}"
         ) from exc
-    expected_policy = {
-        "headless": True,
-        "factory_startup": True,
-        "autoexec_disabled": True,
-        "network_namespace": "unshared",
-        "pid_namespace": "unshared",
-        "gpu_devices_visible": False,
-        "display_environment_forwarded": False,
-        "preview_device": "CPU",
-        "caller_selected_binary": False,
-        "caller_selected_script": False,
-        "caller_selected_assets": False,
-    }
     if (
-        document.get("forge_plan_content_digest") != forge_plan.get("content_digest")
-        or document.get("worker_result_content_digest")
-        != worker_result.get("content_digest")
-        or forge_plan.get("profile") != document.get("profile")
+        forge_plan.get("profile") != document.get("profile")
         or forge_plan.get("recipe") != document.get("recipe")
         or forge_plan.get("toolchain") != document.get("toolchain")
         or forge_plan.get("ue_package_inventory")
         != document.get("ue_package_inventory")
-        or forge_plan.get("execution_policy") != expected_policy
-        or forge_plan.get("builder_sources") != forge._source_pins()
         or worker_result.get("plan_content_digest") != forge_plan.get("content_digest")
         or worker_result.get("profile") != document.get("profile")
         or worker_result.get("recipe") != document.get("recipe")
+        or worker_result.get("builder_sources") != forge_plan.get("builder_sources")
+        or worker_result.get("source_snapshot_content_digest")
+        != snapshot_manifest.get("content_digest")
+        or observed_snapshot != snapshot_manifest
+        or document["source_snapshot"].get("sources")
+        != forge_plan.get("builder_sources")
+        or document["source_snapshot"].get("tree_content_digest")
+        != snapshot_manifest.get("content_digest")
     ):
-        raise base.HumanVisualDemoError("R9 fixture plan/worker cross-binding differs")
+        raise base.HumanVisualDemoError(
+            "R9 fixture plan/worker/snapshot cross-binding differs"
+        )
 
     archetypes = {row["archetype_id"]: row for row in recipe["archetypes"]}
     worker_by_id = {
@@ -783,17 +907,22 @@ def _validate_fixture_inventory(
                 raise base.HumanVisualDemoError("R9 current fixture GLB differs")
             if row["preview"] != {"path": row["preview"]["path"], **preview}:
                 raise base.HumanVisualDemoError("R9 current fixture preview differs")
-            receipt_path = forge._safe_child(root, row["artifact_receipt"]["path"])
-            receipt_raw = forge._read_regular_file(receipt_path)
-            receipt = forge.load_json(receipt_path)
+            receipt = _load_t2_relative_document(
+                root,
+                row["artifact_receipt"],
+                expected_path=row["artifact_receipt"]["path"],
+                label="R9 fixture artifact receipt",
+            )
             forge._artifact_receipt(receipt, archetype)
-            expected = row["artifact_receipt"]
             if (
-                hashlib.sha256(receipt_raw).hexdigest() != expected["sha256"]
-                or len(receipt_raw) != expected["size_bytes"]
-                or receipt.get("content_digest") != expected["content_digest"]
+                receipt.get("plan_content_digest") != forge_plan["content_digest"]
+                or receipt.get("builder_sources") != forge_plan["builder_sources"]
+                or receipt.get("source_snapshot_content_digest")
+                != snapshot_manifest["content_digest"]
             ):
-                raise base.HumanVisualDemoError("R9 current fixture receipt differs")
+                raise base.HumanVisualDemoError(
+                    "R9 current fixture receipt provenance differs"
+                )
             if worker_by_id.get(row["archetype_id"]) != {
                 "archetype_id": row["archetype_id"],
                 "glb_sha256": row["glb"]["sha256"],
