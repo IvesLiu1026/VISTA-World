@@ -30,6 +30,7 @@ import re
 import signal
 import stat
 import subprocess
+import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
@@ -40,15 +41,15 @@ import hssd_ue57_glb_compatibility as compatibility
 import run_hssd_private_research_import as phase1
 
 
-RUNNER_SCHEMA = "simworld.vista.playable-home-hssd-private-research-phase2-runner/v3"
+RUNNER_SCHEMA = "simworld.vista.playable-home-hssd-private-research-phase2-runner/v4"
 EXECUTION_SCHEMA = (
-    "simworld.vista.playable-home-hssd-private-research-phase2-execution/v3"
+    "simworld.vista.playable-home-hssd-private-research-phase2-execution/v4"
 )
 SCENE_RECEIPT_SCHEMA = (
-    "simworld.vista.playable-home-hssd-private-research-phase2-scene-receipt/v3"
+    "simworld.vista.playable-home-hssd-private-research-phase2-scene-receipt/v4"
 )
 HOST_RECEIPT_SCHEMA = (
-    "simworld.vista.playable-home-hssd-private-research-phase2-host-receipt/v3"
+    "simworld.vista.playable-home-hssd-private-research-phase2-host-receipt/v4"
 )
 EXECUTION_ENV = "VISTA_PLAYABLE_HOME_HSSD_PHASE2_EXECUTION"
 EXECUTION_SHA_ENV = "VISTA_PLAYABLE_HOME_HSSD_PHASE2_EXECUTION_SHA256"
@@ -56,6 +57,7 @@ PROJECT_ENV = "VISTA_PLAYABLE_HOME_PROJECT"
 SCENE_MARKER = "VISTA_PLAYABLE_HOME_HSSD_PRIVATE_RESEARCH_PHASE2_RESULT:"
 SCENE_RESULT_FILE = "hssd-private-research-phase2-result.json"
 SCENE_RECEIPT_FILE = "hssd-phase2-scene-receipt.json"
+HOST_RECEIPT_FILE = "hssd-phase2-host-receipt.json"
 SUCCESS_STATUS = (
     "diagnostic_nonpromotable_r2_scene_composed_proxy_authority_repaired_reloaded"
 )
@@ -227,12 +229,33 @@ BWRAP_BYTES = 72_160
 BWRAP_PREFIX = (
     str(BWRAP_PATH),
     "--unshare-net",
+    "--unshare-pid",
     "--die-with-parent",
     "--dev-bind",
     "/",
     "/",
     "--",
 )
+UNREAL_ISOLATION_FLAGS = (
+    "-nullrhi",
+    "-notraceserver",
+    "-NoAnalytics",
+    "-UDPMESSAGING_TRANSPORT_ENABLE=0",
+    "-ini:Engine:[/Script/TcpMessaging.TcpMessagingSettings]:EnableTransport=False",
+)
+LOG_CLOSURE_OBSERVATIONS = 3
+LOG_CLOSURE_INTERVAL_SECONDS = 0.2
+PROCESS_GROUP_TERM_TIMEOUT_SECONDS = 2.0
+PROCESS_GROUP_KILL_TIMEOUT_SECONDS = 2.0
+LOG_CLOSURE_POLICY = {
+    "residual_process_group": "sigterm_then_sigkill_bounded",
+    "pid_namespace_reaper": "bubblewrap_unshare_pid",
+    "stable_stat_and_sha256_observations": LOG_CLOSURE_OBSERVATIONS,
+    "observation_interval_milliseconds": int(LOG_CLOSURE_INTERVAL_SECONDS * 1000),
+    "same_uid_detached_writer_threat_model": (
+        "bounded_detection_only_persistent_post_run_drift_fails_revalidation"
+    ),
+}
 EXECUTION_ISOLATION = {
     "launcher": "bubblewrap",
     "launcher_path": str(BWRAP_PATH),
@@ -240,7 +263,11 @@ EXECUTION_ISOLATION = {
     "launcher_bytes": BWRAP_BYTES,
     "command_prefix": list(BWRAP_PREFIX),
     "os_network_namespace": "unshared",
+    "os_pid_namespace": "unshared_with_bubblewrap_reaper",
     "rendering": "NullRHI",
+    "required_unreal_flags": list(UNREAL_ISOLATION_FLAGS),
+    "trace_server": "disabled_by_-notraceserver",
+    "post_exit_log_closure": copy.deepcopy(LOG_CLOSURE_POLICY),
     "gpu_assignment": "none",
     "cuda_visible_devices": "",
     "same_uid_concurrent_transient_mutation": "out_of_scope_post_run_drift_detected",
@@ -392,6 +419,40 @@ VISUAL_SHELL_ACTOR_RECEIPT_KEYS = {
     "mobility",
     "visible",
 }
+HOST_RECEIPT_KEYS = {
+    "schema_version",
+    "status",
+    "attempt_root",
+    "accepted_as_visual_evidence",
+    "accepted_as_playable_collision",
+    "accepted_as_ue_runtime",
+    "full_material_fidelity",
+    "promotable",
+    "diagnostic_only",
+    "execution_isolation",
+    "phase1_execution_sha256",
+    "phase1_import_receipt_sha256",
+    "phase1_host_receipt_sha256",
+    "r2_build_plan_sha256",
+    "r2_build_plan_bytes",
+    "r2_build_plan_content_digest",
+    "r2_placement_authority",
+    "project_projection_before_composition_sha256",
+    "execution_manifest_sha256",
+    "scene_receipt_sha256",
+    "map_package_relative_path",
+    "map_package_sha256",
+    "map_package_bytes",
+    "stdout_log_sha256",
+    "engine_log_sha256",
+    "log_closure",
+    "placement_count",
+    "room_counts",
+    "semantic_proxy_count",
+    "semantic_proxy_authority",
+    "claims",
+    "content_digest",
+}
 
 
 class RunnerError(RuntimeError):
@@ -416,6 +477,19 @@ class PinnedContracts:
     placements: tuple[dict[str, Any], ...]
 
 
+@dataclass(frozen=True)
+class SealedFileSnapshot:
+    device: int
+    inode: int
+    size_bytes: int
+    mtime_ns: int
+    ctime_ns: int
+    sha256: str
+
+    def receipt_projection(self) -> dict[str, Any]:
+        return {"bytes": self.size_bytes, "sha256": self.sha256}
+
+
 def _canonical_json(value: Any) -> bytes:
     return phase1._canonical_json(value)
 
@@ -430,6 +504,90 @@ def _seal(value: Mapping[str, Any]) -> dict[str, Any]:
 
 def _sha256(path: pathlib.Path) -> str:
     return phase1._sha256(path)
+
+
+def _sealed_file_snapshot(path: pathlib.Path, label: str) -> SealedFileSnapshot:
+    try:
+        descriptor = os.open(
+            path,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+        )
+    except OSError as exc:
+        raise RunnerError(label + " is missing, symlinked, or unreadable") from exc
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            raise RunnerError(label + " is not a regular file")
+        digest = hashlib.sha256()
+        for block in iter(lambda: os.read(descriptor, 1024 * 1024), b""):
+            digest.update(block)
+        after = os.fstat(descriptor)
+        before_identity = (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+        )
+        after_identity = (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+        )
+        if before_identity != after_identity:
+            raise RunnerError(label + " changed while it was being sealed")
+        return SealedFileSnapshot(
+            device=after.st_dev,
+            inode=after.st_ino,
+            size_bytes=after.st_size,
+            mtime_ns=after.st_mtime_ns,
+            ctime_ns=after.st_ctime_ns,
+            sha256=digest.hexdigest(),
+        )
+    finally:
+        os.close(descriptor)
+
+
+def _wait_for_stable_file_snapshots(
+    paths: Mapping[str, pathlib.Path],
+) -> dict[str, SealedFileSnapshot]:
+    snapshots = {
+        label: _sealed_file_snapshot(path, label) for label, path in paths.items()
+    }
+    for _ in range(1, LOG_CLOSURE_OBSERVATIONS):
+        time.sleep(LOG_CLOSURE_INTERVAL_SECONDS)
+        observed = {
+            label: _sealed_file_snapshot(path, label) for label, path in paths.items()
+        }
+        if observed != snapshots:
+            raise RunnerError("post-exit Unreal logs continued changing")
+        snapshots = observed
+    return snapshots
+
+
+def _assert_file_snapshots(
+    paths: Mapping[str, pathlib.Path],
+    expected: Mapping[str, SealedFileSnapshot],
+) -> None:
+    _require(set(paths) == set(expected), "sealed artifact inventory differs")
+    observed = {
+        label: _sealed_file_snapshot(path, label) for label, path in paths.items()
+    }
+    _require(
+        observed == expected, "sealed post-exit artifact changed before publication"
+    )
+
+
+def _host_artifact_paths(attempt: pathlib.Path) -> dict[str, pathlib.Path]:
+    return {
+        "stdout log": attempt / "unreal-compose-stdout.log",
+        "engine log": attempt / "unreal-compose-engine.log",
+        "execution manifest": attempt / "hssd-phase2-execution.json",
+        "scene receipt": attempt / SCENE_RECEIPT_FILE,
+        "map package": attempt / "project" / pathlib.Path(MAP_RELATIVE_FILE),
+    }
 
 
 def _strict_json_file(path: pathlib.Path, label: str) -> dict[str, Any]:
@@ -2284,8 +2442,55 @@ def _attempt_environment(
     }
 
 
-def _terminate_process_group(process: subprocess.Popen[Any]) -> None:
-    phase1._terminate_process_group(process)
+def _process_group_exists(process_group_id: int) -> bool:
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except OSError as exc:
+        raise RunnerError("Unreal process-group state could not be inspected") from exc
+    return True
+
+
+def _wait_process_group_absent(process_group_id: int, timeout: float) -> bool:
+    deadline = time.monotonic() + timeout
+    while _process_group_exists(process_group_id):
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.02)
+    return True
+
+
+def _signal_process_group(process_group_id: int, signum: signal.Signals) -> None:
+    try:
+        os.killpg(process_group_id, signum)
+    except ProcessLookupError:
+        return
+    except OSError as exc:
+        raise RunnerError("Unreal process group could not be terminated") from exc
+
+
+def _terminate_process_group(process: subprocess.Popen[Any]) -> str:
+    process_group_id = process.pid
+    if not _process_group_exists(process_group_id):
+        return "absent"
+    _signal_process_group(process_group_id, signal.SIGTERM)
+    try:
+        process.wait(timeout=PROCESS_GROUP_TERM_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        pass
+    if _wait_process_group_absent(process_group_id, PROCESS_GROUP_TERM_TIMEOUT_SECONDS):
+        return "terminated_sigterm"
+    _signal_process_group(process_group_id, signal.SIGKILL)
+    try:
+        process.wait(timeout=PROCESS_GROUP_KILL_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        pass
+    if not _wait_process_group_absent(
+        process_group_id, PROCESS_GROUP_KILL_TIMEOUT_SECONDS
+    ):
+        raise RunnerError("residual Unreal process group resisted SIGKILL")
+    return "terminated_sigkill"
 
 
 def _wait_contained(process: subprocess.Popen[Any], *, timeout: int) -> int:
@@ -2901,6 +3106,230 @@ def validate_terminal(
     return receipt
 
 
+def _build_log_closure_record(
+    residual_process_group_status: str,
+    snapshots: Mapping[str, SealedFileSnapshot],
+) -> dict[str, Any]:
+    _require(
+        residual_process_group_status
+        in {"absent", "terminated_sigterm", "terminated_sigkill"},
+        "post-exit process-group disposition differs",
+    )
+    _require(
+        set(snapshots) == {"stdout log", "engine log"},
+        "post-exit log snapshot inventory differs",
+    )
+    return {
+        "policy": copy.deepcopy(LOG_CLOSURE_POLICY),
+        "residual_process_group_status": residual_process_group_status,
+        "stdout_log": snapshots["stdout log"].receipt_projection(),
+        "engine_log": snapshots["engine log"].receipt_projection(),
+    }
+
+
+def _semantic_proxy_authority_receipt(receipt: Mapping[str, Any]) -> dict[str, Any]:
+    proxies = receipt["semantic_proxies"]
+    return {
+        "authority": SEMANTIC_PROXY_AUTHORITY,
+        "actor_count": len(proxies),
+        "component_count": sum(
+            len(proxy["reloaded"]["components"]) for proxy in proxies
+        ),
+        "collision_profile": SEMANTIC_PROXY_COLLISION_PROFILE,
+        "collision_mode": SEMANTIC_PROXY_COLLISION_MODE,
+        "collision_responses": SEMANTIC_PROXY_COLLISION_RESPONSES,
+        "simulate_physics": False,
+        "hidden_in_game": True,
+        "scene_receipt_independently_revalidated": True,
+    }
+
+
+def _build_host_receipt(
+    attempt: pathlib.Path,
+    execution: Mapping[str, Any],
+    scene_receipt: Mapping[str, Any],
+    *,
+    project_projection_before_composition_sha256: str,
+    artifact_snapshots: Mapping[str, SealedFileSnapshot],
+    log_closure: Mapping[str, Any],
+) -> dict[str, Any]:
+    _require(
+        set(artifact_snapshots) == set(_host_artifact_paths(attempt)),
+        "host artifact snapshot inventory differs",
+    )
+    return _seal(
+        {
+            "schema_version": HOST_RECEIPT_SCHEMA,
+            "status": SUCCESS_STATUS,
+            "attempt_root": str(attempt),
+            "accepted_as_visual_evidence": False,
+            "accepted_as_playable_collision": False,
+            "accepted_as_ue_runtime": False,
+            "full_material_fidelity": False,
+            "promotable": False,
+            "diagnostic_only": True,
+            "execution_isolation": copy.deepcopy(EXECUTION_ISOLATION),
+            "phase1_execution_sha256": PHASE1_EVIDENCE_PINS["hssd-execution.json"],
+            "phase1_import_receipt_sha256": PHASE1_EVIDENCE_PINS[
+                "hssd-import-receipt.json"
+            ],
+            "phase1_host_receipt_sha256": PHASE1_EVIDENCE_PINS[
+                "hssd-phase1-host-receipt.json"
+            ],
+            "r2_build_plan_sha256": R2_BUILD_PLAN_SHA256,
+            "r2_build_plan_bytes": R2_BUILD_PLAN_BYTES,
+            "r2_build_plan_content_digest": R2_BUILD_PLAN_CONTENT_DIGEST,
+            "r2_placement_authority": copy.deepcopy(
+                execution["r2_placement_authority"]
+            ),
+            "project_projection_before_composition_sha256": (
+                project_projection_before_composition_sha256
+            ),
+            "execution_manifest_sha256": artifact_snapshots[
+                "execution manifest"
+            ].sha256,
+            "scene_receipt_sha256": artifact_snapshots["scene receipt"].sha256,
+            "map_package_relative_path": MAP_RELATIVE_FILE.as_posix(),
+            "map_package_sha256": artifact_snapshots["map package"].sha256,
+            "map_package_bytes": artifact_snapshots["map package"].size_bytes,
+            "stdout_log_sha256": artifact_snapshots["stdout log"].sha256,
+            "engine_log_sha256": artifact_snapshots["engine log"].sha256,
+            "log_closure": copy.deepcopy(dict(log_closure)),
+            "placement_count": len(scene_receipt["actors"]),
+            "room_counts": dict(ROOM_COUNTS),
+            "semantic_proxy_count": len(scene_receipt["semantic_proxies"]),
+            "semantic_proxy_authority": _semantic_proxy_authority_receipt(
+                scene_receipt
+            ),
+            "claims": {
+                "placements_composed": True,
+                "player_eye_reviewed": False,
+                "gta_level": False,
+                "character_present": False,
+                "interaction_proven": False,
+            },
+        }
+    )
+
+
+def validate_host_receipt(attempt: pathlib.Path) -> dict[str, Any]:
+    """Revalidate a published host receipt against all current output bytes."""
+
+    _require(
+        attempt.is_absolute()
+        and not attempt.is_symlink()
+        and attempt.is_dir()
+        and attempt.resolve(strict=True) == attempt,
+        "host attempt root is missing, symlinked, or noncanonical",
+    )
+    host_path = attempt / HOST_RECEIPT_FILE
+    host = _strict_json_file(host_path, "HSSD Phase-2 host receipt")
+
+    artifact_paths = _host_artifact_paths(attempt)
+    snapshots = {
+        label: _sealed_file_snapshot(path, label)
+        for label, path in artifact_paths.items()
+    }
+    hash_fields = {
+        "stdout log": "stdout_log_sha256",
+        "engine log": "engine_log_sha256",
+        "execution manifest": "execution_manifest_sha256",
+        "scene receipt": "scene_receipt_sha256",
+        "map package": "map_package_sha256",
+    }
+    for label, field in hash_fields.items():
+        expected_sha = host.get(field)
+        _require(
+            isinstance(expected_sha, str)
+            and re.fullmatch(r"[0-9a-f]{64}", expected_sha) is not None,
+            "host receipt " + label + " digest pin is invalid",
+        )
+        _require(
+            snapshots[label].sha256 == expected_sha,
+            "current " + label + " digest differs from host receipt",
+        )
+    _require(
+        host.get("map_package_bytes") == snapshots["map package"].size_bytes,
+        "current map package byte count differs from host receipt",
+    )
+
+    _exact_keys(host, HOST_RECEIPT_KEYS, "HSSD Phase-2 host receipt")
+    log_closure = host.get("log_closure")
+    _exact_keys(
+        log_closure,
+        {
+            "policy",
+            "residual_process_group_status",
+            "stdout_log",
+            "engine_log",
+        },
+        "host log closure",
+    )
+    _exact_keys(log_closure["stdout_log"], {"bytes", "sha256"}, "closed stdout")
+    _exact_keys(log_closure["engine_log"], {"bytes", "sha256"}, "closed engine log")
+    _require(
+        log_closure.get("policy") == LOG_CLOSURE_POLICY
+        and log_closure.get("residual_process_group_status")
+        in {"absent", "terminated_sigterm", "terminated_sigkill"}
+        and log_closure.get("stdout_log")
+        == snapshots["stdout log"].receipt_projection()
+        and log_closure.get("engine_log")
+        == snapshots["engine log"].receipt_projection(),
+        "host post-exit log closure evidence differs",
+    )
+
+    execution_path = artifact_paths["execution manifest"]
+    execution = _strict_json_file(execution_path, "HSSD Phase-2 execution")
+    scene_receipt = validate_terminal(attempt, execution, artifact_paths["stdout log"])
+    valid = (
+        host.get("schema_version") == HOST_RECEIPT_SCHEMA
+        and host.get("status") == SUCCESS_STATUS
+        and host.get("content_digest") == _content_digest(host)
+        and host.get("attempt_root") == str(attempt)
+        and host.get("accepted_as_visual_evidence") is False
+        and host.get("accepted_as_playable_collision") is False
+        and host.get("accepted_as_ue_runtime") is False
+        and host.get("full_material_fidelity") is False
+        and host.get("promotable") is False
+        and host.get("diagnostic_only") is True
+        and host.get("execution_isolation") == EXECUTION_ISOLATION
+        and execution.get("schema_version") == EXECUTION_SCHEMA
+        and execution.get("execution_isolation") == EXECUTION_ISOLATION
+        and host.get("phase1_execution_sha256")
+        == PHASE1_EVIDENCE_PINS["hssd-execution.json"]
+        and host.get("phase1_import_receipt_sha256")
+        == PHASE1_EVIDENCE_PINS["hssd-import-receipt.json"]
+        and host.get("phase1_host_receipt_sha256")
+        == PHASE1_EVIDENCE_PINS["hssd-phase1-host-receipt.json"]
+        and host.get("r2_build_plan_sha256") == R2_BUILD_PLAN_SHA256
+        and host.get("r2_build_plan_bytes") == R2_BUILD_PLAN_BYTES
+        and host.get("r2_build_plan_content_digest") == R2_BUILD_PLAN_CONTENT_DIGEST
+        and host.get("r2_placement_authority")
+        == execution.get("r2_placement_authority")
+        and host.get("project_projection_before_composition_sha256")
+        == execution.get("phase1_source", {}).get("project_projection_sha256")
+        and host.get("map_package_relative_path") == MAP_RELATIVE_FILE.as_posix()
+        and host.get("placement_count") == len(scene_receipt["actors"]) == 60
+        and host.get("room_counts") == dict(ROOM_COUNTS)
+        and host.get("semantic_proxy_count")
+        == len(scene_receipt["semantic_proxies"])
+        == SEMANTIC_PROXY_COUNT
+        and host.get("semantic_proxy_authority")
+        == _semantic_proxy_authority_receipt(scene_receipt)
+        and host.get("claims")
+        == {
+            "placements_composed": True,
+            "player_eye_reviewed": False,
+            "gta_level": False,
+            "character_present": False,
+            "interaction_proven": False,
+        }
+    )
+    _require(valid, "HSSD Phase-2 host receipt failed current-byte validation")
+    _assert_file_snapshots(artifact_paths, snapshots)
+    return host
+
+
 def apply_plan(plan: Mapping[str, Any], source: Phase1Source) -> dict[str, Any]:
     try:
         attempt = pathlib.Path(plan["attempt_root"])
@@ -2932,14 +3361,11 @@ def apply_plan(plan: Mapping[str, Any], source: Phase1Source) -> dict[str, Any]:
             execution["project_file"],
             "-run=pythonscript",
             f"-script={execution['scripts']['compose']['path']}",
-            "-nullrhi",
+            *UNREAL_ISOLATION_FLAGS,
             "-unattended",
             "-nop4",
             "-nosplash",
             "-NOSOUND",
-            "-NoAnalytics",
-            "-UDPMESSAGING_TRANSPORT_ENABLE=0",
-            "-ini:Engine:[/Script/TcpMessaging.TcpMessagingSettings]:EnableTransport=False",
             "-ddc=InstalledNoZenLocalFallback",
             "-SaveToUserDir",
             f"-UserDir={user_dir}",
@@ -2961,82 +3387,48 @@ def apply_plan(plan: Mapping[str, Any], source: Phase1Source) -> dict[str, Any]:
                 start_new_session=True,
             )
             returncode = _wait_contained(process, timeout=900)
+            residual_process_group_status = _terminate_process_group(process)
         if returncode != 0:
             raise RunnerError(
                 f"Unreal HSSD Phase-2 composition failed with exit code {returncode}"
             )
+        log_paths = {
+            "stdout log": stdout_path,
+            "engine log": engine_log,
+        }
+        log_snapshots = _wait_for_stable_file_snapshots(log_paths)
         receipt = validate_terminal(attempt, execution, stdout_path)
         map_package = attempt / "project" / pathlib.Path(MAP_RELATIVE_FILE)
         _require(
             not map_package.is_symlink() and map_package.is_file(),
             "saved HSSD Phase-2 map package is missing or symlinked",
         )
-        host_receipt = _seal(
-            {
-                "schema_version": HOST_RECEIPT_SCHEMA,
-                "status": SUCCESS_STATUS,
-                "attempt_root": str(attempt),
-                "accepted_as_visual_evidence": False,
-                "accepted_as_playable_collision": False,
-                "accepted_as_ue_runtime": False,
-                "full_material_fidelity": False,
-                "promotable": False,
-                "diagnostic_only": True,
-                "execution_isolation": copy.deepcopy(EXECUTION_ISOLATION),
-                "phase1_execution_sha256": PHASE1_EVIDENCE_PINS["hssd-execution.json"],
-                "phase1_import_receipt_sha256": PHASE1_EVIDENCE_PINS[
-                    "hssd-import-receipt.json"
-                ],
-                "phase1_host_receipt_sha256": PHASE1_EVIDENCE_PINS[
-                    "hssd-phase1-host-receipt.json"
-                ],
-                "r2_build_plan_sha256": R2_BUILD_PLAN_SHA256,
-                "r2_build_plan_bytes": R2_BUILD_PLAN_BYTES,
-                "r2_build_plan_content_digest": R2_BUILD_PLAN_CONTENT_DIGEST,
-                "r2_placement_authority": copy.deepcopy(
-                    execution["r2_placement_authority"]
-                ),
-                "project_projection_before_composition_sha256": source.snapshot.tree_sha256,
-                "execution_manifest_sha256": _sha256(execution_path),
-                "scene_receipt_sha256": _sha256(
-                    pathlib.Path(execution["scene_receipt"])
-                ),
-                "map_package_relative_path": MAP_RELATIVE_FILE.as_posix(),
-                "map_package_sha256": _sha256(map_package),
-                "map_package_bytes": map_package.stat(follow_symlinks=False).st_size,
-                "stdout_log_sha256": _sha256(stdout_path),
-                "engine_log_sha256": _sha256(engine_log),
-                "placement_count": len(receipt["actors"]),
-                "room_counts": dict(ROOM_COUNTS),
-                "semantic_proxy_count": len(receipt["semantic_proxies"]),
-                "semantic_proxy_authority": {
-                    "authority": SEMANTIC_PROXY_AUTHORITY,
-                    "actor_count": len(receipt["semantic_proxies"]),
-                    "component_count": sum(
-                        len(proxy["reloaded"]["components"])
-                        for proxy in receipt["semantic_proxies"]
-                    ),
-                    "collision_profile": SEMANTIC_PROXY_COLLISION_PROFILE,
-                    "collision_mode": SEMANTIC_PROXY_COLLISION_MODE,
-                    "collision_responses": SEMANTIC_PROXY_COLLISION_RESPONSES,
-                    "simulate_physics": False,
-                    "hidden_in_game": True,
-                    "scene_receipt_independently_revalidated": True,
-                },
-                "claims": {
-                    "placements_composed": True,
-                    "player_eye_reviewed": False,
-                    "gta_level": False,
-                    "character_present": False,
-                    "interaction_proven": False,
-                },
-            }
+        artifact_paths = _host_artifact_paths(attempt)
+        artifact_snapshots = {
+            **log_snapshots,
+            **{
+                label: _sealed_file_snapshot(path, label)
+                for label, path in artifact_paths.items()
+                if label not in log_snapshots
+            },
+        }
+        log_closure = _build_log_closure_record(
+            residual_process_group_status, log_snapshots
         )
+        host_receipt = _build_host_receipt(
+            attempt,
+            execution,
+            receipt,
+            project_projection_before_composition_sha256=source.snapshot.tree_sha256,
+            artifact_snapshots=artifact_snapshots,
+            log_closure=log_closure,
+        )
+        _assert_file_snapshots(artifact_paths, artifact_snapshots)
         _write_exclusive(
-            attempt / "hssd-phase2-host-receipt.json",
+            attempt / HOST_RECEIPT_FILE,
             _canonical_json(host_receipt),
         )
-        return host_receipt
+        return validate_host_receipt(attempt)
     except BaseException as exc:
         failure = _seal(
             {

@@ -23,7 +23,8 @@ Depends on: requirements.md, design.md
     all negative claims survive save/reload validation; actor receipts use exact
     keys, deterministic map paths and the exact StaticMeshActor class; all
     HSSD-related CPU tests pass; exact-plan exploits, extra negative actor claims
-    and contradictory terminal claims fail
+    and contradictory terminal claims fail; v4 additionally binds
+    `-notraceserver`, a Bubblewrap PID namespace and post-exit log closure
 
 - [ ] T4. Execute one fresh diagnostic NullRHI candidate
   - Files: external append-only run only
@@ -42,4 +43,14 @@ Depends on: requirements.md, design.md
   lineage and exact R2 plan. It emitted no attempt directory.
 - The execution contract pins Bubblewrap `0.6.1` at `/usr/bin/bwrap`, SHA-256
   `d78807229d616606e339c5988392b9e0ab4a6a6998fa51e4590837f426a12fca`,
-  and requires `--unshare-net` plus NullRHI.
+  and requires `--unshare-net`, `--unshare-pid`, NullRHI and `-notraceserver`.
+- The first real R2 attempt at
+  `hssd-ue-phase2-r2-diagnostic-20260829T201223Z` is retained as failed evidence:
+  direct UE returned successfully, but a forked UnrealTraceServer appended after
+  return. Its host receipt pins stdout SHA-256
+  `69e1d216865638356d885486dc1ed751615011168ac648fa326354ad4c8555d7`,
+  while current bytes hash to
+  `7bcc89c4a94f0f3cc9fc09c09988b9790c80992d215d0bdcc97ee7390514f89d`.
+  The v4 standalone revalidator rejects it explicitly; it is not T4 success.
+- CPU closure validation: 60 focused tests and 238 full HSSD-related tests pass;
+  stdout, engine log, execution manifest, scene receipt and map drift all fail.
