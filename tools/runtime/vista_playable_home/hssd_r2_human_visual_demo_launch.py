@@ -12,6 +12,8 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib
+import json
 import os
 import signal
 import stat
@@ -42,6 +44,21 @@ FIXTURE_INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v1
 FINISH_PROFILE_CONTENT_DIGEST = (
     "5e42641a128c66225a02362328fef50b026c05c012009b42135a99ed173b366e"
 )
+FINISH_PROFILE_SHA256 = (
+    "7de515303934928162ff20d56c52c1276ccc051694994ac32b4c9d2d15e0fe1a"
+)
+FINISH_PROFILE_BYTES = 70_250
+ENGINE_VERSION = "5.7.3-50162420+++UE5+Release-5.7"
+HSSD_NAMESPACE_RELATIVE = (
+    "Content/VISTA/PlayableHome/hssd_private_research_r5_phase1_diagnostic/"
+    "HSSDPrivateResearch"
+)
+HSSD_NAMESPACE_TREE = {
+    "algorithm": base.PROJECT_STATIC_TREE_ALGORITHM,
+    "file_count": 208,
+    "total_bytes": 23_596_996,
+    "tree_sha256": "449a2556cbcc011ec5074acbbb489507674f110e1051e8a02139eda8f3afa11b",
+}
 MAP_OBJECT_PATH = (
     "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome"
 )
@@ -326,7 +343,12 @@ class LauncherTrust:
     hssd_scene_receipt: TrustedArtifact
     hssd_build_plan: TrustedArtifact
     hssd_map_package: TrustedArtifact
+    finish_profile_sha256: str
+    finish_profile_size_bytes: int
     finish_profile_content_digest: str
+    engine_version: str
+    hssd_namespace_relative: str
+    hssd_namespace_tree: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -405,7 +427,12 @@ PRODUCTION_TRUST = LauncherTrust(
         "60c4f7195d3715e6f6d6691594ca17c481fdad21e838121fcae9ed3ffca4f4d1",
         437_720,
     ),
+    finish_profile_sha256=FINISH_PROFILE_SHA256,
+    finish_profile_size_bytes=FINISH_PROFILE_BYTES,
     finish_profile_content_digest=FINISH_PROFILE_CONTENT_DIGEST,
+    engine_version=ENGINE_VERSION,
+    hssd_namespace_relative=HSSD_NAMESPACE_RELATIVE,
+    hssd_namespace_tree=HSSD_NAMESPACE_TREE,
 )
 
 
@@ -426,13 +453,141 @@ def _trusted_pin(
     return pin
 
 
-def _canonical_document(pin: base.ArtifactPin, label: str) -> dict[str, Any]:
-    maximum = max(MAX_R9_DOCUMENT_BYTES, pin.size_bytes)
-    raw = base._sealed_bytes(pin.path, label, maximum_bytes=maximum)
-    payload = base._strict_json(raw)
-    if raw != base.canonical_json(payload):
-        raise base.HumanVisualDemoError(f"{label} is not canonical JSON")
-    if payload.get("content_digest") != base.content_digest(payload):
+def _reject_nonfinite(value: str) -> None:
+    raise base.HumanVisualDemoError(f"non-finite JSON constant: {value}")
+
+
+def _strict_document(raw: bytes, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(
+            raw,
+            object_pairs_hook=base._reject_duplicate_keys,
+            parse_constant=_reject_nonfinite,
+        )
+    except base.HumanVisualDemoError:
+        raise
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise base.HumanVisualDemoError(f"{label} is not strict JSON") from exc
+    if type(payload) is not dict:
+        raise base.HumanVisualDemoError(f"{label} must be an object")
+    return payload
+
+
+def _compact_json(payload: Mapping[str, Any], *, newline: bool) -> bytes:
+    try:
+        raw = json.dumps(
+            payload,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise base.HumanVisualDemoError("document is not finite JSON") from exc
+    return raw + (b"\n" if newline else b"")
+
+
+def _compact_content_digest(payload: Mapping[str, Any]) -> str:
+    body = copy.deepcopy(dict(payload))
+    body.pop("content_digest", None)
+    return hashlib.sha256(_compact_json(body, newline=False)).hexdigest()
+
+
+def _read_receipt_pinned_file(
+    payload: Any,
+    label: str,
+    *,
+    maximum_bytes: int = MAX_R9_DOCUMENT_BYTES,
+    executable: bool = False,
+) -> tuple[base.ArtifactPin, bytes]:
+    if not isinstance(payload, dict):
+        raise base.HumanVisualDemoError(f"{label} pin must be an object")
+    base._require_exact_keys(payload, base.ARTIFACT_KEYS, f"{label} pin")
+    path_value = payload.get("path")
+    digest = payload.get("sha256")
+    size_bytes = payload.get("size_bytes")
+    if (
+        not isinstance(path_value, str)
+        or not path_value
+        or not isinstance(digest, str)
+        or base.SHA256_RE.fullmatch(digest) is None
+        or not isinstance(size_bytes, int)
+        or isinstance(size_bytes, bool)
+        or size_bytes < 0
+        or size_bytes > maximum_bytes
+    ):
+        raise base.HumanVisualDemoError(f"{label} pin is invalid")
+    path = Path(path_value)
+    if not path.is_absolute() or ".." in path.parts:
+        raise base.HumanVisualDemoError(f"{label} path is not canonical")
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise base.HumanVisualDemoError(f"{label} is unavailable") from exc
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_nlink != 1
+            or before.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+            or (executable and before.st_mode & 0o111 == 0)
+        ):
+            raise base.HumanVisualDemoError(f"{label} file policy differs")
+        chunks: list[bytes] = []
+        observed_digest = hashlib.sha256()
+        total = 0
+        while chunk := os.read(descriptor, 1024 * 1024):
+            total += len(chunk)
+            if total > maximum_bytes:
+                raise base.HumanVisualDemoError(f"{label} exceeds the byte limit")
+            observed_digest.update(chunk)
+            chunks.append(chunk)
+        after = os.fstat(descriptor)
+        identity = lambda row: (
+            row.st_dev,
+            row.st_ino,
+            row.st_size,
+            row.st_mtime_ns,
+            row.st_ctime_ns,
+        )
+        if identity(before) != identity(after):
+            raise base.HumanVisualDemoError(f"{label} changed while read")
+        raw = b"".join(chunks)
+    finally:
+        os.close(descriptor)
+    try:
+        resolved = path.resolve(strict=True)
+        final = os.lstat(path)
+    except OSError as exc:
+        raise base.HumanVisualDemoError(f"{label} path changed after read") from exc
+    if resolved != path or identity(final) != identity(before):
+        raise base.HumanVisualDemoError(f"{label} path identity changed")
+    if (observed_digest.hexdigest(), len(raw)) != (digest, size_bytes):
+        raise base.HumanVisualDemoError(f"{label} differs from its receipt pin")
+    return base.ArtifactPin(path=path, sha256=digest, size_bytes=size_bytes), raw
+
+
+def _document_from_raw(
+    raw: bytes,
+    label: str,
+    *,
+    contract: str,
+) -> dict[str, Any]:
+    payload = _strict_document(raw, label)
+    if contract == "t2_profile":
+        observed_digest = _compact_content_digest(payload)
+    elif contract == "t2_inventory":
+        if raw != _compact_json(payload, newline=True):
+            raise base.HumanVisualDemoError(f"{label} is not forge-canonical JSON")
+        observed_digest = _compact_content_digest(payload)
+    elif contract == "t3":
+        if raw != base.canonical_json(payload):
+            raise base.HumanVisualDemoError(f"{label} is not canonical JSON")
+        observed_digest = base.content_digest(payload)
+    else:
+        raise base.HumanVisualDemoError(f"{label} document contract is unknown")
+    if payload.get("content_digest") != observed_digest:
         raise base.HumanVisualDemoError(f"{label} content digest differs")
     return payload
 
@@ -466,59 +621,203 @@ def _validate_local_json_artifact(
     label: str,
     expected_name: str,
     *,
+    contract: str,
     pending_boundaries: bool = True,
 ) -> tuple[base.ArtifactPin, dict[str, Any]]:
-    pin = base._artifact_pin(payload, label)
+    pin, raw = _read_receipt_pinned_file(payload, label)
     if pin.path.parent != receipt_parent or pin.path.name != expected_name:
         raise base.HumanVisualDemoError(f"{label} is not sealed beside the receipt")
-    document = _canonical_document(pin, label)
+    document = _document_from_raw(raw, label, contract=contract)
     if pending_boundaries:
         _validate_pending_boundaries(document, label)
     return pin, document
 
 
+def _fixture_forge_module() -> Any:
+    try:
+        return importlib.import_module(
+            "tools.blender.vista_playable_home_r9_fixtures.forge"
+        )
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise base.HumanVisualDemoError(
+            "the reviewed T2 fixture validator is unavailable"
+        ) from exc
+
+
+def _composition_materializer_module() -> Any:
+    try:
+        return importlib.import_module(
+            "tools.ue.vista_playable_home.materialize_hssd_r2_citysample_live"
+        )
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise base.HumanVisualDemoError(
+            "the reviewed T3 composition validator is unavailable"
+        ) from exc
+
+
 def _validate_finish_profile(
-    document: Mapping[str, Any], *, expected_content_digest: str
+    document: Mapping[str, Any],
+    pin: base.ArtifactPin,
+    *,
+    trust: LauncherTrust,
 ) -> None:
     base._require_exact_keys(document, FINISH_PROFILE_KEYS, "R9 finish profile")
-    claims = document.get("claims")
     if (
-        document.get("schema_version") != FINISH_PROFILE_SCHEMA
-        or document.get("profile_id") != "hssd_r2_citysample_live_r1"
-        or document.get("content_digest") != expected_content_digest
-        or not isinstance(document.get("rooms"), list)
-        or len(document["rooms"]) != 6
-        or not isinstance(claims, dict)
-        or set(claims)
-        != {
-            "runtime_visual_acceptance",
-            "interaction_accepted",
-            "playable_collision_accepted",
-            "photoreal_character_accepted",
-            "gta_level_quality",
-        }
-        or any(value is not False for value in claims.values())
+        pin.sha256 != trust.finish_profile_sha256
+        or pin.size_bytes != trust.finish_profile_size_bytes
+        or document.get("content_digest") != trust.finish_profile_content_digest
     ):
-        raise base.HumanVisualDemoError("R9 finish profile contract differs")
+        raise base.HumanVisualDemoError("R9 finish profile fixed bytes differ")
+    forge = _fixture_forge_module()
+    try:
+        validated = forge.load_profile(pin.path)
+    except Exception as exc:
+        raise base.HumanVisualDemoError(
+            f"R9 finish profile T2 validation failed: {exc}"
+        ) from exc
+    if validated != document:
+        raise base.HumanVisualDemoError("R9 finish profile changed during validation")
+    rechecked, raw = _read_receipt_pinned_file(_pin_document(pin), "R9 finish profile")
+    if (
+        rechecked != pin
+        or _document_from_raw(raw, "R9 finish profile", contract="t2_profile")
+        != document
+    ):
+        raise base.HumanVisualDemoError("R9 finish profile current bytes changed")
 
 
-def _validate_fixture_inventory(document: Mapping[str, Any]) -> None:
+def _validate_fixture_inventory(
+    document: Mapping[str, Any],
+    pin: base.ArtifactPin,
+    *,
+    finish_profile: base.ArtifactPin,
+    finish_document: Mapping[str, Any],
+) -> None:
     base._require_exact_keys(document, FIXTURE_INVENTORY_KEYS, "R9 fixture inventory")
-    claims = document.get("claims")
-    artifacts = document.get("artifacts")
-    if (
-        document.get("schema_version") != FIXTURE_INVENTORY_SCHEMA
-        or document.get("status") != "fixture_inventory_sealed_not_ue_imported"
-        or document.get("artifact_count") != 3
-        or isinstance(document.get("artifact_count"), bool)
-        or document.get("binary_payload_in_git") is not False
-        or not isinstance(artifacts, list)
-        or len(artifacts) != 3
-        or not isinstance(claims, dict)
-        or set(claims) != {"ue_imported", "visual_acceptance", "gta_quality_accepted"}
-        or any(value is not False for value in claims.values())
+    forge = _fixture_forge_module()
+    try:
+        forge.validate_fixture_inventory(document)
+        recipe = forge.load_recipe()
+    except Exception as exc:
+        raise base.HumanVisualDemoError(
+            f"R9 fixture inventory T2 validation failed: {exc}"
+        ) from exc
+    profile_pin = document.get("profile")
+    if not isinstance(profile_pin, dict) or (
+        profile_pin.get("sha256"),
+        profile_pin.get("size_bytes"),
+        profile_pin.get("content_digest"),
+    ) != (
+        finish_profile.sha256,
+        finish_profile.size_bytes,
+        finish_document.get("content_digest"),
     ):
-        raise base.HumanVisualDemoError("R9 fixture inventory contract differs")
+        raise base.HumanVisualDemoError("R9 inventory/profile byte binding differs")
+    expected_packages = finish_document["fixture_imports"]["exact_package_names"]
+    if (
+        document.get("ue_package_inventory")
+        != {
+            "package_root": finish_document["fixture_imports"]["package_root"],
+            "exact_package_names": expected_packages,
+            "expected_package_count": 9,
+        }
+        or len(expected_packages) != 9
+        or len(set(expected_packages)) != 9
+    ):
+        raise base.HumanVisualDemoError("R9 exact nine-package allowlist differs")
+
+    root = pin.path.parent
+    try:
+        forge_plan = forge.load_json(root / "forge-plan.json")
+        forge.validate_plan(forge_plan, expected_mode="apply")
+        worker_result = forge.load_json(root / "worker-result.json")
+        forge._validate_worker_result(worker_result)
+    except Exception as exc:
+        raise base.HumanVisualDemoError(
+            f"R9 fixture plan/worker validation failed: {exc}"
+        ) from exc
+    expected_policy = {
+        "headless": True,
+        "factory_startup": True,
+        "autoexec_disabled": True,
+        "network_namespace": "unshared",
+        "pid_namespace": "unshared",
+        "gpu_devices_visible": False,
+        "display_environment_forwarded": False,
+        "preview_device": "CPU",
+        "caller_selected_binary": False,
+        "caller_selected_script": False,
+        "caller_selected_assets": False,
+    }
+    if (
+        document.get("forge_plan_content_digest") != forge_plan.get("content_digest")
+        or document.get("worker_result_content_digest")
+        != worker_result.get("content_digest")
+        or forge_plan.get("profile") != document.get("profile")
+        or forge_plan.get("recipe") != document.get("recipe")
+        or forge_plan.get("toolchain") != document.get("toolchain")
+        or forge_plan.get("ue_package_inventory")
+        != document.get("ue_package_inventory")
+        or forge_plan.get("execution_policy") != expected_policy
+        or forge_plan.get("builder_sources") != forge._source_pins()
+        or worker_result.get("plan_content_digest") != forge_plan.get("content_digest")
+        or worker_result.get("profile") != document.get("profile")
+        or worker_result.get("recipe") != document.get("recipe")
+    ):
+        raise base.HumanVisualDemoError("R9 fixture plan/worker cross-binding differs")
+
+    archetypes = {row["archetype_id"]: row for row in recipe["archetypes"]}
+    worker_by_id = {
+        row["archetype_id"]: row for row in worker_result.get("artifacts", [])
+    }
+    try:
+        for row in document["artifacts"]:
+            archetype = archetypes[row["archetype_id"]]
+            glb = forge.inspect_glb(
+                forge._safe_child(root, row["glb"]["path"]), archetype
+            )
+            preview = forge.inspect_png(
+                forge._safe_child(root, row["preview"]["path"]), recipe["preview"]
+            )
+            if row["glb"] != {"path": row["glb"]["path"], **glb}:
+                raise base.HumanVisualDemoError("R9 current fixture GLB differs")
+            if row["preview"] != {"path": row["preview"]["path"], **preview}:
+                raise base.HumanVisualDemoError("R9 current fixture preview differs")
+            receipt_path = forge._safe_child(root, row["artifact_receipt"]["path"])
+            receipt_raw = forge._read_regular_file(receipt_path)
+            receipt = forge.load_json(receipt_path)
+            forge._artifact_receipt(receipt, archetype)
+            expected = row["artifact_receipt"]
+            if (
+                hashlib.sha256(receipt_raw).hexdigest() != expected["sha256"]
+                or len(receipt_raw) != expected["size_bytes"]
+                or receipt.get("content_digest") != expected["content_digest"]
+            ):
+                raise base.HumanVisualDemoError("R9 current fixture receipt differs")
+            if worker_by_id.get(row["archetype_id"]) != {
+                "archetype_id": row["archetype_id"],
+                "glb_sha256": row["glb"]["sha256"],
+                "preview_sha256": row["preview"]["sha256"],
+                "receipt_content_digest": row["artifact_receipt"]["content_digest"],
+            }:
+                raise base.HumanVisualDemoError(
+                    "R9 fixture worker/artifact cross-binding differs"
+                )
+    except base.HumanVisualDemoError:
+        raise
+    except Exception as exc:
+        raise base.HumanVisualDemoError(
+            f"R9 fixture current artifact validation failed: {exc}"
+        ) from exc
+    rechecked, raw = _read_receipt_pinned_file(
+        _pin_document(pin), "R9 fixture inventory"
+    )
+    if (
+        rechecked != pin
+        or _document_from_raw(raw, "R9 fixture inventory", contract="t2_inventory")
+        != document
+    ):
+        raise base.HumanVisualDemoError("R9 fixture inventory current bytes changed")
 
 
 def _require_schema_status_keys(
@@ -534,6 +833,262 @@ def _require_schema_status_keys(
         raise base.HumanVisualDemoError(f"{label} schema or status differs")
 
 
+def _manifest_tree(manifest: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    digest = hashlib.sha256()
+    total_bytes = 0
+    for relative, record in sorted(
+        manifest.items(), key=lambda item: item[0].encode("utf-8")
+    ):
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or relative.startswith("/")
+            or ".." in Path(relative).parts
+            or type(record) is not dict
+            or set(record) != {"sha256", "size_bytes", "mode"}
+            or not isinstance(record["sha256"], str)
+            or base.SHA256_RE.fullmatch(record["sha256"]) is None
+            or not isinstance(record["size_bytes"], int)
+            or isinstance(record["size_bytes"], bool)
+            or record["size_bytes"] < 0
+            or not isinstance(record["mode"], int)
+            or isinstance(record["mode"], bool)
+        ):
+            raise base.HumanVisualDemoError("R9 static manifest row differs")
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(format(record["mode"], "04o").encode("ascii"))
+        digest.update(b"\0")
+        digest.update(str(record["size_bytes"]).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(record["sha256"].encode("ascii"))
+        digest.update(b"\n")
+        total_bytes += record["size_bytes"]
+    return {
+        "algorithm": base.PROJECT_STATIC_TREE_ALGORITHM,
+        "file_count": len(manifest),
+        "total_bytes": total_bytes,
+        "tree_sha256": digest.hexdigest(),
+    }
+
+
+def _fixture_package_paths(finish_document: Mapping[str, Any]) -> set[str]:
+    imports = finish_document.get("fixture_imports")
+    if not isinstance(imports, dict):
+        raise base.HumanVisualDemoError("R9 fixture imports are unavailable")
+    packages = imports.get("exact_package_names")
+    if (
+        not isinstance(packages, list)
+        or len(packages) != 9
+        or len(set(packages)) != 9
+        or packages != sorted(packages)
+        or any(
+            not isinstance(row, str) or not row.startswith("/Game/") for row in packages
+        )
+    ):
+        raise base.HumanVisualDemoError("R9 fixture package allowlist differs")
+    return {"Content/" + row.removeprefix("/Game/") + ".uasset" for row in packages}
+
+
+def _validate_source_output_delta(
+    *,
+    source_manifest: Mapping[str, Mapping[str, Any]],
+    output_manifest: Mapping[str, Mapping[str, Any]],
+    finish_document: Mapping[str, Any],
+) -> None:
+    map_relative = (
+        "Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap"
+    )
+    fixture_paths = _fixture_package_paths(finish_document)
+    allowed = {map_relative, *fixture_paths}
+    changed = {
+        relative
+        for relative in set(source_manifest) | set(output_manifest)
+        if source_manifest.get(relative) != output_manifest.get(relative)
+    }
+    if (
+        changed != allowed
+        or map_relative not in source_manifest
+        or map_relative not in output_manifest
+        or any(path in source_manifest for path in fixture_paths)
+        or any(path not in output_manifest for path in fixture_paths)
+    ):
+        raise base.HumanVisualDemoError(
+            "R9 source/output delta is not exactly map plus nine fixture packages"
+        )
+
+
+def _validate_composition_contract(
+    payload: Any, finish_document: Mapping[str, Any]
+) -> None:
+    if not isinstance(payload, dict):
+        raise base.HumanVisualDemoError("R9 composition contract must be an object")
+    base._require_exact_keys(
+        payload,
+        frozenset(
+            {
+                "legacy_shells",
+                "reuse",
+                "delete",
+                "spawn",
+                "final_static_slots",
+                "dynamic_slots",
+                "preserved_non_hssd_actor_inventory",
+                "collision",
+                "counts",
+            }
+        ),
+        "R9 composition contract",
+    )
+    counts = payload.get("counts")
+    expected_counts = {
+        "legacy_observed": 42,
+        "reused": 41,
+        "deleted": 1,
+        "spawned": 16,
+        "final_static": 57,
+        "dynamic": 3,
+        "final_visual_slots": 60,
+        "preserved_non_hssd": 108,
+    }
+    expected_lengths = {
+        "legacy_shells": 42,
+        "reuse": 41,
+        "spawn": 16,
+        "final_static_slots": 57,
+        "dynamic_slots": 3,
+        "preserved_non_hssd_actor_inventory": 108,
+    }
+    if counts != expected_counts or any(
+        not isinstance(payload.get(key), list) or len(payload[key]) != length
+        for key, length in expected_lengths.items()
+    ):
+        raise base.HumanVisualDemoError("R9 composition count closure differs")
+    if any(
+        not isinstance(row, dict) for key in expected_lengths for row in payload[key]
+    ):
+        raise base.HumanVisualDemoError("R9 composition row shape differs")
+
+    def actor_instance_id(row: Any) -> str | None:
+        if not isinstance(row, dict) or not isinstance(row.get("tags"), list):
+            return None
+        values = [
+            tag.removeprefix("VistaHssdInstanceId=")
+            for tag in row["tags"]
+            if isinstance(tag, str) and tag.startswith("VistaHssdInstanceId=")
+        ]
+        return values[0] if len(values) == 1 else None
+
+    deletion = payload.get("delete")
+    if (
+        not isinstance(deletion, dict)
+        or deletion.get("instance_id") != ("hssd.r1/bedroom.phone.01")
+        or actor_instance_id(deletion.get("source_actor"))
+        != deletion.get("instance_id")
+    ):
+        raise base.HumanVisualDemoError("R9 composition deletion authority differs")
+    final_ids = {row.get("instance_id") for row in payload["final_static_slots"]}
+    dynamic_ids = {row.get("instance_id") for row in payload["dynamic_slots"]}
+    legacy_ids = {actor_instance_id(row) for row in payload["legacy_shells"]}
+    reuse_ids = {
+        row.get("r2_placement", {}).get("instance_id")
+        for row in payload["reuse"]
+        if isinstance(row, dict) and isinstance(row.get("r2_placement"), dict)
+    }
+    reuse_actor_ids = {
+        actor_instance_id(row.get("source_actor"))
+        for row in payload["reuse"]
+        if isinstance(row, dict)
+    }
+    spawn_ids = {row.get("instance_id") for row in payload["spawn"]}
+    profile_slots = set(
+        finish_document["hssd_r2_inventory"]["visual_slot_instance_ids"]
+    )
+    expected_dynamic = set(
+        finish_document["hssd_r2_inventory"]["dynamic_presentation_instance_ids"]
+    )
+    if (
+        None in final_ids
+        or None in dynamic_ids
+        or len(final_ids) != 57
+        or dynamic_ids != expected_dynamic
+        or final_ids | dynamic_ids != profile_slots
+        or reuse_ids != reuse_actor_ids
+        or len(reuse_ids) != 41
+        or spawn_ids != final_ids - reuse_ids
+        or legacy_ids != reuse_ids | {deletion["instance_id"]}
+    ):
+        raise base.HumanVisualDemoError("R9 composition slot identities differ")
+    collision = payload.get("collision")
+    collision_rows = collision.get("rows") if isinstance(collision, dict) else None
+    if (
+        not isinstance(collision, dict)
+        or set(collision) != {"policy_counts", "rows"}
+        or collision.get("policy_counts")
+        != {
+            "retained_r1_semantic_proxy_authority_unchanged": 19,
+            "secondary_simple_aabb_candidate_review_pending": 20,
+            "explicit_detail_no_collision": 21,
+        }
+        or not isinstance(collision_rows, list)
+        or len(collision_rows) != 60
+        or any(not isinstance(row, dict) for row in collision_rows)
+        or {row.get("instance_id") for row in collision_rows} != profile_slots
+        or len(
+            {
+                row.get("actor_path")
+                for row in payload["preserved_non_hssd_actor_inventory"]
+                if isinstance(row, dict)
+            }
+        )
+        != 108
+    ):
+        raise base.HumanVisualDemoError("R9 composition collision closure differs")
+
+    # Rebuild the contract through the reviewed T3 authority.  This closes every
+    # nested actor, placement, dynamic observation, and collision row rather
+    # than accepting a merely count-consistent self-authored envelope.
+    materializer = _composition_materializer_module()
+    pot_id = "hssd.r1/kitchen_dining.pot.01"
+    try:
+        dynamic_by_id = {row["instance_id"]: row for row in payload["dynamic_slots"]}
+        if set(dynamic_by_id) != set(materializer.DYNAMIC_SLOT_BINDINGS):
+            raise base.HumanVisualDemoError("R9 dynamic slot authority differs")
+        rebuilt = materializer.build_migration_contract(
+            [
+                *payload["legacy_shells"],
+                *payload["preserved_non_hssd_actor_inventory"],
+            ],
+            [
+                *payload["final_static_slots"],
+                *(row["logical_r2_slot"] for row in payload["dynamic_slots"]),
+            ],
+            {
+                "actor_inventory_reloaded": [
+                    *payload["legacy_shells"],
+                    *payload["preserved_non_hssd_actor_inventory"],
+                ],
+                "target_observations_reloaded": [
+                    dynamic_by_id[key]["preserved_r6_observation"]
+                    for key in sorted(dynamic_by_id)
+                    if key != pot_id
+                ],
+                "pot_observation_reloaded": dynamic_by_id[pot_id][
+                    "preserved_r6_observation"
+                ],
+            },
+            payload["collision"]["rows"],
+        )
+    except base.HumanVisualDemoError:
+        raise
+    except Exception as exc:
+        raise base.HumanVisualDemoError(
+            f"R9 T3 composition validation failed: {exc}"
+        ) from exc
+    if rebuilt != payload:
+        raise base.HumanVisualDemoError("R9 T3 composition contract differs")
+
+
 def _validate_execution_document(
     document: Mapping[str, Any],
     *,
@@ -541,6 +1096,7 @@ def _validate_execution_document(
     project: base.ArtifactPin,
     scripts: Mapping[str, base.ArtifactPin],
     finish_profile: base.ArtifactPin,
+    finish_document: Mapping[str, Any],
     fixture_inventory: base.ArtifactPin,
     parent_pin: base.ArtifactPin,
     parent: base.HumanVisualDemoInputs,
@@ -549,6 +1105,7 @@ def _validate_execution_document(
     build_version: base.ArtifactPin,
     bwrap: base.ArtifactPin,
     result: base.ArtifactPin,
+    trust: LauncherTrust,
 ) -> None:
     _require_schema_status_keys(
         document,
@@ -573,18 +1130,42 @@ def _validate_execution_document(
         or document.get("source_project_static_tree") != parent.project_static_tree
     ):
         raise base.HumanVisualDemoError("R9 execution source/script binding differs")
-    for key in ("source_static_manifest", "hssd_namespace", "composition_contract"):
-        value = document.get(key)
-        if not isinstance(value, (list, dict)) or not value:
-            raise base.HumanVisualDemoError(f"R9 execution {key} is empty")
+    source_manifest = document.get("source_static_manifest")
+    if not isinstance(source_manifest, dict) or not source_manifest:
+        raise base.HumanVisualDemoError("R9 execution source manifest is empty")
+    current_source_manifest = base._project_static_manifest(parent.project.path)
+    if (
+        source_manifest != current_source_manifest
+        or _manifest_tree(source_manifest) != parent.project_static_tree
+    ):
+        raise base.HumanVisualDemoError("R9 execution source manifest differs")
+    prefix = trust.hssd_namespace_relative.rstrip("/") + "/"
+    namespace_manifest = {
+        relative: record
+        for relative, record in source_manifest.items()
+        if relative.startswith(prefix)
+    }
+    if (
+        document.get("hssd_namespace") != trust.hssd_namespace_tree
+        or _manifest_tree(namespace_manifest) != trust.hssd_namespace_tree
+    ):
+        raise base.HumanVisualDemoError("R9 execution HSSD namespace differs")
+    _validate_composition_contract(
+        document.get("composition_contract"), finish_document
+    )
+    output_manifest = base._project_static_manifest(project.path)
+    _validate_source_output_delta(
+        source_manifest=source_manifest,
+        output_manifest=output_manifest,
+        finish_document=finish_document,
+    )
 
     engine = document.get("engine")
     if not isinstance(engine, dict):
         raise base.HumanVisualDemoError("R9 execution engine must be an object")
     base._require_exact_keys(engine, EXECUTION_ENGINE_KEYS, "R9 execution engine")
     if (
-        not isinstance(engine.get("version"), str)
-        or not engine["version"]
+        engine.get("version") != trust.engine_version
         or engine.get("unreal_editor_cmd") != _pin_document(unreal_editor_cmd)
         or engine.get("build_version") != _pin_document(build_version)
         or engine.get("bwrap") != _pin_document(bwrap)
@@ -731,7 +1312,7 @@ def _validate_host_document(
     logs: list[dict[str, Any]] = []
     prior = ""
     for row in logs_payload:
-        pin = base._artifact_pin(row, "R9 host log")
+        pin, _raw = _read_receipt_pinned_file(row, "R9 host log")
         if pin.path.parent != receipt_parent or str(pin.path) <= prior:
             raise base.HumanVisualDemoError(
                 "R9 host logs are not uniquely sorted/local"
@@ -963,15 +1544,28 @@ def _validate_upgrade(
             receipt_parent,
             "R9 " + key,
             LOCAL_ARTIFACT_NAMES[key],
+            contract=(
+                "t2_profile"
+                if key == "finish_profile"
+                else "t2_inventory"
+                if key == "fixture_inventory"
+                else "t3"
+            ),
             pending_boundaries=key not in {"finish_profile", "fixture_inventory"},
         )
         local_pins[key] = pin
         local_json[key] = document
     _validate_finish_profile(
         local_json["finish_profile"],
-        expected_content_digest=trust.finish_profile_content_digest,
+        local_pins["finish_profile"],
+        trust=trust,
     )
-    _validate_fixture_inventory(local_json["fixture_inventory"])
+    _validate_fixture_inventory(
+        local_json["fixture_inventory"],
+        local_pins["fixture_inventory"],
+        finish_profile=local_pins["finish_profile"],
+        finish_document=local_json["finish_profile"],
+    )
 
     scripts: dict[str, base.ArtifactPin] = {}
     expected_script_names = {
@@ -979,7 +1573,7 @@ def _validate_upgrade(
         "commandlet": "compose_hssd_r2_citysample_live_commandlet.py",
     }
     for key, name in expected_script_names.items():
-        pin = base._artifact_pin(payload.get(key), "R9 " + key)
+        pin, _raw = _read_receipt_pinned_file(payload.get(key), "R9 " + key)
         if pin.path.parent != receipt_parent or pin.path.name != name:
             raise base.HumanVisualDemoError(f"R9 {key} receipt binding differs")
         scripts[key] = pin
@@ -1003,6 +1597,7 @@ def _validate_upgrade(
         project=project,
         scripts=scripts,
         finish_profile=local_pins["finish_profile"],
+        finish_document=local_json["finish_profile"],
         fixture_inventory=local_pins["fixture_inventory"],
         parent_pin=parent_pin,
         parent=parent,
@@ -1011,6 +1606,7 @@ def _validate_upgrade(
         build_version=build_version,
         bwrap=bwrap,
         result=local_pins["result"],
+        trust=trust,
     )
     _validate_result_document(
         local_json["result"],
@@ -1314,6 +1910,10 @@ def run_human_visual_demo(
                     "R9 receipt binding changed during startup grace"
                 )
             preflight_r6_rollback(trust=trust, parent_loader=rollback_loader)
+            if process.poll() is not None:
+                raise base.HumanVisualDemoError(
+                    "R9 demo exited during post-grace current-byte validation"
+                )
             base._emit_status(base.READY_STATUS, inputs.runtime, pid=process.pid)
             while True:
                 return_code = process.poll()
