@@ -1,7 +1,9 @@
 """Layer r2 room presentation actors over the saved r1 candidate map."""
 
+import hashlib
 import json
 import os
+import stat
 import sys
 
 import unreal
@@ -30,6 +32,14 @@ from presentation_commandlet_common import (  # noqa: E402
 
 PRESENTATION_SHADOW_POLICY_TAG = "VistaShadowPolicy=visible_no_shadow"
 AUTHORITY_SHADOW_POLICY_TAG = "VistaShadowPolicy=hidden_nanite_authority"
+R4_PRESENTATION_SHADOW_POLICY_TAG = "VistaShadowPolicy=visible_cast_shadow"
+R4_AUTHORITY_SHADOW_POLICY_TAG = "VistaShadowPolicy=hidden_collision_no_shadow"
+REALISM_R4_PROFILE_SCHEMA = "simworld.vista.playable-home-realism-r4/v1"
+REALISM_R4_PROFILE_ID = "realistic_interior_r4_lighting_shadows_v1"
+REALISM_R4_SCENE_RECEIPT_SCHEMA = "simworld.vista.playable-home-ue-scene-receipt/v2"
+PRESENTATION_SCENE_RECEIPT_SCHEMA_V3 = (
+    "simworld.vista.playable-home-ue-presentation-scene-receipt/v3"
+)
 
 
 def nanite_enabled(mesh):
@@ -234,11 +244,154 @@ def attach_keep_world(child, parent):
         require(False, "failed to attach presentation actor to r1 authority: " + str(exc))
 
 
+def reject_json_constant(value):
+    raise RuntimeError("R4 materialized profile contains non-finite JSON: " + value)
+
+
+def reject_duplicate_json_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        require(key not in result, "R4 materialized profile contains duplicate keys")
+        result[key] = value
+    return result
+
+
+def load_materialized_r4_profile(execution):
+    descriptor = execution.get("realism_r4_profile")
+    require(
+        isinstance(descriptor, dict)
+        and set(descriptor)
+        == {
+            "path",
+            "sha256",
+            "source_sha256",
+            "schema_version",
+            "profile_id",
+            "content_digest",
+            "runtime_visual_acceptance",
+            "gta_quality_accepted",
+        },
+        "R4 materialized profile descriptor differs",
+    )
+    attempt_root = base.canonical_path(execution["attempt_root"])
+    path = base.safe_attempt_child(
+        descriptor["path"], attempt_root, "R4 materialized profile"
+    )
+    contracts_root = base.canonical_path(os.path.join(attempt_root, "contracts"))
+    require(
+        os.path.dirname(path) == contracts_root
+        and os.path.basename(path) == "realism-r4-profile.json"
+        and not os.path.islink(path),
+        "R4 materialized profile path is not the fixed contracts child",
+    )
+    expected_sha = base.require_sha(descriptor["sha256"], "R4 materialized profile")
+    base.require_sha(descriptor["source_sha256"], "R4 source profile")
+    try:
+        descriptor_fd = os.open(
+            path,
+            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
+    except OSError as exc:
+        raise RuntimeError("R4 materialized profile cannot be opened safely") from exc
+    try:
+        before = os.fstat(descriptor_fd)
+        require(
+            stat.S_ISREG(before.st_mode)
+            and before.st_nlink == 1
+            and before.st_size <= 4 * 1024 * 1024,
+            "R4 materialized profile has unsafe metadata",
+        )
+        chunks = []
+        while True:
+            block = os.read(descriptor_fd, 1024 * 1024)
+            if not block:
+                break
+            chunks.append(block)
+            require(
+                sum(len(chunk) for chunk in chunks) <= 4 * 1024 * 1024,
+                "R4 materialized profile is oversized",
+            )
+        raw = b"".join(chunks)
+        after = os.fstat(descriptor_fd)
+        require(
+            (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+            == (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+            and len(raw) == before.st_size,
+            "R4 materialized profile changed while being read",
+        )
+    finally:
+        os.close(descriptor_fd)
+    require(
+        hashlib.sha256(raw).hexdigest() == expected_sha,
+        "R4 materialized profile digest differs from execution",
+    )
+    try:
+        profile = json.loads(
+            raw.decode("utf-8", "strict"),
+            parse_constant=reject_json_constant,
+            object_pairs_hook=reject_duplicate_json_keys,
+        )
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("R4 materialized profile is not strict JSON") from exc
+    require(
+        isinstance(profile, dict) and raw == base.canonical_json(profile),
+        "R4 materialized profile is not canonical JSON",
+    )
+    body = dict(profile)
+    content_digest = body.pop("content_digest", None)
+    require(
+        isinstance(content_digest, str)
+        and hashlib.sha256(base.canonical_json(body)).hexdigest() == content_digest,
+        "R4 materialized profile content digest differs",
+    )
+    require(
+        descriptor["schema_version"] == REALISM_R4_PROFILE_SCHEMA
+        and descriptor["profile_id"] == REALISM_R4_PROFILE_ID
+        and descriptor["content_digest"] == content_digest
+        and descriptor["runtime_visual_acceptance"] is False
+        and descriptor["gta_quality_accepted"] is False,
+        "R4 materialized profile descriptor identity differs",
+    )
+    require(
+        profile == execution.get("realism_r4_composition"),
+        "R4 materialized profile differs from embedded composition",
+    )
+    return profile
+
+
 def run():
     execution, manifest_path, manifest_sha = load_presentation_execution(
         "compose", __file__
     )
     is_external = presentation_is_external(execution)
+    has_r4_profile = "realism_r4_profile" in execution
+    has_r4_composition = "realism_r4_composition" in execution
+    require(
+        has_r4_profile == has_r4_composition,
+        "R4 execution profile/composition presence differs",
+    )
+    is_r4 = has_r4_composition
+    r4_profile = load_materialized_r4_profile(execution) if is_r4 else None
+    if is_r4:
+        require(
+            isinstance(r4_profile, dict)
+            and r4_profile.get("schema_version") == REALISM_R4_PROFILE_SCHEMA
+            and r4_profile.get("profile_id") == REALISM_R4_PROFILE_ID
+            and r4_profile.get("shadow_policy")
+            == {
+                "visible_presentation_cast_shadow": True,
+                "visible_presentation_cast_hidden_shadow": False,
+                "hidden_collision_proxy_cast_shadow": False,
+                "hidden_collision_proxy_cast_hidden_shadow": False,
+            }
+            and r4_profile.get("claims")
+            == {
+                "runtime_visual_acceptance": False,
+                "gta_quality_accepted": False,
+                "runtime_play_proof": "pending",
+            },
+            "R4 presentation shadow contract differs",
+        )
     presentation_import_sha = base.require_sha(
         os.environ.get(PRESENTATION_IMPORT_SHA_ENV, ""),
         "presentation import receipt",
@@ -256,7 +409,7 @@ def run():
     base_scene, base_scene_path = load_verified_receipt(
         execution["scene_receipt"],
         base_scene_sha,
-        base.SCENE_RECEIPT_SCHEMA,
+        (REALISM_R4_SCENE_RECEIPT_SCHEMA if is_r4 else base.SCENE_RECEIPT_SCHEMA),
         "saved_reloaded_candidate",
         "base scene receipt",
     )
@@ -385,19 +538,26 @@ def run():
             authority_mesh = property_or_none(authority_component, "static_mesh")
             require(isinstance(authority_mesh, unreal.StaticMesh),
                     "r1 room authority has no StaticMesh")
+            # Legacy source-level regression pins this exact guard.
+            # fmt: off
             require(nanite_enabled(authority_mesh) is True,
                     "r1 room shadow authority is not Nanite-enabled")
+            # fmt: on
             authority.set_actor_hidden_in_game(True)
             authority_component.set_visibility(False, True)
             authority_component.set_collision_profile_name(unreal.Name("BlockAll"))
             authority_component.set_simulate_physics(False)
             authority_component.set_editor_property("generate_overlap_events", False)
-            authority_component.set_cast_shadow(True)
-            authority_component.set_cast_hidden_shadow(True)
+            if is_r4:
+                authority_component.set_cast_shadow(False)
+                authority_component.set_cast_hidden_shadow(False)
+            else:
+                authority_component.set_cast_shadow(True)
+                authority_component.set_cast_hidden_shadow(True)
             require_shadow_policy(
                 authority_component,
-                cast_shadow=True,
-                cast_hidden_shadow=True,
+                cast_shadow=not is_r4,
+                cast_hidden_shadow=not is_r4,
                 label="r1 room authority",
             )
             try:
@@ -406,12 +566,20 @@ def run():
                 )
             except Exception:
                 pass
-            set_tags(authority, list(authority.get_editor_property("tags")) + [
-                "VistaRole=room_collision_proxy",
-                "VistaPresentationVisibility=hidden",
-                "VistaCollisionAuthority=r1",
-                AUTHORITY_SHADOW_POLICY_TAG,
-            ])
+            set_tags(
+                authority,
+                list(authority.get_editor_property("tags"))
+                + [
+                    "VistaRole=room_collision_proxy",
+                    "VistaPresentationVisibility=hidden",
+                    "VistaCollisionAuthority=r1",
+                    (
+                        R4_AUTHORITY_SHADOW_POLICY_TAG
+                        if is_r4
+                        else AUTHORITY_SHADOW_POLICY_TAG
+                    ),
+                ],
+            )
 
             imported = imports_by_artifact[operation["artifact_id"]]
             mesh = unreal.load_asset(imported["object_path"])
@@ -438,9 +606,17 @@ def run():
             require(actor is not None, "failed to spawn presentation actor")
             actor.set_actor_scale3d(vector(transform["scale"]))
             actor.set_actor_label(safe_label(operation["presentation_id"]))
-            set_tags(actor, list(operation["tags"]) + [
-                PRESENTATION_SHADOW_POLICY_TAG,
-            ])
+            set_tags(
+                actor,
+                list(operation["tags"])
+                + [
+                    (
+                        R4_PRESENTATION_SHADOW_POLICY_TAG
+                        if is_r4
+                        else PRESENTATION_SHADOW_POLICY_TAG
+                    ),
+                ],
+            )
             component = static_mesh_component(actor)
             require(component is not None,
                     "presentation actor has no StaticMeshComponent")
@@ -449,11 +625,14 @@ def run():
             component.set_simulate_physics(False)
             component.set_editor_property("generate_overlap_events", False)
             component.set_mobility(unreal.ComponentMobility.STATIC)
-            component.set_cast_shadow(False)
+            if is_r4:
+                component.set_cast_shadow(True)
+            else:
+                component.set_cast_shadow(False)
             component.set_cast_hidden_shadow(False)
             require_shadow_policy(
                 component,
-                cast_shadow=False,
+                cast_shadow=is_r4,
                 cast_hidden_shadow=False,
                 label="visible presentation component",
             )
@@ -501,13 +680,17 @@ def run():
                     not bool(component.get_editor_property("generate_overlap_events")),
                     "reloaded presentation actor lost NoCollision policy")
             require(
-                unreal.Name(PRESENTATION_SHADOW_POLICY_TAG)
+                unreal.Name(
+                    R4_PRESENTATION_SHADOW_POLICY_TAG
+                    if is_r4
+                    else PRESENTATION_SHADOW_POLICY_TAG
+                )
                 in presentation_actor.get_editor_property("tags"),
                 "reloaded presentation actor lost shadow policy tag",
             )
             require_shadow_policy(
                 component,
-                cast_shadow=False,
+                cast_shadow=is_r4,
                 cast_hidden_shadow=False,
                 label="reloaded visible presentation component",
             )
@@ -545,18 +728,30 @@ def run():
                     nanite_enabled(authority_mesh) is True,
                     "reloaded r1 room shadow authority is not Nanite-enabled")
             require(
-                unreal.Name(AUTHORITY_SHADOW_POLICY_TAG)
+                unreal.Name(
+                    R4_AUTHORITY_SHADOW_POLICY_TAG
+                    if is_r4
+                    else AUTHORITY_SHADOW_POLICY_TAG
+                )
                 in authority.get_editor_property("tags"),
                 "reloaded r1 authority lost shadow policy tag",
             )
             require_shadow_policy(
                 authority_component,
-                cast_shadow=True,
-                cast_hidden_shadow=True,
+                cast_shadow=not is_r4,
+                cast_hidden_shadow=not is_r4,
                 label="reloaded r1 room authority",
             )
             require(parent_path == authority_path,
                     "reloaded presentation actor lost its r1 authority attachment")
+            presentation_cast_shadow = property_or_none(component, "cast_shadow")
+            presentation_cast_hidden_shadow = property_or_none(
+                component, "cast_hidden_shadow"
+            )
+            authority_cast_shadow = property_or_none(authority_component, "cast_shadow")
+            authority_cast_hidden_shadow = property_or_none(
+                authority_component, "cast_hidden_shadow"
+            )
             observation = {
                 "artifact_id": operation["artifact_id"],
                 "presentation_id": operation["presentation_id"],
@@ -575,6 +770,19 @@ def run():
                 "r1_authority_hidden_in_game": authority_hidden,
                 "r1_authority_component_visible": authority_visible,
             }
+            if is_r4:
+                observation.update(
+                    {
+                        "presentation_cast_shadow": presentation_cast_shadow,
+                        "presentation_cast_hidden_shadow": (
+                            presentation_cast_hidden_shadow
+                        ),
+                        "r1_authority_cast_shadow": authority_cast_shadow,
+                        "r1_authority_cast_hidden_shadow": (
+                            authority_cast_hidden_shadow
+                        ),
+                    }
+                )
             if is_external:
                 target_observations = []
                 target_ids = binding["external_content"]["semantic_target_ids"]
@@ -680,8 +888,33 @@ def run():
                 for item in room_observations
             ) == expected_target_count
         )
+    if is_r4:
+        gates["visible_presentation_shadow_verified"] = (
+            reload_verified
+            and len(room_observations) == 3
+            and all(
+                item.get("presentation_cast_shadow") is True
+                and item.get("presentation_cast_hidden_shadow") is False
+                for item in room_observations
+            )
+        )
+        gates["hidden_collision_proxy_no_shadow_verified"] = (
+            reload_verified
+            and len(room_observations) == 3
+            and all(
+                item.get("r1_authority_cast_shadow") is False
+                and item.get("r1_authority_cast_hidden_shadow") is False
+                for item in room_observations
+            )
+        )
+        gates["human_visual_acceptance"] = "pending"
+        gates["gta_quality_accepted"] = False
     receipt = {
-        "schema_version": presentation_scene_receipt_schema(execution),
+        "schema_version": (
+            PRESENTATION_SCENE_RECEIPT_SCHEMA_V3
+            if is_r4
+            else presentation_scene_receipt_schema(execution)
+        ),
         "status": status,
         "error": error,
         "bindings": {

@@ -36,6 +36,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+import jsonschema
+
 
 Path = pathlib.Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -146,6 +148,33 @@ PRESENTATION_SCENE_RECEIPT_SCHEMA = (
 )
 PRESENTATION_SCENE_RECEIPT_SCHEMA_V2 = (
     "simworld.vista.playable-home-ue-presentation-scene-receipt/v2"
+)
+PRESENTATION_SCENE_RECEIPT_SCHEMA_V3 = (
+    "simworld.vista.playable-home-ue-presentation-scene-receipt/v3"
+)
+REALISM_R4_PROFILE_SCHEMA = "simworld.vista.playable-home-realism-r4/v1"
+REALISM_R4_SCENE_RECEIPT_SCHEMA = "simworld.vista.playable-home-ue-scene-receipt/v2"
+REALISM_R4_OBSERVATION_SCHEMA = "simworld.vista.playable-home-realism-r4-observation/v1"
+REALISM_R4_PROFILE_ATTEMPT_FILE = "realism-r4-profile.json"
+REALISM_R4_PROFILE_SCHEMA_PATH = (
+    REPO_ROOT
+    / "world_packs"
+    / "schemas"
+    / "vista-playable-home-realism-r4-v1.schema.json"
+)
+REALISM_R4_PROFILE_SCHEMA_SHA256 = (
+    "32cc73591635f722cd82c7713cd9f909093870ee5cdd6431f10f8294546e61b1"
+)
+REALISM_R4_PROFILE_ID = "realistic_interior_r4_lighting_shadows_v1"
+REALISM_R4_ROOM_IDS = frozenset(
+    {
+        "home.r1/room.entry_hall",
+        "home.r1/room.living_room",
+        "home.r1/room.kitchen_dining",
+        "home.r1/room.bedroom",
+        "home.r1/room.office",
+        "home.r1/room.bathroom_laundry",
+    }
 )
 PRESENTATION_IMPORT_RESULT_FILE = "presentation-import-result.json"
 PRESENTATION_SCENE_RESULT_FILE = "presentation-scene-result.json"
@@ -2037,6 +2066,170 @@ def validate_visual_profile(
     return profile, raw
 
 
+def validate_realism_r4_profile(
+    path: Path,
+    expected_sha256: str,
+    plan: Mapping[str, Any],
+    base_visual_profile: Mapping[str, Any] | None,
+) -> tuple[dict[str, Any], bytes]:
+    """Validate the additive R4 lighting/shadow contract fail closed.
+
+    R4 is an overlay on the sealed R2 visual profile.  It deliberately does
+    not widen the R2 schema or reinterpret existing receipts.  The profile is
+    a build request, not runtime or human visual acceptance.
+    """
+
+    profile, _source_raw = _load_json(
+        path,
+        expected_sha256=expected_sha256,
+        label="R4 realism profile",
+    )
+    schema_path = _existing_file(
+        REALISM_R4_PROFILE_SCHEMA_PATH, "R4 realism profile schema"
+    )
+    if sha256_file(schema_path) != REALISM_R4_PROFILE_SCHEMA_SHA256:
+        _fail(
+            "VISTA_HOME_REALISM_R4_SCHEMA_INVALID",
+            "R4 realism profile schema digest differs",
+            pointer=str(schema_path),
+        )
+    try:
+        schema = visual_profile_contract.load_json(schema_path)
+        jsonschema.Draft202012Validator.check_schema(schema)
+        errors = sorted(
+            jsonschema.Draft202012Validator(schema).iter_errors(profile),
+            key=lambda error: (
+                tuple(str(part) for part in error.absolute_path),
+                error.validator or "",
+                error.message,
+            ),
+        )
+    except (
+        visual_profile_contract.VisualProfileContractError,
+        jsonschema.SchemaError,
+    ) as exc:
+        _fail(
+            "VISTA_HOME_REALISM_R4_SCHEMA_INVALID",
+            "R4 realism profile schema is unavailable",
+            pointer=str(schema_path),
+        )
+        raise AssertionError from exc
+    if errors:
+        error = errors[0]
+        pointer = "$" + "".join(
+            f"[{part}]" if isinstance(part, int) else f".{part}"
+            for part in error.absolute_path
+        )
+        _fail(
+            "VISTA_HOME_REALISM_R4_PROFILE_INVALID",
+            f"R4 schema constraint {error.validator!r} failed",
+            pointer=pointer,
+        )
+    if profile.get("content_digest") != _content_digest(profile):
+        _fail(
+            "VISTA_HOME_REALISM_R4_PROFILE_INVALID",
+            "R4 realism profile content digest differs",
+            pointer="$.content_digest",
+        )
+    if base_visual_profile is None:
+        _fail(
+            "VISTA_HOME_REALISM_R4_PROFILE_INVALID",
+            "R4 realism requires the sealed R2 base visual profile",
+        )
+    expected_base = {
+        "visual_profile_id": base_visual_profile.get("visual_profile_id"),
+        "content_digest": base_visual_profile.get("content_digest"),
+    }
+    if (
+        profile.get("house_revision") != plan["house"]["revision"]
+        or profile.get("source_house_content_digest") != plan["house"]["content_digest"]
+        or profile.get("base_visual_profile") != expected_base
+    ):
+        _fail(
+            "VISTA_HOME_REALISM_R4_PROFILE_INVALID",
+            "R4 realism profile is not bound to this house and R2 base profile",
+        )
+    base_renderer = base_visual_profile.get("renderer_profile")
+    if not isinstance(base_renderer, Mapping) or {
+        "dynamic_gi": base_renderer.get("dynamic_gi"),
+        "reflections": base_renderer.get("reflections"),
+        "anti_aliasing": base_renderer.get("anti_aliasing"),
+        "shadow_method": base_renderer.get("shadow_method"),
+        "hardware_ray_tracing": base_renderer.get("hardware_ray_tracing"),
+    } != {
+        "dynamic_gi": "lumen",
+        "reflections": "lumen",
+        "anti_aliasing": "tsr",
+        "shadow_method": "virtual_shadow_maps",
+        "hardware_ray_tracing": False,
+    }:
+        _fail(
+            "VISTA_HOME_REALISM_R4_RENDERER_INVALID",
+            "R4 realism must preserve software Lumen, TSR, and VSM",
+        )
+    rooms = {room["room_id"]: room["world_bounds_cm"] for room in plan["rooms"]}
+    pairs = profile["practical_fixture_light_pairs"]
+    pair_ids = [pair["pair_id"] for pair in pairs]
+    fixture_ids = [pair["fixture"]["fixture_id"] for pair in pairs]
+    light_ids = [pair["light"]["light_id"] for pair in pairs]
+    room_ids = [pair["room_id"] for pair in pairs]
+    if (
+        len(set(pair_ids)) != len(pairs)
+        or len(set(fixture_ids)) != len(pairs)
+        or len(set(light_ids)) != len(pairs)
+        or set(room_ids) != REALISM_R4_ROOM_IDS
+        or len(room_ids) != len(set(room_ids))
+        or set(rooms) != REALISM_R4_ROOM_IDS
+    ):
+        _fail(
+            "VISTA_HOME_REALISM_R4_LIGHTING_INVALID",
+            "R4 requires one unique practical fixture/light pair in every room",
+        )
+    for index, pair in enumerate(pairs):
+        bounds = rooms[pair["room_id"]]
+        fixture_location = pair["fixture"]["location_cm"]
+        light_location = pair["light"]["location_cm"]
+        for label, location in (
+            ("fixture", fixture_location),
+            ("light", light_location),
+        ):
+            if not all(
+                float(low) <= float(value) <= float(high)
+                for value, low, high in zip(
+                    location, bounds["min_cm"], bounds["max_cm"]
+                )
+            ):
+                _fail(
+                    "VISTA_HOME_REALISM_R4_LIGHTING_INVALID",
+                    f"R4 {label} lies outside its declared room",
+                    pointer=(
+                        f"$.practical_fixture_light_pairs[{index}].{label}.location_cm"
+                    ),
+                )
+        separation = math.sqrt(
+            sum(
+                (float(fixture) - float(light)) ** 2
+                for fixture, light in zip(fixture_location, light_location)
+            )
+        )
+        if separation > 50.0:
+            _fail(
+                "VISTA_HOME_REALISM_R4_LIGHTING_INVALID",
+                "R4 fixture and light are not a spatial pair",
+                pointer=f"$.practical_fixture_light_pairs[{index}]",
+            )
+    exposure = profile["post_process"]["exposure"]
+    if float(exposure["min_ev100"]) >= float(exposure["max_ev100"]):
+        _fail(
+            "VISTA_HOME_REALISM_R4_POST_PROCESS_INVALID",
+            "R4 exposure range is empty",
+            pointer="$.post_process.exposure",
+        )
+    # Stage canonical bytes even when the pinned authoring file is pretty
+    # printed.  UE re-opens and byte-verifies this exact copy before use.
+    return profile, canonical_json(profile)
+
+
 def validate_blender_manifest(
     path: Path,
     expected_sha256: str,
@@ -3275,6 +3468,8 @@ class BuildConfig:
     visual_binding_manifest_sha256: str | None = None
     visual_profile: Path | None = None
     visual_profile_sha256: str | None = None
+    realism_r4_profile: Path | None = None
+    realism_r4_profile_sha256: str | None = None
     presentation_manifest: Path | None = None
     presentation_manifest_sha256: str | None = None
     presentation_artifact_receipt: Path | None = None
@@ -3299,6 +3494,8 @@ class PlannedBuild:
     input_ini_raw: bytes
     visual_profile: dict[str, Any] | None
     visual_profile_raw: bytes | None
+    realism_r4_profile: dict[str, Any] | None
+    realism_r4_profile_raw: bytes | None
     presentation: PresentationInputs | None
     presentation_vulkan_icd: dict[str, str] | None
     presentation_vulkan_icd_raw: bytes | None
@@ -3394,6 +3591,8 @@ def _planned_execution(
     visual_profile: Mapping[str, Any] | None = None,
     visual_profile_sha256: str | None = None,
     renderer_request: Mapping[str, Any] | None = None,
+    realism_r4_profile: Mapping[str, Any] | None = None,
+    realism_r4_profile_sha256: str | None = None,
     presentation: PresentationInputs | None = None,
     presentation_manifest_sha256: str | None = None,
     presentation_artifact_receipt_sha256: str | None = None,
@@ -3409,6 +3608,16 @@ def _planned_execution(
         _fail(
             "VISTA_HOME_BUILD_ARGUMENT_INVALID",
             "presentation bundles require a selected visual profile",
+        )
+    if (realism_r4_profile is None) != (realism_r4_profile_sha256 is None):
+        _fail(
+            "VISTA_HOME_BUILD_ARGUMENT_INVALID",
+            "R4 realism profile and pin must be supplied together",
+        )
+    if realism_r4_profile is not None and visual_profile is None:
+        _fail(
+            "VISTA_HOME_BUILD_ARGUMENT_INVALID",
+            "R4 realism requires a selected base visual profile",
         )
     if presentation is not None:
         _require_sha(presentation_manifest_sha256, "presentation manifest pin")
@@ -3523,6 +3732,32 @@ def _planned_execution(
                 "runtime_proof": False,
             },
         })
+    if realism_r4_profile is not None:
+        r4_source_sha = _require_sha(
+            realism_r4_profile_sha256, "R4 realism profile pin"
+        )
+        r4_raw = canonical_json(realism_r4_profile)
+        if (
+            realism_r4_profile.get("schema_version") != REALISM_R4_PROFILE_SCHEMA
+            or realism_r4_profile.get("profile_id") != REALISM_R4_PROFILE_ID
+            or realism_r4_profile.get("content_digest")
+            != _content_digest(realism_r4_profile)
+        ):
+            _fail(
+                "VISTA_HOME_REALISM_R4_PROFILE_INVALID",
+                "R4 execution profile identity differs",
+            )
+        value["realism_r4_profile"] = {
+            "path": str(attempt / "contracts" / REALISM_R4_PROFILE_ATTEMPT_FILE),
+            "sha256": sha256_bytes(r4_raw),
+            "source_sha256": r4_source_sha,
+            "schema_version": REALISM_R4_PROFILE_SCHEMA,
+            "profile_id": REALISM_R4_PROFILE_ID,
+            "content_digest": realism_r4_profile["content_digest"],
+            "runtime_visual_acceptance": False,
+            "gta_quality_accepted": False,
+        }
+        value["realism_r4_composition"] = copy.deepcopy(dict(realism_r4_profile))
     if presentation is not None:
         value.update({
             "presentation_sources": {
@@ -3583,6 +3818,25 @@ def plan_build(config: BuildConfig, *, require_editor: bool = False) -> PlannedB
         )
     elif config.visual_profile_sha256 is not None:
         _fail("VISTA_HOME_BUILD_ARGUMENT_INVALID", "visual profile pin requires a profile path")
+    selected_r4_profile: dict[str, Any] | None = None
+    selected_r4_profile_raw: bytes | None = None
+    if config.realism_r4_profile is not None:
+        if config.realism_r4_profile_sha256 is None:
+            _fail(
+                "VISTA_HOME_BUILD_PIN_INVALID",
+                "R4 realism profile pin is required",
+            )
+        selected_r4_profile, selected_r4_profile_raw = validate_realism_r4_profile(
+            config.realism_r4_profile,
+            config.realism_r4_profile_sha256,
+            plan,
+            selected_profile,
+        )
+    elif config.realism_r4_profile_sha256 is not None:
+        _fail(
+            "VISTA_HOME_BUILD_ARGUMENT_INVALID",
+            "R4 realism profile pin requires a profile path",
+        )
     presentation_values = (
         config.presentation_manifest,
         config.presentation_manifest_sha256,
@@ -3682,6 +3936,8 @@ def plan_build(config: BuildConfig, *, require_editor: bool = False) -> PlannedB
         visual_profile=selected_profile,
         visual_profile_sha256=config.visual_profile_sha256,
         renderer_request=renderer_request,
+        realism_r4_profile=selected_r4_profile,
+        realism_r4_profile_sha256=config.realism_r4_profile_sha256,
         presentation=presentation,
         presentation_manifest_sha256=config.presentation_manifest_sha256,
         presentation_artifact_receipt_sha256=(
@@ -3790,6 +4046,22 @@ def plan_build(config: BuildConfig, *, require_editor: bool = False) -> PlannedB
             "content_digest": renderer_request["content_digest"],
             "status": "staged_runtime_observation_required",
             "runtime_proof": False,
+        }
+    if selected_r4_profile is not None:
+        report["inputs"]["realism_r4_profile"] = {
+            "path": str(config.realism_r4_profile),
+            "sha256": config.realism_r4_profile_sha256,
+            "schema_version": REALISM_R4_PROFILE_SCHEMA,
+            "profile_id": selected_r4_profile["profile_id"],
+            "content_digest": selected_r4_profile["content_digest"],
+        }
+        report["project"]["realism_r4"] = {
+            "fixture_light_pair_count": 6,
+            "room_count": 6,
+            "renderer_stack": "software_lumen_tsr_vsm",
+            "runtime_visual_acceptance": False,
+            "gta_quality_accepted": False,
+            "runtime_play_proof": "pending",
         }
     if presentation is not None:
         report["inputs"]["presentation_manifest"] = {
@@ -3908,6 +4180,8 @@ def plan_build(config: BuildConfig, *, require_editor: bool = False) -> PlannedB
         input_ini_raw=input_ini_raw,
         visual_profile=selected_profile,
         visual_profile_raw=selected_profile_raw,
+        realism_r4_profile=selected_r4_profile,
+        realism_r4_profile_raw=selected_r4_profile_raw,
         presentation=presentation,
         presentation_vulkan_icd=presentation_vulkan_icd,
         presentation_vulkan_icd_raw=presentation_vulkan_icd_raw,
@@ -4277,12 +4551,173 @@ def _verify_import_receipt(receipt: Mapping[str, Any], execution: Mapping[str, A
             )
 
 
+def _normalized_r4_number(value: Any) -> float:
+    rounded = round(float(value), 3)
+    return 0.0 if rounded == -0.0 else rounded
+
+
+def _normalized_r4_angle(value: Any) -> float:
+    return _normalized_r4_number((float(value) + 180.0) % 360.0 - 180.0)
+
+
+def _normalized_r4_transform(value: Mapping[str, Any]) -> dict[str, list[float]]:
+    return {
+        "location_cm": [_normalized_r4_number(item) for item in value["location_cm"]],
+        "rotation_deg": [_normalized_r4_angle(item) for item in value["rotation_deg"]],
+        "scale": [_normalized_r4_number(item) for item in value["scale"]],
+    }
+
+
+def _verify_realism_r4_observation(
+    observation: Any,
+    profile: Mapping[str, Any],
+) -> None:
+    observation_keys = {
+        "schema_version",
+        "profile_id",
+        "profile_content_digest",
+        "renderer_contract",
+        "fixture_light_pairs",
+        "post_process",
+        "claims",
+    }
+    if (
+        not isinstance(observation, Mapping)
+        or set(observation) != observation_keys
+        or observation.get("schema_version") != REALISM_R4_OBSERVATION_SCHEMA
+        or observation.get("profile_id") != profile["profile_id"]
+        or observation.get("profile_content_digest") != profile["content_digest"]
+        or observation.get("renderer_contract") != profile["renderer_contract"]
+        or observation.get("post_process") != profile["post_process"]
+        or observation.get("claims") != profile["claims"]
+    ):
+        _fail(
+            "VISTA_HOME_BUILD_RECEIPT_INVALID",
+            "R4 scene observation identity or policies differ",
+        )
+
+    source_pairs = {
+        pair["pair_id"]: pair for pair in profile["practical_fixture_light_pairs"]
+    }
+    observed_pairs = observation.get("fixture_light_pairs")
+    if (
+        len(source_pairs) != 6
+        or {pair["room_id"] for pair in source_pairs.values()} != REALISM_R4_ROOM_IDS
+        or not isinstance(observed_pairs, list)
+        or len(observed_pairs) != 6
+        or [item.get("pair_id") for item in observed_pairs] != sorted(source_pairs)
+    ):
+        _fail(
+            "VISTA_HOME_BUILD_RECEIPT_INVALID",
+            "R4 scene fixture/light pair inventory differs",
+        )
+
+    pair_keys = {"pair_id", "room_id", "fixture", "light"}
+    fixture_keys = {
+        "fixture_id",
+        "actor_path",
+        "actor_class_path",
+        "world_transform_cm",
+        "mesh_object_path",
+        "collision_profile",
+        "visible",
+        "cast_shadow",
+        "cast_hidden_shadow",
+    }
+    light_keys = {
+        "light_id",
+        "actor_path",
+        "actor_class_path",
+        "type",
+        "world_transform_cm",
+        "intensity",
+        "unit",
+        "use_temperature",
+        "temperature_k",
+        "attenuation_radius_cm",
+        "cast_shadow",
+    }
+    light_classes = {
+        "rect": "/Script/Engine.RectLight",
+        "spot": "/Script/Engine.SpotLight",
+    }
+    actor_paths: set[str] = set()
+    for observed in observed_pairs:
+        if not isinstance(observed, Mapping):
+            _fail(
+                "VISTA_HOME_BUILD_RECEIPT_INVALID",
+                "R4 scene fixture/light pair observation differs",
+            )
+        source = source_pairs.get(observed.get("pair_id"))
+        fixture = observed.get("fixture")
+        light = observed.get("light")
+        if (
+            set(observed) != pair_keys
+            or source is None
+            or observed.get("room_id") != source["room_id"]
+            or not isinstance(fixture, Mapping)
+            or set(fixture) != fixture_keys
+            or not isinstance(light, Mapping)
+            or set(light) != light_keys
+        ):
+            _fail(
+                "VISTA_HOME_BUILD_RECEIPT_INVALID",
+                "R4 scene fixture/light pair observation differs",
+            )
+        source_fixture = source["fixture"]
+        source_light = source["light"]
+        expected_fixture = {
+            "fixture_id": source_fixture["fixture_id"],
+            "actor_class_path": "/Script/Engine.StaticMeshActor",
+            "world_transform_cm": _normalized_r4_transform(source_fixture),
+            "mesh_object_path": source_fixture["mesh_object_path"],
+            "collision_profile": "NoCollision",
+            "visible": True,
+            "cast_shadow": source_fixture["cast_shadow"],
+            "cast_hidden_shadow": False,
+        }
+        expected_light = {
+            "light_id": source_light["light_id"],
+            "actor_class_path": light_classes[source_light["type"]],
+            "type": source_light["type"],
+            "world_transform_cm": _normalized_r4_transform(source_light),
+            "intensity": _normalized_r4_number(source_light["intensity"]),
+            "unit": source_light["unit"],
+            "use_temperature": True,
+            "temperature_k": _normalized_r4_number(source_light["temperature_k"]),
+            "attenuation_radius_cm": _normalized_r4_number(
+                source_light["attenuation_radius_cm"]
+            ),
+            "cast_shadow": source_light["cast_shadow"],
+        }
+        fixture_path = fixture.get("actor_path")
+        light_path = light.get("actor_path")
+        if (
+            {key: value for key, value in fixture.items() if key != "actor_path"}
+            != expected_fixture
+            or {key: value for key, value in light.items() if key != "actor_path"}
+            != expected_light
+            or not isinstance(fixture_path, str)
+            or not fixture_path
+            or not isinstance(light_path, str)
+            or not light_path
+            or fixture_path in actor_paths
+            or light_path in actor_paths
+        ):
+            _fail(
+                "VISTA_HOME_BUILD_RECEIPT_INVALID",
+                "R4 scene fixture/light pair observation differs",
+            )
+        actor_paths.update({fixture_path, light_path})
+
+
 def _verify_scene_receipt(
     receipt: Mapping[str, Any],
     execution: Mapping[str, Any],
     plan: Mapping[str, Any],
     import_sha256: str,
 ) -> None:
+    is_r4 = "realism_r4_composition" in execution
     expected_keys = {
         "schema_version",
         "status",
@@ -4293,14 +4728,15 @@ def _verify_scene_receipt(
         "actor_inventory",
         "gates",
     }
+    if is_r4:
+        expected_keys.add("realism_r4_observation")
     if (
         set(receipt) != expected_keys
         or receipt.get("content_namespace") != plan["unreal"]["content_namespace"]
         or receipt.get("map_path") != plan["unreal"]["map_path"]
     ):
         _fail("VISTA_HOME_BUILD_RECEIPT_INVALID", "scene receipt fields or revision paths differ")
-    gates = receipt.get("gates")
-    if gates != {
+    expected_gates = {
         "map_saved": True,
         "map_reloaded": True,
         "semantic_tags_verified": True,
@@ -4312,7 +4748,19 @@ def _verify_scene_receipt(
         "input_mappings_verified": True,
         "quarantined": False,
         "runtime_play_proof": "pending",
-    }:
+    }
+    if is_r4:
+        expected_gates.update(
+            {
+                "realism_r4_fixture_light_pairs_verified": True,
+                "realism_r4_restrained_post_process_verified": True,
+                "realism_r4_renderer_contract_preserved": True,
+                "human_visual_acceptance": "pending",
+                "gta_quality_accepted": False,
+            }
+        )
+    gates = receipt.get("gates")
+    if gates != expected_gates:
         _fail("VISTA_HOME_BUILD_RECEIPT_INVALID", "scene receipt gates did not pass")
     bindings = receipt.get("bindings")
     expected_binding_keys = {
@@ -4350,6 +4798,12 @@ def _verify_scene_receipt(
         _fail("VISTA_HOME_BUILD_RECEIPT_INVALID", "scene receipt pins differ")
     if not isinstance(receipt.get("actor_inventory"), list):
         _fail("VISTA_HOME_BUILD_RECEIPT_INVALID", "scene actor inventory is invalid")
+    if is_r4:
+        profile = execution["realism_r4_composition"]
+        _verify_realism_r4_observation(
+            receipt.get("realism_r4_observation"),
+            profile,
+        )
 
 
 def _presentation_object_path(namespace: str, target_asset_id: str) -> str:
@@ -4389,7 +4843,17 @@ def _presentation_import_schema(execution: Mapping[str, Any]) -> str:
     )
 
 
+def _scene_schema(execution: Mapping[str, Any]) -> str:
+    return (
+        REALISM_R4_SCENE_RECEIPT_SCHEMA
+        if "realism_r4_composition" in execution
+        else SCENE_RECEIPT_SCHEMA
+    )
+
+
 def _presentation_scene_schema(execution: Mapping[str, Any]) -> str:
+    if "realism_r4_composition" in execution:
+        return PRESENTATION_SCENE_RECEIPT_SCHEMA_V3
     return (
         PRESENTATION_SCENE_RECEIPT_SCHEMA_V2
         if _presentation_is_external(execution)
@@ -4594,6 +5058,7 @@ def _verify_presentation_scene_receipt(
     presentation_import_sha256: str,
 ) -> None:
     is_external = _presentation_is_external(execution)
+    is_r4 = "realism_r4_composition" in execution
     expected_keys = {
         "schema_version", "status", "error", "bindings", "content_namespace",
         "map_path", "room_observations", "gates",
@@ -4622,6 +5087,11 @@ def _verify_presentation_scene_receipt(
     if is_external:
         expected_gates["external_nanite_disabled_verified"] = True
         expected_gates["external_r1_semantic_visual_targets_verified"] = True
+    if is_r4:
+        expected_gates["visible_presentation_shadow_verified"] = True
+        expected_gates["hidden_collision_proxy_no_shadow_verified"] = True
+        expected_gates["human_visual_acceptance"] = "pending"
+        expected_gates["gta_quality_accepted"] = False
     if receipt.get("gates") != expected_gates:
         _fail(
             "VISTA_HOME_BUILD_RECEIPT_INVALID",
@@ -4690,6 +5160,15 @@ def _verify_presentation_scene_receipt(
             "external_content", "nanite_policy", "nanite_enabled",
             "r1_semantic_visual_observations",
         })
+    if is_r4:
+        observation_keys.update(
+            {
+                "presentation_cast_shadow",
+                "presentation_cast_hidden_shadow",
+                "r1_authority_cast_shadow",
+                "r1_authority_cast_hidden_shadow",
+            }
+        )
     entity_operations = {
         item["semantic_id"]: item
         for item in spec["operations"]
@@ -4762,6 +5241,15 @@ def _verify_presentation_scene_receipt(
             or observation.get("r1_authority_collision_profile") != "BlockAll"
             or observation.get("r1_authority_hidden_in_game") is not True
             or observation.get("r1_authority_component_visible") is not False
+            or (
+                is_r4
+                and (
+                    observation.get("presentation_cast_shadow") is not True
+                    or observation.get("presentation_cast_hidden_shadow") is not False
+                    or observation.get("r1_authority_cast_shadow") is not False
+                    or observation.get("r1_authority_cast_hidden_shadow") is not False
+                )
+            )
             or (
                 is_external
                 and (
@@ -5125,6 +5613,7 @@ def _materialize_inputs(planned: PlannedBuild, *, owner_token: str | None = None
     build_plan_target = contracts_dir / "build-plan.json"
     _write_exclusive(build_plan_target, planning.canonical_json(planned.plan))
     visual_profile_target: Path | None = None
+    realism_r4_profile_target: Path | None = None
     renderer_request_target: Path | None = None
     presentation_manifest_target: Path | None = None
     presentation_artifact_receipt_target: Path | None = None
@@ -5139,6 +5628,14 @@ def _materialize_inputs(planned: PlannedBuild, *, owner_token: str | None = None
         renderer_request_target = contracts_dir / RENDERER_REQUEST_ATTEMPT_FILE
         _write_exclusive(visual_profile_target, planned.visual_profile_raw)
         _write_exclusive(renderer_request_target, planned.renderer_request_raw)
+    if planned.realism_r4_profile is not None:
+        if planned.realism_r4_profile_raw is None:
+            _fail(
+                "VISTA_HOME_BUILD_EXECUTION_DRIFT",
+                "R4 plan lost its pinned profile bytes",
+            )
+        realism_r4_profile_target = contracts_dir / REALISM_R4_PROFILE_ATTEMPT_FILE
+        _write_exclusive(realism_r4_profile_target, planned.realism_r4_profile_raw)
     if planned.presentation is not None:
         presentation_manifest_target = (
             contracts_dir / PRESENTATION_MANIFEST_ATTEMPT_FILE
@@ -5223,7 +5720,7 @@ def _materialize_inputs(planned: PlannedBuild, *, owner_token: str | None = None
         ),
         presentation_bindings=contract_presentation_bindings,
     )
-    if external_presentation:
+    if external_presentation or planned.realism_r4_profile is not None:
         generated_value, generated_raw, generated_sha = _planned_execution(
             plan=planned.plan,
             attempt=attempt,
@@ -5233,10 +5730,10 @@ def _materialize_inputs(planned: PlannedBuild, *, owner_token: str | None = None
             visual_profile=planned.visual_profile,
             visual_profile_sha256=planned.config.visual_profile_sha256,
             renderer_request=planned.renderer_request,
+            realism_r4_profile=planned.realism_r4_profile,
+            realism_r4_profile_sha256=(planned.config.realism_r4_profile_sha256),
             presentation=planned.presentation,
-            presentation_manifest_sha256=(
-                planned.config.presentation_manifest_sha256
-            ),
+            presentation_manifest_sha256=(planned.config.presentation_manifest_sha256),
             presentation_artifact_receipt_sha256=(
                 planned.config.presentation_artifact_receipt_sha256
             ),
@@ -5274,6 +5771,18 @@ def _materialize_inputs(planned: PlannedBuild, *, owner_token: str | None = None
             ],
             "renderer_runtime_observation": "pending",
         })
+    if planned.realism_r4_profile is not None:
+        preparation.update(
+            {
+                "realism_r4_profile_sha256": (planned.config.realism_r4_profile_sha256),
+                "realism_r4_profile_content_digest": (
+                    planned.realism_r4_profile["content_digest"]
+                ),
+                "realism_r4_fixture_light_pair_count": 6,
+                "realism_r4_human_visual_acceptance": "pending",
+                "realism_r4_gta_quality_accepted": False,
+            }
+        )
     if planned.presentation is not None:
         preparation.update({
             "presentation_manifest_sha256": (
@@ -5435,7 +5944,7 @@ def apply_build(planned: PlannedBuild) -> dict[str, Any]:
         )
         scene_receipt, scene_sha = _load_receipt(
             scene_receipt_path,
-            SCENE_RECEIPT_SCHEMA,
+            _scene_schema(planned.execution),
             "saved_reloaded_candidate",
             "scene receipt",
         )
@@ -5530,6 +6039,23 @@ def apply_build(planned: PlannedBuild) -> dict[str, Any]:
                 ],
                 "renderer_runtime_observation": "pending",
             })
+        if planned.realism_r4_profile is not None:
+            result.update(
+                {
+                    "realism_r4_profile_id": (planned.realism_r4_profile["profile_id"]),
+                    "realism_r4_profile_sha256": (
+                        planned.config.realism_r4_profile_sha256
+                    ),
+                    "realism_r4_profile_content_digest": (
+                        planned.realism_r4_profile["content_digest"]
+                    ),
+                    "realism_r4_fixture_light_pairs_verified": True,
+                    "realism_r4_restrained_post_process_verified": True,
+                    "realism_r4_renderer_contract_preserved": True,
+                    "realism_r4_human_visual_acceptance": "pending",
+                    "realism_r4_gta_quality_accepted": False,
+                }
+            )
         if planned.presentation is not None:
             result.update({
                 "base_scene_receipt_sha256": scene_sha,
@@ -5630,6 +6156,18 @@ def _parser() -> argparse.ArgumentParser:
         help="expected lowercase SHA-256 for --visual-profile",
     )
     parser.add_argument(
+        "--realism-r4-profile",
+        type=Path,
+        help=(
+            "absolute path to the additive six-room R4 lighting, post-process, "
+            "and shadow profile"
+        ),
+    )
+    parser.add_argument(
+        "--realism-r4-profile-sha256",
+        help="expected lowercase SHA-256 for --realism-r4-profile",
+    )
+    parser.add_argument(
         "--presentation-manifest",
         type=Path,
         help="absolute normalized r2 forge manifest containing ue_import_bundles",
@@ -5692,6 +6230,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         visual_binding_manifest_sha256=args.visual_binding_manifest_sha256,
         visual_profile=args.visual_profile,
         visual_profile_sha256=args.visual_profile_sha256,
+        realism_r4_profile=args.realism_r4_profile,
+        realism_r4_profile_sha256=args.realism_r4_profile_sha256,
         presentation_manifest=args.presentation_manifest,
         presentation_manifest_sha256=args.presentation_manifest_sha256,
         presentation_artifact_receipt=args.presentation_artifact_receipt,
