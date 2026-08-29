@@ -3,7 +3,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import os
 import pathlib
 import struct
 import zlib
@@ -13,7 +12,41 @@ import pytest
 from tools.blender.vista_playable_home_r9_fixtures import forge
 
 
-def _fake_toolchain() -> dict:
+def _fake_authority(*, tree_sha256: str = "3" * 64) -> dict:
+    return {
+        "schema_version": forge.blender_authority.MANIFEST_SCHEMA_VERSION,
+        "source_archive": {
+            "official_url": forge.blender_authority.OFFICIAL_ARCHIVE_URL,
+            "sha256": forge.blender_authority.OFFICIAL_ARCHIVE_SHA256,
+            "size_bytes": forge.blender_authority.OFFICIAL_ARCHIVE_BYTES,
+        },
+        "authority_root": str(forge.DEFAULT_BLENDER_AUTHORITY_ROOT),
+        "distribution_root": str(forge.DEFAULT_BLENDER_DISTRIBUTION_ROOT),
+        "manifest": {
+            "path": str(forge.blender_authority.MANIFEST_PATH),
+            "sha256": "1" * 64,
+            "size_bytes": 4096,
+            "content_tree_sha256": "2" * 64,
+            "tree_sha256": tree_sha256,
+            "entry_count": 5626,
+        },
+        "blender": {
+            "path": str(forge.DEFAULT_BLENDER),
+            "sha256": forge.PINNED_BLENDER_SHA256,
+            "size_bytes": forge.PINNED_BLENDER_BYTES,
+        },
+        "wrapper_python": {
+            "path": str(
+                forge.DEFAULT_BLENDER_DISTRIBUTION_ROOT
+                / forge.blender_authority.WRAPPER_PYTHON_RELATIVE_PATH
+            ),
+            "sha256": "4" * 64,
+            "size_bytes": 8_000_000,
+        },
+    }
+
+
+def _fake_toolchain(**_: object) -> dict:
     return {
         "blender": {
             "path": str(forge.DEFAULT_BLENDER),
@@ -21,6 +54,8 @@ def _fake_toolchain() -> dict:
             "size_bytes": forge.PINNED_BLENDER_BYTES,
             "version": forge.PINNED_BLENDER_VERSION,
             "execution_device": "CPU",
+            "authority": _fake_authority(),
+            "execution_binding": "root_owned_distribution_fd_read_only",
         },
         "bubblewrap": {
             "path": str(forge.DEFAULT_BWRAP),
@@ -37,6 +72,7 @@ def _glb_bytes(
     *,
     root_overrides: dict | None = None,
     mesh_node_overrides: dict | None = None,
+    material_overrides: dict[int, dict] | None = None,
     scene_nodes: list[int] | None = None,
     **overrides: object,
 ) -> bytes:
@@ -49,6 +85,31 @@ def _glb_bytes(
     mesh_node = {"name": archetype["mesh_node_name"], "mesh": 0}
     root_node.update(root_overrides or {})
     mesh_node.update(mesh_node_overrides or {})
+    materials = []
+    for name, contract in zip(
+        archetype["material_names"], forge.load_recipe()["materials"], strict=True
+    ):
+        material = {
+            "name": name,
+            "pbrMetallicRoughness": {
+                "baseColorFactor": contract["base_color_rgba"],
+                "metallicFactor": contract["metallic"],
+                "roughnessFactor": contract["roughness"],
+            },
+            "extras": {
+                "vista_r9_alpha_mode": "OPAQUE",
+                "vista_r9_material_role": contract["role"],
+            },
+        }
+        emissive = [
+            contract["emission_color_rgba"][index] * contract["emission_strength"]
+            for index in range(3)
+        ]
+        if any(emissive):
+            material["emissiveFactor"] = emissive
+        materials.append(material)
+    for index, override in (material_overrides or {}).items():
+        materials[index].update(override)
     document = {
         "asset": {"version": "2.0", "generator": "fixture-test"},
         "scene": 0,
@@ -63,17 +124,7 @@ def _glb_bytes(
                 ],
             }
         ],
-        "materials": [
-            {
-                "name": name,
-                "pbrMetallicRoughness": {
-                    "baseColorFactor": [0.5, 0.5, 0.5, 1.0],
-                    "metallicFactor": 0.5,
-                    "roughnessFactor": 0.5,
-                },
-            }
-            for name in archetype["material_names"]
-        ],
+        "materials": materials,
         "accessors": [
             {
                 "bufferView": index,
@@ -231,6 +282,11 @@ def _write_artifact_fixture(
             "recipe": copy.deepcopy(plan["recipe"]),
             "builder_sources": copy.deepcopy(plan["builder_sources"]),
             "source_snapshot_content_digest": request["source_snapshot_content_digest"],
+            "output_root": plan["output_root"],
+            "toolchain": copy.deepcopy(plan["toolchain"]),
+            "archetypes": copy.deepcopy(plan["archetypes"]),
+            "ue_package_inventory": copy.deepcopy(plan["ue_package_inventory"]),
+            "execution_policy": copy.deepcopy(plan["execution_policy"]),
             "artifact_count": 3,
             "artifacts": worker_rows,
             "execution": {
@@ -269,8 +325,8 @@ def test_profile_and_recipe_are_exact_closed_sealed_documents() -> None:
     assert recipe["content_digest"] == forge.PINNED_RECIPE_CONTENT_DIGEST
     assert forge.file_pin(forge.PROFILE_PATH) == {
         "path": str(forge.PROFILE_PATH),
-        "sha256": "7805bb21089373991f94c025dde59e843bba76856c1ad2908da14e47e2f79ab9",
-        "size_bytes": 70265,
+        "sha256": "065782f443fd659a20d9a2ed5419403b2cf0faf04e336f05b11fc38528e999cb",
+        "size_bytes": 71082,
     }
     assert forge.file_pin(forge.RECIPE_PATH) == {
         "path": str(forge.RECIPE_PATH),
@@ -471,6 +527,13 @@ def test_dry_run_is_deterministic_and_zero_write(
     assert first["will_execute_blender_generation"] is False
     assert first["profile"]["relative_path"] == forge.PROFILE_RELATIVE_PATH.as_posix()
     assert first["recipe"]["relative_path"] == forge.RECIPE_RELATIVE_PATH.as_posix()
+    assert all(row["content_digest"] is not None for row in first["builder_sources"])
+    for row in first["builder_sources"]:
+        if row["relative_path"].endswith(".py"):
+            assert row["content_digest_kind"] == "raw_sha256"
+            assert row["content_digest"] == row["sha256"]
+        else:
+            assert row["content_digest_kind"] == "canonical_json_sha256"
     assert "path" not in first["profile"]
     assert "path" not in first["recipe"]
     assert str(forge.REPOSITORY_ROOT) not in json.dumps(first, sort_keys=True)
@@ -525,16 +588,26 @@ def test_cli_and_worker_command_offer_no_binary_script_asset_or_output_override(
     for option in ("--blender", "--worker", "--asset", "--output-root"):
         with pytest.raises(SystemExit):
             parser.parse_args([option, "untrusted"])
-    command = forge._worker_command(tmp_path / "attempt", blender_fd=17)
+    command = forge._worker_command(tmp_path / "attempt", distribution_fd=17)
     assert command[0] == str(forge.DEFAULT_BWRAP)
     assert "--unshare-net" in command
     assert "--unshare-pid" in command
     assert "--dev" in command
     assert str(forge.DEFAULT_BLENDER) in command
+    assert str(forge.DEFAULT_BLENDER_DISTRIBUTION_ROOT) in command
     assert "--ro-bind-fd" in command
     assert "17" in command
     assert str(forge.WORKER_PATH) not in command
     assert str(tmp_path / "attempt" / forge.SOURCE_SNAPSHOT_ROOT) in command
+    probe = forge._version_probe_command(distribution_fd=19)
+    assert probe[0] == str(forge.DEFAULT_BWRAP)
+    assert "--unshare-net" in probe
+    assert "--unshare-pid" in probe
+    assert "--dev" in probe
+    assert "--ro-bind-fd" in probe
+    assert "19" in probe
+    assert str(forge.DEFAULT_BLENDER_DISTRIBUTION_ROOT) in probe
+    assert probe[-2:] == [str(forge.DEFAULT_BLENDER), "--version"]
     environment = forge._subprocess_environment()
     assert environment["CUDA_VISIBLE_DEVICES"] == ""
     assert environment["HIP_VISIBLE_DEVICES"] == ""
@@ -544,32 +617,40 @@ def test_cli_and_worker_command_offer_no_binary_script_asset_or_output_override(
     assert environment["CYCLES_DEVICE"] == "CPU"
 
 
-def test_toolchain_snapshot_is_kernel_sealed_and_pre_execution_drift_fails(
-    tmp_path: pathlib.Path,
+def test_root_owned_authority_is_required_and_runtime_tree_drift_fails(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source = tmp_path / "toolchain"
-    original = b"pinned executable bytes"
-    source.write_bytes(original)
-    expected_sha256 = hashlib.sha256(original).hexdigest()
-    descriptor = forge._sealed_file_snapshot(
-        source,
-        expected_sha256=expected_sha256,
-        expected_size_bytes=len(original),
-    )
-    try:
-        assert os.pread(descriptor, len(original), 0) == original
-        with pytest.raises(OSError):
-            os.pwrite(descriptor, b"drift", 0)
-    finally:
-        os.close(descriptor)
-
-    source.write_bytes(b"replacement executable")
-    with pytest.raises(forge.FixtureForgeError, match="toolchain source drifted"):
-        forge._sealed_file_snapshot(
-            source,
-            expected_sha256=expected_sha256,
-            expected_size_bytes=len(original),
+    def unavailable() -> dict:
+        raise forge.blender_authority.BlenderAuthorityError(
+            "IMMUTABLE_BLENDER_AUTHORITY_REQUIRED", "not deployed"
         )
+
+    monkeypatch.setattr(forge.blender_authority, "audit_fixed_authority", unavailable)
+    with pytest.raises(
+        forge.FixtureForgeError,
+        match="FIXTURE_BLENDER_AUTHORITY_ADMIN_PREFLIGHT_REQUIRED",
+    ):
+        forge._audit_fixed_blender_authority()
+
+    for relative_name in ("lib/libOpenImageIO.so", "addons_core/io_scene_gltf2.py"):
+        runtime_member = tmp_path / relative_name
+        runtime_member.parent.mkdir(parents=True, exist_ok=True)
+        runtime_member.write_bytes(b"pinned runtime member")
+
+        def observed_authority(path: pathlib.Path = runtime_member) -> dict:
+            return _fake_authority(
+                tree_sha256=hashlib.sha256(path.read_bytes()).hexdigest()
+            )
+
+        monkeypatch.setattr(forge, "_audit_fixed_blender_authority", observed_authority)
+        expected = observed_authority()
+        runtime_member.write_bytes(b"mutated after authority pin")
+        with pytest.raises(
+            forge.FixtureForgeError, match="FIXTURE_BLENDER_AUTHORITY_DRIFT"
+        ):
+            forge._assert_blender_authority_current(
+                expected, phase=f"after {relative_name} pin"
+            )
 
 
 def test_glb_inspection_closes_structure_materials_and_bounds(
@@ -608,7 +689,7 @@ def test_glb_inspection_closes_structure_materials_and_bounds(
                 "extensionsUsed": ["KHR_lights_punctual"],
                 "extensions": {"KHR_lights_punctual": {"lights": []}},
             },
-            "lights",
+            "extensions",
         ),
     ),
 )
@@ -617,6 +698,70 @@ def test_glb_inspection_rejects_transform_hierarchy_animation_and_light_payloads
 ) -> None:
     archetype = forge.load_recipe()["archetypes"][2]
     path = tmp_path / "malicious.glb"
+    path.write_bytes(_glb_bytes(archetype, **payload))
+    with pytest.raises(forge.FixtureForgeError, match=message):
+        forge.inspect_glb(path, archetype)
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    (
+        ({"extensionsUsed": ["KHR_materials_unlit"]}, "extensions"),
+        (
+            {
+                "material_overrides": {
+                    0: {"extensions": {"EXT_vista_unknown": {"enabled": True}}}
+                }
+            },
+            "extension payload",
+        ),
+        (
+            {
+                "material_overrides": {
+                    0: {
+                        "pbrMetallicRoughness": {
+                            "baseColorFactor": [1.0, 0.0, 1.0, 1.0],
+                            "metallicFactor": 0.82,
+                            "roughnessFactor": 0.26,
+                        }
+                    }
+                }
+            },
+            "differs from recipe",
+        ),
+        (
+            {
+                "material_overrides": {
+                    1: {
+                        "pbrMetallicRoughness": {
+                            "baseColorFactor": [0.93, 0.88, 0.74, 1.0],
+                            "metallicFactor": 0.75,
+                            "roughnessFactor": 0.32,
+                        }
+                    }
+                }
+            },
+            "differs from recipe",
+        ),
+        (
+            {"material_overrides": {1: {"emissiveFactor": [0.0, 0.0, 0.0]}}},
+            "differs from recipe",
+        ),
+        (
+            {"material_overrides": {0: {"alphaMode": "BLEND"}}},
+            "alpha",
+        ),
+        (
+            {"material_overrides": {0: {"doubleSided": True}}},
+            "double_sided",
+        ),
+    ),
+)
+def test_glb_inspection_rejects_all_extensions_and_nonrecipe_materials(
+    tmp_path: pathlib.Path, payload: dict, message: str
+) -> None:
+    archetype = forge.load_recipe()["archetypes"][2]
+    path = tmp_path / "material-drift.glb"
     path.write_bytes(_glb_bytes(archetype, **payload))
     with pytest.raises(forge.FixtureForgeError, match=message):
         forge.inspect_glb(path, archetype)
@@ -668,13 +813,55 @@ def test_inventory_is_canonical_current_byte_closed_and_detects_drift(
     assert observed["ue_package_inventory"]["expected_package_count"] == 9
     assert all(value is False for value in observed["claims"].values())
 
-    for relative_path in ("forge-plan.json", "worker-result.json"):
+    for relative_path in (
+        "forge-plan.json",
+        "worker-request.json",
+        "worker-result.json",
+    ):
         document_path = output_root / relative_path
         original = document_path.read_bytes()
         document_path.write_bytes(original + b" ")
         with pytest.raises(forge.FixtureForgeError):
             forge.validate_fixture_inventory_file(inventory_path)
         document_path.write_bytes(original)
+
+    original_inventory_raw = inventory_path.read_bytes()
+    request_path = output_root / "worker-request.json"
+    original_request_raw = request_path.read_bytes()
+    mutated_request = forge.load_json(request_path)
+    mutated_request["output_root"] = str(output_root / "caller-selected")
+    mutated_request = forge.seal_document(mutated_request)
+    request_path.write_bytes(forge.canonical_json_bytes(mutated_request))
+    inventory_with_request_pin = copy.deepcopy(inventory)
+    inventory_with_request_pin["worker_request"] = forge._document_pin(
+        request_path, relative_path="worker-request.json"
+    )
+    inventory_with_request_pin = forge.seal_document(inventory_with_request_pin)
+    inventory_path.write_bytes(forge.canonical_json_bytes(inventory_with_request_pin))
+    with pytest.raises(forge.FixtureForgeError, match="request output root drifted"):
+        forge.validate_fixture_inventory_file(inventory_path)
+    request_path.write_bytes(original_request_raw)
+    inventory_path.write_bytes(original_inventory_raw)
+
+    worker_result_path = output_root / "worker-result.json"
+    original_worker_result_raw = worker_result_path.read_bytes()
+    mutated_worker_result = forge.load_json(worker_result_path)
+    mutated_worker_result["artifacts"][0]["glb_sha256"] = "0" * 64
+    mutated_worker_result = forge.seal_document(mutated_worker_result)
+    worker_result_path.write_bytes(forge.canonical_json_bytes(mutated_worker_result))
+    inventory_with_result_pin = copy.deepcopy(inventory)
+    inventory_with_result_pin["worker_result"] = forge._document_pin(
+        worker_result_path, relative_path="worker-result.json"
+    )
+    inventory_with_result_pin = forge.seal_document(inventory_with_result_pin)
+    inventory_path.write_bytes(forge.canonical_json_bytes(inventory_with_result_pin))
+    with pytest.raises(
+        forge.FixtureForgeError,
+        match="worker-result artifact row differs from current inventory bytes",
+    ):
+        forge.validate_fixture_inventory_file(inventory_path)
+    worker_result_path.write_bytes(original_worker_result_raw)
+    inventory_path.write_bytes(original_inventory_raw)
 
     snapshot_worker = output_root.joinpath(
         forge.SOURCE_SNAPSHOT_ROOT.as_posix(),
