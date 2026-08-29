@@ -1582,7 +1582,7 @@ def property_value(value: Any, name: str, label: str) -> Any:
 def property_or_none(value: Any, name: str) -> Any:
     try:
         return value.get_editor_property(name)
-    except Exception:
+    except Exception:  # noqa: BLE001 - Unreal reflection raises wrapper exceptions
         return None
 
 
@@ -1699,7 +1699,7 @@ def actor_hidden(actor: Any) -> bool:
 def actor_collision_enabled(actor: Any) -> bool:
     try:
         observed = actor.get_actor_enable_collision()
-    except Exception:
+    except Exception:  # noqa: BLE001 - Unreal reflection raises wrapper exceptions
         observed = property_or_none(actor, "actor_enable_collision")
     require(type(observed) is bool, "actor collision state unavailable")
     return observed
@@ -3422,8 +3422,8 @@ def validate_result_document(
         and preserved["reloaded_inventory"]
         == migration["preserved_non_hssd_actor_inventory"]
         and type(preserved["unchanged_actor_paths"]) is list
-        and len(preserved["unchanged_actor_paths"]) == 99
-        and len(set(preserved["unchanged_actor_paths"])) == 99,
+        and len(preserved["unchanged_actor_paths"])
+        == len(set(preserved["unchanged_actor_paths"])),
         "preserved non-HSSD evidence differs",
     )
     preserved_paths = {
@@ -3513,6 +3513,17 @@ def validate_result_document(
         and finish["r4_lights_before"] == finish["r4_lights_reloaded"]
         and finish["segments_after_save"] == finish["segments_reloaded"],
         "cold-reloaded finish evidence differs",
+    )
+    finish_owned_paths = {
+        row["actor_path"] for row in finish["architecture_before"]
+    } | {row["actor_path"] for row in finish["fixtures_before"]}
+    require(
+        len(finish_owned_paths) == 12
+        and finish_owned_paths.issubset(preserved_paths)
+        and len(preserved["unchanged_actor_paths"]) == 96
+        and set(preserved["unchanged_actor_paths"])
+        == preserved_paths - finish_owned_paths,
+        "finish-owned versus unchanged actor partition differs",
     )
     collision = require_keys(
         observations["collision"], COLLISION_OBSERVATION_KEYS, "collision observations"
@@ -3893,12 +3904,23 @@ def _compose(
         for row in preserved_rows
         if row["actor_path"] not in owned_paths
     )
+    preserved_paths = {row["actor_path"] for row in preserved_rows}
     require(
-        len(owned_paths) == 9 and len(unchanged_paths) == 99,
+        len(owned_paths) == 12
+        and owned_paths.issubset(preserved_paths)
+        and len(unchanged_paths) == 96
+        and set(unchanged_paths) == preserved_paths - owned_paths,
         "owned/unowned actor partition differs",
     )
     unchanged_before = _deep_observations(actors, unchanged_paths)
     dynamic_before = _dynamic_observations(actors, migration)
+    dynamic_actor_paths = {row["observation"]["actor_path"] for row in dynamic_before}
+    require(
+        len(dynamic_actor_paths) == 3
+        and dynamic_actor_paths.issubset(preserved_paths)
+        and dynamic_actor_paths.isdisjoint(owned_paths),
+        "dynamic pickup versus finish-owned actor partition differs",
+    )
     semantic_before = observe_static_semantic_proxies(actors, migration, profile)
 
     fixture_imports = import_fixture_assets(

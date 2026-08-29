@@ -272,7 +272,14 @@ def migration_fixture() -> dict:
     legacy_by_id[commandlet.DELETION_INSTANCE_ID] = _actor(
         "Legacy_phone", instance_id=commandlet.DELETION_INSTANCE_ID
     )
-    preserved = [_actor(f"Preserved_{index:03d}") for index in range(108)]
+    finish_owned = [
+        *[_actor(f"Architecture_{index:02d}") for index in range(6)],
+        *[_actor(f"Fixture_{index:02d}") for index in range(6)],
+    ]
+    preserved = sorted(
+        [*finish_owned, *[_actor(f"Preserved_{index:03d}") for index in range(96)]],
+        key=lambda row: row["actor_path"],
+    )
     semantic_ids = [*dynamic_ids, *static_ids[:16]]
     secondary_ids = static_ids[16:36]
     detail_ids = static_ids[36:]
@@ -468,12 +475,16 @@ def document_fixture() -> tuple[dict, dict, dict]:
                 ),
                 "material_object_paths": sorted(
                     [
-                        "/Game/VISTA/PlayableHome/vista_playable_home_r1/"
-                        f"R9Fixtures/{archetype_id}/M_{archetype_id}_A."
-                        f"M_{archetype_id}_A",
-                        "/Game/VISTA/PlayableHome/vista_playable_home_r1/"
-                        f"R9Fixtures/{archetype_id}/M_{archetype_id}_B."
-                        f"M_{archetype_id}_B",
+                        (
+                            "/Game/VISTA/PlayableHome/vista_playable_home_r1/"
+                            f"R9Fixtures/{archetype_id}/M_{archetype_id}_A."
+                            f"M_{archetype_id}_A"
+                        ),
+                        (
+                            "/Game/VISTA/PlayableHome/vista_playable_home_r1/"
+                            f"R9Fixtures/{archetype_id}/M_{archetype_id}_B."
+                            f"M_{archetype_id}_B"
+                        ),
                     ]
                 ),
                 "mesh_bounds_cm": {
@@ -533,6 +544,12 @@ def document_fixture() -> tuple[dict, dict, dict]:
         }
         for index in range(26)
     ]
+    finish_owned_paths = {row["actor_path"] for row in [*architecture, *fixtures]}
+    preserved_paths = {
+        row["actor_path"] for row in migration["preserved_non_hssd_actor_inventory"]
+    }
+    assert len(finish_owned_paths) == 12
+    assert finish_owned_paths.issubset(preserved_paths)
     policy_by_id = {
         row["instance_id"]: row["collision_policy"]
         for row in migration["collision"]["rows"]
@@ -592,10 +609,7 @@ def document_fixture() -> tuple[dict, dict, dict]:
             "reloaded_inventory": copy.deepcopy(
                 migration["preserved_non_hssd_actor_inventory"]
             ),
-            "unchanged_actor_paths": sorted(
-                row["actor_path"]
-                for row in migration["preserved_non_hssd_actor_inventory"][:99]
-            ),
+            "unchanged_actor_paths": sorted(preserved_paths - finish_owned_paths),
         },
         "fixture_imports": fixture_rows,
         "six_room_finish": {
