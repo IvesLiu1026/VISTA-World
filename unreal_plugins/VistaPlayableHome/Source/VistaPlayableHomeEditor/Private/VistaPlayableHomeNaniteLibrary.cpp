@@ -11,6 +11,7 @@
 #include "MaterialEditingLibrary.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "Policies/CondensedJsonPrintPolicy.h"
 #include "Serialization/JsonWriter.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
