@@ -10,9 +10,11 @@ mechanism.
 from __future__ import annotations
 
 import argparse
+import copy
 import fcntl
 import hashlib
 import json
+import math
 import os
 import re
 import signal
@@ -27,7 +29,11 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 
-COMBINED_RECEIPT_SCHEMA = "simworld.vista.human-visual-demo-combined-receipt/v2"
+COMBINED_RECEIPT_SCHEMA_V2 = "simworld.vista.human-visual-demo-combined-receipt/v2"
+COMBINED_RECEIPT_SCHEMA_V3 = "simworld.vista.human-visual-demo-combined-receipt/v3"
+# The legacy name remains the v2 value so existing producers and their emitted
+# bytes are unchanged.  V3 is an additive, explicitly selected receipt shape.
+COMBINED_RECEIPT_SCHEMA = COMBINED_RECEIPT_SCHEMA_V2
 COMBINED_RECEIPT_STATUS = "sealed_human_visual_demo_candidate"
 COMBINED_RECEIPT_NAME = "human-visual-demo-combined-receipt.json"
 COMBINED_RECEIPT_SIDECAR_NAME = COMBINED_RECEIPT_NAME + ".sha256"
@@ -76,6 +82,7 @@ RECEIPT_KEYS = frozenset(
         "content_digest",
     }
 )
+RECEIPT_V3_KEYS = RECEIPT_KEYS | {"realism_r4_upgrade"}
 ARTIFACT_KEYS = frozenset({"path", "sha256", "size_bytes"})
 MAP_KEYS = frozenset({"object_path", "package"})
 PROJECT_STATIC_TREE_KEYS = frozenset(
@@ -97,6 +104,301 @@ SOURCE_PROVENANCE_ARTIFACT_KEYS = (
     "hssd_host_receipt",
     "hssd_scene_receipt",
 )
+REALISM_R4_UPGRADE_SCHEMA = "simworld.vista.human-visual-demo-realism-r4-upgrade/v1"
+REALISM_R4_UPGRADE_STATUS = "realism_r4_map_saved_cold_reloaded"
+REALISM_R4_PROFILE_SCHEMA = "simworld.vista.playable-home-realism-r4/v1"
+REALISM_R4_PROFILE_ID = "realistic_interior_r4_lighting_shadows_v1"
+REALISM_R4_PROFILE_SHA256 = (
+    "887f50e7edd438c8d7952336b13cade5ef38970284093360e5f14521d6521139"
+)
+REALISM_R4_PROFILE_BYTES = 6_032
+REALISM_R4_PROFILE_CONTENT_DIGEST = (
+    "8df2d80cc9af526ad5cc1ff26af708642908fb9c77ba7e8b5e1ef3cf8149f090"
+)
+REALISM_R4_UPGRADE_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "parent_combined_receipt",
+        "source_map",
+        "source_project_static_tree",
+        "profile",
+        "profile_id",
+        "profile_content_digest",
+        "execution",
+        "result",
+        "materializer",
+        "commandlet",
+        "unreal_editor_cmd",
+        "build_version",
+        "map_object_path",
+        "output_project_static_tree",
+        "observations",
+        "acceptance",
+    }
+)
+REALISM_R4_OBSERVATIONS = {
+    "r2_practical_lights_removed": 3,
+    "r2_post_process_removed": 1,
+    "r4_fixture_light_pairs": 6,
+    "unrelated_actor_identities_preserved": True,
+    "visible_presentation_shadow_policy_applied": True,
+    "hidden_collision_proxy_no_shadow_policy_applied": True,
+    "only_map_static_artifact_changed": True,
+    "map_saved_and_cold_reloaded": True,
+    "renderer_contract_preserved": True,
+}
+REALISM_R4_ACCEPTANCE = {
+    "human_visual_acceptance": "pending",
+    "runtime_play_proof": "pending",
+}
+REALISM_R4_EXECUTION_SCHEMA = (
+    "simworld.vista.human-visual-demo-combined-realism-r4-execution/v1"
+)
+REALISM_R4_RESULT_SCHEMA = (
+    "simworld.vista.human-visual-demo-combined-realism-r4-result/v1"
+)
+REALISM_R4_EXECUTION_STATUS = "authorized_apply_request"
+REALISM_R4_EXECUTION_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "attempt_root",
+        "project",
+        "materializer",
+        "commandlet",
+        "profile",
+        "result",
+        "engine",
+        "map",
+        "parent_combined_receipt",
+        "source_project_static_tree",
+        "source_static_manifest",
+        "actor_contract",
+        "legal_scope",
+        "acknowledgements",
+        "claims",
+        "acceptance",
+        "content_digest",
+    }
+)
+REALISM_R4_RESULT_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "provider_id",
+        "human_operated_visual_demo_only",
+        "prohibited_agent_adapter",
+        "execution_sha256",
+        "profile",
+        "map_object_path",
+        "map_package",
+        "actor_inventory_before",
+        "actor_inventory_reloaded",
+        "removed_r2_actor_paths",
+        "r4_pair_observations_before_save",
+        "r4_pair_observations_reloaded",
+        "post_process_observation_before_save",
+        "post_process_observation_reloaded",
+        "shadow_observations_before_save",
+        "shadow_observations_reloaded",
+        "renderer_observation",
+        "legal_scope",
+        "claims",
+        "acceptance",
+        "gates",
+        "error",
+        "content_digest",
+    }
+)
+REALISM_R4_RESULT_GATE_KEYS = frozenset(
+    {
+        "fixed_map_loaded",
+        "source_actor_inventory_exact",
+        "exact_r2_removal_allowlist_matched",
+        "only_exact_r2_allowlist_destroyed",
+        "exact_six_fixture_light_pairs_spawned",
+        "restrained_post_process_spawned",
+        "visible_presentation_shadow_policy_applied",
+        "hidden_collision_proxy_no_shadow_policy_applied",
+        "unrelated_actor_identities_preserved",
+        "renderer_contract_preserved",
+        "map_saved",
+        "map_cold_reloaded",
+        "r4_actor_inventory_reloaded_exact",
+        "shadow_policy_reloaded_exact",
+        "only_map_static_artifact_changed",
+        "cold_reloaded_map_artifact_sealed",
+    }
+)
+REALISM_R4_ARTIFACT_KEYS = frozenset({"path", "sha256", "size_bytes"})
+REALISM_R4_EXECUTION_RESULT_KEYS = frozenset({"path", "sidecar_path"})
+REALISM_R4_ENGINE_KEYS = frozenset(
+    {"version", "unreal_editor_cmd", "build_version", "null_rhi"}
+)
+REALISM_R4_MAP_KEYS = frozenset({"object_path", "relative_path", "source_package"})
+REALISM_R4_ACTOR_CONTRACT_KEYS = frozenset(
+    {
+        "r2_removal_allowlist",
+        "visible_actor_role_allowlist",
+        "hidden_actor_role_allowlist",
+        "pickup_role",
+        "pickup_presentation_component",
+        "pickup_proxy_component",
+        "expected_source_counts",
+    }
+)
+REALISM_R4_R2_REMOVAL_ALLOWLIST = [
+    {
+        "kind": "practical_light",
+        "class_path": "/Script/Engine.SpotLight",
+        "semantic_id": "light.entry_hall.01",
+    },
+    {
+        "kind": "practical_light",
+        "class_path": "/Script/Engine.RectLight",
+        "semantic_id": "light.kitchen_dining.01",
+    },
+    {
+        "kind": "practical_light",
+        "class_path": "/Script/Engine.RectLight",
+        "semantic_id": "light.living_room.01",
+    },
+    {
+        "kind": "post_process",
+        "class_path": "/Script/Engine.PostProcessVolume",
+        "required_tags": [
+            "VistaExposureProfile=bounded_histogram",
+            "VistaLightingRig=neutral_day_practicals_v1",
+            "VistaRole=post_process",
+        ],
+    },
+]
+REALISM_R4_ACTOR_CONTRACT = {
+    "r2_removal_allowlist": REALISM_R4_R2_REMOVAL_ALLOWLIST,
+    "visible_actor_role_allowlist": ["hssd_visual_shell", "room"],
+    "hidden_actor_role_allowlist": ["room_collision_proxy"],
+    "pickup_role": "pickup",
+    "pickup_presentation_component": "PresentationMesh",
+    "pickup_proxy_component": "PickupMesh",
+    "expected_source_counts": {
+        "actors": 141,
+        "room_actors": 6,
+        "room_collision_proxies": 3,
+        "hssd_visual_shells": 42,
+        "pickup_actors": 8,
+        "pickup_presentations": 3,
+    },
+}
+REALISM_R4_ACKNOWLEDGEMENTS = {
+    "private_noncommercial_research": (
+        "I acknowledge City Sample and HSSD use is restricted to private "
+        "noncommercial research."
+    ),
+    "epic_ue_only_content_entitlement": (
+        "I confirm my Epic entitlement and UE-only use of City Sample content."
+    ),
+    "no_redistribution": (
+        "I acknowledge source UAssets and external asset payloads may not be "
+        "redistributed."
+    ),
+    "external_assets_outside_git": (
+        "I acknowledge every external asset payload remains outside Git."
+    ),
+    "large_combined_copy": (
+        "I authorize the isolated large HSSD and City Sample project copy."
+    ),
+    "metahuman_visual_demo_only": (
+        "I acknowledge City Sample and MetaHuman content is for a "
+        "human-operated visual demo only and is excluded from VISTA datasets, "
+        "databases, and AI/VLM training, testing, evaluation, and review."
+    ),
+    "hssd_attribution": (
+        "I acknowledge HSSD attribution is required and public payload "
+        "distribution is prohibited."
+    ),
+    "hssd_material_conflict": (
+        "I acknowledge inherited HSSD material conflicts remain nonpromotable."
+    ),
+    "sealed_r3_large_copy": (
+        "I authorize an isolated 9.15 GiB reflink or copy of the sealed R3 project."
+    ),
+}
+REALISM_R4_ACTOR_INVENTORY_KEYS = frozenset({"actor_path", "actor_class_path", "tags"})
+REALISM_R4_PAIR_OBSERVATION_KEYS = frozenset(
+    {
+        "pair_id",
+        "room_id",
+        "fixture_actor_path",
+        "fixture_class_path",
+        "fixture_mesh_object_path",
+        "fixture_transform",
+        "fixture_visible",
+        "fixture_cast_shadow",
+        "fixture_cast_hidden_shadow",
+        "fixture_collision_profile",
+        "light_actor_path",
+        "light_class_path",
+        "light_transform",
+        "light_intensity",
+        "light_temperature_k",
+        "light_attenuation_radius_cm",
+        "light_use_temperature",
+        "light_cast_shadow",
+        "light_intensity_units",
+    }
+)
+REALISM_R4_POST_OBSERVATION_KEYS = frozenset(
+    {
+        "actor_path",
+        "class_path",
+        "tags",
+        "unbound",
+        "priority",
+        "blend_weight",
+        "motion_blur_amount",
+        "chromatic_aberration_intensity",
+        "film_grain_intensity",
+        "bloom_intensity",
+        "vignette_intensity",
+        "auto_exposure_method_histogram",
+        "override_flags",
+        "exposure",
+    }
+)
+REALISM_R4_SHADOW_OBSERVATION_KEYS = frozenset(
+    {
+        "actor_path",
+        "actor_class_path",
+        "component_path",
+        "component_name",
+        "category",
+        "visible",
+        "cast_shadow",
+        "cast_hidden_shadow",
+    }
+)
+REALISM_R4_POST_OVERRIDE_FLAGS = frozenset(
+    {
+        "override_auto_exposure_method",
+        "override_auto_exposure_min_brightness",
+        "override_auto_exposure_max_brightness",
+        "override_auto_exposure_speed_up",
+        "override_auto_exposure_speed_down",
+        "override_motion_blur_amount",
+        "override_scene_fringe_intensity",
+        "override_grain_intensity",
+        "override_bloom_intensity",
+        "override_vignette_intensity",
+    }
+)
+REALISM_R4_SHADOW_CATEGORY_COUNTS = {
+    "room_visible": 3,
+    "room_proxy_hidden": 3,
+    "hssd_visible": 42,
+    "pickup_presentation_visible": 3,
+    "pickup_proxy_hidden": 3,
+}
 LEGAL_SCOPE = {
     "private_noncommercial_research_only": True,
     "epic_ue_only_content_entitlement_confirmed": True,
@@ -141,6 +443,8 @@ class HumanVisualDemoInputs:
     executable: ArtifactPin
     map_object_path: str
     map_package: ArtifactPin
+    receipt_schema_version: str
+    realism_r4_upgrade: Mapping[str, Any] | None
 
 
 def canonical_json(payload: Mapping[str, Any]) -> bytes:
@@ -531,6 +835,899 @@ def _validate_source_provenance(payload: Any) -> dict[str, Any]:
     return validated
 
 
+def _pin_document(pin: ArtifactPin) -> dict[str, Any]:
+    return {
+        "path": str(pin.path),
+        "sha256": pin.sha256,
+        "size_bytes": pin.size_bytes,
+    }
+
+
+def _validate_project_tree_shape(payload: Any, label: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError(f"{label} must be an object")
+    _require_exact_keys(payload, PROJECT_STATIC_TREE_KEYS, label)
+    if payload.get("algorithm") != PROJECT_STATIC_TREE_ALGORITHM:
+        raise HumanVisualDemoError(f"{label} algorithm differs")
+    for key in ("file_count", "total_bytes"):
+        value = payload.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise HumanVisualDemoError(f"{label} {key} is invalid")
+    tree_sha256 = payload.get("tree_sha256")
+    if not isinstance(tree_sha256, str) or not SHA256_RE.fullmatch(tree_sha256):
+        raise HumanVisualDemoError(f"{label} SHA-256 is invalid")
+    return dict(payload)
+
+
+def _validate_realism_r4_profile(
+    pin: ArtifactPin, upgrade: Mapping[str, Any]
+) -> dict[str, Any]:
+    if (
+        pin.path.name != "realism-r4-profile.json"
+        or pin.sha256 != REALISM_R4_PROFILE_SHA256
+        or pin.size_bytes != REALISM_R4_PROFILE_BYTES
+    ):
+        raise HumanVisualDemoError("R4 profile filename differs")
+    raw = _sealed_bytes(pin.path, "R4 profile", maximum_bytes=256 * 1024)
+    profile = _strict_json(raw)
+    if (
+        profile.get("schema_version") != REALISM_R4_PROFILE_SCHEMA
+        or profile.get("profile_id") != REALISM_R4_PROFILE_ID
+        or upgrade.get("profile_id") != REALISM_R4_PROFILE_ID
+    ):
+        raise HumanVisualDemoError("R4 profile identity differs")
+    observed_digest = content_digest(profile)
+    if (
+        profile.get("content_digest") != observed_digest
+        or observed_digest != REALISM_R4_PROFILE_CONTENT_DIGEST
+        or upgrade.get("profile_content_digest") != observed_digest
+    ):
+        raise HumanVisualDemoError("R4 profile content digest differs")
+    claims = profile.get("claims")
+    if claims != {
+        "runtime_visual_acceptance": False,
+        "gta_quality_accepted": False,
+        "runtime_play_proof": "pending",
+    }:
+        raise HumanVisualDemoError("R4 profile claim boundary differs")
+    pairs = profile.get("practical_fixture_light_pairs")
+    if (
+        not isinstance(pairs, list)
+        or len(pairs) != 6
+        or len({pair.get("pair_id") for pair in pairs if isinstance(pair, dict)}) != 6
+        or len({pair.get("room_id") for pair in pairs if isinstance(pair, dict)}) != 6
+    ):
+        raise HumanVisualDemoError("R4 profile pair inventory differs")
+    return profile
+
+
+def _strict_canonical_pinned_document(
+    pin: ArtifactPin,
+    label: str,
+    expected_keys: frozenset[str],
+) -> dict[str, Any]:
+    raw = _sealed_bytes(pin.path, label, maximum_bytes=MAX_RECEIPT_BYTES * 128)
+    if len(raw) != pin.size_bytes or hashlib.sha256(raw).hexdigest() != pin.sha256:
+        raise HumanVisualDemoError(f"{label} differs from its artifact pin")
+    payload = _strict_json(raw)
+    _require_exact_keys(payload, expected_keys, label)
+    if raw != canonical_json(payload):
+        raise HumanVisualDemoError(f"{label} is not canonical JSON")
+    if payload.get("content_digest") != content_digest(payload):
+        raise HumanVisualDemoError(f"{label} content digest differs")
+    return payload
+
+
+def _validate_r4_source_manifest(
+    payload: Any, expected_tree: Mapping[str, Any]
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(payload, dict) or not payload:
+        raise HumanVisualDemoError("R4 source static manifest must be an object")
+    digest = hashlib.sha256()
+    total_bytes = 0
+    validated: dict[str, dict[str, Any]] = {}
+    for relative, pin in sorted(
+        payload.items(), key=lambda item: item[0].encode("utf-8")
+    ):
+        pure = Path(relative)
+        if (
+            not isinstance(relative, str)
+            or not relative
+            or pure.is_absolute()
+            or any(part in {"", ".", ".."} for part in pure.parts)
+            or (
+                relative != "VistaPlayableHome.uproject"
+                and pure.parts[0] not in PROJECT_STATIC_ROOTS
+            )
+            or not isinstance(pin, dict)
+            or set(pin) != {"sha256", "size_bytes", "mode"}
+        ):
+            raise HumanVisualDemoError("R4 source static manifest entry differs")
+        sha256 = pin.get("sha256")
+        size_bytes = pin.get("size_bytes")
+        mode = pin.get("mode")
+        if (
+            not isinstance(sha256, str)
+            or not SHA256_RE.fullmatch(sha256)
+            or not isinstance(size_bytes, int)
+            or isinstance(size_bytes, bool)
+            or size_bytes < 0
+            or not isinstance(mode, int)
+            or isinstance(mode, bool)
+            or not 0 <= mode <= 0o7777
+            or mode & 0o022
+        ):
+            raise HumanVisualDemoError("R4 source static manifest pin differs")
+        validated[relative] = {
+            "sha256": sha256,
+            "size_bytes": size_bytes,
+            "mode": mode,
+        }
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(format(mode, "04o").encode("ascii"))
+        digest.update(b"\0")
+        digest.update(str(size_bytes).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(sha256.encode("ascii"))
+        digest.update(b"\n")
+        total_bytes += size_bytes
+    observed_tree = {
+        "algorithm": PROJECT_STATIC_TREE_ALGORITHM,
+        "file_count": len(validated),
+        "total_bytes": total_bytes,
+        "tree_sha256": digest.hexdigest(),
+    }
+    if observed_tree != expected_tree:
+        raise HumanVisualDemoError("R4 source manifest/tree cross-binding differs")
+    return validated
+
+
+def _validate_r4_execution(
+    pin: ArtifactPin,
+    *,
+    receipt_parent: Path,
+    project: ArtifactPin,
+    parent_inputs: HumanVisualDemoInputs,
+    upgrade: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    execution = _strict_canonical_pinned_document(
+        pin, "R4 execution", REALISM_R4_EXECUTION_KEYS
+    )
+    if (
+        execution.get("schema_version") != REALISM_R4_EXECUTION_SCHEMA
+        or execution.get("status") != REALISM_R4_EXECUTION_STATUS
+        or execution.get("attempt_root") != str(receipt_parent)
+        or execution.get("project") != _pin_document(project)
+        or execution.get("materializer") != upgrade.get("materializer")
+        or execution.get("commandlet") != upgrade.get("commandlet")
+        or execution.get("profile") != upgrade.get("profile")
+        or execution.get("parent_combined_receipt")
+        != upgrade.get("parent_combined_receipt")
+        or execution.get("source_project_static_tree")
+        != parent_inputs.project_static_tree
+        or execution.get("legal_scope") != LEGAL_SCOPE
+        or execution.get("claims") != CLAIMS
+        or execution.get("acceptance") != REALISM_R4_ACCEPTANCE
+        or execution.get("acknowledgements") != REALISM_R4_ACKNOWLEDGEMENTS
+        or execution.get("actor_contract") != REALISM_R4_ACTOR_CONTRACT
+    ):
+        raise HumanVisualDemoError("R4 execution cross-binding differs")
+    source_manifest = _validate_r4_source_manifest(
+        execution.get("source_static_manifest"), parent_inputs.project_static_tree
+    )
+    engine = execution.get("engine")
+    if not isinstance(engine, dict):
+        raise HumanVisualDemoError("R4 execution engine must be an object")
+    _require_exact_keys(engine, REALISM_R4_ENGINE_KEYS, "R4 execution engine")
+    if (
+        engine.get("version") != "5.7.3-50162420+++UE5+Release-5.7"
+        or engine.get("unreal_editor_cmd") != upgrade.get("unreal_editor_cmd")
+        or engine.get("build_version") != upgrade.get("build_version")
+        or engine.get("null_rhi") is not True
+    ):
+        raise HumanVisualDemoError("R4 execution toolchain differs")
+    map_payload = execution.get("map")
+    if not isinstance(map_payload, dict):
+        raise HumanVisualDemoError("R4 execution map must be an object")
+    _require_exact_keys(map_payload, REALISM_R4_MAP_KEYS, "R4 execution map")
+    source_package = map_payload.get("source_package")
+    expected_source_at_output = {
+        "path": str(
+            receipt_parent
+            / "project/Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/"
+            "VistaPlayableHome.umap"
+        ),
+        "sha256": parent_inputs.map_package.sha256,
+        "size_bytes": parent_inputs.map_package.size_bytes,
+    }
+    if (
+        map_payload.get("object_path") != parent_inputs.map_object_path
+        or map_payload.get("relative_path")
+        != "Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap"
+        or source_package != expected_source_at_output
+    ):
+        raise HumanVisualDemoError("R4 execution source map binding differs")
+    result_binding = execution.get("result")
+    if not isinstance(result_binding, dict):
+        raise HumanVisualDemoError("R4 execution result binding must be an object")
+    _require_exact_keys(
+        result_binding, REALISM_R4_EXECUTION_RESULT_KEYS, "R4 execution result binding"
+    )
+    if result_binding != {
+        "path": str(receipt_parent / "combined-realism-r4-result.json"),
+        "sidecar_path": str(receipt_parent / "combined-realism-r4-result.json.sha256"),
+    }:
+        raise HumanVisualDemoError("R4 execution result path differs")
+    return execution, source_manifest
+
+
+def _validate_actor_inventory(payload: Any, label: str) -> list[dict[str, Any]]:
+    if not isinstance(payload, list) or not payload:
+        raise HumanVisualDemoError(f"{label} must be a non-empty list")
+    validated = []
+    prior_path = ""
+    for row in payload:
+        if not isinstance(row, dict):
+            raise HumanVisualDemoError(f"{label} row must be an object")
+        _require_exact_keys(row, REALISM_R4_ACTOR_INVENTORY_KEYS, f"{label} row")
+        actor_path = row.get("actor_path")
+        class_path = row.get("actor_class_path")
+        tags = row.get("tags")
+        if (
+            not isinstance(actor_path, str)
+            or not actor_path.startswith("/Game/")
+            or actor_path <= prior_path
+            or not isinstance(class_path, str)
+            or not class_path.startswith("/Script/")
+            or not isinstance(tags, list)
+            or tags != sorted(tags)
+            or len(tags) != len(set(tags))
+            or any(not isinstance(tag, str) or not tag for tag in tags)
+        ):
+            raise HumanVisualDemoError(f"{label} row identity differs")
+        validated.append(copy.deepcopy(row))
+        prior_path = actor_path
+    return validated
+
+
+def _actor_roles(row: Mapping[str, Any]) -> set[str]:
+    return {tag.split("=", 1)[1] for tag in row["tags"] if tag.startswith("VistaRole=")}
+
+
+def _r2_removal_matches(
+    inventory: list[dict[str, Any]], contract: Mapping[str, Any]
+) -> list[dict[str, Any]]:
+    matches = []
+    for specification in contract["r2_removal_allowlist"]:
+        if specification["kind"] == "practical_light":
+            required = {
+                "VistaLightingRig=neutral_day_practicals_v1",
+                "VistaRole=lighting",
+                "VistaVisualRevision=realistic_interior_r2",
+                "VistaSemanticId=" + specification["semantic_id"],
+            }
+        else:
+            required = set(specification["required_tags"])
+        selected = [
+            row
+            for row in inventory
+            if row["actor_class_path"] == specification["class_path"]
+            and required.issubset(row["tags"])
+        ]
+        if len(selected) != 1:
+            raise HumanVisualDemoError("R4 result R2 removal identity differs")
+        matches.append(selected[0])
+    return matches
+
+
+def _validate_transform(payload: Any, label: str) -> dict[str, list[float]]:
+    if not isinstance(payload, dict) or set(payload) != {
+        "location_cm",
+        "rotation_deg",
+        "scale",
+    }:
+        raise HumanVisualDemoError(f"{label} transform differs")
+    result = {}
+    for key in ("location_cm", "rotation_deg", "scale"):
+        values = payload.get(key)
+        if (
+            not isinstance(values, list)
+            or len(values) != 3
+            or any(
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(float(value))
+                for value in values
+            )
+        ):
+            raise HumanVisualDemoError(f"{label} transform values differ")
+        result[key] = list(values)
+    return result
+
+
+def _profile_transform(payload: Mapping[str, Any]) -> dict[str, list[float]]:
+    return {
+        "location_cm": list(payload["location_cm"]),
+        "rotation_deg": [
+            ((float(value) + 180.0) % 360.0) - 180.0
+            for value in payload["rotation_deg"]
+        ],
+        "scale": list(payload["scale"]),
+    }
+
+
+def _transforms_equal(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
+    return all(
+        math.isclose(float(a), float(b), rel_tol=0.0, abs_tol=0.0001)
+        for key in ("location_cm", "rotation_deg", "scale")
+        for a, b in zip(left[key], right[key])
+    )
+
+
+def _number_equal(left: Any, right: Any, *, tolerance: float = 0.0001) -> bool:
+    return (
+        isinstance(left, (int, float))
+        and not isinstance(left, bool)
+        and isinstance(right, (int, float))
+        and not isinstance(right, bool)
+        and math.isfinite(float(left))
+        and math.isfinite(float(right))
+        and math.isclose(float(left), float(right), rel_tol=0.0, abs_tol=tolerance)
+    )
+
+
+def _project_static_manifest(project: Path) -> dict[str, dict[str, Any]]:
+    manifest: dict[str, dict[str, Any]] = {}
+    for relative, path, metadata in _static_tree_files(project):
+        sha256, size_bytes = _sha256_file(path, "R4 output static file")
+        manifest[relative] = {
+            "sha256": sha256,
+            "size_bytes": size_bytes,
+            "mode": stat.S_IMODE(metadata.st_mode),
+        }
+    return manifest
+
+
+def _validate_only_r4_map_changed(
+    source: Mapping[str, Mapping[str, Any]],
+    output: Mapping[str, Mapping[str, Any]],
+) -> None:
+    relative_map = (
+        "Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap"
+    )
+    if set(source) != set(output):
+        raise HumanVisualDemoError("R4 output static path inventory differs")
+    changed = sorted(
+        relative for relative in source if source[relative] != output[relative]
+    )
+    if (
+        changed != [relative_map]
+        or source[relative_map]["mode"] != output[relative_map]["mode"]
+        or source[relative_map]["sha256"] == output[relative_map]["sha256"]
+    ):
+        raise HumanVisualDemoError("R4 output changed something other than the map")
+
+
+def _validate_r4_pair_observations(
+    payload: Any,
+    *,
+    profile: Mapping[str, Any],
+    inventory: Mapping[str, Mapping[str, Any]],
+    label: str,
+) -> list[dict[str, Any]]:
+    pairs = sorted(
+        profile["practical_fixture_light_pairs"], key=lambda row: row["pair_id"]
+    )
+    if not isinstance(payload, list) or len(payload) != len(pairs):
+        raise HumanVisualDemoError(f"{label} pair inventory differs")
+    validated: list[dict[str, Any]] = []
+    fixture_paths: set[str] = set()
+    light_paths: set[str] = set()
+    expected_light_classes = {
+        "rect": "/Script/Engine.RectLight",
+        "spot": "/Script/Engine.SpotLight",
+    }
+    for row, specification in zip(payload, pairs):
+        if not isinstance(row, dict):
+            raise HumanVisualDemoError(f"{label} pair row must be an object")
+        _require_exact_keys(row, REALISM_R4_PAIR_OBSERVATION_KEYS, f"{label} pair row")
+        fixture = specification["fixture"]
+        light = specification["light"]
+        fixture_transform = _validate_transform(
+            row.get("fixture_transform"), f"{label} fixture"
+        )
+        light_transform = _validate_transform(
+            row.get("light_transform"), f"{label} light"
+        )
+        fixture_path = row.get("fixture_actor_path")
+        light_path = row.get("light_actor_path")
+        fixture_tags = sorted(
+            {
+                "VistaRole=practical_fixture",
+                "VistaRoom=" + specification["room_id"],
+                "VistaR4Pair=" + specification["pair_id"],
+                "VistaFixtureId=" + fixture["fixture_id"],
+                "VistaLightingRig=" + REALISM_R4_PROFILE_ID,
+            }
+        )
+        light_tags = sorted(
+            {
+                "VistaRole=lighting",
+                "VistaRoom=" + specification["room_id"],
+                "VistaR4Pair=" + specification["pair_id"],
+                "VistaPracticalLightId=" + light["light_id"],
+                "VistaFixtureId=" + fixture["fixture_id"],
+                "VistaLightingRig=" + REALISM_R4_PROFILE_ID,
+            }
+        )
+        if (
+            row.get("pair_id") != specification["pair_id"]
+            or row.get("room_id") != specification["room_id"]
+            or not isinstance(fixture_path, str)
+            or not isinstance(light_path, str)
+            or fixture_path in fixture_paths
+            or light_path in light_paths
+            or fixture_path not in inventory
+            or light_path not in inventory
+            or row.get("fixture_class_path") != "/Script/Engine.StaticMeshActor"
+            or inventory[fixture_path]
+            != {
+                "actor_path": fixture_path,
+                "actor_class_path": "/Script/Engine.StaticMeshActor",
+                "tags": fixture_tags,
+            }
+            or row.get("fixture_mesh_object_path") != fixture["mesh_object_path"]
+            or not _transforms_equal(fixture_transform, _profile_transform(fixture))
+            or row.get("fixture_visible") is not True
+            or row.get("fixture_cast_shadow") is not True
+            or row.get("fixture_cast_hidden_shadow") is not False
+            or row.get("fixture_collision_profile") != "NoCollision"
+            or row.get("light_class_path") != expected_light_classes.get(light["type"])
+            or inventory[light_path]
+            != {
+                "actor_path": light_path,
+                "actor_class_path": expected_light_classes.get(light["type"]),
+                "tags": light_tags,
+            }
+            or not _transforms_equal(light_transform, _profile_transform(light))
+            or not _number_equal(row.get("light_intensity"), light["intensity"])
+            or not _number_equal(row.get("light_temperature_k"), light["temperature_k"])
+            or not _number_equal(
+                row.get("light_attenuation_radius_cm"), light["attenuation_radius_cm"]
+            )
+            or row.get("light_use_temperature") is not True
+            or row.get("light_cast_shadow") is not True
+            or row.get("light_intensity_units") != light["unit"]
+            or light["unit"] != "lumens"
+        ):
+            raise HumanVisualDemoError(f"{label} pair evidence differs")
+        fixture_paths.add(fixture_path)
+        light_paths.add(light_path)
+        validated.append(copy.deepcopy(row))
+    return validated
+
+
+def _validate_r4_post_observation(
+    payload: Any,
+    *,
+    profile: Mapping[str, Any],
+    inventory: Mapping[str, Mapping[str, Any]],
+    label: str,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError(f"{label} post-process evidence must be an object")
+    _require_exact_keys(payload, REALISM_R4_POST_OBSERVATION_KEYS, label)
+    actor_path = payload.get("actor_path")
+    expected_tags = sorted(
+        {
+            "VistaRole=post_process",
+            "VistaLightingRig=" + REALISM_R4_PROFILE_ID,
+            "VistaExposureProfile=bounded_histogram",
+            "VistaRealismProfile=" + REALISM_R4_PROFILE_ID,
+        }
+    )
+    post = profile["post_process"]
+    exposure = post["exposure"]
+    observed_exposure = payload.get("exposure")
+    overrides = payload.get("override_flags")
+    if (
+        not isinstance(actor_path, str)
+        or actor_path not in inventory
+        or payload.get("class_path") != "/Script/Engine.PostProcessVolume"
+        or inventory[actor_path]
+        != {
+            "actor_path": actor_path,
+            "actor_class_path": "/Script/Engine.PostProcessVolume",
+            "tags": expected_tags,
+        }
+        or payload.get("tags") != expected_tags
+        or payload.get("unbound") is not True
+        or not _number_equal(payload.get("priority"), 100.0, tolerance=0.000001)
+        or not _number_equal(payload.get("blend_weight"), 1.0, tolerance=0.000001)
+        or any(
+            not _number_equal(payload.get(key), post[key], tolerance=0.000001)
+            for key in (
+                "motion_blur_amount",
+                "chromatic_aberration_intensity",
+                "film_grain_intensity",
+                "bloom_intensity",
+                "vignette_intensity",
+            )
+        )
+        or payload.get("auto_exposure_method_histogram") is not True
+        or not isinstance(overrides, dict)
+        or set(overrides) != REALISM_R4_POST_OVERRIDE_FLAGS
+        or any(value is not True for value in overrides.values())
+        or not isinstance(observed_exposure, dict)
+        or set(observed_exposure)
+        != {"min_ev100", "max_ev100", "speed_up", "speed_down"}
+        or any(
+            not _number_equal(
+                observed_exposure.get(key), exposure[key], tolerance=0.000001
+            )
+            for key in ("min_ev100", "max_ev100", "speed_up", "speed_down")
+        )
+        or exposure.get("metering_mode") != "histogram"
+    ):
+        raise HumanVisualDemoError(f"{label} post-process evidence differs")
+    return copy.deepcopy(payload)
+
+
+def _validate_r4_shadow_observations(
+    payload: Any,
+    *,
+    inventory: Mapping[str, Mapping[str, Any]],
+    label: str,
+) -> list[dict[str, Any]]:
+    if not isinstance(payload, list):
+        raise HumanVisualDemoError(f"{label} shadow evidence must be a list")
+    counts = {key: 0 for key in REALISM_R4_SHADOW_CATEGORY_COUNTS}
+    component_paths: set[str] = set()
+    validated: list[dict[str, Any]] = []
+    prior_identity: tuple[str, str] | None = None
+    for row in payload:
+        if not isinstance(row, dict):
+            raise HumanVisualDemoError(f"{label} shadow row must be an object")
+        _require_exact_keys(
+            row, REALISM_R4_SHADOW_OBSERVATION_KEYS, f"{label} shadow row"
+        )
+        category = row.get("category")
+        actor_path = row.get("actor_path")
+        component_path = row.get("component_path")
+        component_name = row.get("component_name")
+        identity = (actor_path, component_path)
+        actor = inventory.get(actor_path) if isinstance(actor_path, str) else None
+        roles = _actor_roles(actor) if actor is not None else set()
+        hidden = category in {"room_proxy_hidden", "pickup_proxy_hidden"}
+        role_valid = (
+            (
+                category == "room_visible"
+                and "room" in roles
+                and "room_collision_proxy" not in roles
+            )
+            or (
+                category == "room_proxy_hidden"
+                and {"room", "room_collision_proxy"}.issubset(roles)
+            )
+            or (category == "hssd_visible" and "hssd_visual_shell" in roles)
+            or (
+                category == "pickup_presentation_visible"
+                and "pickup" in roles
+                and component_name == "PresentationMesh"
+            )
+            or (
+                category == "pickup_proxy_hidden"
+                and "pickup" in roles
+                and component_name == "PickupMesh"
+            )
+        )
+        if (
+            category not in counts
+            or actor is None
+            or row.get("actor_class_path") != actor["actor_class_path"]
+            or not isinstance(component_path, str)
+            or not component_path
+            or component_path in component_paths
+            or prior_identity is not None
+            and identity <= prior_identity
+            or not isinstance(component_name, str)
+            or not component_name
+            or row.get("visible") is not (not hidden)
+            or row.get("cast_shadow") is not (not hidden)
+            or row.get("cast_hidden_shadow") is not False
+            or not role_valid
+        ):
+            raise HumanVisualDemoError(f"{label} shadow evidence differs")
+        counts[category] += 1
+        component_paths.add(component_path)
+        validated.append(copy.deepcopy(row))
+        prior_identity = identity
+    if counts != REALISM_R4_SHADOW_CATEGORY_COUNTS:
+        raise HumanVisualDemoError(f"{label} shadow category inventory differs")
+    return validated
+
+
+def _validate_r4_result(
+    pin: ArtifactPin,
+    *,
+    execution: Mapping[str, Any],
+    execution_sha256: str,
+    profile: Mapping[str, Any],
+    map_package: ArtifactPin,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    result = _strict_canonical_pinned_document(pin, "R4 result", REALISM_R4_RESULT_KEYS)
+    sidecar_path = Path(execution["result"]["sidecar_path"])
+    sidecar = _sealed_bytes(sidecar_path, "R4 result sidecar", maximum_bytes=256)
+    if sidecar != f"{pin.sha256}  {pin.path.name}\n".encode("ascii"):
+        raise HumanVisualDemoError("R4 result sidecar differs")
+    if (
+        result.get("schema_version") != REALISM_R4_RESULT_SCHEMA
+        or result.get("status") != REALISM_R4_UPGRADE_STATUS
+        or result.get("provider_id") != PROVIDER_ID
+        or result.get("human_operated_visual_demo_only") is not True
+        or result.get("prohibited_agent_adapter") is not True
+        or result.get("execution_sha256") != execution_sha256
+        or result.get("profile") != execution.get("profile")
+        or result.get("map_object_path") != execution["map"]["object_path"]
+        or result.get("map_package") != _pin_document(map_package)
+        or result.get("legal_scope") != LEGAL_SCOPE
+        or result.get("claims") != CLAIMS
+        or result.get("acceptance") != REALISM_R4_ACCEPTANCE
+        or result.get("error") is not None
+    ):
+        raise HumanVisualDemoError("R4 result identity or claim boundary differs")
+    gates = result.get("gates")
+    if (
+        not isinstance(gates, dict)
+        or set(gates) != REALISM_R4_RESULT_GATE_KEYS
+        or any(value is not True for value in gates.values())
+    ):
+        raise HumanVisualDemoError("R4 result gates differ")
+
+    before = _validate_actor_inventory(
+        result.get("actor_inventory_before"), "R4 source actor inventory"
+    )
+    reloaded = _validate_actor_inventory(
+        result.get("actor_inventory_reloaded"), "R4 reloaded actor inventory"
+    )
+    expected = REALISM_R4_ACTOR_CONTRACT["expected_source_counts"]
+    before_roles = [_actor_roles(row) for row in before]
+    if (
+        len(before) != expected["actors"]
+        or sum("room" in roles for roles in before_roles) != expected["room_actors"]
+        or sum("room_collision_proxy" in roles for roles in before_roles)
+        != expected["room_collision_proxies"]
+        or sum("hssd_visual_shell" in roles for roles in before_roles)
+        != expected["hssd_visual_shells"]
+        or sum("pickup" in roles for roles in before_roles) != expected["pickup_actors"]
+        or any(
+            "VistaLightingRig=" + REALISM_R4_PROFILE_ID in row["tags"]
+            or "VistaRole=practical_fixture" in row["tags"]
+            or any(tag.startswith("VistaR4Pair=") for tag in row["tags"])
+            for row in before
+        )
+    ):
+        raise HumanVisualDemoError("R4 source actor contract differs")
+    removal_matches = _r2_removal_matches(before, REALISM_R4_ACTOR_CONTRACT)
+    removal_paths = sorted(row["actor_path"] for row in removal_matches)
+    if result.get("removed_r2_actor_paths") != removal_paths:
+        raise HumanVisualDemoError("R4 removed actor evidence differs")
+    unrelated_before = [row for row in before if row["actor_path"] not in removal_paths]
+    rig_tag = "VistaLightingRig=" + REALISM_R4_PROFILE_ID
+    r4_rows = [row for row in reloaded if rig_tag in row["tags"]]
+    unrelated_reloaded = [row for row in reloaded if rig_tag not in row["tags"]]
+    if (
+        len(reloaded) != len(before) - 4 + 13
+        or len(r4_rows) != 13
+        or unrelated_reloaded != unrelated_before
+        or sum("VistaRole=practical_fixture" in row["tags"] for row in r4_rows) != 6
+        or sum("VistaRole=lighting" in row["tags"] for row in r4_rows) != 6
+        or sum("VistaRole=post_process" in row["tags"] for row in r4_rows) != 1
+    ):
+        raise HumanVisualDemoError("R4 reloaded actor inventory differs")
+    inventory = {row["actor_path"]: row for row in reloaded}
+    pairs_before = _validate_r4_pair_observations(
+        result.get("r4_pair_observations_before_save"),
+        profile=profile,
+        inventory=inventory,
+        label="R4 before-save",
+    )
+    pairs_reloaded = _validate_r4_pair_observations(
+        result.get("r4_pair_observations_reloaded"),
+        profile=profile,
+        inventory=inventory,
+        label="R4 cold-reloaded",
+    )
+    if pairs_reloaded != pairs_before:
+        raise HumanVisualDemoError("R4 pair evidence changed after cold reload")
+    post_before = _validate_r4_post_observation(
+        result.get("post_process_observation_before_save"),
+        profile=profile,
+        inventory=inventory,
+        label="R4 before-save",
+    )
+    post_reloaded = _validate_r4_post_observation(
+        result.get("post_process_observation_reloaded"),
+        profile=profile,
+        inventory=inventory,
+        label="R4 cold-reloaded",
+    )
+    if post_reloaded != post_before:
+        raise HumanVisualDemoError("R4 post-process evidence changed after cold reload")
+    shadows_before = _validate_r4_shadow_observations(
+        result.get("shadow_observations_before_save"),
+        inventory=inventory,
+        label="R4 before-save",
+    )
+    shadows_reloaded = _validate_r4_shadow_observations(
+        result.get("shadow_observations_reloaded"),
+        inventory=inventory,
+        label="R4 cold-reloaded",
+    )
+    if shadows_reloaded != shadows_before:
+        raise HumanVisualDemoError("R4 shadow evidence changed after cold reload")
+    renderer = result.get("renderer_observation")
+    if renderer != {
+        "contract": profile["renderer_contract"],
+        "force_no_precomputed_lighting": True,
+        "configuration_mutation_requested": False,
+        "null_rhi_visual_proof": False,
+    }:
+        raise HumanVisualDemoError("R4 renderer observation differs")
+    observations = {
+        "r2_practical_lights_removed": 3,
+        "r2_post_process_removed": 1,
+        "r4_fixture_light_pairs": len(pairs_reloaded),
+        "unrelated_actor_identities_preserved": gates[
+            "unrelated_actor_identities_preserved"
+        ],
+        "visible_presentation_shadow_policy_applied": gates[
+            "visible_presentation_shadow_policy_applied"
+        ],
+        "hidden_collision_proxy_no_shadow_policy_applied": gates[
+            "hidden_collision_proxy_no_shadow_policy_applied"
+        ],
+        "only_map_static_artifact_changed": gates["only_map_static_artifact_changed"],
+        "map_saved_and_cold_reloaded": gates["map_saved"]
+        and gates["map_cold_reloaded"],
+        "renderer_contract_preserved": gates["renderer_contract_preserved"],
+    }
+    return result, observations
+
+
+def _validate_realism_r4_upgrade(
+    payload: Any,
+    *,
+    receipt_parent: Path,
+    project: ArtifactPin,
+    project_static_tree: Mapping[str, Any],
+    map_object_path: str,
+    map_package: ArtifactPin,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise HumanVisualDemoError("R4 upgrade provenance must be an object")
+    _require_exact_keys(payload, REALISM_R4_UPGRADE_KEYS, "R4 upgrade provenance")
+    if (
+        payload.get("schema_version") != REALISM_R4_UPGRADE_SCHEMA
+        or payload.get("status") != REALISM_R4_UPGRADE_STATUS
+        or payload.get("map_object_path") != map_object_path
+        or project.path != receipt_parent / "project" / "VistaPlayableHome.uproject"
+    ):
+        raise HumanVisualDemoError("R4 upgrade identity differs")
+
+    local_names = {
+        "profile": "realism-r4-profile.json",
+        "execution": "combined-realism-r4-execution.json",
+        "result": "combined-realism-r4-result.json",
+        "materializer": "materialize_combined_realism_r4.py",
+        "commandlet": "compose_combined_realism_r4_commandlet.py",
+    }
+    validated: dict[str, Any] = {
+        "schema_version": REALISM_R4_UPGRADE_SCHEMA,
+        "status": REALISM_R4_UPGRADE_STATUS,
+    }
+    local_pins: dict[str, ArtifactPin] = {}
+    for key, filename in local_names.items():
+        pin = _artifact_pin(payload.get(key), "R4 " + key)
+        if pin.path != receipt_parent / filename:
+            raise HumanVisualDemoError(f"R4 {key} binding differs")
+        local_pins[key] = pin
+        validated[key] = _pin_document(pin)
+
+    unreal_editor_cmd = _artifact_pin(
+        payload.get("unreal_editor_cmd"), "R4 UnrealEditor-Cmd", executable=True
+    )
+    if unreal_editor_cmd.path.name != "UnrealEditor-Cmd":
+        raise HumanVisualDemoError("R4 UnrealEditor-Cmd identity differs")
+    build_version = _artifact_pin(payload.get("build_version"), "R4 Build.version")
+    if build_version.path.name != "Build.version":
+        raise HumanVisualDemoError("R4 Build.version identity differs")
+    validated["unreal_editor_cmd"] = _pin_document(unreal_editor_cmd)
+    validated["build_version"] = _pin_document(build_version)
+
+    parent_pin = _artifact_pin(
+        payload.get("parent_combined_receipt"), "R4 parent combined receipt"
+    )
+    if parent_pin.path.name != COMBINED_RECEIPT_NAME:
+        raise HumanVisualDemoError("R4 parent receipt filename differs")
+    parent_inputs = load_combined_receipt(parent_pin.path)
+    if (
+        parent_inputs.receipt_schema_version != COMBINED_RECEIPT_SCHEMA_V2
+        or parent_inputs.receipt_sha256 != parent_pin.sha256
+        or parent_inputs.receipt == receipt_parent / COMBINED_RECEIPT_NAME
+    ):
+        raise HumanVisualDemoError("R4 parent receipt binding differs")
+    validated["parent_combined_receipt"] = _pin_document(parent_pin)
+
+    source_map = _artifact_pin(payload.get("source_map"), "R4 source map")
+    if source_map != parent_inputs.map_package:
+        raise HumanVisualDemoError("R4 source map differs from parent receipt")
+    validated["source_map"] = _pin_document(source_map)
+    try:
+        source_map_metadata = os.stat(source_map.path, follow_symlinks=False)
+        output_map_metadata = os.stat(map_package.path, follow_symlinks=False)
+    except OSError as exc:
+        raise HumanVisualDemoError(
+            "R4 source/output map identity is unavailable"
+        ) from exc
+    if (
+        source_map.path == map_package.path
+        or (source_map_metadata.st_dev, source_map_metadata.st_ino)
+        == (output_map_metadata.st_dev, output_map_metadata.st_ino)
+        or source_map.sha256 == map_package.sha256
+    ):
+        raise HumanVisualDemoError("R4 output map aliases or duplicates its parent map")
+
+    source_tree = _validate_project_tree_shape(
+        payload.get("source_project_static_tree"), "R4 source project static tree"
+    )
+    output_tree = _validate_project_tree_shape(
+        payload.get("output_project_static_tree"), "R4 output project static tree"
+    )
+    if source_tree != parent_inputs.project_static_tree:
+        raise HumanVisualDemoError("R4 source project tree differs from parent receipt")
+    if output_tree != project_static_tree:
+        raise HumanVisualDemoError("R4 output project tree differs from receipt")
+    validated["source_project_static_tree"] = source_tree
+    validated["output_project_static_tree"] = output_tree
+
+    profile = _validate_realism_r4_profile(local_pins["profile"], payload)
+    validated["profile_id"] = REALISM_R4_PROFILE_ID
+    validated["profile_content_digest"] = REALISM_R4_PROFILE_CONTENT_DIGEST
+    execution, source_manifest = _validate_r4_execution(
+        local_pins["execution"],
+        receipt_parent=receipt_parent,
+        project=project,
+        parent_inputs=parent_inputs,
+        upgrade=payload,
+    )
+    if execution["result"]["path"] != str(local_pins["result"].path):
+        raise HumanVisualDemoError("R4 execution/result path cross-binding differs")
+    _result, observations = _validate_r4_result(
+        local_pins["result"],
+        execution=execution,
+        execution_sha256=local_pins["execution"].sha256,
+        profile=profile,
+        map_package=map_package,
+    )
+    output_manifest = _project_static_manifest(project.path)
+    _validate_only_r4_map_changed(source_manifest, output_manifest)
+    if (
+        payload.get("observations") != observations
+        or observations != REALISM_R4_OBSERVATIONS
+    ):
+        raise HumanVisualDemoError("R4 upgrade observations differ")
+    if payload.get("acceptance") != REALISM_R4_ACCEPTANCE:
+        raise HumanVisualDemoError("R4 acceptance boundary differs")
+    validated["map_object_path"] = map_object_path
+    validated["observations"] = copy.deepcopy(observations)
+    validated["acceptance"] = dict(REALISM_R4_ACCEPTANCE)
+    if validated != payload:
+        raise HumanVisualDemoError("R4 upgrade provenance differs after validation")
+    return validated
+
+
 def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
     if receipt_path.name != COMBINED_RECEIPT_NAME:
         raise HumanVisualDemoError(
@@ -550,11 +1747,15 @@ def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
         raise HumanVisualDemoError("combined receipt sidecar differs")
 
     receipt = _strict_json(raw)
-    _require_exact_keys(receipt, RECEIPT_KEYS, "combined receipt")
+    receipt_schema = receipt.get("schema_version")
+    if receipt_schema == COMBINED_RECEIPT_SCHEMA_V2:
+        _require_exact_keys(receipt, RECEIPT_KEYS, "combined receipt")
+    elif receipt_schema == COMBINED_RECEIPT_SCHEMA_V3:
+        _require_exact_keys(receipt, RECEIPT_V3_KEYS, "combined receipt")
+    else:
+        raise HumanVisualDemoError("combined receipt schema differs")
     if raw != canonical_json(receipt):
         raise HumanVisualDemoError("combined receipt is not canonical JSON")
-    if receipt.get("schema_version") != COMBINED_RECEIPT_SCHEMA:
-        raise HumanVisualDemoError("combined receipt schema differs")
     if receipt.get("status") != COMBINED_RECEIPT_STATUS:
         raise HumanVisualDemoError("combined receipt status differs")
     if receipt.get("provider_id") != PROVIDER_ID:
@@ -597,6 +1798,17 @@ def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
     if map_package.path != expected_map:
         raise HumanVisualDemoError("map package is not the receipt-pinned project map")
 
+    realism_r4_upgrade = None
+    if receipt_schema == COMBINED_RECEIPT_SCHEMA_V3:
+        realism_r4_upgrade = _validate_realism_r4_upgrade(
+            receipt.get("realism_r4_upgrade"),
+            receipt_parent=receipt_path.parent,
+            project=project,
+            project_static_tree=project_static_tree,
+            map_object_path=map_object_path,
+            map_package=map_package,
+        )
+
     return HumanVisualDemoInputs(
         receipt=receipt_path,
         receipt_sha256=receipt_sha256,
@@ -607,6 +1819,8 @@ def load_combined_receipt(receipt_path: Path) -> HumanVisualDemoInputs:
         executable=executable_pin,
         map_object_path=map_object_path,
         map_package=map_package,
+        receipt_schema_version=receipt_schema,
+        realism_r4_upgrade=realism_r4_upgrade,
     )
 
 
