@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -216,6 +217,8 @@ class ClosedFixture:
             map_package=source_lane.ArtifactPin(
                 map_package, _sha(map_package), map_package.stat().st_size
             ),
+            receipt_schema_version=source_lane.COMBINED_RECEIPT_SCHEMA_V2,
+            realism_r4_upgrade=None,
         )
         monkeypatch.setattr(
             package.source_lane, "load_combined_receipt", lambda _path: self.source
@@ -675,6 +678,26 @@ def test_plan_is_zero_write_and_rehashes_bwrap(
         projections["seed_manifest_rederived_before_seed_and_capture_acceptance"]
         is True
     )
+
+
+def test_sealed_r3_package_lane_refuses_r4_receipt_shape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = ClosedFixture(tmp_path, monkeypatch)
+    r4_shaped = dataclasses.replace(
+        fixture.source,
+        receipt_schema_version=source_lane.COMBINED_RECEIPT_SCHEMA_V3,
+        realism_r4_upgrade={},
+    )
+    monkeypatch.setattr(
+        package.source_lane, "load_combined_receipt", lambda _path: r4_shaped
+    )
+
+    with pytest.raises(
+        package.HumanVisualPackageError, match="SOURCE_RECEIPT_PIN_MISMATCH"
+    ):
+        fixture.fresh_inputs()
+    assert not fixture.attempt.exists()
 
 
 def test_real_niagara_python_dependency_conflicts_with_denylist(
