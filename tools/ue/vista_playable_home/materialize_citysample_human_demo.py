@@ -1650,6 +1650,44 @@ def _assert_source_stability(prepared: PreparedPlan) -> None:
     )
 
 
+def _assert_project_topology(
+    observed: tree_io.TreeSnapshot, projection: ProjectProjection
+) -> None:
+    """Validate the immutable project topology after the UE commandlet.
+
+    Unreal may create empty project-root cache directories even when HOME,
+    UserDir, and the DDC payload are redirected outside the project.  Those
+    roots are deliberately excluded from the launcher's static-tree seal, so
+    tolerate only real, private, empty directories below those fixed roots.
+    Files below a mutable root still fail closed at publication.
+
+    The map package is the one permitted mutable static file.  Its terminal
+    SHA-256 and size are validated later against the cold-reload result, so the
+    pre-commandlet aggregate byte count is not an invariant.
+    """
+
+    mutable_files = tuple(
+        record.relative_path
+        for record in observed.files
+        if pathlib.PurePosixPath(record.relative_path).parts[0] in MUTABLE_PROJECT_ROOTS
+    )
+    _require(
+        not mutable_files,
+        "combined output mutable project root contains a file",
+    )
+    static_directories = tuple(
+        relative
+        for relative in observed.directories
+        if relative == "."
+        or pathlib.PurePosixPath(relative).parts[0] not in MUTABLE_PROJECT_ROOTS
+    )
+    _require(
+        static_directories == projection.directories
+        and len(observed.files) == projection.file_count,
+        "combined output project topology differs",
+    )
+
+
 def _assert_output(
     prepared: PreparedPlan, terminal_map: Mapping[str, Any]
 ) -> tree_io.TreeSnapshot:
@@ -1657,12 +1695,7 @@ def _assert_output(
     observed = tree_io.snapshot_tree(
         project, "combined output project", require_private_modes=True
     )
-    _require(
-        observed.directories == prepared.projection.directories
-        and len(observed.files) == prepared.projection.file_count
-        and observed.total_bytes >= prepared.projection.total_bytes,
-        "combined output project topology differs",
-    )
+    _assert_project_topology(observed, prepared.projection)
     descriptor = project / PROJECT_NAME
     _require(
         descriptor.read_bytes() == _project_document_raw(),
@@ -1742,6 +1775,12 @@ def _assert_output(
             "size_bytes": map_record.size_bytes,
         },
         "output map differs from the commandlet terminal seal",
+    )
+    source_map_size = expected_files[MAP_RELATIVE_PATH.as_posix()][0]
+    _require(
+        observed.total_bytes
+        == prepared.projection.total_bytes - source_map_size + map_record.size_bytes,
+        "combined output byte total differs after the sealed map rewrite",
     )
     _require(
         expected.sha256 == prepared.projection.sha256,

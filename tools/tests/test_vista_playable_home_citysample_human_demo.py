@@ -685,6 +685,81 @@ def test_launcher_static_tree_algorithm_matches_exact_record_definition(
     }
 
 
+def test_output_topology_allows_only_empty_mutable_cache_directories() -> None:
+    projection = demo.ProjectProjection(
+        directories=(".", "Config", "Content"),
+        file_count=2,
+        total_bytes=1_000,
+        sha256="0" * 64,
+    )
+    observed = types.SimpleNamespace(
+        directories=(
+            ".",
+            "Config",
+            "Content",
+            "DerivedDataCache",
+            "DerivedDataCache/VT",
+        ),
+        files=(
+            types.SimpleNamespace(relative_path=demo.PROJECT_NAME),
+            types.SimpleNamespace(relative_path=demo.MAP_RELATIVE_PATH.as_posix()),
+        ),
+        # A saved map may be smaller than the source map.  Its exact terminal
+        # pin is checked by _assert_output after this topology precondition.
+        total_bytes=150,
+    )
+
+    demo._assert_project_topology(observed, projection)
+
+
+@pytest.mark.parametrize(
+    ("directories", "files", "message"),
+    [
+        (
+            (".", "Config", "Content", "Unexpected"),
+            (demo.PROJECT_NAME, demo.MAP_RELATIVE_PATH.as_posix()),
+            "topology differs",
+        ),
+        (
+            (".", "Config", "Content", "DerivedDataCacheEvil"),
+            (demo.PROJECT_NAME, demo.MAP_RELATIVE_PATH.as_posix()),
+            "topology differs",
+        ),
+        (
+            (".", "Config"),
+            (demo.PROJECT_NAME, demo.MAP_RELATIVE_PATH.as_posix()),
+            "topology differs",
+        ),
+        (
+            (".", "Config", "Content", "DerivedDataCache"),
+            (
+                demo.PROJECT_NAME,
+                demo.MAP_RELATIVE_PATH.as_posix(),
+                "DerivedDataCache/cache.bin",
+            ),
+            "mutable project root contains a file",
+        ),
+    ],
+)
+def test_output_topology_rejects_unprojected_static_entries_or_mutable_files(
+    directories: tuple[str, ...], files: tuple[str, ...], message: str
+) -> None:
+    projection = demo.ProjectProjection(
+        directories=(".", "Config", "Content"),
+        file_count=2,
+        total_bytes=100,
+        sha256="0" * 64,
+    )
+    observed = types.SimpleNamespace(
+        directories=directories,
+        files=tuple(types.SimpleNamespace(relative_path=value) for value in files),
+        total_bytes=100,
+    )
+
+    with pytest.raises(demo.DemoMaterializerError, match=message):
+        demo._assert_project_topology(observed, projection)
+
+
 def test_published_v2_receipt_is_consumed_by_launcher_without_adapter(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
