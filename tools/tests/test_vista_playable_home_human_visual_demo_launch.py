@@ -126,6 +126,13 @@ def test_command_and_environment_are_human_only_closed_and_non_networked(
     assert "-VistaHumanOperatedVisualDemo" in command
     assert f"-VistaCharacterProvider={launcher.PROVIDER_ID}" in command
     assert "-graphicsadapter=0" in command
+    assert "-ddc=InstalledNoZenLocalFallback" in command
+    assert "-SaveToUserDir" in command
+    assert "-NOSOUND" in command
+    assert (
+        "-ini:Engine:[/Script/AppleARKit.AppleARKitSettings]:"
+        "bEnableLiveLinkForFaceTracking=False"
+    ) in command
     assert "vistaworldport" not in rendered
     assert "pixelstreaming" not in rendered
     assert "token" not in rendered
@@ -185,6 +192,8 @@ def test_default_cli_is_zero_write_dry_run_and_has_no_launch_side_effect(
         "extra_ue_arguments": False,
         "vista_agent_tcp_listener_requested": False,
         "network_readiness_probe": False,
+        "local_zen_autolaunch_disabled": True,
+        "apple_arkit_livelink_disabled": True,
         "agent_runtime_invoked": False,
         "human_operated_visual_demo_only": True,
         "prohibited_agent_adapter": True,
