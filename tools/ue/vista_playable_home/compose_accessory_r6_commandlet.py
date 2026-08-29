@@ -534,6 +534,13 @@ def collision_label(component):
     raise CommandletFailure("collision mode is outside the closed enum")
 
 
+def simulates_physics(component, label):
+    try:
+        return bool(component.is_simulating_physics())
+    except Exception:
+        return bool_property(component, "simulate_physics", label)
+
+
 def component_observation(component, expected_name):
     require(
         isinstance(component, unreal.StaticMeshComponent),
@@ -552,11 +559,14 @@ def component_observation(component, expected_name):
         "visible": bool_property(component, "visible", expected_name),
         "collision_mode": collision_label(component),
         "collision_profile_name": str(component.get_collision_profile_name()),
-        "mobility": str(component.get_mobility()),
+        # UE 5.7 does not expose USceneComponent::GetMobility in its generated
+        # Python wrapper.  Preserve the exact enum string used by the receipt,
+        # but obtain the value through the stable editor-reflection surface.
+        "mobility": str(property_value(component, "mobility", expected_name)),
         "attach_parent_component_path": (
             str(attach_parent.get_path_name()) if attach_parent is not None else None
         ),
-        "simulate_physics": bool(component.is_simulating_physics()),
+        "simulate_physics": simulates_physics(component, expected_name),
         "generate_overlap_events": bool_property(
             component, "generate_overlap_events", expected_name
         ),
