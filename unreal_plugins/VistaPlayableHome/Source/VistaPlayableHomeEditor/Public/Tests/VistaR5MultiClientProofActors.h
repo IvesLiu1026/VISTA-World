@@ -40,13 +40,13 @@ private:
     UPROPERTY(Replicated)
     TObjectPtr<AVistaPickupActor> HeldItem = nullptr;
 
-    UPROPERTY(VisibleAnywhere)
+    UPROPERTY(VisibleAnywhere, Category = "VISTA|R5 Proof")
     TObjectPtr<USceneComponent> ProviderGrip;
 
-    UPROPERTY(VisibleAnywhere)
+    UPROPERTY(VisibleAnywhere, Category = "VISTA|R5 Proof")
     TObjectPtr<USceneComponent> CarryAnchor;
 
-    UPROPERTY(VisibleAnywhere)
+    UPROPERTY(VisibleAnywhere, Category = "VISTA|R5 Proof")
     TObjectPtr<UVistaActionExecutorComponent> ActionExecutor;
 
     UFUNCTION()
