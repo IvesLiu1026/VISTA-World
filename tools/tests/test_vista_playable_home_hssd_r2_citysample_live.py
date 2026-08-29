@@ -308,6 +308,11 @@ def _apply_fixture(
         "_validate_t4_contract",
         lambda _prepared, _execution, _result, _scene: None,
     )
+    monkeypatch.setattr(
+        materializer,
+        "_validate_fixture_import_host_bindings",
+        lambda _prepared, _observations, _manifest: None,
+    )
     source, fixtures = _fixture_inputs()
     source_root = tmp_path / "source-project"
     descriptor = _write(source_root / materializer.PROJECT_NAME, b'{"FileVersion":3}\n')
@@ -679,7 +684,21 @@ def test_apply_publishes_exact_delta_host_and_v5_receipts(
     assert host["gates"] == {key: True for key in sorted(materializer.HOST_GATE_KEYS)}
     assert host["static_delta"]["changed_file_count"] == 10
     assert host["current_byte_revalidation"]["passed"] is True
+    assert host["containment"]["credential_hidden_policy"] == (
+        materializer.CREDENTIAL_HIDDEN_POLICY
+    )
+    assert (
+        host["fixture_evidence_manifest"]
+        == (receipt["hssd_r2_citysample_live_r1_upgrade"]["fixture_evidence_manifest"])
+    )
     assert not (prepared.attempt_root / materializer.FAILURE_NAME).exists()
+    complete = materializer._canonical_document(
+        prepared.attempt_root / materializer.COMPLETE_NAME,
+        "test complete",
+        expected_keys=materializer.COMPLETE_KEYS,
+    )[1]
+    assert complete["status"] == materializer.COMPLETE_STATUS
+    assert complete["failure_absent"] is True
 
 
 def test_zero_exit_with_malformed_receipt_is_quarantined_without_promotion(
@@ -817,6 +836,9 @@ def test_command_contract_has_net_pid_nullrhi_and_no_trace(
     _patch_sources(monkeypatch, source, fixtures)
     config, attempt = _config(tmp_path)
     prepared = materializer.build_plan(attempt, config=config)
+    assert prepared.report["execution_contract"]["credential_hidden_policy"] == (
+        materializer.CREDENTIAL_HIDDEN_POLICY
+    )
     command = materializer.build_unreal_command(
         prepared,
         project=attempt / "project" / materializer.PROJECT_NAME,
@@ -839,6 +861,12 @@ def test_command_contract_has_net_pid_nullrhi_and_no_trace(
     assert "--dev" in command
     assert "--proc" in command
     assert "--tmpfs" in command
+    for hidden in materializer.BWRAP_PRIVATE_MASKS:
+        index = command.index(hidden)
+        assert command[index - 1] == "--tmpfs"
+        assert index < bind_index
+    assert "/home/yhliu" not in command
+    assert "/run/user" not in command
     assert "-nullrhi" in command
     assert "-notraceserver" in command
     assert "-NoAnalytics" in command
@@ -1127,3 +1155,372 @@ def test_schema_and_local_artifact_names_match_v5_launcher_contract() -> None:
         "hssd-r2-citysample-live-scene-receipt.json"
     )
     assert materializer.HOST_RECEIPT_NAME == "hssd-r2-citysample-live-host-receipt.json"
+    assert materializer.COMPLETE_NAME == "hssd-r2-citysample-live-host-complete.json"
+
+
+def _copy_manifest_inputs(prepared: materializer.PreparedPlan) -> None:
+    prepared.attempt_root.mkdir(mode=0o700)
+    _write(
+        prepared.attempt_root / materializer.FINISH_PROFILE_LOCAL_NAME,
+        prepared.fixtures.profile_artifact.path.read_bytes(),
+    )
+    _write(
+        prepared.attempt_root / materializer.FIXTURE_INVENTORY_LOCAL_NAME,
+        prepared.fixtures.inventory_artifact.path.read_bytes(),
+    )
+
+
+def test_t5_never_executes_copied_commandlet_and_rejects_nested_drift(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trusted_validator = materializer._validate_t4_contract
+    prepared = _apply_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(materializer, "_validate_t4_contract", trusted_validator)
+    _copy_manifest_inputs(prepared)
+    project_root = prepared.attempt_root / "project"
+    project = _write(project_root / materializer.PROJECT_NAME, b"{}\n")
+    _write(
+        project_root / pathlib.Path(materializer.MAP_RELATIVE_PATH),
+        b"map\n",
+    )
+    copied_materializer = _write(
+        prepared.attempt_root / materializer.MATERIALIZER_NAME,
+        prepared.materializer_artifact.path.read_bytes(),
+    )
+    sentinel = tmp_path / "host-commandlet-executed"
+    copied_commandlet = _write(
+        prepared.attempt_root / materializer.COMMANDLET_NAME,
+        (
+            f"import pathlib\npathlib.Path({str(sentinel)!r}).write_text('unsafe')\n"
+        ).encode(),
+    )
+    execution = materializer._execution_document(
+        prepared,
+        project=project,
+        materializer=copied_materializer,
+        commandlet=copied_commandlet,
+        finish_profile=prepared.attempt_root / materializer.FINISH_PROFILE_LOCAL_NAME,
+        fixture_inventory=(
+            prepared.attempt_root / materializer.FIXTURE_INVENTORY_LOCAL_NAME
+        ),
+        source_static_manifest={},
+    )
+    observations = {key: {"sealed": key} for key in materializer.UE_OBSERVATION_KEYS}
+    observations["source_actor_inventory"] = sorted(
+        [
+            *prepared.migration["legacy_shells"],
+            *prepared.migration["preserved_non_hssd_actor_inventory"],
+        ],
+        key=lambda row: row["actor_path"],
+    )
+    observations["legacy_shells_before"] = copy.deepcopy(
+        prepared.migration["legacy_shells"]
+    )
+    observations["shell_migration"] = {"reuse_before": []}
+    result = materializer._seal_document(
+        {
+            "schema_version": materializer.RESULT_SCHEMA,
+            "status": materializer.UPGRADE_STATUS,
+            "provider_id": materializer.PROVIDER_ID,
+            "human_operated_visual_demo_only": True,
+            "prohibited_agent_adapter": True,
+            "execution_sha256": hashlib.sha256(
+                materializer._canonical_json(execution)
+            ).hexdigest(),
+            "map_object_path": materializer.MAP_OBJECT_PATH,
+            "map_package": {
+                "path": str(
+                    project_root / pathlib.Path(materializer.MAP_RELATIVE_PATH)
+                ),
+                "sha256": "a" * 64,
+                "size_bytes": 4,
+            },
+            "project_static_tree": {
+                "algorithm": "sha256-path-nul-mode-size-content-v1",
+                "file_count": 1,
+                "total_bytes": 4,
+                "tree_sha256": "b" * 64,
+            },
+            "observations": observations,
+            "legal_scope": copy.deepcopy(materializer.LEGAL_SCOPE),
+            "claims": copy.deepcopy(materializer.CLAIMS),
+            "acceptance": copy.deepcopy(materializer.ACCEPTANCE),
+            "gates": {key: True for key in sorted(materializer.UE_RESULT_GATE_KEYS)},
+            "error": None,
+        }
+    )
+    result_raw = materializer._canonical_json(result)
+    execution_raw = materializer._canonical_json(execution)
+    scene = materializer._seal_document(
+        {
+            "schema_version": materializer.SCENE_RECEIPT_SCHEMA,
+            "status": materializer.UPGRADE_STATUS,
+            "provider_id": materializer.PROVIDER_ID,
+            "human_operated_visual_demo_only": True,
+            "prohibited_agent_adapter": True,
+            "execution": {
+                "path": str(prepared.attempt_root / materializer.EXECUTION_NAME),
+                "sha256": hashlib.sha256(execution_raw).hexdigest(),
+                "size_bytes": len(execution_raw),
+            },
+            "result": {
+                "path": str(prepared.attempt_root / materializer.RESULT_NAME),
+                "sha256": hashlib.sha256(result_raw).hexdigest(),
+                "size_bytes": len(result_raw),
+            },
+            "map_object_path": materializer.MAP_OBJECT_PATH,
+            "map_package": copy.deepcopy(result["map_package"]),
+            "project_static_tree": copy.deepcopy(result["project_static_tree"]),
+            "observations": copy.deepcopy(observations),
+            "legal_scope": copy.deepcopy(materializer.LEGAL_SCOPE),
+            "claims": copy.deepcopy(materializer.CLAIMS),
+            "acceptance": copy.deepcopy(materializer.ACCEPTANCE),
+        }
+    )
+
+    with pytest.raises(materializer.R9PreflightError, match="shell migration.*keys"):
+        materializer._validate_t4_contract(prepared, execution, result, scene)
+    assert not sentinel.exists()
+
+
+def test_fixture_evidence_manifest_closes_blender_worker_log_bytes_and_modes(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared = _apply_fixture(tmp_path, monkeypatch)
+    source = _write(tmp_path / "source-blender-worker.log", b"sealed worker log\n")
+    metadata = source.stat()
+    record = materializer.FixtureEvidenceFile(
+        relative_path="logs/blender-worker.log",
+        source=source,
+        sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        size_bytes=source.stat().st_size,
+        mode=0o600,
+        device=metadata.st_dev,
+        inode=metadata.st_ino,
+        mtime_ns=metadata.st_mtime_ns,
+    )
+    prepared = dataclasses.replace(
+        prepared,
+        fixtures=dataclasses.replace(
+            prepared.fixtures,
+            evidence_files=(record,),
+            evidence_directories=(
+                materializer.FixtureEvidenceDirectory("logs", 0o700),
+            ),
+        ),
+    )
+    _copy_manifest_inputs(prepared)
+    (prepared.attempt_root / "logs").mkdir(mode=0o700)
+    copied = _write(
+        prepared.attempt_root / "logs/blender-worker.log", source.read_bytes()
+    )
+    manifest = materializer._fixture_evidence_manifest(prepared)
+
+    assert manifest["files"][-1]["relative_path"] == "logs/blender-worker.log"
+    assert manifest["directories"] == [
+        {
+            "relative_path": "logs",
+            "path": str(prepared.attempt_root / "logs"),
+            "mode": 0o700,
+        }
+    ]
+    materializer._validate_fixture_evidence_manifest(prepared, manifest)
+    copied.write_bytes(b"late worker log mutation\n")
+    with pytest.raises(materializer.R9PreflightError, match="SHA-256 differs"):
+        materializer._validate_fixture_evidence_manifest(prepared, manifest)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("map_mode", "preserving its source mode"),
+        ("map_sha", "preserving its source mode"),
+        ("package_mode", "private sealed file"),
+        ("package_empty", "private sealed file"),
+    ],
+)
+def test_static_delta_rejects_mode_or_content_drift(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    message: str,
+) -> None:
+    prepared = _apply_fixture(tmp_path, monkeypatch)
+    map_relative = materializer.MAP_RELATIVE_PATH.as_posix()
+    baseline = {map_relative: {"sha256": "a" * 64, "size_bytes": 10, "mode": 0o600}}
+    output = {map_relative: {"sha256": "b" * 64, "size_bytes": 11, "mode": 0o600}}
+    for index, relative in enumerate(
+        materializer._fixture_package_paths(prepared.fixtures.profile)
+    ):
+        output[relative] = {
+            "sha256": format(index + 1, "064x"),
+            "size_bytes": index + 1,
+            "mode": 0o600,
+        }
+    first_package = materializer._fixture_package_paths(prepared.fixtures.profile)[0]
+    if mutation == "map_mode":
+        output[map_relative]["mode"] = 0o644
+    elif mutation == "map_sha":
+        output[map_relative]["sha256"] = baseline[map_relative]["sha256"]
+    elif mutation == "package_mode":
+        output[first_package]["mode"] = 0o644
+    else:
+        output[first_package]["size_bytes"] = 0
+
+    with pytest.raises(materializer.R9PreflightError, match=message):
+        materializer._exact_static_delta(
+            prepared, baseline_manifest=baseline, output_manifest=output
+        )
+
+
+def _host_binding_contract(
+    prepared: materializer.PreparedPlan,
+) -> tuple[materializer.PreparedPlan, list[dict], dict[str, dict]]:
+    archetypes = ["flush_dome", "linear_panel", "pendant"]
+    package_names = [f"/Game/VISTA/PlayableHome/R9/P{index}" for index in range(9)]
+    profile_rows = []
+    inventory_rows = []
+    observations = []
+    output_manifest = {}
+    for index, archetype_id in enumerate(archetypes):
+        names = package_names[index * 3 : index * 3 + 3]
+        glb_relative = f"artifacts/{archetype_id}.glb"
+        profile_rows.append(
+            {
+                "archetype_id": archetype_id,
+                "glb_relative_path": glb_relative,
+                "static_mesh_package_name": names[0],
+                "static_mesh_object_path": names[0] + ".Mesh",
+                "material_package_names": names[1:],
+                "material_object_paths": [name + ".Material" for name in names[1:]],
+            }
+        )
+        inventory_rows.append(
+            {
+                "archetype_id": archetype_id,
+                "glb": {
+                    "path": glb_relative,
+                    "sha256": format(index + 20, "064x"),
+                    "size_bytes": 100 + index,
+                },
+            }
+        )
+        packages = []
+        for package_index, name in enumerate(sorted(names)):
+            relative = "Content/" + name.removeprefix("/Game/") + ".uasset"
+            pin = {
+                "sha256": format(index * 3 + package_index + 40, "064x"),
+                "size_bytes": 200 + index * 3 + package_index,
+                "mode": 0o600,
+            }
+            output_manifest[relative] = pin
+            packages.append(
+                {
+                    "package_name": name,
+                    "path": str(prepared.attempt_root / "project" / relative),
+                    "sha256": pin["sha256"],
+                    "size_bytes": pin["size_bytes"],
+                }
+            )
+        observations.append(
+            {
+                "archetype_id": archetype_id,
+                "source_glb": {
+                    "path": str(prepared.attempt_root / glb_relative),
+                    "sha256": inventory_rows[-1]["glb"]["sha256"],
+                    "size_bytes": inventory_rows[-1]["glb"]["size_bytes"],
+                },
+                "mesh_object_path": profile_rows[-1]["static_mesh_object_path"],
+                "material_object_paths": sorted(
+                    profile_rows[-1]["material_object_paths"]
+                ),
+                "package_artifacts": packages,
+            }
+        )
+    profile = copy.deepcopy(prepared.fixtures.profile)
+    profile["fixture_imports"] = {
+        "glb_inventory": profile_rows,
+        "exact_package_names": sorted(package_names),
+    }
+    inventory = copy.deepcopy(prepared.fixtures.inventory)
+    inventory["artifacts"] = inventory_rows
+    prepared = dataclasses.replace(
+        prepared,
+        fixtures=dataclasses.replace(
+            prepared.fixtures, profile=profile, inventory=inventory
+        ),
+    )
+    return prepared, observations, output_manifest
+
+
+@pytest.mark.parametrize(
+    "mutation", ["source_glb", "package_path", "package_sha", "package_size"]
+)
+def test_fixture_import_host_binding_rejects_claim_drift(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    trusted_validator = materializer._validate_fixture_import_host_bindings
+    prepared, observations, output_manifest = _host_binding_contract(
+        _apply_fixture(tmp_path, monkeypatch)
+    )
+    monkeypatch.setattr(
+        materializer, "_validate_fixture_import_host_bindings", trusted_validator
+    )
+    materializer._validate_fixture_import_host_bindings(
+        prepared, observations, output_manifest
+    )
+    changed = copy.deepcopy(observations)
+    if mutation == "source_glb":
+        changed[0]["source_glb"]["sha256"] = "f" * 64
+    elif mutation == "package_path":
+        changed[0]["package_artifacts"][0]["path"] = "/tmp/foreign.uasset"
+    elif mutation == "package_sha":
+        changed[0]["package_artifacts"][0]["sha256"] = "f" * 64
+    else:
+        changed[0]["package_artifacts"][0]["size_bytes"] += 1
+    with pytest.raises(materializer.R9PreflightError, match="binding differs"):
+        materializer._validate_fixture_import_host_bindings(
+            prepared, changed, output_manifest
+        )
+
+
+def test_failure_after_combined_receipt_never_publishes_complete(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared = _apply_fixture(tmp_path, monkeypatch)
+
+    def fake_run(
+        _prepared: materializer.PreparedPlan,
+        *,
+        execution_path: pathlib.Path,
+        execution_sha256: str,
+        **_kwargs: object,
+    ) -> tuple[dict[str, pathlib.Path], dict[str, materializer.StableFileSnapshot]]:
+        return _write_commandlet_success(
+            _prepared,
+            execution_path=execution_path,
+            execution_sha256=execution_sha256,
+        )
+
+    original = materializer._publication_state
+    calls = 0
+
+    def fail_after_combined(*args: object, **kwargs: object) -> dict:
+        nonlocal calls
+        calls += 1
+        if calls == 4:
+            raise materializer.R9PreflightError("injected after-combined failure")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(materializer, "_run_unreal", fake_run)
+    monkeypatch.setattr(materializer, "_publication_state", fail_after_combined)
+    with pytest.raises(materializer.R9PreflightError, match="after-combined"):
+        materializer.apply_plan(prepared)
+
+    assert (
+        prepared.attempt_root / materializer.r6_launcher.COMBINED_RECEIPT_NAME
+    ).is_file()
+    assert (prepared.attempt_root / materializer.FAILURE_NAME).is_file()
+    assert not (prepared.attempt_root / materializer.COMPLETE_NAME).exists()
