@@ -392,6 +392,20 @@ def _render_preview(bpy: Any, path: pathlib.Path) -> None:
         forge._fail("FIXTURE_WORKER_RENDER_FAILED", "Blender preview render failed")
 
 
+def _canonicalize_preview(path: pathlib.Path) -> None:
+    raw = forge._read_regular_file(path, maximum_bytes=8 * 1024 * 1024)
+    canonical = forge.canonical_png_bytes(raw)
+    temporary = path.with_name(f"{path.name}.canonicalizing")
+    forge._write_exclusive(temporary, canonical)
+    try:
+        os.replace(temporary, path)
+    except OSError as exc:
+        raise forge.FixtureForgeError(
+            "FIXTURE_PREVIEW_CANONICALIZATION_FAILED",
+            "unable to publish canonical preview bytes",
+        ) from exc
+
+
 def _build_one(
     bpy: Any,
     mathutils: Any,
@@ -436,7 +450,9 @@ def _build_one(
     preview_path = output_root.joinpath(*pathlib.PurePosixPath(paths["preview"]).parts)
     preview_repeat = preview_path.with_suffix(".determinism.png")
     _render_preview(bpy, preview_path)
+    _canonicalize_preview(preview_path)
     _render_preview(bpy, preview_repeat)
+    _canonicalize_preview(preview_repeat)
     preview_path.chmod(0o600)
     preview_repeat.chmod(0o600)
     first_preview = forge._read_regular_file(preview_path)
