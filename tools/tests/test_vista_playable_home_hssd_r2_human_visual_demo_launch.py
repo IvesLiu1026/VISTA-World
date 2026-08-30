@@ -21,6 +21,9 @@ from tools.tests.test_vista_playable_home_hssd_r2_citysample_live_commandlet imp
 from tools.ue.vista_playable_home import (
     compose_hssd_r2_citysample_live_commandlet as final_commandlet,
 )
+from tools.ue.vista_playable_home import (
+    materialize_hssd_r2_citysample_live as final_materializer,
+)
 
 base = launcher.base
 
@@ -130,6 +133,8 @@ materializer = SimpleNamespace(
     DYNAMIC_SLOT_BINDINGS=DYNAMIC_SLOT_BINDINGS,
     DELETION_INSTANCE_ID=DELETION_INSTANCE_ID,
     STATIC_MESH_CLASS=STATIC_MESH_CLASS,
+    EXECUTION_SCHEMA=launcher.EXECUTION_SCHEMA,
+    UPGRADE_SCHEMA=launcher.UPGRADE_SCHEMA,
     build_migration_contract=_build_migration_contract,
 )
 BUILDER_SOURCE_RELATIVE_PATHS = (
@@ -191,7 +196,13 @@ def _use_final_materializer_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         launcher,
         "_composition_commandlet_module",
-        lambda: SimpleNamespace(validate_result_document=lambda *_args: None),
+        lambda: SimpleNamespace(
+            EXECUTION_SCHEMA=final_commandlet.EXECUTION_SCHEMA,
+            semantic_proxy_bindings_from_authorities=(
+                final_commandlet.semantic_proxy_bindings_from_authorities
+            ),
+            validate_result_document=lambda *_args: None,
+        ),
     )
     monkeypatch.setattr(launcher, "_fixture_forge_module", lambda: fixture_forge)
     monkeypatch.setattr(launcher, "_validate_copied_t2_bundle", lambda *_args: None)
@@ -346,6 +357,16 @@ def _migration(profile: dict[str, object]) -> dict[str, object]:
     dynamic_ids = set(inventory["dynamic_presentation_instance_ids"])
     static_ids = sorted(set(visual_ids) - dynamic_ids)
     legacy_ids = [materializer.DELETION_INSTANCE_ID, *static_ids[:41]]
+    static_semantic_ids = set(static_ids[:16])
+    semantic_target_by_instance = {
+        **materializer.DYNAMIC_SLOT_BINDINGS,
+        **{
+            instance_id: f"home.r1/fixture.semantic_proxy.{index:02d}"
+            for index, instance_id in enumerate(sorted(static_semantic_ids))
+        },
+    }
+    nonsemantic_ids = sorted(set(visual_ids) - set(semantic_target_by_instance))
+    secondary_collision_ids = set(nonsemantic_ids[:20])
 
     def actor(index: int, instance_id: str | None = None) -> dict[str, object]:
         tags = ["VistaRole=unrelated"]
@@ -359,20 +380,13 @@ def _migration(profile: dict[str, object]) -> dict[str, object]:
 
     placements = []
     collision = []
-    policies = (
-        ["retained_r1_semantic_proxy_authority_unchanged"] * 19
-        + ["secondary_simple_aabb_candidate_review_pending"] * 20
-        + ["explicit_detail_no_collision"] * 21
-    )
     for index, instance_id in enumerate(visual_ids):
         placements.append(
             {
                 "instance_id": instance_id,
                 "room_id": "home.r1/room.bedroom",
                 "source_asset_id": "hssd.static.test",
-                "semantic_target_id": materializer.DYNAMIC_SLOT_BINDINGS.get(
-                    instance_id
-                ),
+                "semantic_target_id": semantic_target_by_instance.get(instance_id),
                 "object_path": "/Game/VISTA/HSSD/Test.Test",
                 "world_transform_cm": {
                     "location_cm": [float(index), 0.0, 50.0],
@@ -384,7 +398,16 @@ def _migration(profile: dict[str, object]) -> dict[str, object]:
             }
         )
         collision.append(
-            {"instance_id": instance_id, "collision_policy": policies[index]}
+            {
+                "instance_id": instance_id,
+                "collision_policy": (
+                    "retained_r1_semantic_proxy_authority_unchanged"
+                    if instance_id in semantic_target_by_instance
+                    else "secondary_simple_aabb_candidate_review_pending"
+                    if instance_id in secondary_collision_ids
+                    else "explicit_detail_no_collision"
+                ),
+            }
         )
     actors = [actor(index, value) for index, value in enumerate(legacy_ids)]
     actors.extend(actor(index + 42) for index in range(108))
@@ -413,7 +436,12 @@ def _migration(profile: dict[str, object]) -> dict[str, object]:
             },
             "proxy": {
                 "component_name": "PickupMesh",
+                "component_path": (
+                    f"{launcher.MAP_OBJECT_PATH}.Dynamic_{index}.PickupMesh"
+                ),
                 "collision_mode": "QueryOnly",
+                "generate_overlap_events": True,
+                "can_ever_affect_navigation": False,
                 "visible": False,
             },
             "portable": True,
@@ -438,6 +466,103 @@ def _migration(profile: dict[str, object]) -> dict[str, object]:
         },
         collision,
     )
+
+
+def _r6_semantic_result(migration: dict[str, object]) -> dict[str, object]:
+    dynamic = {
+        row["instance_id"]: copy.deepcopy(row["preserved_r6_observation"])
+        for row in migration["dynamic_slots"]
+    }
+    pot_id = "hssd.r1/kitchen_dining.pot.01"
+    return {
+        "schema_version": "simworld.vista.fixture-r6-result/v1",
+        "target_observations_reloaded": [
+            dynamic[key] for key in sorted(dynamic) if key != pot_id
+        ],
+        "pot_observation_reloaded": dynamic[pot_id],
+    }
+
+
+def _hssd_semantic_scene(
+    migration: dict[str, object], r6_result: dict[str, object]
+) -> dict[str, object]:
+    placements = [
+        *migration["final_static_slots"],
+        *(row["logical_r2_slot"] for row in migration["dynamic_slots"]),
+    ]
+    semantic_to_instance = {
+        row["semantic_target_id"]: row["instance_id"]
+        for row in placements
+        if row["semantic_target_id"] is not None
+    }
+    dynamic_observations = [
+        *r6_result["target_observations_reloaded"],
+        r6_result["pot_observation_reloaded"],
+    ]
+    dynamic_by_semantic = {row["semantic_id"]: row for row in dynamic_observations}
+    static_semantics = sorted(set(semantic_to_instance) - set(dynamic_by_semantic))
+
+    proxies = []
+    for index, semantic_id in enumerate(sorted(semantic_to_instance)):
+        dynamic = dynamic_by_semantic.get(semantic_id)
+        if dynamic is None:
+            static_index = static_semantics.index(semantic_id)
+            actor_path = f"{launcher.MAP_OBJECT_PATH}.SemanticProxy_{static_index:02d}"
+            component_path = actor_path + ".Collision"
+            overlap = False
+            navigation = static_index != 0
+        else:
+            actor_path = dynamic["actor_path"]
+            component_path = dynamic["proxy"]["component_path"]
+            overlap = dynamic["proxy"]["generate_overlap_events"]
+            navigation = dynamic["proxy"]["can_ever_affect_navigation"]
+        observation = {
+            "actor_class_path": "/Script/Engine.StaticMeshActor",
+            "actor_collision_enabled": True,
+            "actor_hidden_in_game": True,
+            "actor_label": f"SemanticProxy_{index:02d}",
+            "actor_path": actor_path,
+            "components": [
+                {
+                    "can_ever_affect_navigation": navigation,
+                    "collision_enabled": True,
+                    "collision_mode": "QueryOnly",
+                    "collision_profile": "Custom",
+                    "collision_responses": {
+                        "Pawn": "Block",
+                        "Visibility": "Block",
+                    },
+                    "component_path": component_path,
+                    "generate_overlap_events": overlap,
+                    "mesh_path": "/Game/VISTA/Fixture.Proxy",
+                    "mobility": "Static",
+                    "simulate_physics": False,
+                    "visible": False,
+                }
+            ],
+            "semantic_state": {"semantic_id": semantic_id},
+            "semantic_target_id": semantic_id,
+            "tags": ["VistaSemanticId=" + semantic_id],
+            "world_transform_cm": {
+                "location_cm": [float(index), 0.0, 50.0],
+                "rotation_deg": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+            },
+        }
+        proxies.append(
+            {
+                "after_authority_repair_and_hide": copy.deepcopy(observation),
+                "authority": "hidden_r1_proxy_query_authority_repaired",
+                "authority_evidence": {"fixture": True},
+                "baseline": {"fixture": True},
+                "reloaded": copy.deepcopy(observation),
+                "semantic_target_id": semantic_id,
+            }
+        )
+    return {
+        "schema_version": "simworld.vista.fixture-hssd-scene/v1",
+        "semantic_proxies": proxies,
+    }
 
 
 def _relative_pin(path: Path, root: Path) -> dict[str, object]:
@@ -604,6 +729,7 @@ def _fixture(tmp_path: Path) -> Fixture:
         hssd_map_package=launcher.TrustedArtifact(
             hssd_map, _sha(hssd_map), hssd_map.stat().st_size
         ),
+        hssd_placement_authority_content_digest="0" * 64,
         finish_profile_sha256="0" * 64,
         finish_profile_size_bytes=0,
         finish_profile_content_digest="0" * 64,
@@ -756,12 +882,42 @@ def _fixture(tmp_path: Path) -> Fixture:
     scene_path = attempt / launcher.LOCAL_ARTIFACT_NAMES["scene_receipt"]
     execution_path = attempt / launcher.LOCAL_ARTIFACT_NAMES["execution"]
     migration = _migration(profile)
+    placement_authority_content_digest = launcher._placement_authority_content_digest(
+        migration
+    )
+    _write_t3(
+        hssd_plan,
+        {
+            "schema_version": "simworld.vista.fixture-hssd-build-plan/v1",
+            "placements": launcher._migration_placement_rows(migration),
+        },
+    )
+    r6_semantic_document = _write_t3(accessory, _r6_semantic_result(migration))
+    hssd_semantic_document = _write_t3(
+        hssd_scene, _hssd_semantic_scene(migration, r6_semantic_document)
+    )
+    parent = replace(parent, accessory_r6_upgrade={"result": _pin(accessory)})
+    trust = replace(
+        trust,
+        hssd_scene_receipt=launcher.TrustedArtifact(
+            hssd_scene, _sha(hssd_scene), hssd_scene.stat().st_size
+        ),
+        hssd_build_plan=launcher.TrustedArtifact(
+            hssd_plan, _sha(hssd_plan), hssd_plan.stat().st_size
+        ),
+        hssd_placement_authority_content_digest=(placement_authority_content_digest),
+    )
+    semantic_proxy_bindings = final_commandlet.semantic_proxy_bindings_from_authorities(
+        hssd_semantic_document, migration, r6_semantic_document
+    )
     authority = {
         "host_receipt": trust.hssd_host_receipt.document(),
         "scene_receipt": trust.hssd_scene_receipt.document(),
         "build_plan": trust.hssd_build_plan.document(),
         "map_package": trust.hssd_map_package.document(),
         **launcher.HSSD_AUTHORITY_COUNTS,
+        "placement_authority_content_digest": (placement_authority_content_digest),
+        "semantic_proxy_bindings": semantic_proxy_bindings,
     }
     _write_t3(
         execution_path,
@@ -1129,6 +1285,17 @@ def _fixture(tmp_path: Path) -> Fixture:
 
 
 def test_final_contract_constants_are_exact() -> None:
+    assert launcher.EXECUTION_SCHEMA == final_materializer.EXECUTION_SCHEMA
+    assert launcher.EXECUTION_SCHEMA == final_commandlet.EXECUTION_SCHEMA
+    assert launcher.UPGRADE_SCHEMA == final_materializer.UPGRADE_SCHEMA
+    assert launcher.HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST == (
+        final_materializer.HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST
+    )
+    assert launcher.HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST == (
+        final_commandlet.HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST
+    )
+    assert launcher.EXECUTION_SCHEMA.endswith("execution/v2")
+    assert launcher.UPGRADE_SCHEMA.endswith("upgrade/v2")
     assert launcher.FIXTURE_INVENTORY_SCHEMA.endswith("/v3")
     assert launcher.FINISH_PROFILE_SHA256 == (
         "065782f443fd659a20d9a2ed5419403b2cf0faf04e336f05b11fc38528e999cb"
@@ -1137,6 +1304,165 @@ def test_final_contract_constants_are_exact() -> None:
     assert len(launcher.FIXTURE_INVENTORY_KEYS) == 18
     assert len(launcher.UE_RESULT_GATES) == 22
     assert len(launcher.HOST_GATES) == 9
+    assert len(launcher.HSSD_AUTHORITY_KEYS) == 9
+
+
+@pytest.mark.parametrize("drift", ["paths", "flags"])
+def test_semantic_proxy_authority_rejects_distribution_preserving_resealed_drift(
+    tmp_path: Path, drift: str
+) -> None:
+    fixture = _fixture(tmp_path)
+    execution_path = Path(
+        fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]["execution"]["path"]
+    )
+    execution = json.loads(execution_path.read_text(encoding="utf-8"))
+    authority = copy.deepcopy(execution["hssd_r2_authority"])
+    rows = authority["semantic_proxy_bindings"]
+    if drift == "paths":
+        candidates = [
+            row
+            for row in rows
+            if row["generate_overlap_events"] is False
+            and row["can_ever_affect_navigation"] is True
+        ][:2]
+        for key in ("actor_path", "component_path"):
+            candidates[0][key], candidates[1][key] = (
+                candidates[1][key],
+                candidates[0][key],
+            )
+    else:
+        first = next(
+            row
+            for row in rows
+            if (
+                row["generate_overlap_events"],
+                row["can_ever_affect_navigation"],
+            )
+            == (False, False)
+        )
+        second = next(
+            row
+            for row in rows
+            if (
+                row["generate_overlap_events"],
+                row["can_ever_affect_navigation"],
+            )
+            == (False, True)
+        )
+        for key in ("generate_overlap_events", "can_ever_affect_navigation"):
+            first[key], second[key] = second[key], first[key]
+
+    launcher._validate_semantic_proxy_bindings(
+        rows, "distribution-preserving resealed fixture"
+    )
+    with pytest.raises(
+        base.HumanVisualDemoError, match="authority differs from source"
+    ):
+        launcher._validate_semantic_proxy_lineage(
+            authority=authority,
+            migration=execution["composition_contract"]["migration"],
+            parent=fixture.parent,
+            execution_document=execution,
+            trust=fixture.trust,
+        )
+
+
+def test_semantic_lineage_rejects_consistent_static_placement_swap(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path)
+    execution_path = Path(
+        fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]["execution"]["path"]
+    )
+    execution = json.loads(execution_path.read_text(encoding="utf-8"))
+    original = execution["composition_contract"]["migration"]
+    placements = launcher._migration_placement_rows(original)
+    dynamic_ids = set(materializer.DYNAMIC_SLOT_BINDINGS)
+    candidates = [
+        row
+        for row in placements
+        if row["instance_id"] not in dynamic_ids
+        and row["semantic_target_id"] is not None
+    ][:2]
+    candidates[0]["semantic_target_id"], candidates[1]["semantic_target_id"] = (
+        candidates[1]["semantic_target_id"],
+        candidates[0]["semantic_target_id"],
+    )
+    dynamic_by_id = {row["instance_id"]: row for row in original["dynamic_slots"]}
+    pot_id = "hssd.r1/kitchen_dining.pot.01"
+    rebuilt = materializer.build_migration_contract(
+        [
+            *original["legacy_shells"],
+            *original["preserved_non_hssd_actor_inventory"],
+        ],
+        placements,
+        {
+            "actor_inventory_reloaded": [
+                *original["legacy_shells"],
+                *original["preserved_non_hssd_actor_inventory"],
+            ],
+            "target_observations_reloaded": [
+                dynamic_by_id[key]["preserved_r6_observation"]
+                for key in sorted(dynamic_by_id)
+                if key != pot_id
+            ],
+            "pot_observation_reloaded": dynamic_by_id[pot_id][
+                "preserved_r6_observation"
+            ],
+        },
+        original["collision"]["rows"],
+    )
+    launcher._validate_composition_contract(rebuilt, fixture.profile)
+
+    scene = json.loads(
+        fixture.trust.hssd_scene_receipt.path.read_text(encoding="utf-8")
+    )
+    r6_result_path = Path(fixture.parent.accessory_r6_upgrade["result"]["path"])
+    r6_result = json.loads(r6_result_path.read_text(encoding="utf-8"))
+    authority = copy.deepcopy(execution["hssd_r2_authority"])
+    authority["semantic_proxy_bindings"] = (
+        final_commandlet.semantic_proxy_bindings_from_authorities(
+            scene, rebuilt, r6_result
+        )
+    )
+    authority["placement_authority_content_digest"] = (
+        launcher._placement_authority_content_digest(rebuilt)
+    )
+    with pytest.raises(base.HumanVisualDemoError, match="placement authority"):
+        launcher._validate_semantic_proxy_lineage(
+            authority=authority,
+            migration=rebuilt,
+            parent=fixture.parent,
+            execution_document=execution,
+            trust=fixture.trust,
+        )
+
+
+def test_semantic_lineage_rejects_coherent_coffee_full_state_drift(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path)
+    execution_path = Path(
+        fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]["execution"]["path"]
+    )
+    execution = json.loads(execution_path.read_text(encoding="utf-8"))
+    migration = copy.deepcopy(execution["composition_contract"]["migration"])
+    coffee = next(
+        row
+        for row in migration["dynamic_slots"]
+        if row["instance_id"] == "hssd.r1/kitchen_dining.coffee_cup.01"
+    )
+    coffee["preserved_r6_observation"]["presentation"]["visible"] = False
+    launcher._validate_composition_contract(migration, fixture.profile)
+
+    with pytest.raises(base.HumanVisualDemoError, match="dynamic full-state"):
+        launcher._validate_semantic_proxy_lineage(
+            authority=execution["hssd_r2_authority"],
+            migration=migration,
+            parent=fixture.parent,
+            execution_document=execution,
+            trust=fixture.trust,
+        )
 
 
 def test_v5_complete_receipt_loads_and_closes_current_state(tmp_path: Path) -> None:
