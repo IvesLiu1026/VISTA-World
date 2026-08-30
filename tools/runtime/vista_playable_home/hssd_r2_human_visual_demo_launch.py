@@ -299,6 +299,9 @@ EXECUTION_ACKNOWLEDGEMENT_KEYS = frozenset(
         "fresh_append_only_candidate",
     }
 )
+EXECUTION_ACKNOWLEDGEMENTS = {
+    key: "confirmed" for key in sorted(EXECUTION_ACKNOWLEDGEMENT_KEYS)
+}
 LOCAL_ARTIFACT_NAMES = {
     "finish_profile": "hssd-r2-citysample-live-finish-profile.json",
     "fixture_inventory": "hssd-r2-citysample-live-fixture-inventory.json",
@@ -833,6 +836,17 @@ def _composition_materializer_module() -> Any:
         ) from exc
 
 
+def _composition_commandlet_module() -> Any:
+    try:
+        return importlib.import_module(
+            "tools.ue.vista_playable_home.compose_hssd_r2_citysample_live_commandlet"
+        )
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise base.HumanVisualDemoError(
+            "the reviewed T4 result validator is unavailable"
+        ) from exc
+
+
 def _validate_finish_profile(
     document: Mapping[str, Any],
     pin: base.ArtifactPin,
@@ -908,38 +922,46 @@ def _load_t2_relative_document(
     return document
 
 
-def _validate_t2_evidence_tree(root: Path, forge: Any) -> None:
-    expected_files: dict[str, int] = {
-        "forge-plan.json": 0o600,
-        "worker-result.json": 0o600,
-        forge.SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix(): 0o600,
+def _validate_t2_evidence_tree(
+    root: Path,
+    forge: Any,
+    *,
+    file_rows: Mapping[str, Mapping[str, Any]],
+    directory_rows: Mapping[str, Mapping[str, Any]],
+) -> None:
+    try:
+        expected = dict(forge._expected_output_tree("final"))
+    except Exception as exc:
+        raise base.HumanVisualDemoError(
+            "reviewed T2 evidence-tree contract is unavailable"
+        ) from exc
+    expected.pop("fixture-inventory.json", None)
+    expected[LOCAL_ARTIFACT_NAMES["finish_profile"]] = ("file", 0o600)
+    expected[LOCAL_ARTIFACT_NAMES["fixture_inventory"]] = ("file", 0o600)
+    expected_files = {
+        relative: mode for relative, (kind, mode) in expected.items() if kind == "file"
     }
-    expected_directories: dict[str, int] = {
-        "artifacts": 0o700,
-        "previews": 0o700,
-        "receipts": 0o700,
-        forge.SOURCE_SNAPSHOT_ROOT.as_posix(): 0o500,
+    expected_directories = {
+        relative: mode
+        for relative, (kind, mode) in expected.items()
+        if kind == "directory"
     }
-    for paths in forge.EXPECTED_ARTIFACT_RELATIVE_PATHS.values():
-        for relative in paths.values():
-            expected_files[relative] = 0o600
-    for relative_path in forge.BUILDER_SOURCE_RELATIVE_PATHS:
-        relative = forge.SOURCE_SNAPSHOT_ROOT / relative_path
-        expected_files[relative.as_posix()] = 0o400
-        parent = relative.parent
-        while parent != forge.SOURCE_SNAPSHOT_ROOT.parent:
-            expected_directories[parent.as_posix()] = 0o500
-            if parent == forge.SOURCE_SNAPSHOT_ROOT:
-                break
-            parent = parent.parent
+    if {key: row.get("mode") for key, row in file_rows.items()} != expected_files or {
+        key: row.get("mode") for key, row in directory_rows.items()
+    } != expected_directories:
+        raise base.HumanVisualDemoError(
+            "R9 fixture evidence manifest omitted, added, or remoded T2 evidence"
+        )
 
     observed_files: dict[str, int] = {}
     observed_directories: dict[str, int] = {}
 
     def walk(directory: Path) -> None:
         try:
-            entries = sorted(os.scandir(directory), key=lambda row: row.name)
-        except OSError as exc:
+            entries = sorted(
+                os.scandir(directory), key=lambda row: row.name.encode("utf-8")
+            )
+        except (OSError, UnicodeError) as exc:
             raise base.HumanVisualDemoError(
                 "R9 fixture evidence tree is unavailable"
             ) from exc
@@ -962,27 +984,124 @@ def _validate_t2_evidence_tree(root: Path, forge: Any) -> None:
                     "R9 fixture evidence tree contains a linked or special file"
                 )
 
-    for namespace in ("artifacts", "previews", "receipts", "source-snapshot"):
-        metadata = os.lstat(root / namespace)
+    top_namespaces = {
+        Path(relative).parts[0] for relative in expected_directories if relative
+    }
+    for namespace in sorted(top_namespaces):
+        root_path = root / namespace
+        try:
+            metadata = os.lstat(root_path)
+        except OSError as exc:
+            raise base.HumanVisualDemoError(
+                "R9 fixture evidence namespace is unavailable"
+            ) from exc
         if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
             raise base.HumanVisualDemoError(
                 "R9 fixture evidence namespace is not a real directory"
             )
         observed_directories[namespace] = stat.S_IMODE(metadata.st_mode)
-        walk(root / namespace)
-    for relative in (
-        "forge-plan.json",
-        "worker-result.json",
-        forge.SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix(),
+        walk(root_path)
+    expected_namespace_files = {
+        relative
+        for relative in expected_files
+        if Path(relative).parts[0] in top_namespaces
+    }
+    if (
+        observed_files
+        != {relative: expected_files[relative] for relative in expected_namespace_files}
+        or observed_directories != expected_directories
     ):
-        metadata = os.lstat(root / relative)
-        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
-            raise base.HumanVisualDemoError(
-                "R9 fixture root evidence file policy differs"
+        raise base.HumanVisualDemoError(
+            "R9 fixture evidence namespace gained, lost, or remoded an entry"
+        )
+
+
+def _validate_copied_t2_bundle(
+    root: Path, document: Mapping[str, Any], forge: Any
+) -> None:
+    try:
+        if (
+            forge.PROFILE_SCHEMA != FINISH_PROFILE_SCHEMA
+            or forge.INVENTORY_SCHEMA != FIXTURE_INVENTORY_SCHEMA
+        ):
+            raise base.HumanVisualDemoError("reviewed T2 schema constants differ")
+        forge.validate_fixture_inventory(document)
+        plan = forge._load_pinned_document(
+            root, document["forge_plan"], label="copied forge plan"
+        )
+        forge.validate_plan(plan, expected_mode="apply")
+        request = forge._load_pinned_document(
+            root, document["worker_request"], label="copied worker request"
+        )
+        forge.validate_worker_request(request, expected_plan=plan)
+        worker_result = forge._load_pinned_document(
+            root, document["worker_result"], label="copied worker result"
+        )
+        forge._validate_worker_result(worker_result, expected_plan=plan)
+        snapshot = forge._load_pinned_document(
+            root,
+            document["source_snapshot"]["manifest"],
+            label="copied source snapshot manifest",
+        )
+        observed_snapshot = forge._validate_source_snapshot(
+            root, expected_sources=plan["builder_sources"]
+        )
+        if snapshot != observed_snapshot:
+            raise base.HumanVisualDemoError("copied source snapshot mapping differs")
+        if (
+            document["profile"] != plan["profile"]
+            or document["recipe"] != plan["recipe"]
+            or document["toolchain"] != plan["toolchain"]
+            or document["output_root"] != plan["output_root"]
+            or document["archetypes"] != plan["archetypes"]
+            or document["execution_policy"] != plan["execution_policy"]
+            or document["ue_package_inventory"] != plan["ue_package_inventory"]
+            or document["source_snapshot"]["sources"] != plan["builder_sources"]
+        ):
+            raise base.HumanVisualDemoError("copied T2 lineage differs")
+        recipe = forge.load_recipe()
+        archetypes = {row["archetype_id"]: row for row in recipe["archetypes"]}
+        worker_rows = {row["archetype_id"]: row for row in worker_result["artifacts"]}
+        for row in document["artifacts"]:
+            archetype_id = row["archetype_id"]
+            glb = forge.inspect_glb(
+                forge._safe_child(root, row["glb"]["path"]),
+                archetypes[archetype_id],
             )
-        observed_files[relative] = stat.S_IMODE(metadata.st_mode)
-    if observed_files != expected_files or observed_directories != expected_directories:
-        raise base.HumanVisualDemoError("R9 fixture evidence tree differs")
+            preview = forge.inspect_png(
+                forge._safe_child(root, row["preview"]["path"]), recipe["preview"]
+            )
+            receipt_path = forge._safe_child(root, row["artifact_receipt"]["path"])
+            receipt_raw = forge._read_regular_file(receipt_path)
+            receipt = forge.load_json(receipt_path)
+            forge._artifact_receipt(receipt, archetypes[archetype_id])
+            expected_worker = {
+                "archetype_id": archetype_id,
+                "glb_sha256": glb["sha256"],
+                "preview_sha256": preview["sha256"],
+                "receipt_content_digest": receipt["content_digest"],
+            }
+            if (
+                row["glb"] != {"path": row["glb"]["path"], **glb}
+                or row["preview"] != {"path": row["preview"]["path"], **preview}
+                or receipt["plan_content_digest"] != plan["content_digest"]
+                or receipt["builder_sources"] != plan["builder_sources"]
+                or receipt["source_snapshot_content_digest"]
+                != snapshot["content_digest"]
+                or hashlib.sha256(receipt_raw).hexdigest()
+                != row["artifact_receipt"]["sha256"]
+                or len(receipt_raw) != row["artifact_receipt"]["size_bytes"]
+                or receipt["content_digest"]
+                != row["artifact_receipt"]["content_digest"]
+                or worker_rows[archetype_id] != expected_worker
+            ):
+                raise base.HumanVisualDemoError("copied T2 artifact authority differs")
+    except base.HumanVisualDemoError:
+        raise
+    except Exception as exc:
+        raise base.HumanVisualDemoError(
+            "reviewed copied T2 bundle validation failed: " + str(exc)[:512]
+        ) from exc
 
 
 def _validate_fixture_inventory(
@@ -1196,6 +1315,7 @@ def _validate_fixture_evidence_manifest(
             expected_directories.add(parent.as_posix())
             parent = parent.parent
     observed_directories: set[str] = set()
+    directory_by_relative: dict[str, dict[str, Any]] = {}
     for row in directories:
         relative = row["relative_path"]
         parts = _safe_evidence_relative(relative, "R9 fixture evidence directory")
@@ -1216,6 +1336,7 @@ def _validate_fixture_evidence_manifest(
         ):
             raise base.HumanVisualDemoError("R9 fixture evidence directory differs")
         observed_directories.add(relative)
+        directory_by_relative[relative] = row
     if observed_directories != expected_directories or value.get(
         "tree"
     ) != _manifest_tree(manifest):
@@ -1245,6 +1366,14 @@ def _validate_fixture_evidence_manifest(
                 raise base.HumanVisualDemoError(
                     "R9 fixture artifact evidence projection differs"
                 )
+    forge = _fixture_forge_module()
+    _validate_t2_evidence_tree(
+        receipt_parent,
+        forge,
+        file_rows=file_by_relative,
+        directory_rows=directory_by_relative,
+    )
+    _validate_copied_t2_bundle(receipt_parent, inventory_document, forge)
     return copy.deepcopy(value)
 
 
@@ -1656,6 +1785,20 @@ def _validate_composition_contract(
         raise base.HumanVisualDemoError("R9 T3 composition contract differs")
 
 
+def _validate_execution_acknowledgements(value: Any) -> None:
+    if not isinstance(value, dict):
+        raise base.HumanVisualDemoError(
+            "R9 execution acknowledgements must be an object"
+        )
+    base._require_exact_keys(
+        value,
+        EXECUTION_ACKNOWLEDGEMENT_KEYS,
+        "R9 execution acknowledgements",
+    )
+    if value != EXECUTION_ACKNOWLEDGEMENTS:
+        raise base.HumanVisualDemoError("R9 execution acknowledgement differs")
+
+
 def _validate_execution_document(
     document: Mapping[str, Any],
     *,
@@ -1798,26 +1941,58 @@ def _validate_execution_document(
         )
         if sidecar_raw != f"{pin.sha256}  {pin.path.name}\n".encode("ascii"):
             raise base.HumanVisualDemoError(f"R9 {label} sidecar differs")
-    acknowledgements = document.get("acknowledgements")
-    if not isinstance(acknowledgements, dict):
-        raise base.HumanVisualDemoError(
-            "R9 execution acknowledgements must be an object"
-        )
-    base._require_exact_keys(
-        acknowledgements,
-        EXECUTION_ACKNOWLEDGEMENT_KEYS,
-        "R9 execution acknowledgements",
-    )
-    if any(
-        not isinstance(value, str) or not value for value in acknowledgements.values()
-    ):
-        raise base.HumanVisualDemoError("R9 execution acknowledgement differs")
+    _validate_execution_acknowledgements(document.get("acknowledgements"))
     _validate_pending_boundaries(document, "R9 execution")
     if document.get("acceptance") != ACCEPTANCE:
         raise base.HumanVisualDemoError("R9 execution acceptance differs")
 
 
-def _validate_ue_observations(value: Any) -> None:
+def _finish_owned_actor_paths(
+    finish_document: Mapping[str, Any],
+) -> tuple[set[str], set[str]]:
+    rooms = finish_document.get("rooms")
+    if (
+        not isinstance(rooms, list)
+        or len(rooms) != 6
+        or any(not isinstance(room, dict) for room in rooms)
+        or len({room.get("room_id") for room in rooms}) != 6
+    ):
+        raise base.HumanVisualDemoError("R9 finish room authority differs")
+    architecture_paths: set[str] = set()
+    fixture_paths: set[str] = set()
+    for room in rooms:
+        architecture = room.get("architecture_actor")
+        fixture = room.get("fixture_light_binding")
+        architecture_path = (
+            architecture.get("actor_path") if isinstance(architecture, dict) else None
+        )
+        fixture_path = (
+            fixture.get("fixture_actor_path") if isinstance(fixture, dict) else None
+        )
+        if (
+            not isinstance(architecture_path, str)
+            or not architecture_path
+            or not isinstance(fixture_path, str)
+            or not fixture_path
+        ):
+            raise base.HumanVisualDemoError("R9 finish actor authority differs")
+        architecture_paths.add(architecture_path)
+        fixture_paths.add(fixture_path)
+    if (
+        len(architecture_paths) != 6
+        or len(fixture_paths) != 6
+        or architecture_paths & fixture_paths
+    ):
+        raise base.HumanVisualDemoError("R9 finish-owned actor partition differs")
+    return architecture_paths, fixture_paths
+
+
+def _validate_ue_observations(
+    value: Any,
+    *,
+    finish_document: Mapping[str, Any],
+    migration: Mapping[str, Any],
+) -> None:
     if not isinstance(value, dict):
         raise base.HumanVisualDemoError("R9 UE observations must be an object")
     base._require_exact_keys(value, UE_OBSERVATION_KEYS, "R9 UE observations")
@@ -1852,7 +2027,6 @@ def _validate_ue_observations(value: Any) -> None:
         != {"source_inventory", "reloaded_inventory", "unchanged_actor_paths"}
         or len(preserved.get("source_inventory", [])) != 108
         or preserved.get("source_inventory") != preserved.get("reloaded_inventory")
-        or len(preserved.get("unchanged_actor_paths", [])) != 99
         or len(value.get("fixture_imports", [])) != 3
         or not isinstance(finish, dict)
         or any(
@@ -1886,14 +2060,60 @@ def _validate_ue_observations(value: Any) -> None:
         raise base.HumanVisualDemoError(
             "R9 UE observation counts or reload evidence differ"
         )
+    preserved_authority = migration.get("preserved_non_hssd_actor_inventory")
+    unchanged = preserved.get("unchanged_actor_paths")
+    if (
+        not isinstance(preserved_authority, list)
+        or len(preserved_authority) != 108
+        or any(not isinstance(row, dict) for row in preserved_authority)
+        or preserved.get("source_inventory") != preserved_authority
+        or not isinstance(unchanged, list)
+        or any(not isinstance(path, str) or not path for path in unchanged)
+        or unchanged != sorted(set(unchanged))
+    ):
+        raise base.HumanVisualDemoError("R9 preserved actor authority differs")
+    preserved_paths = {row.get("actor_path") for row in preserved_authority}
+    architecture_authority, fixture_authority = _finish_owned_actor_paths(
+        finish_document
+    )
+
+    def observed_paths(key: str) -> set[Any]:
+        rows = finish.get(key)
+        return {
+            row.get("actor_path") if isinstance(row, dict) else None
+            for row in rows
+            if isinstance(rows, list)
+        }
+
+    if (
+        None in preserved_paths
+        or len(preserved_paths) != 108
+        or not (architecture_authority | fixture_authority).issubset(preserved_paths)
+        or observed_paths("architecture_before") != architecture_authority
+        or observed_paths("architecture_after_save") != architecture_authority
+        or observed_paths("architecture_reloaded") != architecture_authority
+        or observed_paths("fixtures_before") != fixture_authority
+        or observed_paths("fixtures_after_save") != fixture_authority
+        or observed_paths("fixtures_reloaded") != fixture_authority
+        or len(unchanged) != 96
+        or unchanged
+        != sorted(preserved_paths - architecture_authority - fixture_authority)
+    ):
+        raise base.HumanVisualDemoError(
+            "R9 finish-owned versus unchanged actor partition differs"
+        )
 
 
 def _validate_result_document(
     document: Mapping[str, Any],
     *,
+    execution_document: Mapping[str, Any],
+    scene_document: Mapping[str, Any],
     execution: base.ArtifactPin,
     map_package: base.ArtifactPin,
     project_tree: Mapping[str, Any],
+    finish_document: Mapping[str, Any],
+    migration: Mapping[str, Any],
 ) -> None:
     _require_schema_status_keys(
         document,
@@ -1916,7 +2136,22 @@ def _validate_result_document(
     base._require_exact_keys(gates, UE_RESULT_GATES, "R9 result gates")
     if any(value is not True for value in gates.values()):
         raise base.HumanVisualDemoError("R9 result gate is not true")
-    _validate_ue_observations(document.get("observations"))
+    _validate_ue_observations(
+        document.get("observations"),
+        finish_document=finish_document,
+        migration=migration,
+    )
+    commandlet = _composition_commandlet_module()
+    try:
+        commandlet.validate_result_document(
+            execution_document, document, scene_document
+        )
+    except base.HumanVisualDemoError:
+        raise
+    except Exception as exc:
+        raise base.HumanVisualDemoError(
+            "R9 T4 nested result validation failed: " + str(exc)[:512]
+        ) from exc
     _validate_pending_boundaries(document, "R9 result")
 
 
@@ -2415,9 +2650,13 @@ def _validate_upgrade(
     )
     _validate_result_document(
         local_json["result"],
+        execution_document=local_json["execution"],
+        scene_document=local_json["scene_receipt"],
         execution=local_pins["execution"],
         map_package=map_package,
         project_tree=project_tree,
+        finish_document=local_json["finish_profile"],
+        migration=local_json["execution"]["composition_contract"]["migration"],
     )
     _validate_scene_document(
         local_json["scene_receipt"],
