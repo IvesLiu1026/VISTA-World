@@ -44,6 +44,8 @@ def _component(
     query_only: bool = False,
     visible: bool = True,
     cast_shadow: bool = True,
+    generate_overlap_events: bool = False,
+    can_ever_affect_navigation: bool = False,
 ) -> dict:
     return {
         "component_path": f"/fixture/components/{name}",
@@ -60,8 +62,8 @@ def _component(
         "mobility": "Static",
         "attach_parent_component_path": None,
         "simulate_physics": False,
-        "generate_overlap_events": False,
-        "can_ever_affect_navigation": False,
+        "generate_overlap_events": generate_overlap_events,
+        "can_ever_affect_navigation": can_ever_affect_navigation,
         "cast_shadow": cast_shadow,
         "cast_hidden_shadow": False,
         "materials": [],
@@ -123,7 +125,9 @@ def _shell_observation(placement: dict, actor: dict) -> dict:
     }
 
 
-def _semantic_observation(placement: dict, index: int) -> dict:
+def _semantic_observation(
+    placement: dict, index: int, binding: dict[str, object]
+) -> dict:
     semantic_id = placement["semantic_target_id"] or f"semantic.synthetic.{index:02d}"
     return {
         "instance_id": placement["instance_id"],
@@ -138,6 +142,8 @@ def _semantic_observation(placement: dict, index: int) -> dict:
                 query_only=True,
                 visible=False,
                 cast_shadow=False,
+                generate_overlap_events=bool(binding["generate_overlap_events"]),
+                can_ever_affect_navigation=bool(binding["can_ever_affect_navigation"]),
             ),
         ),
     }
@@ -332,6 +338,12 @@ def migration_fixture() -> dict:
                 "logical_r2_slot": placements[key],
                 "preserved_r6_observation": {
                     "semantic_id": commandlet.DYNAMIC_SLOT_BINDINGS[key],
+                    "actor_path": f"/fixture/dynamic/{key}",
+                    "proxy": {
+                        "component_path": f"/fixture/dynamic/{key}/PickupMesh",
+                        "generate_overlap_events": True,
+                        "can_ever_affect_navigation": False,
+                    },
                     "authority": "sealed-r6",
                 },
                 "transform_policy": (
@@ -365,8 +377,115 @@ def migration_fixture() -> dict:
     }
 
 
+def _semantic_proxy_bindings(migration: dict) -> list[dict[str, object]]:
+    placement_by_id = {
+        row["instance_id"]: row for row in migration["final_static_slots"]
+    }
+    policy_by_id = {
+        row["instance_id"]: row["collision_policy"]
+        for row in migration["collision"]["rows"]
+    }
+    static_ids = sorted(
+        instance_id
+        for instance_id, policy in policy_by_id.items()
+        if policy == "retained_r1_semantic_proxy_authority_unchanged"
+        and instance_id not in commandlet.DYNAMIC_SLOT_BINDINGS
+    )
+    rows = [
+        {
+            "instance_id": instance_id,
+            "semantic_id": placement_by_id[instance_id]["semantic_target_id"],
+            "actor_path": _actor(f"Semantic_{index:02d}")["actor_path"],
+            "component_path": f"/fixture/components/SemanticComponent_{index:02d}",
+            "generate_overlap_events": False,
+            "can_ever_affect_navigation": index < 15,
+        }
+        for index, instance_id in enumerate(static_ids)
+    ]
+    dynamic_by_id = {row["instance_id"]: row for row in migration["dynamic_slots"]}
+    for instance_id in sorted(dynamic_by_id):
+        dynamic = dynamic_by_id[instance_id]
+        observation = dynamic["preserved_r6_observation"]
+        rows.append(
+            {
+                "instance_id": instance_id,
+                "semantic_id": dynamic["semantic_id"],
+                "actor_path": observation["actor_path"],
+                "component_path": observation["proxy"]["component_path"],
+                "generate_overlap_events": True,
+                "can_ever_affect_navigation": False,
+            }
+        )
+    rows.sort(key=lambda row: str(row["instance_id"]))
+    assert len(rows) == 19
+    return rows
+
+
+def _semantic_authority_documents(
+    migration: dict,
+) -> tuple[dict, dict, list[dict[str, object]]]:
+    bindings = _semantic_proxy_bindings(migration)
+    proxies = []
+    for binding in bindings:
+        semantic_id = str(binding["semantic_id"])
+        observation = {
+            "actor_class_path": "/Script/VistaPlayableHome.VistaSemanticPropActor",
+            "actor_collision_enabled": True,
+            "actor_hidden_in_game": True,
+            "actor_label": "SemanticAuthority",
+            "actor_path": binding["actor_path"],
+            "components": [
+                {
+                    "can_ever_affect_navigation": binding["can_ever_affect_navigation"],
+                    "collision_enabled": True,
+                    "collision_mode": "QueryOnly",
+                    "collision_profile": "Custom",
+                    "collision_responses": {
+                        "Pawn": "Block",
+                        "Visibility": "Block",
+                    },
+                    "component_path": binding["component_path"],
+                    "generate_overlap_events": binding["generate_overlap_events"],
+                    "mesh_path": "/Game/VISTA/Test.Test",
+                    "mobility": "Static",
+                    "simulate_physics": False,
+                    "visible": False,
+                }
+            ],
+            "semantic_state": {"semantic_id": semantic_id},
+            "semantic_target_id": semantic_id,
+            "tags": ["VistaSemanticId=" + semantic_id],
+            "world_transform_cm": _transform(),
+        }
+        proxies.append(
+            {
+                "after_authority_repair_and_hide": copy.deepcopy(observation),
+                "authority": "hidden_r1_proxy_query_authority_repaired",
+                "authority_evidence": {"fixture": True},
+                "baseline": {"fixture": True},
+                "reloaded": copy.deepcopy(observation),
+                "semantic_target_id": semantic_id,
+            }
+        )
+    dynamic = [
+        copy.deepcopy(row["preserved_r6_observation"])
+        for row in migration["dynamic_slots"]
+    ]
+    pot_semantic = commandlet.DYNAMIC_SLOT_BINDINGS["hssd.r1/kitchen_dining.pot.01"]
+    r6_result = {
+        "target_observations_reloaded": [
+            row for row in dynamic if row["semantic_id"] != pot_semantic
+        ],
+        "pot_observation_reloaded": next(
+            row for row in dynamic if row["semantic_id"] == pot_semantic
+        ),
+    }
+    return {"semantic_proxies": proxies}, r6_result, bindings
+
+
 def document_fixture() -> tuple[dict, dict, dict]:
     migration = migration_fixture()
+    semantic_bindings = _semantic_proxy_bindings(migration)
     attempt = pathlib.Path("/tmp/hssd-r2-citysample-live-test")
     package_names = [
         f"/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/package_{index}"
@@ -412,7 +531,10 @@ def document_fixture() -> tuple[dict, dict, dict]:
                 "sha256": "0" * 64,
                 "size_bytes": 1,
             },
-            "hssd_r2_authority": {"fixture": True},
+            "hssd_r2_authority": {
+                "fixture": True,
+                "semantic_proxy_bindings": copy.deepcopy(semantic_bindings),
+            },
             "source_project_static_tree": {"fixture": True},
             "source_static_manifest": {"fixture": True},
             "hssd_namespace": {"fixture": True},
@@ -586,8 +708,11 @@ def document_fixture() -> tuple[dict, dict, dict]:
         for instance_id, policy in policy_by_id.items()
         if policy == "explicit_detail_no_collision"
     )
+    binding_by_id = {row["instance_id"]: row for row in semantic_bindings}
     semantic_rows = [
-        _semantic_observation(static_by_id[instance_id], index)
+        _semantic_observation(
+            static_by_id[instance_id], index, binding_by_id[instance_id]
+        )
         for index, instance_id in enumerate(semantic_instance_ids)
     ]
     secondary_rows = [
@@ -725,6 +850,7 @@ def test_module_is_import_safe_without_unreal() -> None:
 
 
 def test_frozen_t2_and_t5_contract_constants_are_exact() -> None:
+    assert commandlet.EXECUTION_SCHEMA.endswith("execution/v2")
     assert commandlet.PROFILE_SHA256 == (
         "065782f443fd659a20d9a2ed5419403b2cf0faf04e336f05b11fc38528e999cb"
     )
@@ -853,6 +979,101 @@ def test_migration_contract_rejects_widened_or_drifted_authority(mutator) -> Non
         commandlet.validate_migration_contract(migration)
 
 
+def test_semantic_proxy_projection_preserves_exact_15_1_3_lineage() -> None:
+    migration = migration_fixture()
+    scene, r6_result, expected = _semantic_authority_documents(migration)
+
+    observed = commandlet.semantic_proxy_bindings_from_authorities(
+        scene, migration, r6_result
+    )
+
+    assert observed == expected
+    assert (
+        sum(
+            row["generate_overlap_events"] is False
+            and row["can_ever_affect_navigation"] is True
+            for row in observed
+        )
+        == 15
+    )
+    assert (
+        sum(
+            row["generate_overlap_events"] is False
+            and row["can_ever_affect_navigation"] is False
+            for row in observed
+        )
+        == 1
+    )
+    assert (
+        sum(
+            row["generate_overlap_events"] is True
+            and row["can_ever_affect_navigation"] is False
+            for row in observed
+        )
+        == 3
+    )
+
+
+def test_semantic_proxy_projection_rejects_resealed_state_or_dynamic_drift() -> None:
+    migration = migration_fixture()
+    scene, r6_result, _expected = _semantic_authority_documents(migration)
+    proxy = next(
+        row
+        for row in scene["semantic_proxies"]
+        if row["reloaded"]["components"][0]["can_ever_affect_navigation"] is True
+    )
+    proxy["reloaded"]["components"][0]["can_ever_affect_navigation"] = False
+    proxy["after_authority_repair_and_hide"] = copy.deepcopy(proxy["reloaded"])
+    with pytest.raises(commandlet.CommandletFailure, match="boolean distribution"):
+        commandlet.semantic_proxy_bindings_from_authorities(scene, migration, r6_result)
+
+    scene, r6_result, _expected = _semantic_authority_documents(migration)
+    r6_result["target_observations_reloaded"][0]["proxy"]["component_path"] += ".drift"
+    with pytest.raises(commandlet.CommandletFailure, match="dynamic proxy/HSSD"):
+        commandlet.semantic_proxy_bindings_from_authorities(scene, migration, r6_result)
+
+    migration = migration_fixture()
+    scene, r6_result, _expected = _semantic_authority_documents(migration)
+    old_semantic_id = commandlet.DYNAMIC_SLOT_BINDINGS["hssd.r1/bedroom.phone.01"]
+    replacement = "home.r1/room.bedroom/entity.resealed_phone.01"
+    dynamic = next(
+        row
+        for row in migration["dynamic_slots"]
+        if row["semantic_id"] == old_semantic_id
+    )
+    dynamic["logical_r2_slot"]["semantic_target_id"] = replacement
+    proxy = next(
+        row
+        for row in scene["semantic_proxies"]
+        if row["semantic_target_id"] == old_semantic_id
+    )
+    proxy["semantic_target_id"] = replacement
+    reloaded = proxy["reloaded"]
+    reloaded["semantic_target_id"] = replacement
+    reloaded["semantic_state"]["semantic_id"] = replacement
+    reloaded["tags"] = ["VistaSemanticId=" + replacement]
+    proxy["after_authority_repair_and_hide"] = copy.deepcopy(reloaded)
+    with pytest.raises(commandlet.CommandletFailure, match="dynamic semantic"):
+        commandlet.semantic_proxy_bindings_from_authorities(scene, migration, r6_result)
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    [
+        lambda rows: rows.pop(),
+        lambda rows: rows[1].__setitem__("instance_id", rows[0]["instance_id"]),
+        lambda rows: rows[0].__setitem__("generate_overlap_events", "false"),
+    ],
+)
+def test_semantic_proxy_binding_inventory_rejects_missing_duplicate_or_nonbool(
+    mutator,
+) -> None:
+    rows = _semantic_proxy_bindings(migration_fixture())
+    mutator(rows)
+    with pytest.raises(commandlet.CommandletFailure):
+        commandlet.validate_semantic_proxy_bindings(rows, "semantic bindings")
+
+
 def test_secondary_proxy_transform_is_exact_world_aabb_box() -> None:
     assert commandlet.secondary_proxy_transform(
         {"world_bounds_m": {"min_m": [1.0, -2.0, 0.0], "max_m": [2.5, 1.0, 0.75]}}
@@ -885,6 +1106,33 @@ def test_result_and_scene_validator_binds_nested_identities_not_only_counts() ->
         commandlet.validate_result_document(execution, malformed, malformed_scene)
 
 
+def test_result_validator_rejects_consistently_resealed_semantic_flag_drift() -> None:
+    execution, result, scene = document_fixture()
+    for key in (
+        "semantic_static_before",
+        "semantic_static_after_save",
+        "semantic_static_reloaded",
+    ):
+        component = result["observations"]["collision"][key][0][
+            "static_mesh_components"
+        ][0]
+        component["can_ever_affect_navigation"] = not component[
+            "can_ever_affect_navigation"
+        ]
+    result = commandlet.seal(result)
+    scene["observations"] = copy.deepcopy(result["observations"])
+    result_raw = commandlet.canonical_json(result)
+    scene["result"] = {
+        "path": execution["result"]["result_path"],
+        "sha256": hashlib.sha256(result_raw).hexdigest(),
+        "size_bytes": len(result_raw),
+    }
+    scene = commandlet.seal(scene)
+
+    with pytest.raises(commandlet.CommandletFailure, match="query authority differs"):
+        commandlet.validate_result_document(execution, result, scene)
+
+
 def test_valid_t4_document_is_accepted_by_t5_nested_validator(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -915,6 +1163,9 @@ def test_valid_t4_document_is_accepted_by_t5_nested_validator(
         attempt_root=pathlib.Path(execution["attempt_root"]),
         migration=copy.deepcopy(execution["composition_contract"]["migration"]),
         fixtures=SimpleNamespace(profile=profile),
+        source=SimpleNamespace(
+            hssd_authority=copy.deepcopy(execution["hssd_r2_authority"])
+        ),
     )
     monkeypatch.setattr(
         materializer,

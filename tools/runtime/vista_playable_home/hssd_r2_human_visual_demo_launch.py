@@ -30,9 +30,9 @@ from typing import Any
 from tools.runtime.vista_playable_home import human_visual_demo_launch as base
 
 COMBINED_RECEIPT_SCHEMA_V5 = "simworld.vista.human-visual-demo-combined-receipt/v5"
-UPGRADE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-upgrade/v1"
+UPGRADE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-upgrade/v2"
 UPGRADE_STATUS = "hssd_r2_citysample_live_saved_cold_reloaded"
-EXECUTION_SCHEMA = "simworld.vista.hssd-r2-citysample-live-execution/v1"
+EXECUTION_SCHEMA = "simworld.vista.hssd-r2-citysample-live-execution/v2"
 EXECUTION_STATUS = "authorized_apply_request"
 RESULT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-result/v1"
 SCENE_RECEIPT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-scene-receipt/v1"
@@ -63,6 +63,9 @@ HSSD_NAMESPACE_TREE = {
     "total_bytes": 23_596_996,
     "tree_sha256": "449a2556cbcc011ec5074acbbb489507674f110e1051e8a02139eda8f3afa11b",
 }
+HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST = (
+    "6ba35488c0dee391faaa6884144f7f37955d37dcfd2f0110622c63d350ab52a9"
+)
 MAP_OBJECT_PATH = (
     "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome"
 )
@@ -113,8 +116,20 @@ HSSD_AUTHORITY_KEYS = frozenset(
         "build_plan",
         "map_package",
         "placement_count",
+        "placement_authority_content_digest",
         "semantic_proxy_count",
+        "semantic_proxy_bindings",
         "transform_override_count",
+    }
+)
+SEMANTIC_PROXY_BINDING_KEYS = frozenset(
+    {
+        "instance_id",
+        "semantic_id",
+        "actor_path",
+        "component_path",
+        "generate_overlap_events",
+        "can_ever_affect_navigation",
     }
 )
 HSSD_AUTHORITY_COUNTS = {
@@ -521,6 +536,7 @@ class LauncherTrust:
     hssd_scene_receipt: TrustedArtifact
     hssd_build_plan: TrustedArtifact
     hssd_map_package: TrustedArtifact
+    hssd_placement_authority_content_digest: str
     finish_profile_sha256: str
     finish_profile_size_bytes: int
     finish_profile_content_digest: str
@@ -605,6 +621,7 @@ PRODUCTION_TRUST = LauncherTrust(
         "60c4f7195d3715e6f6d6691594ca17c481fdad21e838121fcae9ed3ffca4f4d1",
         437_720,
     ),
+    hssd_placement_authority_content_digest=(HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST),
     finish_profile_sha256=FINISH_PROFILE_SHA256,
     finish_profile_size_bytes=FINISH_PROFILE_BYTES,
     finish_profile_content_digest=FINISH_PROFILE_CONTENT_DIGEST,
@@ -1876,7 +1893,15 @@ def _validate_execution_document(
         or composition.get("expected_counts") != COMPOSITION_EXPECTED_COUNTS
     ):
         raise base.HumanVisualDemoError("R9 composition/profile binding differs")
-    _validate_composition_contract(composition.get("migration"), finish_document)
+    migration = composition.get("migration")
+    _validate_composition_contract(migration, finish_document)
+    _validate_semantic_proxy_lineage(
+        authority=authority,
+        migration=migration,
+        parent=parent,
+        execution_document=document,
+        trust=trust,
+    )
     output_manifest = base._project_static_manifest(project.path)
     _validate_source_output_delta(
         source_manifest=source_manifest,
@@ -2466,6 +2491,58 @@ def preflight_r6_rollback(
     }
 
 
+def _validate_semantic_proxy_bindings(value: Any, label: str) -> list[dict[str, Any]]:
+    if type(value) is not list or len(value) != 19:
+        raise base.HumanVisualDemoError(f"{label} count differs")
+    rows: list[dict[str, Any]] = []
+    for index, value_row in enumerate(value):
+        row_label = f"{label} row {index}"
+        if type(value_row) is not dict:
+            raise base.HumanVisualDemoError(f"{row_label} must be an object")
+        base._require_exact_keys(value_row, SEMANTIC_PROXY_BINDING_KEYS, row_label)
+        if not (
+            type(value_row.get("instance_id")) is str
+            and value_row["instance_id"]
+            and type(value_row.get("semantic_id")) is str
+            and value_row["semantic_id"]
+            and type(value_row.get("actor_path")) is str
+            and value_row["actor_path"]
+            and type(value_row.get("component_path")) is str
+            and value_row["component_path"]
+            and type(value_row.get("generate_overlap_events")) is bool
+            and type(value_row.get("can_ever_affect_navigation")) is bool
+        ):
+            raise base.HumanVisualDemoError(f"{row_label} values differ")
+        rows.append(copy.deepcopy(value_row))
+    if not (
+        rows == sorted(rows, key=lambda row: row["instance_id"])
+        and len({row["instance_id"] for row in rows}) == 19
+        and len({row["semantic_id"] for row in rows}) == 19
+        and len({row["actor_path"] for row in rows}) == 19
+        and len({row["component_path"] for row in rows}) == 19
+    ):
+        raise base.HumanVisualDemoError(f"{label} identities differ")
+    distribution = {
+        state: sum(
+            (
+                row["generate_overlap_events"],
+                row["can_ever_affect_navigation"],
+            )
+            == state
+            for row in rows
+        )
+        for state in ((False, True), (False, False), (True, False), (True, True))
+    }
+    if distribution != {
+        (False, True): 15,
+        (False, False): 1,
+        (True, False): 3,
+        (True, True): 0,
+    }:
+        raise base.HumanVisualDemoError(f"{label} boolean distribution differs")
+    return rows
+
+
 def _validate_hssd_authority(payload: Any, trust: LauncherTrust) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise base.HumanVisualDemoError("HSSD R2 authority must be an object")
@@ -2486,7 +2563,236 @@ def _validate_hssd_authority(payload: Any, trust: LauncherTrust) -> dict[str, An
         if payload.get(key) != value or isinstance(payload.get(key), bool):
             raise base.HumanVisualDemoError(f"HSSD R2 {key} differs")
         result[key] = value
+    placement_digest = payload.get("placement_authority_content_digest")
+    if (
+        not isinstance(placement_digest, str)
+        or base.SHA256_RE.fullmatch(placement_digest) is None
+        or placement_digest != trust.hssd_placement_authority_content_digest
+    ):
+        raise base.HumanVisualDemoError(
+            "HSSD R2 placement authority content digest differs"
+        )
+    result["placement_authority_content_digest"] = placement_digest
+    result["semantic_proxy_bindings"] = _validate_semantic_proxy_bindings(
+        payload.get("semantic_proxy_bindings"), "HSSD R2 semantic proxy bindings"
+    )
     return result
+
+
+def _migration_placement_rows(migration: Mapping[str, Any]) -> list[dict[str, Any]]:
+    if type(migration) is not dict:
+        raise base.HumanVisualDemoError("R9 placement migration must be an object")
+    final_static = migration.get("final_static_slots")
+    dynamic = migration.get("dynamic_slots")
+    if not (
+        type(final_static) is list
+        and len(final_static) == 57
+        and type(dynamic) is list
+        and len(dynamic) == 3
+        and all(type(row) is dict for row in final_static)
+        and all(
+            type(row) is dict and type(row.get("logical_r2_slot")) is dict
+            for row in dynamic
+        )
+    ):
+        raise base.HumanVisualDemoError("R9 placement authority rows differ")
+    rows = sorted(
+        [
+            *(copy.deepcopy(row) for row in final_static),
+            *(copy.deepcopy(row["logical_r2_slot"]) for row in dynamic),
+        ],
+        key=lambda row: row.get("instance_id", ""),
+    )
+    if not (
+        all(type(row.get("instance_id")) is str and row["instance_id"] for row in rows)
+        and len({row["instance_id"] for row in rows}) == 60
+    ):
+        raise base.HumanVisualDemoError("R9 placement authority identities differ")
+    return rows
+
+
+def _placement_authority_content_digest(
+    migration: Mapping[str, Any],
+) -> str:
+    rows = _migration_placement_rows(migration)
+    try:
+        raw = json.dumps(
+            rows,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise base.HumanVisualDemoError(
+            "R9 placement authority is not finite JSON"
+        ) from exc
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _placement_identity_projection(rows: Any, label: str) -> list[dict[str, Any]]:
+    if type(rows) is not list or len(rows) != 60:
+        raise base.HumanVisualDemoError(f"{label} count differs")
+    result = []
+    for index, row in enumerate(rows):
+        if type(row) is not dict:
+            raise base.HumanVisualDemoError(f"{label} row {index} differs")
+        projected = {
+            key: row.get(key)
+            for key in (
+                "instance_id",
+                "room_id",
+                "source_asset_id",
+                "semantic_target_id",
+            )
+        }
+        if not (
+            all(
+                type(projected[key]) is str and projected[key]
+                for key in (
+                    "instance_id",
+                    "room_id",
+                    "source_asset_id",
+                )
+            )
+            and (
+                projected["semantic_target_id"] is None
+                or (
+                    type(projected["semantic_target_id"]) is str
+                    and projected["semantic_target_id"]
+                )
+            )
+        ):
+            raise base.HumanVisualDemoError(f"{label} row {index} identity differs")
+        result.append(projected)
+    result.sort(key=lambda row: row["instance_id"])
+    if len({row["instance_id"] for row in result}) != 60:
+        raise base.HumanVisualDemoError(f"{label} identities differ")
+    return result
+
+
+def _validate_semantic_proxy_lineage(
+    *,
+    authority: Mapping[str, Any],
+    migration: Mapping[str, Any],
+    parent: base.HumanVisualDemoInputs,
+    execution_document: Mapping[str, Any],
+    trust: LauncherTrust,
+) -> None:
+    materializer = _composition_materializer_module()
+    commandlet = _composition_commandlet_module()
+    if not (
+        getattr(materializer, "EXECUTION_SCHEMA", None) == EXECUTION_SCHEMA
+        and getattr(materializer, "UPGRADE_SCHEMA", None) == UPGRADE_SCHEMA
+        and getattr(commandlet, "EXECUTION_SCHEMA", None) == EXECUTION_SCHEMA
+    ):
+        raise base.HumanVisualDemoError(
+            "R9 semantic authority consumer schema versions differ"
+        )
+    if trust == PRODUCTION_TRUST and not (
+        getattr(materializer, "HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST", None)
+        == HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST
+        and getattr(commandlet, "HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST", None)
+        == HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST
+    ):
+        raise base.HumanVisualDemoError(
+            "R9 placement authority consumer constants differ"
+        )
+
+    observed_placement_digest = _placement_authority_content_digest(migration)
+    if not (
+        authority.get("placement_authority_content_digest")
+        == observed_placement_digest
+        == trust.hssd_placement_authority_content_digest
+    ):
+        raise base.HumanVisualDemoError(
+            "R9 placement authority content digest differs from source"
+        )
+    _build_plan_pin, build_plan_raw = _read_receipt_pinned_file(
+        authority.get("build_plan"), "HSSD R2 placement source build plan"
+    )
+    build_plan = _strict_document(build_plan_raw, "HSSD R2 placement source build plan")
+    if _placement_identity_projection(
+        build_plan.get("placements"), "HSSD R2 build-plan placements"
+    ) != _placement_identity_projection(
+        _migration_placement_rows(migration), "R9 migration placements"
+    ):
+        raise base.HumanVisualDemoError(
+            "R9 migration placement identities differ from HSSD build plan"
+        )
+
+    scene_pin, scene_raw = _read_receipt_pinned_file(
+        authority.get("scene_receipt"), "HSSD R2 semantic source scene receipt"
+    )
+    if _pin_document(scene_pin) != authority.get("scene_receipt"):
+        raise base.HumanVisualDemoError("HSSD R2 semantic scene pin differs")
+    scene_document = _strict_document(scene_raw, "HSSD R2 semantic source scene")
+
+    r6_upgrade = parent.accessory_r6_upgrade
+    r6_result_payload = (
+        r6_upgrade.get("result") if isinstance(r6_upgrade, Mapping) else None
+    )
+    r6_result_pin, r6_result_raw = _read_receipt_pinned_file(
+        r6_result_payload, "R6 accessory semantic source result"
+    )
+    if execution_document.get("r6_accessory_result") != _pin_document(r6_result_pin):
+        raise base.HumanVisualDemoError("R9 semantic authority R6 result pin differs")
+    r6_result = _document_from_raw(
+        r6_result_raw, "R6 accessory semantic source result", contract="t3"
+    )
+
+    dynamic_rows = migration.get("dynamic_slots")
+    expected_dynamic = getattr(materializer, "DYNAMIC_SLOT_BINDINGS", None)
+    r6_targets = r6_result.get("target_observations_reloaded")
+    r6_pot = r6_result.get("pot_observation_reloaded")
+    if not (
+        type(expected_dynamic) is dict
+        and len(expected_dynamic) == 3
+        and type(dynamic_rows) is list
+        and len(dynamic_rows) == 3
+        and all(type(row) is dict for row in dynamic_rows)
+        and type(r6_targets) is list
+        and len(r6_targets) == 2
+        and all(type(row) is dict for row in r6_targets)
+        and type(r6_pot) is dict
+    ):
+        raise base.HumanVisualDemoError("R9 dynamic R6 authority rows differ")
+    dynamic_by_id = {row.get("instance_id"): row for row in dynamic_rows}
+    r6_by_semantic = {row.get("semantic_id"): row for row in [*r6_targets, r6_pot]}
+    if not (
+        set(dynamic_by_id) == set(expected_dynamic)
+        and set(r6_by_semantic) == set(expected_dynamic.values())
+    ):
+        raise base.HumanVisualDemoError("R9 dynamic R6 authority identities differ")
+    for instance_id, semantic_id in expected_dynamic.items():
+        dynamic = dynamic_by_id[instance_id]
+        if not (
+            dynamic.get("semantic_id") == semantic_id
+            and dynamic.get("preserved_r6_observation") == r6_by_semantic[semantic_id]
+        ):
+            raise base.HumanVisualDemoError(
+                "R9 dynamic full-state authority differs from current R6: "
+                + instance_id
+            )
+
+    try:
+        expected = commandlet.semantic_proxy_bindings_from_authorities(
+            scene_document, migration, r6_result
+        )
+    except base.HumanVisualDemoError:
+        raise
+    except Exception as exc:
+        raise base.HumanVisualDemoError(
+            "R9 semantic proxy authority lineage failed: " + str(exc)[:512]
+        ) from exc
+    observed = _validate_semantic_proxy_bindings(
+        authority.get("semantic_proxy_bindings"),
+        "HSSD R2 semantic proxy execution authority",
+    )
+    if observed != expected:
+        raise base.HumanVisualDemoError(
+            "HSSD R2 semantic proxy execution authority differs from source"
+        )
 
 
 def _validate_upgrade(

@@ -60,7 +60,12 @@ def _dynamic_observation(semantic_id: str, z: float, relative_z: float) -> dict:
         },
         "proxy": {
             "component_name": "PickupMesh",
+            "component_path": (
+                materializer.MAP_OBJECT_PATH + ".Proxy_" + semantic_id[-6:]
+            ),
             "collision_mode": "QueryOnly",
+            "generate_overlap_events": True,
+            "can_ever_affect_navigation": False,
             "visible": False,
         },
         "portable": True,
@@ -153,6 +158,8 @@ def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureSta
     placements = []
     for index, instance_id in enumerate(placement_ids):
         semantic_id = materializer.DYNAMIC_SLOT_BINDINGS.get(instance_id)
+        if semantic_id is None and instance_id in static_ids[:16]:
+            semantic_id = f"home.r1/room.bedroom/entity.static.{index:02d}"
         placements.append(
             {
                 "instance_id": instance_id,
@@ -191,11 +198,41 @@ def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureSta
         "target_observations_reloaded": [phone, cup],
         "pot_observation_reloaded": pot,
     }
+    placement_by_id = {row["instance_id"]: row for row in placements}
+    semantic_bindings = [
+        {
+            "instance_id": instance_id,
+            "semantic_id": placement_by_id[instance_id]["semantic_target_id"],
+            "actor_path": materializer.MAP_OBJECT_PATH + f".Semantic_{index:02d}",
+            "component_path": (
+                materializer.MAP_OBJECT_PATH + f".Semantic_{index:02d}.PropMesh"
+            ),
+            "generate_overlap_events": False,
+            "can_ever_affect_navigation": index < 15,
+        }
+        for index, instance_id in enumerate(sorted(static_ids[:16]))
+    ]
+    dynamic_by_semantic = {row["semantic_id"]: row for row in [phone, cup, pot]}
+    for instance_id, semantic_id in materializer.DYNAMIC_SLOT_BINDINGS.items():
+        observation = dynamic_by_semantic[semantic_id]
+        semantic_bindings.append(
+            {
+                "instance_id": instance_id,
+                "semantic_id": semantic_id,
+                "actor_path": observation["actor_path"],
+                "component_path": observation["proxy"]["component_path"],
+                "generate_overlap_events": True,
+                "can_ever_affect_navigation": False,
+            }
+        )
+    semantic_bindings.sort(key=lambda row: row["instance_id"])
+    semantic_instance_ids = {*static_ids[:16], *dynamic_ids}
+    secondary_instance_ids = set(static_ids[16:36])
     collision = []
-    for index, instance_id in enumerate(placement_ids):
-        if index < 19:
+    for instance_id in placement_ids:
+        if instance_id in semantic_instance_ids:
             policy = "retained_r1_semantic_proxy_authority_unchanged"
-        elif index < 39:
+        elif instance_id in secondary_instance_ids:
             policy = "secondary_simple_aabb_candidate_review_pending"
         else:
             policy = "explicit_detail_no_collision"
@@ -257,7 +294,11 @@ def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureSta
                 "size_bytes": materializer.HSSD_R2_MAP_BYTES,
             },
             "placement_count": 60,
+            "placement_authority_content_digest": (
+                materializer._placement_authority_content_digest(placements)
+            ),
             "semantic_proxy_count": 19,
+            "semantic_proxy_bindings": semantic_bindings,
             "transform_override_count": 17,
         },
         hssd_namespace=copy.deepcopy(materializer.HSSD_NAMESPACE_TREE),
@@ -291,6 +332,56 @@ def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureSta
     return source, fixtures
 
 
+def _semantic_scene(bindings: list[dict]) -> dict:
+    proxies = []
+    for binding in bindings:
+        semantic_id = binding["semantic_id"]
+        observation = {
+            "actor_class_path": "/Script/VistaPlayableHome.VistaSemanticPropActor",
+            "actor_collision_enabled": True,
+            "actor_hidden_in_game": True,
+            "actor_label": "SemanticAuthority",
+            "actor_path": binding["actor_path"],
+            "components": [
+                {
+                    "can_ever_affect_navigation": binding["can_ever_affect_navigation"],
+                    "collision_enabled": True,
+                    "collision_mode": "QueryOnly",
+                    "collision_profile": "Custom",
+                    "collision_responses": {
+                        "Pawn": "Block",
+                        "Visibility": "Block",
+                    },
+                    "component_path": binding["component_path"],
+                    "generate_overlap_events": binding["generate_overlap_events"],
+                    "mesh_path": "/Game/VISTA/Test.Test",
+                    "mobility": "Static",
+                    "simulate_physics": False,
+                    "visible": False,
+                }
+            ],
+            "semantic_state": {"semantic_id": semantic_id},
+            "semantic_target_id": semantic_id,
+            "tags": ["VistaSemanticId=" + semantic_id],
+            "world_transform_cm": {
+                "location_cm": [0.0, 0.0, 0.0],
+                "rotation_deg": [0.0, 0.0, 0.0],
+                "scale": [1.0, 1.0, 1.0],
+            },
+        }
+        proxies.append(
+            {
+                "after_authority_repair_and_hide": copy.deepcopy(observation),
+                "authority": "hidden_r1_proxy_query_authority_repaired",
+                "authority_evidence": {"fixture": True},
+                "baseline": {"fixture": True},
+                "reloaded": copy.deepcopy(observation),
+                "semantic_target_id": semantic_id,
+            }
+        )
+    return {"semantic_proxies": proxies}
+
+
 def _config(tmp_path: pathlib.Path) -> tuple[materializer.Config, pathlib.Path]:
     parent = tmp_path / "runs"
     parent.mkdir(mode=0o700)
@@ -317,6 +408,61 @@ def _write(path: pathlib.Path, raw: bytes, *, mode: int = 0o600) -> pathlib.Path
 def _artifact(path: pathlib.Path) -> materializer.Artifact:
     raw = path.read_bytes()
     return materializer.Artifact(path, hashlib.sha256(raw).hexdigest(), len(raw))
+
+
+def test_source_semantic_proxy_projection_is_exact_and_dynamic_cross_bound() -> None:
+    source, _fixtures = _fixture_inputs()
+    expected = copy.deepcopy(source.hssd_authority["semantic_proxy_bindings"])
+    scene = _semantic_scene(expected)
+
+    observed = materializer._semantic_proxy_bindings(
+        scene, source.placements, source.r6_result
+    )
+
+    assert observed == expected
+    assert materializer._validate_semantic_proxy_bindings(
+        observed, "semantic bindings"
+    ) == {row["instance_id"]: row for row in expected}
+
+
+def test_source_semantic_proxy_projection_rejects_dynamic_r6_drift() -> None:
+    source, _fixtures = _fixture_inputs()
+    expected = copy.deepcopy(source.hssd_authority["semantic_proxy_bindings"])
+    scene = _semantic_scene(expected)
+    r6_result = copy.deepcopy(source.r6_result)
+    r6_result["target_observations_reloaded"][0]["proxy"]["generate_overlap_events"] = (
+        False
+    )
+
+    with pytest.raises(materializer.R9PreflightError, match="dynamic proxy/HSSD"):
+        materializer._semantic_proxy_bindings(scene, source.placements, r6_result)
+
+
+def test_source_semantic_proxy_projection_rejects_replaced_dynamic_identity() -> None:
+    source, _fixtures = _fixture_inputs()
+    expected = copy.deepcopy(source.hssd_authority["semantic_proxy_bindings"])
+    scene = _semantic_scene(expected)
+    placements = copy.deepcopy(list(source.placements))
+    old_semantic_id = materializer.DYNAMIC_SLOT_BINDINGS["hssd.r1/bedroom.phone.01"]
+    replacement = "home.r1/room.bedroom/entity.resealed_phone.01"
+    placement = next(
+        row for row in placements if row["semantic_target_id"] == old_semantic_id
+    )
+    placement["semantic_target_id"] = replacement
+    proxy = next(
+        row
+        for row in scene["semantic_proxies"]
+        if row["semantic_target_id"] == old_semantic_id
+    )
+    proxy["semantic_target_id"] = replacement
+    reloaded = proxy["reloaded"]
+    reloaded["semantic_target_id"] = replacement
+    reloaded["semantic_state"]["semantic_id"] = replacement
+    reloaded["tags"] = ["VistaSemanticId=" + replacement]
+    proxy["after_authority_repair_and_hide"] = copy.deepcopy(reloaded)
+
+    with pytest.raises(materializer.R9PreflightError, match="dynamic semantic"):
+        materializer._semantic_proxy_bindings(scene, placements, source.r6_result)
 
 
 def _apply_fixture(
@@ -507,6 +653,7 @@ def _write_commandlet_success(
 
 
 def test_production_lineage_constants_are_exact() -> None:
+    assert materializer.EXECUTION_SCHEMA.endswith("execution/v2")
     assert materializer.R6_RECEIPT_SHA256 == (
         "6370e4e179a1f2485ddf3fab572a15426b7703eefa6ae6c6ea6d9ca7f7648870"
     )
@@ -676,6 +823,8 @@ def test_dry_run_build_plan_is_deterministic_and_zero_write(
     second = materializer.build_plan(attempt, config=config)
 
     assert first.report == second.report
+    assert first.report["schema_version"] == materializer.PLAN_SCHEMA
+    assert materializer.PLAN_SCHEMA.endswith("plan/v2")
     assert first.report["status"] == materializer.DRY_RUN_STATUS
     assert first.report["mode"] == "dry_run_zero_write"
     assert first.report["will_write"] is False
@@ -1198,7 +1347,7 @@ def test_schema_and_local_artifact_names_match_v5_launcher_contract() -> None:
     assert materializer.COMBINED_RECEIPT_SCHEMA_V5.endswith("/v5")
     assert (
         materializer.UPGRADE_SCHEMA
-        == "simworld.vista.hssd-r2-citysample-live-upgrade/v1"
+        == "simworld.vista.hssd-r2-citysample-live-upgrade/v2"
     )
     assert materializer.UPGRADE_STATUS == "hssd_r2_citysample_live_saved_cold_reloaded"
     assert materializer.FINISH_PROFILE_LOCAL_NAME == (

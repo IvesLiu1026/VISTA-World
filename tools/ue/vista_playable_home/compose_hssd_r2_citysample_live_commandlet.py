@@ -31,7 +31,7 @@ except ModuleNotFoundError:  # pragma: no cover - exercised by import-safety tes
     unreal = None  # type: ignore[assignment]
 
 
-EXECUTION_SCHEMA = "simworld.vista.hssd-r2-citysample-live-execution/v1"
+EXECUTION_SCHEMA = "simworld.vista.hssd-r2-citysample-live-execution/v2"
 RESULT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-result/v1"
 SCENE_RECEIPT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-scene-receipt/v1"
 RESULT_STATUS = "hssd_r2_citysample_live_saved_cold_reloaded"
@@ -88,6 +88,9 @@ HSSD_HOST_SHA256 = "e911fc34a6b869f41ebc294f7f0f3c67db25abe853fcfb2af34b91e416c5
 HSSD_SCENE_SHA256 = "f7d225fb07a51f6eeb76e565df589a317f57c7618b489393c44b79b23a5f4a4d"
 HSSD_PLAN_SHA256 = "4b2ded463a0be4caf26cd326a06944ab171d93c917d5de530fd36ca9b3ae9de2"
 HSSD_MAP_SHA256 = "60c4f7195d3715e6f6d6691594ca17c481fdad21e838121fcae9ed3ffca4f4d1"
+HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST = (
+    "6ba35488c0dee391faaa6884144f7f37955d37dcfd2f0110622c63d350ab52a9"
+)
 HSSD_NAMESPACE_TREE = {
     "algorithm": "sha256-path-nul-mode-size-content-v1",
     "file_count": 208,
@@ -1382,7 +1385,348 @@ def validate_composition_contract(
     return value
 
 
-def _validate_authority(value: Any) -> None:
+def _semantic_proxy_binding_from_authority_observation(
+    observation: Any, semantic_id: str, label: str
+) -> dict[str, Any]:
+    require_keys(
+        observation,
+        {
+            "actor_class_path",
+            "actor_collision_enabled",
+            "actor_hidden_in_game",
+            "actor_label",
+            "actor_path",
+            "components",
+            "semantic_state",
+            "semantic_target_id",
+            "tags",
+            "world_transform_cm",
+        },
+        label + " observation",
+    )
+    components = observation["components"]
+    semantic_state = observation["semantic_state"]
+    require(
+        observation["semantic_target_id"] == semantic_id
+        and type(semantic_state) is dict
+        and semantic_state.get("semantic_id") == semantic_id
+        and type(observation["actor_path"]) is str
+        and observation["actor_path"]
+        and observation["actor_hidden_in_game"] is True
+        and observation["actor_collision_enabled"] is True
+        and type(observation["tags"]) is list
+        and "VistaSemanticId=" + semantic_id in observation["tags"]
+        and type(components) is list
+        and len(components) == 1,
+        label + " actor authority differs",
+    )
+    component = require_keys(
+        components[0],
+        {
+            "can_ever_affect_navigation",
+            "collision_enabled",
+            "collision_mode",
+            "collision_profile",
+            "collision_responses",
+            "component_path",
+            "generate_overlap_events",
+            "mesh_path",
+            "mobility",
+            "simulate_physics",
+            "visible",
+        },
+        label + " component",
+    )
+    require(
+        type(component["component_path"]) is str
+        and component["component_path"]
+        and component["collision_enabled"] is True
+        and component["collision_mode"] == "QueryOnly"
+        and component["collision_profile"] == "Custom"
+        and component["collision_responses"] == {"Pawn": "Block", "Visibility": "Block"}
+        and component["simulate_physics"] is False
+        and type(component["generate_overlap_events"]) is bool
+        and type(component["can_ever_affect_navigation"]) is bool
+        and component["visible"] is False,
+        label + " component authority differs",
+    )
+    return {
+        "semantic_id": semantic_id,
+        "actor_path": observation["actor_path"],
+        "component_path": component["component_path"],
+        "generate_overlap_events": component["generate_overlap_events"],
+        "can_ever_affect_navigation": component["can_ever_affect_navigation"],
+    }
+
+
+def validate_semantic_proxy_binding(value: Any, label: str) -> dict[str, Any]:
+    binding = require_keys(
+        value,
+        {
+            "instance_id",
+            "semantic_id",
+            "actor_path",
+            "component_path",
+            "generate_overlap_events",
+            "can_ever_affect_navigation",
+        },
+        label,
+    )
+    require(
+        type(binding["instance_id"]) is str
+        and binding["instance_id"]
+        and type(binding["semantic_id"]) is str
+        and binding["semantic_id"]
+        and type(binding["actor_path"]) is str
+        and binding["actor_path"]
+        and type(binding["component_path"]) is str
+        and binding["component_path"]
+        and type(binding["generate_overlap_events"]) is bool
+        and type(binding["can_ever_affect_navigation"]) is bool,
+        label + " values differ",
+    )
+    return binding
+
+
+def placement_authority_content_digest(migration: Mapping[str, Any]) -> str:
+    require(type(migration) is dict, "placement authority migration differs")
+    final_static = migration.get("final_static_slots")
+    dynamic = migration.get("dynamic_slots")
+    require(
+        type(final_static) is list
+        and len(final_static) == 57
+        and type(dynamic) is list
+        and len(dynamic) == 3
+        and all(type(row) is dict for row in final_static)
+        and all(
+            type(row) is dict and type(row.get("logical_r2_slot")) is dict
+            for row in dynamic
+        ),
+        "placement authority rows differ",
+    )
+    rows = sorted(
+        [
+            *(copy.deepcopy(row) for row in final_static),
+            *(copy.deepcopy(row["logical_r2_slot"]) for row in dynamic),
+        ],
+        key=lambda row: row.get("instance_id", ""),
+    )
+    require(
+        all(type(row.get("instance_id")) is str and row["instance_id"] for row in rows)
+        and len({row["instance_id"] for row in rows}) == 60,
+        "placement authority identities differ",
+    )
+    return hashlib.sha256(canonical_json(rows).removesuffix(b"\n")).hexdigest()
+
+
+def validate_semantic_proxy_bindings(
+    value: Any, label: str
+) -> dict[str, dict[str, Any]]:
+    require(type(value) is list and len(value) == 19, label + " count differs")
+    rows = [
+        validate_semantic_proxy_binding(row, label + " row " + str(index))
+        for index, row in enumerate(value)
+    ]
+    require(
+        rows == sorted(rows, key=lambda row: row["instance_id"])
+        and len({row["instance_id"] for row in rows}) == 19
+        and len({row["semantic_id"] for row in rows}) == 19
+        and len({row["actor_path"] for row in rows}) == 19
+        and len({row["component_path"] for row in rows}) == 19,
+        label + " identities differ",
+    )
+    distribution = {
+        state: sum(
+            (
+                row["generate_overlap_events"],
+                row["can_ever_affect_navigation"],
+            )
+            == state
+            for row in rows
+        )
+        for state in ((False, True), (False, False), (True, False), (True, True))
+    }
+    require(
+        distribution
+        == {
+            (False, True): 15,
+            (False, False): 1,
+            (True, False): 3,
+            (True, True): 0,
+        },
+        label + " boolean distribution differs",
+    )
+    return {row["instance_id"]: row for row in rows}
+
+
+def validate_dynamic_semantic_binding(
+    binding: Mapping[str, Any], dynamic: Mapping[str, Any], label: str
+) -> None:
+    binding = validate_semantic_proxy_binding(binding, label + " binding")
+    observation = dynamic["preserved_r6_observation"]
+    require(type(observation) is dict, label + " R6 observation differs")
+    proxy = observation.get("proxy")
+    require(
+        dynamic["instance_id"] == binding["instance_id"]
+        and dynamic["semantic_id"] == binding["semantic_id"]
+        and observation.get("semantic_id") == binding["semantic_id"]
+        and observation.get("actor_path") == binding["actor_path"]
+        and type(proxy) is dict
+        and proxy.get("component_path") == binding["component_path"]
+        and proxy.get("generate_overlap_events") is binding["generate_overlap_events"]
+        and proxy.get("can_ever_affect_navigation")
+        is binding["can_ever_affect_navigation"],
+        label + " differs from preserved R6 authority",
+    )
+
+
+def semantic_proxy_bindings_from_authorities(
+    scene: Mapping[str, Any],
+    migration: Mapping[str, Any],
+    r6_result: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    require(
+        type(scene) is dict and type(migration) is dict and type(r6_result) is dict,
+        "semantic projection source documents differ",
+    )
+    final_static = migration.get("final_static_slots")
+    dynamic = migration.get("dynamic_slots")
+    require(
+        type(final_static) is list
+        and type(dynamic) is list
+        and all(type(row) is dict for row in final_static)
+        and all(
+            type(row) is dict and type(row.get("logical_r2_slot")) is dict
+            for row in dynamic
+        ),
+        "semantic projection migration rows differ",
+    )
+    placements = [
+        *final_static,
+        *(row["logical_r2_slot"] for row in dynamic),
+    ]
+    require(
+        all("semantic_target_id" in row and "instance_id" in row for row in placements),
+        "semantic projection placement fields differ",
+    )
+    semantic_to_instance = {
+        row["semantic_target_id"]: row["instance_id"]
+        for row in placements
+        if row["semantic_target_id"] is not None
+    }
+    require(
+        len(semantic_to_instance) == 19
+        and all(
+            type(semantic_id) is str
+            and semantic_id
+            and type(instance_id) is str
+            and instance_id
+            for semantic_id, instance_id in semantic_to_instance.items()
+        ),
+        "HSSD semantic placement binding differs",
+    )
+    proxies = scene.get("semantic_proxies")
+    require(type(proxies) is list and len(proxies) == 19, "HSSD proxy count differs")
+    rows: list[dict[str, Any]] = []
+    for index, proxy in enumerate(proxies):
+        label = "HSSD semantic proxy " + str(index)
+        require_keys(
+            proxy,
+            {
+                "after_authority_repair_and_hide",
+                "authority",
+                "authority_evidence",
+                "baseline",
+                "reloaded",
+                "semantic_target_id",
+            },
+            label,
+        )
+        require(
+            proxy["authority"] == "hidden_r1_proxy_query_authority_repaired"
+            and proxy["after_authority_repair_and_hide"] == proxy["reloaded"],
+            label + " sealed lifecycle differs",
+        )
+        semantic_id = proxy["semantic_target_id"]
+        require(
+            type(semantic_id) is str and semantic_id in semantic_to_instance,
+            label + " semantic ID differs",
+        )
+        projected = _semantic_proxy_binding_from_authority_observation(
+            proxy["reloaded"], semantic_id, label
+        )
+        rows.append({"instance_id": semantic_to_instance[semantic_id], **projected})
+    rows.sort(key=lambda row: row["instance_id"])
+    require(
+        len({row["instance_id"] for row in rows}) == 19
+        and len({row["semantic_id"] for row in rows}) == 19
+        and {row["semantic_id"] for row in rows} == set(semantic_to_instance),
+        "HSSD semantic proxy projection identities differ",
+    )
+    distribution = {
+        state: sum(
+            (
+                row["generate_overlap_events"],
+                row["can_ever_affect_navigation"],
+            )
+            == state
+            for row in rows
+        )
+        for state in ((False, True), (False, False), (True, False), (True, True))
+    }
+    require(
+        distribution
+        == {
+            (False, True): 15,
+            (False, False): 1,
+            (True, False): 3,
+            (True, True): 0,
+        },
+        "HSSD semantic proxy boolean distribution differs",
+    )
+    binding_by_semantic = {row["semantic_id"]: row for row in rows}
+    require(
+        set(DYNAMIC_SLOT_BINDINGS.values()).issubset(binding_by_semantic),
+        "HSSD dynamic semantic proxy identities differ",
+    )
+    dynamic_rows = r6_result.get("target_observations_reloaded")
+    pot = r6_result.get("pot_observation_reloaded")
+    require(
+        type(dynamic_rows) is list and len(dynamic_rows) == 2 and type(pot) is dict,
+        "R6 dynamic observations differ",
+    )
+    require(
+        all(type(row) is dict for row in [*dynamic_rows, pot]),
+        "R6 dynamic observation rows differ",
+    )
+    r6_dynamic = {row.get("semantic_id"): row for row in [*dynamic_rows, pot]}
+    require(
+        set(r6_dynamic) == set(DYNAMIC_SLOT_BINDINGS.values()),
+        "R6 dynamic semantic identities differ",
+    )
+    for instance_id, semantic_id in DYNAMIC_SLOT_BINDINGS.items():
+        binding = binding_by_semantic[semantic_id]
+        observed = r6_dynamic[semantic_id]
+        proxy = observed.get("proxy")
+        require(
+            binding["instance_id"] == instance_id
+            and observed.get("actor_path") == binding["actor_path"]
+            and type(proxy) is dict
+            and proxy.get("component_path") == binding["component_path"]
+            and proxy.get("generate_overlap_events")
+            is binding["generate_overlap_events"]
+            and proxy.get("can_ever_affect_navigation")
+            is binding["can_ever_affect_navigation"],
+            "R6 dynamic proxy/HSSD authority differs: " + instance_id,
+        )
+    return rows
+
+
+def _validate_authority(
+    value: Any,
+    migration: Mapping[str, Any],
+    r6_result: Mapping[str, Any],
+) -> None:
     require_keys(
         value,
         {
@@ -1391,7 +1735,9 @@ def _validate_authority(value: Any) -> None:
             "build_plan",
             "map_package",
             "placement_count",
+            "placement_authority_content_digest",
             "semantic_proxy_count",
+            "semantic_proxy_bindings",
             "transform_override_count",
         },
         "HSSD R2 authority",
@@ -1402,13 +1748,32 @@ def _validate_authority(value: Any) -> None:
         ("build_plan", HSSD_PLAN_SHA256),
         ("map_package", HSSD_MAP_SHA256),
     )
+    scene_raw: bytes | None = None
     for key, digest in pins:
-        validate_artifact(value[key], "HSSD " + key, expected_sha256=digest)
+        _path, raw = validate_artifact(
+            value[key], "HSSD " + key, expected_sha256=digest
+        )
+        if key == "scene_receipt":
+            scene_raw = raw
     require(
         value["placement_count"] == 60
+        and value["placement_authority_content_digest"]
+        == HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST
+        and value["placement_authority_content_digest"]
+        == placement_authority_content_digest(migration)
         and value["semantic_proxy_count"] == 19
         and value["transform_override_count"] == 17,
         "HSSD R2 authority counts differ",
+    )
+    require(scene_raw is not None, "HSSD R2 scene receipt bytes are absent")
+    expected_bindings = semantic_proxy_bindings_from_authorities(
+        strict_json(scene_raw, "HSSD R2 scene receipt"), migration, r6_result
+    )
+    observed_bindings = value["semantic_proxy_bindings"]
+    validate_semantic_proxy_bindings(observed_bindings, "HSSD semantic bindings")
+    require(
+        observed_bindings == expected_bindings,
+        "HSSD R2 semantic proxy bindings differ",
     )
 
 
@@ -1497,13 +1862,17 @@ def read_execution() -> tuple[
         expected_sha256=R6_RECEIPT_SHA256,
         expected_bytes=R6_RECEIPT_BYTES,
     )
-    validate_artifact(
+    _r6_result_path, r6_result_raw = validate_artifact(
         execution["r6_accessory_result"],
         "R6 accessory result",
         expected_sha256=R6_RESULT_SHA256,
         expected_bytes=R6_RESULT_BYTES,
     )
-    _validate_authority(execution["hssd_r2_authority"])
+    r6_result = strict_json(r6_result_raw, "R6 accessory result")
+    migration = validate_migration_contract(
+        execution["composition_contract"]["migration"]
+    )
+    _validate_authority(execution["hssd_r2_authority"], migration, r6_result)
     require(
         execution["source_project_static_tree"] == R6_PROJECT_TREE
         and manifest_tree(execution["source_static_manifest"]) == R6_PROJECT_TREE
@@ -2733,8 +3102,14 @@ def compose_finish(
 
 
 def semantic_proxy_observation(
-    actor: Any, instance_id: str, semantic_id: str
+    actor: Any,
+    instance_id: str,
+    semantic_id: str,
+    expected_binding: Mapping[str, Any],
 ) -> dict[str, Any]:
+    expected_binding = validate_semantic_proxy_binding(
+        expected_binding, "semantic proxy expected binding"
+    )
     observed = actor_observation(actor)
     require(
         "VistaSemanticId=" + semantic_id in observed["tags"]
@@ -2743,17 +3118,23 @@ def semantic_proxy_observation(
     )
     component = observed["static_mesh_components"][0]
     require(
-        observed["actor_hidden_in_game"] is True
+        expected_binding["instance_id"] == instance_id
+        and expected_binding["semantic_id"] == semantic_id
+        and observed["actor_path"] == expected_binding["actor_path"]
+        and component["component_path"] == expected_binding["component_path"]
+        and observed["actor_hidden_in_game"] is True
         and observed["actor_collision_enabled"] is True
         and component["mesh_object_path"] is not None
         and component["collision_mode"] == "QueryOnly"
         and component["collision_profile_name"] == "Custom"
         and component["collision_responses"] == {"Pawn": "Block", "Visibility": "Block"}
         and component["simulate_physics"] is False
-        and component["generate_overlap_events"] is False
-        and component["can_ever_affect_navigation"] is False
+        and component["generate_overlap_events"]
+        is expected_binding["generate_overlap_events"]
+        and component["can_ever_affect_navigation"]
+        is expected_binding["can_ever_affect_navigation"]
         and component["visible"] is False,
-        "semantic proxy query authority differs",
+        "semantic proxy query authority differs: " + instance_id,
     )
     return {"instance_id": instance_id, "semantic_id": semantic_id, **observed}
 
@@ -2762,6 +3143,7 @@ def observe_static_semantic_proxies(
     actors: Sequence[Any],
     migration: Mapping[str, Any],
     profile: Mapping[str, Any],
+    semantic_bindings: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
     dynamic_ids = set(DYNAMIC_SLOT_BINDINGS)
     placement_by_id = {
@@ -2772,6 +3154,10 @@ def observe_static_semantic_proxies(
         ]
     }
     instance_ids = profile["collision_policy"]["semantic_proxies"]["instance_ids"]
+    require(
+        set(semantic_bindings) == set(instance_ids),
+        "semantic binding inventory differs",
+    )
     result = []
     for instance_id in sorted(set(instance_ids) - dynamic_ids):
         semantic_id = placement_by_id[instance_id]["semantic_target_id"]
@@ -2779,7 +3165,14 @@ def observe_static_semantic_proxies(
             type(semantic_id) is str and semantic_id, "static semantic binding absent"
         )
         actor = actor_by_tag(actors, "VistaSemanticId=" + semantic_id, "semantic proxy")
-        result.append(semantic_proxy_observation(actor, instance_id, semantic_id))
+        result.append(
+            semantic_proxy_observation(
+                actor,
+                instance_id,
+                semantic_id,
+                semantic_bindings[instance_id],
+            )
+        )
     require(len(result) == 16, "static semantic proxy count differs")
     return result
 
@@ -3177,7 +3570,12 @@ def _validate_fixture_import_document(value: Any, label: str) -> None:
     )
 
 
-def _validate_semantic_proxy_document(value: Any, label: str) -> None:
+def _validate_semantic_proxy_document(
+    value: Any, label: str, expected_binding: Mapping[str, Any]
+) -> None:
+    expected_binding = validate_semantic_proxy_binding(
+        expected_binding, label + " expected binding"
+    )
     require_keys(value, {"instance_id", "semantic_id", *ACTOR_OBSERVATION_KEYS}, label)
     actor = {key: value[key] for key in ACTOR_OBSERVATION_KEYS}
     _validate_actor_observation_document(actor, label + " actor")
@@ -3186,6 +3584,9 @@ def _validate_semantic_proxy_document(value: Any, label: str) -> None:
         and value["instance_id"]
         and type(value["semantic_id"]) is str
         and value["semantic_id"]
+        and value["instance_id"] == expected_binding["instance_id"]
+        and value["semantic_id"] == expected_binding["semantic_id"]
+        and value["actor_path"] == expected_binding["actor_path"]
         and "VistaSemanticId=" + value["semantic_id"] in value["tags"]
         and value["actor_hidden_in_game"] is True
         and value["actor_collision_enabled"] is True
@@ -3195,13 +3596,16 @@ def _validate_semantic_proxy_document(value: Any, label: str) -> None:
     )
     component = value["static_mesh_components"][0]
     require(
-        component["mesh_object_path"] is not None
+        component["component_path"] == expected_binding["component_path"]
+        and component["mesh_object_path"] is not None
         and component["collision_mode"] == "QueryOnly"
         and component["collision_profile_name"] == "Custom"
         and component["collision_responses"] == {"Pawn": "Block", "Visibility": "Block"}
         and component["simulate_physics"] is False
-        and component["generate_overlap_events"] is False
-        and component["can_ever_affect_navigation"] is False
+        and component["generate_overlap_events"]
+        is expected_binding["generate_overlap_events"]
+        and component["can_ever_affect_navigation"]
+        is expected_binding["can_ever_affect_navigation"]
         and component["visible"] is False,
         label + " query authority differs",
     )
@@ -3351,6 +3755,12 @@ def validate_result_document(
     )
     migration = validate_migration_contract(
         execution["composition_contract"]["migration"]
+    )
+    authority = execution.get("hssd_r2_authority")
+    require(type(authority) is dict, "semantic result authority differs")
+    semantic_bindings = validate_semantic_proxy_bindings(
+        authority.get("semantic_proxy_bindings"),
+        "semantic result bindings",
     )
     placement_by_id = {
         row["instance_id"]: row for row in migration["final_static_slots"]
@@ -3594,6 +4004,16 @@ def validate_result_document(
         for instance_id, policy in policy_by_id.items()
         if policy == "retained_r1_semantic_proxy_authority_unchanged"
     }
+    require(
+        set(semantic_bindings) == semantic_ids,
+        "semantic result binding inventory differs",
+    )
+    for dynamic in migration["dynamic_slots"]:
+        validate_dynamic_semantic_binding(
+            semantic_bindings[dynamic["instance_id"]],
+            dynamic,
+            "dynamic semantic binding",
+        )
     secondary_ids = {
         instance_id
         for instance_id, policy in policy_by_id.items()
@@ -3616,7 +4036,9 @@ def validate_result_document(
             "semantic identities differ",
         )
         for row in rows:
-            _validate_semantic_proxy_document(row, "semantic proxy")
+            _validate_semantic_proxy_document(
+                row, "semantic proxy", semantic_bindings[row["instance_id"]]
+            )
             require(
                 row["semantic_id"]
                 == placement_by_id[row["instance_id"]]["semantic_target_id"],
@@ -3894,6 +4316,10 @@ def _compose(
         "copied R6 project drifted before UE mutation",
     )
     migration = execution["composition_contract"]["migration"]
+    semantic_bindings = validate_semantic_proxy_bindings(
+        execution["hssd_r2_authority"]["semantic_proxy_bindings"],
+        "semantic runtime bindings",
+    )
     gates = {key: False for key in RESULT_GATE_KEYS}
     gates["source_actor_inventory_exact"] = False
 
@@ -3964,7 +4390,9 @@ def _compose(
         and dynamic_actor_paths.isdisjoint(owned_paths),
         "dynamic pickup versus finish-owned actor partition differs",
     )
-    semantic_before = observe_static_semantic_proxies(actors, migration, profile)
+    semantic_before = observe_static_semantic_proxies(
+        actors, migration, profile, semantic_bindings
+    )
 
     fixture_imports = import_fixture_assets(
         project,
@@ -4060,7 +4488,10 @@ def _compose(
         list(actor_subsystem.get_all_level_actors()), migration
     )
     semantic_after = observe_static_semantic_proxies(
-        list(actor_subsystem.get_all_level_actors()), migration, profile
+        list(actor_subsystem.get_all_level_actors()),
+        migration,
+        profile,
+        semantic_bindings,
     )
     gates["semantic_proxy_inventory_19_exact"] = (
         len(semantic_after) + len(dynamic_after) == 19
@@ -4125,7 +4556,9 @@ def _compose(
         static_reloaded == sorted(static_after, key=lambda row: row["instance_id"]),
         "static shell state drifted on cold reload",
     )
-    semantic_reloaded = observe_static_semantic_proxies(reloaded, migration, profile)
+    semantic_reloaded = observe_static_semantic_proxies(
+        reloaded, migration, profile, semantic_bindings
+    )
     require(
         semantic_reloaded == semantic_before == semantic_after,
         "semantic proxy state drifted",
