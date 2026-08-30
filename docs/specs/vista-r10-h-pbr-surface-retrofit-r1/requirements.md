@@ -126,7 +126,8 @@ Acceptance notes:
   Visibility blocking, non-simulating, non-overlapping, navigation-affecting,
   and actor collision-enabled.
 - All 108 preserved actors, 60 visual slots, six fixture actors, 19 semantic
-  proxies, 20 secondary proxies, 21 detail-no-collision rows, five portals,
+  proxies (16 static proxy actors plus three dynamic semantic instances), 20
+  secondary proxies, 21 detail-no-collision rows, five portals,
   game mode, world path, WorldSettings, lights, tags, pickup state, and provider
   remain exact except for the nine approved material-list cells on the three
   target components.

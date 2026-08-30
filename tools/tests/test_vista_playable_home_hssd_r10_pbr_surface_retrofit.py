@@ -431,10 +431,18 @@ def _fixture(tmp_path: Path) -> Fixture:
                 },
                 "collision": {
                     "semantic_static_reloaded": [
-                        {"proxy": index} for index in range(19)
+                        {"proxy": index} for index in range(16)
+                    ],
+                    "semantic_dynamic_instance_ids": [
+                        "dynamic.semantic." + str(index) for index in range(3)
                     ],
                     "secondary_reloaded": [{"proxy": index} for index in range(20)],
                     "detail_reloaded": [{"proxy": index} for index in range(21)],
+                    "policy_counts": {
+                        "detail_no_collision": 21,
+                        "secondary_query_proxies": 20,
+                        "semantic_proxies": 19,
+                    },
                 },
                 "world_reloaded": {
                     "default_game_mode": profile["source_parent"]["default_game_mode"],
