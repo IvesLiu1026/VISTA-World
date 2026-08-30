@@ -1,6 +1,6 @@
 # Tasks: R9 h CC0 Animation Overlay Plan
 
-Status: Ready for integration
+Status: Complete
 Updated: 2026-08-30
 Depends on: requirements.md, design.md
 
@@ -50,12 +50,15 @@ Depends on: requirements.md, design.md
   - Result: 43 focused and 226 related regression tests passed; third-round
     read-only review returned PASS with no remaining blocker
 
-- [ ] T6. Commit, push, and integrate
+- [x] T6. Commit, push, and integrate
   - Files: all owned files
   - Depends on: T5
   - Requirements: R5, R6, R8
   - Validation: feature branch pushed; one logical commit cherry-picked to the
     clean integration branch and pushed; both worktrees clean
+  - Result: feature commit `a2598ef0` was pushed and cherry-picked as
+    integration commit `4ca32fb2`; the integration checkout repeated all 226
+    related regressions successfully before publication
 
 ## Notes
 
