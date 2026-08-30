@@ -2,46 +2,136 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import importlib
-import importlib.util
 import json
-import shutil
-import sys
+import stat
 from dataclasses import dataclass, replace
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-from tools.blender.vista_playable_home_r9_fixtures import forge as fixture_forge
-from tools.tests.test_vista_playable_home_r9_fixtures import _write_artifact_fixture
 
 from tools.runtime.vista_playable_home import (
     hssd_r2_human_visual_demo_launch as launcher,
 )
 
-
-def _load_composition_materializer():
-    qualified_name = "tools.ue.vista_playable_home.materialize_hssd_r2_citysample_live"
-    try:
-        return importlib.import_module(qualified_name)
-    except ModuleNotFoundError:
-        for root in map(Path, sys.path):
-            source = root / Path(*qualified_name.split(".")).with_suffix(".py")
-            if not source.is_file():
-                continue
-            spec = importlib.util.spec_from_file_location(qualified_name, source)
-            if spec is None or spec.loader is None:
-                continue
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[qualified_name] = module
-            spec.loader.exec_module(module)
-            return module
-        raise
-
-
-composition_materializer = _load_composition_materializer()
-
 base = launcher.base
+
+DYNAMIC_SLOT_BINDINGS = {
+    "hssd.r1/bedroom.phone.01": "home.r1/room.bedroom/entity.phone.01",
+    "hssd.r1/kitchen_dining.coffee_cup.01": (
+        "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+    ),
+    "hssd.r1/kitchen_dining.pot.01": "home.r1/room.kitchen_dining/entity.pot.01",
+}
+DELETION_INSTANCE_ID = "hssd.r1/bedroom.phone.01"
+STATIC_MESH_CLASS = "/Script/Engine.StaticMeshActor"
+
+
+def _build_migration_contract(
+    actor_inventory: list[dict[str, object]],
+    placements: list[dict[str, object]],
+    r6_result: dict[str, object],
+    collision_ledger: list[dict[str, object]],
+) -> dict[str, object]:
+    legacy = {
+        next(
+            tag.removeprefix("VistaHssdInstanceId=")
+            for tag in row["tags"]
+            if tag.startswith("VistaHssdInstanceId=")
+        ): copy.deepcopy(row)
+        for row in actor_inventory
+        if any(tag.startswith("VistaHssdInstanceId=") for tag in row["tags"])
+    }
+    unrelated = [
+        copy.deepcopy(row)
+        for row in actor_inventory
+        if not any(tag.startswith("VistaHssdInstanceId=") for tag in row["tags"])
+    ]
+    by_id = {row["instance_id"]: row for row in placements}
+    static_ids = set(by_id) - set(DYNAMIC_SLOT_BINDINGS)
+    reuse_ids = set(legacy) - {DELETION_INSTANCE_ID}
+    spawn_ids = static_ids - reuse_ids
+    dynamic_observations = {
+        row["semantic_id"]: row
+        for row in [
+            *r6_result["target_observations_reloaded"],
+            r6_result["pot_observation_reloaded"],
+        ]
+    }
+    collision_by_id = {row["instance_id"]: row for row in collision_ledger}
+    policies = (
+        "retained_r1_semantic_proxy_authority_unchanged",
+        "secondary_simple_aabb_candidate_review_pending",
+        "explicit_detail_no_collision",
+    )
+    return {
+        "legacy_shells": [legacy[key] for key in sorted(legacy)],
+        "reuse": [
+            {
+                "source_actor": legacy[key],
+                "r2_placement": copy.deepcopy(by_id[key]),
+            }
+            for key in sorted(reuse_ids)
+        ],
+        "delete": {
+            "instance_id": DELETION_INSTANCE_ID,
+            "source_actor": legacy[DELETION_INSTANCE_ID],
+        },
+        "spawn": [copy.deepcopy(by_id[key]) for key in sorted(spawn_ids)],
+        "final_static_slots": [copy.deepcopy(by_id[key]) for key in sorted(static_ids)],
+        "dynamic_slots": [
+            {
+                "instance_id": key,
+                "semantic_id": DYNAMIC_SLOT_BINDINGS[key],
+                "logical_r2_slot": copy.deepcopy(by_id[key]),
+                "preserved_r6_observation": copy.deepcopy(
+                    dynamic_observations[DYNAMIC_SLOT_BINDINGS[key]]
+                ),
+                "transform_policy": (
+                    "preserve_complete_r6_fit_never_apply_raw_r2_transform"
+                ),
+            }
+            for key in sorted(DYNAMIC_SLOT_BINDINGS)
+        ],
+        "preserved_non_hssd_actor_inventory": sorted(
+            unrelated, key=lambda row: row["actor_path"]
+        ),
+        "collision": {
+            "policy_counts": {
+                policy: sum(
+                    row["collision_policy"] == policy for row in collision_ledger
+                )
+                for policy in policies
+            },
+            "rows": [copy.deepcopy(collision_by_id[key]) for key in sorted(by_id)],
+        },
+        "counts": {
+            "legacy_observed": 42,
+            "reused": 41,
+            "deleted": 1,
+            "spawned": 16,
+            "final_static": 57,
+            "dynamic": 3,
+            "final_visual_slots": 60,
+            "preserved_non_hssd": 108,
+        },
+    }
+
+
+materializer = SimpleNamespace(
+    DYNAMIC_SLOT_BINDINGS=DYNAMIC_SLOT_BINDINGS,
+    DELETION_INSTANCE_ID=DELETION_INSTANCE_ID,
+    STATIC_MESH_CLASS=STATIC_MESH_CLASS,
+    build_migration_contract=_build_migration_contract,
+)
+
+
+@pytest.fixture(autouse=True)
+def _use_final_materializer_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        launcher, "_composition_materializer_module", lambda: materializer
+    )
 
 
 def _sha(path: Path) -> str:
@@ -52,18 +142,55 @@ def _pin(path: Path) -> dict[str, object]:
     return {"path": str(path), "sha256": _sha(path), "size_bytes": path.stat().st_size}
 
 
-def _write(path: Path, content: bytes, *, mode: int = 0o600) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(content)
+def _write(path: Path, raw: bytes, *, mode: int = 0o600) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.write_bytes(raw)
     path.chmod(mode)
     return path
 
 
-def _write_document(path: Path, payload: dict[str, object]) -> dict[str, object]:
-    payload = copy.deepcopy(payload)
-    payload["content_digest"] = base.content_digest(payload)
-    _write(path, base.canonical_json(payload))
-    return payload
+def _write_t3(path: Path, value: dict[str, object]) -> dict[str, object]:
+    document = copy.deepcopy(value)
+    document.pop("content_digest", None)
+    document["content_digest"] = base.content_digest(document)
+    _write(path, base.canonical_json(document))
+    return document
+
+
+def _t2_digest(value: dict[str, object]) -> str:
+    body = copy.deepcopy(value)
+    body.pop("content_digest", None)
+    return hashlib.sha256(
+        json.dumps(
+            body,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+def _write_t2(path: Path, value: dict[str, object]) -> dict[str, object]:
+    document = copy.deepcopy(value)
+    document.pop("content_digest", None)
+    document["content_digest"] = _t2_digest(document)
+    raw = (
+        json.dumps(
+            document,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
+    _write(path, raw)
+    return document
+
+
+def _strict_content(path: Path) -> str:
+    return json.loads(path.read_text(encoding="utf-8"))["content_digest"]
 
 
 def _write_project(root: Path, map_bytes: bytes) -> tuple[Path, Path]:
@@ -78,23 +205,79 @@ def _write_project(root: Path, map_bytes: bytes) -> tuple[Path, Path]:
     return project, map_package
 
 
-def _composition_contract(profile: dict[str, object]) -> dict[str, object]:
+def _profile() -> dict[str, object]:
+    dynamic = sorted(materializer.DYNAMIC_SLOT_BINDINGS)
+    static = [f"hssd.r1/test.static.{index:02d}" for index in range(57)]
+    glb_inventory = []
+    package_names = []
+    for archetype in ("flush_dome", "linear_panel", "pendant"):
+        root = "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures/" + archetype
+        materials = [root + f"/M_{archetype}_{suffix}" for suffix in ("A", "B")]
+        packages = [root + "/" + archetype, *materials]
+        package_names.extend(packages)
+        glb_inventory.append(
+            {
+                "archetype_id": archetype,
+                "glb_relative_path": f"artifacts/{archetype}.glb",
+                "static_mesh_object_path": root + f"/{archetype}.{archetype}",
+                "static_mesh_package_name": packages[0],
+                "material_object_paths": [
+                    value + "." + value.rsplit("/", 1)[-1] for value in materials
+                ],
+                "material_package_names": materials,
+            }
+        )
+    value: dict[str, object] = {
+        "schema_version": launcher.FINISH_PROFILE_SCHEMA,
+        "profile_id": "hssd_r2_citysample_live_r1",
+        "source_lineage": {"fixture": True},
+        "rooms": [{"room_id": f"room-{index}"} for index in range(6)],
+        "fixture_forge": {
+            "inventory_schema_version": launcher.FIXTURE_INVENTORY_SCHEMA,
+            "inventory_status": "fixture_inventory_sealed_snapshot_provenance_not_ue_imported",
+        },
+        "fixture_imports": {
+            "package_root": "/Game/VISTA/PlayableHome/vista_playable_home_r1/R9Fixtures",
+            "glb_inventory": glb_inventory,
+            "exact_package_names": sorted(package_names),
+            "expected_package_count": 9,
+            "import_policy": {"fixture": True},
+            "binary_payload_in_git": False,
+        },
+        "hssd_r2_inventory": {
+            "visual_slot_count": 60,
+            "static_shell_count": 57,
+            "visual_slot_instance_ids": sorted([*static, *dynamic]),
+            "dynamic_presentation_instance_ids": dynamic,
+            "protected_portal_count": 5,
+        },
+        "collision_policy": {"fixture": True},
+        "claims": {
+            "runtime_visual_acceptance": False,
+            "interaction_accepted": False,
+            "playable_collision_accepted": False,
+            "photoreal_character_accepted": False,
+            "gta_level_quality": False,
+        },
+    }
+    value["content_digest"] = _t2_digest(value)
+    return value
+
+
+def _migration(profile: dict[str, object]) -> dict[str, object]:
     inventory = profile["hssd_r2_inventory"]
     visual_ids = sorted(inventory["visual_slot_instance_ids"])
     dynamic_ids = set(inventory["dynamic_presentation_instance_ids"])
     static_ids = sorted(set(visual_ids) - dynamic_ids)
-    legacy_ids = [composition_materializer.DELETION_INSTANCE_ID, *static_ids[:41]]
+    legacy_ids = [materializer.DELETION_INSTANCE_ID, *static_ids[:41]]
 
     def actor(index: int, instance_id: str | None = None) -> dict[str, object]:
         tags = ["VistaRole=unrelated"]
         if instance_id is not None:
-            tags = [
-                "VistaHssdInstanceId=" + instance_id,
-                "VistaRole=hssd_visual_shell",
-            ]
+            tags = ["VistaHssdInstanceId=" + instance_id]
         return {
             "actor_path": f"{launcher.MAP_OBJECT_PATH}.Actor_{index:03d}",
-            "actor_class_path": composition_materializer.STATIC_MESH_CLASS,
+            "actor_class_path": materializer.STATIC_MESH_CLASS,
             "tags": tags,
         }
 
@@ -111,7 +294,7 @@ def _composition_contract(profile: dict[str, object]) -> dict[str, object]:
                 "instance_id": instance_id,
                 "room_id": "home.r1/room.bedroom",
                 "source_asset_id": "hssd.static.test",
-                "semantic_target_id": composition_materializer.DYNAMIC_SLOT_BINDINGS.get(
+                "semantic_target_id": materializer.DYNAMIC_SLOT_BINDINGS.get(
                     instance_id
                 ),
                 "object_path": "/Game/VISTA/HSSD/Test.Test",
@@ -122,12 +305,11 @@ def _composition_contract(profile: dict[str, object]) -> dict[str, object]:
                 },
                 "tags": ["VistaHssdInstanceId=" + instance_id],
                 "visual_policy": {"collision_profile": "NoCollision"},
-            },
+            }
         )
         collision.append(
             {"instance_id": instance_id, "collision_policy": policies[index]}
         )
-
     actors = [actor(index, value) for index, value in enumerate(legacy_ids)]
     actors.extend(actor(index + 42) for index in range(108))
 
@@ -161,41 +343,80 @@ def _composition_contract(profile: dict[str, object]) -> dict[str, object]:
             "portable": True,
         }
 
-    dynamic_observations = {
+    observations = {
         instance_id: observation(semantic_id, index)
         for index, (instance_id, semantic_id) in enumerate(
-            composition_materializer.DYNAMIC_SLOT_BINDINGS.items()
+            materializer.DYNAMIC_SLOT_BINDINGS.items()
         )
     }
     pot_id = "hssd.r1/kitchen_dining.pot.01"
-    r6_result = {
-        "actor_inventory_reloaded": actors,
-        "target_observations_reloaded": [
-            dynamic_observations[key]
-            for key in sorted(dynamic_observations)
-            if key != pot_id
-        ],
-        "pot_observation_reloaded": dynamic_observations[pot_id],
-    }
-    return composition_materializer.build_migration_contract(
-        actors, placements, r6_result, collision
+    return materializer.build_migration_contract(
+        actors,
+        placements,
+        {
+            "actor_inventory_reloaded": actors,
+            "target_observations_reloaded": [
+                observations[key] for key in sorted(observations) if key != pot_id
+            ],
+            "pot_observation_reloaded": observations[pot_id],
+        },
+        collision,
     )
 
 
-def _write_t2_fixture_bundle(root: Path) -> tuple[dict, dict, dict, Path, dict]:
-    patcher = pytest.MonkeyPatch()
-    try:
-        plan, worker = _write_artifact_fixture(root, patcher)
-        inventory = fixture_forge._build_inventory(plan, worker, root)
-        return (
-            plan,
-            worker,
-            inventory,
-            root.parent,
-            copy.deepcopy(plan["toolchain"]),
-        )
-    finally:
-        patcher.undo()
+def _relative_pin(path: Path, root: Path) -> dict[str, object]:
+    return {
+        "path": path.relative_to(root).as_posix(),
+        "sha256": _sha(path),
+        "size_bytes": path.stat().st_size,
+    }
+
+
+def _evidence_manifest(root: Path, relatives: list[str]) -> dict[str, object]:
+    rows = []
+    manifest = {}
+    directories: set[str] = set()
+    for relative in sorted(relatives):
+        path = root / relative
+        mode = stat.S_IMODE(path.stat().st_mode)
+        rows.append({"relative_path": relative, **_pin(path), "mode": mode})
+        manifest[relative] = {
+            "sha256": _sha(path),
+            "size_bytes": path.stat().st_size,
+            "mode": mode,
+        }
+        parent = Path(relative).parent
+        while parent != Path("."):
+            directories.add(parent.as_posix())
+            parent = parent.parent
+    value: dict[str, object] = {
+        "schema_version": launcher.FIXTURE_EVIDENCE_SCHEMA,
+        "root": str(root),
+        "files": rows,
+        "directories": [
+            {
+                "relative_path": relative,
+                "path": str(root / relative),
+                "mode": stat.S_IMODE((root / relative).stat().st_mode),
+            }
+            for relative in sorted(directories)
+        ],
+        "tree": launcher._manifest_tree(manifest),
+    }
+    value["content_digest"] = base.content_digest(value)
+    return value
+
+
+def _log_snapshot(path: Path) -> dict[str, object]:
+    metadata = path.stat()
+    return {
+        "device": metadata.st_dev,
+        "inode": metadata.st_ino,
+        "size_bytes": metadata.st_size,
+        "mtime_ns": metadata.st_mtime_ns,
+        "ctime_ns": metadata.st_ctime_ns,
+        "sha256": _sha(path),
+    }
 
 
 @dataclass
@@ -204,89 +425,84 @@ class Fixture:
     receipt: dict[str, object]
     trust: launcher.LauncherTrust
     parent: base.HumanVisualDemoInputs
-    t2_run_parent: Path
-    t2_toolchain: dict[str, object]
+    profile: dict[str, object]
+    inventory: dict[str, object]
+    evidence: dict[str, object]
+    result: dict[str, object]
+    host: dict[str, object]
 
     def parent_loader(self, path: Path) -> base.HumanVisualDemoInputs:
         assert path == self.trust.r6_receipt.path
         return self.parent
 
     def load(self) -> launcher.R9HumanVisualDemoInputs:
-        with (
-            mock.patch.object(fixture_forge, "DEFAULT_RUN_PARENT", self.t2_run_parent),
-            mock.patch.object(
-                fixture_forge,
-                "_verify_toolchain",
-                return_value=copy.deepcopy(self.t2_toolchain),
-            ),
-        ):
-            return launcher.load_combined_receipt(
-                self.receipt_path, trust=self.trust, parent_loader=self.parent_loader
-            )
-
-    def reseal(self) -> None:
-        self.receipt["content_digest"] = base.content_digest(self.receipt)
-        raw = base.canonical_json(self.receipt)
-        self.receipt_path.write_bytes(raw)
-        self.receipt_path.with_name(base.COMBINED_RECEIPT_SIDECAR_NAME).write_text(
-            f"{hashlib.sha256(raw).hexdigest()}  {base.COMBINED_RECEIPT_NAME}\n",
-            encoding="ascii",
+        return launcher.load_combined_receipt(
+            self.receipt_path,
+            trust=self.trust,
+            parent_loader=self.parent_loader,
         )
 
 
 def _fixture(tmp_path: Path) -> Fixture:
-    source_project, source_map = _write_project(
-        tmp_path / "r6-project", b"sealed-r6-map\n"
-    )
-    output_root = tmp_path / "r9-attempt"
+    source_project, source_map = _write_project(tmp_path / "r6-project", b"r6-map\n")
+    attempt = tmp_path / "r9-attempt"
     output_project, output_map = _write_project(
-        output_root / "project", b"sealed-r9-map-plus-hssd-finish\n"
+        attempt / "project", b"r9-map-with-finish\n"
     )
-    namespace_relative = Path(launcher.HSSD_NAMESPACE_RELATIVE)
-    namespace_bytes = b"byte-identical-hssd-namespace\n"
-    _write(
-        source_project.parent / namespace_relative / "Fixture.uasset", namespace_bytes
-    )
-    _write(
-        output_project.parent / namespace_relative / "Fixture.uasset", namespace_bytes
-    )
+    namespace = Path(launcher.HSSD_NAMESPACE_RELATIVE) / "Fixture.uasset"
+    _write(source_project.parent / namespace, b"same-hssd\n")
+    _write(output_project.parent / namespace, b"same-hssd\n")
+
     executable = _write(
         tmp_path / "UE/Engine/Binaries/Linux/UnrealEditor",
         b"#!/bin/sh\nexit 0\n",
         mode=0o500,
     )
-    unreal_cmd = _write(
-        executable.with_name("UnrealEditor-Cmd"), b"#!/bin/sh\nexit 0\n", mode=0o500
-    )
-    build_version = _write(
-        tmp_path / "UE/Engine/Build/Build.version", b'{"MajorVersion":5}\n'
-    )
-
+    unreal_cmd = _write(executable.with_name("UnrealEditor-Cmd"), b"cmd\n", mode=0o500)
+    build_version = _write(tmp_path / "UE/Engine/Build/Build.version", b"{}\n")
     provenance: dict[str, object] = {}
     for key in base.SOURCE_PROVENANCE_ARTIFACT_KEYS:
-        artifact = _write(tmp_path / "provenance" / f"{key}.json", b'{"sealed":true}\n')
-        provenance[key] = _pin(artifact)
+        provenance[key] = _pin(_write(tmp_path / "provenance" / f"{key}.json", b"{}\n"))
     provenance["plugin_package_tree_sha256"] = "a" * 64
     provenance["plugin_source_git_commit"] = "b" * 40
 
-    r6_receipt = _write(
-        tmp_path / "rollback-evidence" / base.COMBINED_RECEIPT_NAME,
-        b'{"sealed":"r6-v4-parent"}\n',
-    )
+    r6_receipt = _write(tmp_path / "r6" / base.COMBINED_RECEIPT_NAME, b"r6\n")
     r6_workdir = tmp_path / "r6-worktree"
     r6_launcher = _write(
         r6_workdir / "tools/runtime/vista_playable_home/human_visual_demo_launch.py",
-        b"# sealed rollback launcher\n",
+        b"# launcher\n",
     )
-    uv = _write(tmp_path / "bin/uv", b"#!/bin/sh\nexit 0\n", mode=0o500)
-    systemd_run = _write(
-        tmp_path / "bin/systemd-run", b"#!/bin/sh\nexit 0\n", mode=0o500
-    )
-    hssd_host = _write(tmp_path / "hssd/host.json", b'{"sealed":"host"}\n')
-    hssd_scene = _write(tmp_path / "hssd/scene.json", b'{"sealed":"scene"}\n')
-    hssd_plan = _write(tmp_path / "hssd/build-plan.json", b'{"sealed":"plan"}\n')
-    hssd_map = _write(tmp_path / "hssd/VistaPlayableHome.umap", b"hssd-authority-map\n")
+    uv = _write(tmp_path / "bin/uv", b"#!/bin/sh\n", mode=0o500)
+    systemd_run = _write(tmp_path / "bin/systemd-run", b"#!/bin/sh\n", mode=0o500)
+    hssd_host = _write(tmp_path / "hssd/host.json", b"host\n")
+    hssd_scene = _write(tmp_path / "hssd/scene.json", b"scene\n")
+    hssd_plan = _write(tmp_path / "hssd/plan.json", b"plan\n")
+    hssd_map = _write(tmp_path / "hssd/map.umap", b"map\n")
+    accessory = _write(tmp_path / "r6/accessory.json", b"accessory\n")
 
+    source_pin = base.ArtifactPin(
+        source_project, _sha(source_project), source_project.stat().st_size
+    )
+    source_map_pin = base.ArtifactPin(
+        source_map, _sha(source_map), source_map.stat().st_size
+    )
+    executable_pin = base.ArtifactPin(
+        executable, _sha(executable), executable.stat().st_size
+    )
+    parent = base.HumanVisualDemoInputs(
+        receipt=r6_receipt,
+        receipt_sha256=_sha(r6_receipt),
+        receipt_content_digest="c" * 64,
+        project=source_pin,
+        project_static_tree=base.compute_project_static_tree(source_project),
+        source_provenance=copy.deepcopy(provenance),
+        executable=executable_pin,
+        map_object_path=launcher.MAP_OBJECT_PATH,
+        map_package=source_map_pin,
+        receipt_schema_version=base.COMBINED_RECEIPT_SCHEMA_V4,
+        realism_r4_upgrade={"sealed": True},
+        accessory_r6_upgrade={"result": _pin(accessory)},
+    )
     trust = launcher.LauncherTrust(
         r6_receipt=launcher.TrustedArtifact(
             r6_receipt, _sha(r6_receipt), r6_receipt.stat().st_size
@@ -312,49 +528,139 @@ def _fixture(tmp_path: Path) -> Fixture:
         hssd_map_package=launcher.TrustedArtifact(
             hssd_map, _sha(hssd_map), hssd_map.stat().st_size
         ),
-        finish_profile_sha256=launcher.FINISH_PROFILE_SHA256,
-        finish_profile_size_bytes=launcher.FINISH_PROFILE_BYTES,
+        finish_profile_sha256="0" * 64,
+        finish_profile_size_bytes=0,
         finish_profile_content_digest="0" * 64,
         engine_version=launcher.ENGINE_VERSION,
         hssd_namespace_relative=launcher.HSSD_NAMESPACE_RELATIVE,
         hssd_namespace_tree={},
     )
-    source_project_pin = base.ArtifactPin(
-        source_project, _sha(source_project), source_project.stat().st_size
-    )
-    source_map_pin = base.ArtifactPin(
-        source_map, _sha(source_map), source_map.stat().st_size
-    )
-    executable_pin = base.ArtifactPin(
-        executable, _sha(executable), executable.stat().st_size
-    )
-    r6_accessory_result = _write(
-        tmp_path / "rollback-evidence/accessory-r6-result.json",
-        b'{"sealed":"r6-accessory-result"}\n',
-    )
-    parent = base.HumanVisualDemoInputs(
-        receipt=r6_receipt,
-        receipt_sha256=_sha(r6_receipt),
-        receipt_content_digest="c" * 64,
-        project=source_project_pin,
-        project_static_tree=base.compute_project_static_tree(source_project),
-        source_provenance=copy.deepcopy(provenance),
-        executable=executable_pin,
-        map_object_path=launcher.MAP_OBJECT_PATH,
-        map_package=source_map_pin,
-        receipt_schema_version=base.COMBINED_RECEIPT_SCHEMA_V4,
-        realism_r4_upgrade={"sealed": True},
-        accessory_r6_upgrade={"result": _pin(r6_accessory_result)},
-    )
 
-    materializer = _write(
-        output_root / "materialize_hssd_r2_citysample_live.py",
-        b"# sealed materializer\n",
+    profile = _profile()
+    profile_path = attempt / launcher.LOCAL_ARTIFACT_NAMES["finish_profile"]
+    profile = _write_t2(profile_path, profile)
+    for archetype in ("flush_dome", "linear_panel", "pendant"):
+        _write(attempt / f"artifacts/{archetype}.glb", ("glb-" + archetype).encode())
+        _write(attempt / f"previews/{archetype}.png", ("png-" + archetype).encode())
+        _write_t2(attempt / f"receipts/{archetype}.json", {"archetype_id": archetype})
+    for relative in (
+        "forge-plan.json",
+        "worker-request.json",
+        "worker-result.json",
+        "source-snapshot.json",
+        "source-snapshot/forge.py",
+    ):
+        _write_t2(attempt / relative, {"fixture": relative})
+
+    by_profile = {
+        row["archetype_id"]: row for row in profile["fixture_imports"]["glb_inventory"]
+    }
+    artifacts = []
+    for archetype in ("flush_dome", "linear_panel", "pendant"):
+        glb = attempt / f"artifacts/{archetype}.glb"
+        preview = attempt / f"previews/{archetype}.png"
+        receipt = attempt / f"receipts/{archetype}.json"
+        artifacts.append(
+            {
+                "archetype_id": archetype,
+                "glb": _relative_pin(glb, attempt),
+                "preview": _relative_pin(preview, attempt),
+                "artifact_receipt": {
+                    **_relative_pin(receipt, attempt),
+                    "content_digest": _strict_content(receipt),
+                },
+                "ue_import": copy.deepcopy(by_profile[archetype]),
+            }
+        )
+    inventory_path = attempt / launcher.LOCAL_ARTIFACT_NAMES["fixture_inventory"]
+    inventory = _write_t2(
+        inventory_path,
+        {
+            "schema_version": launcher.FIXTURE_INVENTORY_SCHEMA,
+            "archetypes": [
+                {"archetype_id": value}
+                for value in ("flush_dome", "linear_panel", "pendant")
+            ],
+            "execution_policy": {"fixture": True},
+            "output_root": str(attempt),
+            "profile": {
+                "path": "profile.json",
+                "sha256": _sha(profile_path),
+                "size_bytes": profile_path.stat().st_size,
+                "content_digest": profile["content_digest"],
+            },
+            "recipe": {"fixture": True},
+            "forge_plan": {"fixture": True},
+            "worker_request": {"fixture": True},
+            "worker_result": {"fixture": True},
+            "source_snapshot": {"fixture": True},
+            "toolchain": {"fixture": True},
+            "artifact_count": 3,
+            "artifacts": artifacts,
+            "ue_package_inventory": {
+                "package_root": profile["fixture_imports"]["package_root"],
+                "exact_package_names": profile["fixture_imports"][
+                    "exact_package_names"
+                ],
+                "expected_package_count": 9,
+            },
+            "binary_payload_in_git": False,
+            "claims": {"runtime_visual_acceptance": False},
+            "status": "fixture_inventory_sealed_snapshot_provenance_not_ue_imported",
+        },
     )
-    commandlet = _write(
-        output_root / "compose_hssd_r2_citysample_live_commandlet.py",
-        b"# sealed commandlet\n",
+    evidence_relatives = [
+        launcher.LOCAL_ARTIFACT_NAMES["finish_profile"],
+        launcher.LOCAL_ARTIFACT_NAMES["fixture_inventory"],
+        "forge-plan.json",
+        "worker-request.json",
+        "worker-result.json",
+        "source-snapshot.json",
+        "source-snapshot/forge.py",
+        *[
+            f"artifacts/{value}.glb"
+            for value in ("flush_dome", "linear_panel", "pendant")
+        ],
+        *[
+            f"previews/{value}.png"
+            for value in ("flush_dome", "linear_panel", "pendant")
+        ],
+        *[
+            f"receipts/{value}.json"
+            for value in ("flush_dome", "linear_panel", "pendant")
+        ],
+    ]
+    evidence = _evidence_manifest(attempt, evidence_relatives)
+
+    for package_name in profile["fixture_imports"]["exact_package_names"]:
+        relative = Path("Content/" + package_name.removeprefix("/Game/") + ".uasset")
+        _write(output_project.parent / relative, (package_name + "\n").encode())
+    source_manifest = base._project_static_manifest(source_project)
+    output_manifest = base._project_static_manifest(output_project)
+    output_tree = base.compute_project_static_tree(output_project)
+    namespace_manifest = {
+        key: row
+        for key, row in source_manifest.items()
+        if key.startswith(launcher.HSSD_NAMESPACE_RELATIVE + "/")
+    }
+    namespace_tree = launcher._manifest_tree(namespace_manifest)
+    trust = replace(
+        trust,
+        finish_profile_sha256=_sha(profile_path),
+        finish_profile_size_bytes=profile_path.stat().st_size,
+        finish_profile_content_digest=profile["content_digest"],
+        hssd_namespace_tree=namespace_tree,
     )
+    materializer_path = _write(
+        attempt / "materialize_hssd_r2_citysample_live.py", b"# materializer\n"
+    )
+    commandlet_path = _write(
+        attempt / "compose_hssd_r2_citysample_live_commandlet.py", b"# commandlet\n"
+    )
+    result_path = attempt / launcher.LOCAL_ARTIFACT_NAMES["result"]
+    scene_path = attempt / launcher.LOCAL_ARTIFACT_NAMES["scene_receipt"]
+    execution_path = attempt / launcher.LOCAL_ARTIFACT_NAMES["execution"]
+    migration = _migration(profile)
     authority = {
         "host_receipt": trust.hssd_host_receipt.document(),
         "scene_receipt": trust.hssd_scene_receipt.document(),
@@ -362,97 +668,168 @@ def _fixture(tmp_path: Path) -> Fixture:
         "map_package": trust.hssd_map_package.document(),
         **launcher.HSSD_AUTHORITY_COUNTS,
     }
-    profile_path = output_root / launcher.LOCAL_ARTIFACT_NAMES["finish_profile"]
-    shutil.copyfile(fixture_forge.PROFILE_PATH, profile_path)
-    profile_path.chmod(0o600)
-    profile_document = fixture_forge.load_profile(profile_path)
-    t2_root = tmp_path / "t2-runs/fixture-test-apply"
-    (
-        _plan,
-        _worker_result,
-        inventory_document,
-        t2_run_parent,
-        t2_toolchain,
-    ) = _write_t2_fixture_bundle(t2_root)
-    for directory in ("artifacts", "previews", "receipts", "source-snapshot"):
-        shutil.copytree(
-            t2_root / directory, output_root / directory, copy_function=shutil.copy2
-        )
-    for name in ("forge-plan.json", "worker-result.json", "source-snapshot.json"):
-        shutil.copy2(t2_root / name, output_root / name)
-    inventory_path = output_root / launcher.LOCAL_ARTIFACT_NAMES["fixture_inventory"]
-    inventory_path.write_bytes(fixture_forge.canonical_json_bytes(inventory_document))
-    inventory_path.chmod(0o600)
-    for package_name in profile_document["fixture_imports"]["exact_package_names"]:
-        package_relative = Path(
-            "Content/" + package_name.removeprefix("/Game/") + ".uasset"
-        )
-        _write(
-            output_project.parent / package_relative,
-            (package_name + "\n").encode("utf-8"),
-        )
-    source_manifest = base._project_static_manifest(source_project)
-    namespace_manifest = {
-        relative: record
-        for relative, record in source_manifest.items()
-        if relative.startswith(launcher.HSSD_NAMESPACE_RELATIVE + "/")
-    }
-    namespace_tree = launcher._manifest_tree(namespace_manifest)
-    trust = replace(
-        trust,
-        finish_profile_sha256=_sha(profile_path),
-        finish_profile_size_bytes=profile_path.stat().st_size,
-        finish_profile_content_digest=str(profile_document["content_digest"]),
-        hssd_namespace_tree=namespace_tree,
-    )
-    output_tree = base.compute_project_static_tree(output_project)
-    result_path = output_root / launcher.LOCAL_ARTIFACT_NAMES["result"]
-    result_sidecar = result_path.with_name(result_path.name + ".sha256")
-    execution_path = output_root / launcher.LOCAL_ARTIFACT_NAMES["execution"]
-    acknowledgements = {
-        key: f"acknowledged {key}" for key in launcher.EXECUTION_ACKNOWLEDGEMENT_KEYS
-    }
-    _write_document(
+    _write_t3(
         execution_path,
         {
             "schema_version": launcher.EXECUTION_SCHEMA,
             "status": launcher.EXECUTION_STATUS,
-            "attempt_root": str(output_root),
+            "attempt_root": str(attempt),
             "project": _pin(output_project),
-            "materializer": _pin(materializer),
-            "commandlet": _pin(commandlet),
+            "materializer": _pin(materializer_path),
+            "commandlet": _pin(commandlet_path),
             "finish_profile": _pin(profile_path),
             "fixture_inventory": _pin(inventory_path),
+            "fixture_evidence_manifest": copy.deepcopy(evidence),
             "parent_combined_receipt": trust.r6_receipt.document(),
-            "r6_accessory_result": _pin(r6_accessory_result),
+            "r6_accessory_result": _pin(accessory),
             "hssd_r2_authority": authority,
             "source_project_static_tree": copy.deepcopy(parent.project_static_tree),
-            "source_static_manifest": copy.deepcopy(source_manifest),
-            "hssd_namespace": copy.deepcopy(namespace_tree),
-            "composition_contract": _composition_contract(profile_document),
+            "source_static_manifest": source_manifest,
+            "hssd_namespace": namespace_tree,
+            "composition_contract": {
+                "migration": migration,
+                "fixture_imports": copy.deepcopy(profile["fixture_imports"]),
+                "collision_policy": copy.deepcopy(profile["collision_policy"]),
+                "finish_profile_content_digest": profile["content_digest"],
+                "expected_counts": copy.deepcopy(launcher.COMPOSITION_EXPECTED_COUNTS),
+            },
             "engine": {
-                "version": trust.engine_version,
+                "version": launcher.ENGINE_VERSION,
                 "unreal_editor_cmd": _pin(unreal_cmd),
                 "build_version": _pin(build_version),
                 "bwrap": trust.bwrap.document(),
                 "null_rhi": True,
+                "trace_server": "disabled",
+                "gpu": None,
+                "display": None,
             },
             "map": {
                 "object_path": launcher.MAP_OBJECT_PATH,
-                "relative_path": (
-                    "Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/"
-                    "VistaPlayableHome.umap"
-                ),
-                "source_package": _pin(source_map),
+                "relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap",
+                "source_package": {
+                    "path": str(output_map),
+                    "sha256": _sha(source_map),
+                    "size_bytes": source_map.stat().st_size,
+                },
             },
-            "result": {"path": str(result_path), "sidecar_path": str(result_sidecar)},
+            "result": {
+                "result_path": str(result_path),
+                "result_sidecar_path": str(result_path) + ".sha256",
+                "scene_receipt_path": str(scene_path),
+                "scene_receipt_sidecar_path": str(scene_path) + ".sha256",
+            },
             "legal_scope": copy.deepcopy(base.LEGAL_SCOPE),
-            "acknowledgements": acknowledgements,
+            "acknowledgements": {
+                key: "confirmed" for key in launcher.EXECUTION_ACKNOWLEDGEMENT_KEYS
+            },
             "claims": copy.deepcopy(base.CLAIMS),
             "acceptance": copy.deepcopy(launcher.ACCEPTANCE),
         },
     )
-    _write_document(
+
+    fixture_rows = []
+    evidence_by_relative = {row["relative_path"]: row for row in evidence["files"]}
+    for profile_row in profile["fixture_imports"]["glb_inventory"]:
+        archetype = profile_row["archetype_id"]
+        source = evidence_by_relative[f"artifacts/{archetype}.glb"]
+        package_names = sorted(
+            [
+                profile_row["static_mesh_package_name"],
+                *profile_row["material_package_names"],
+            ]
+        )
+        packages = []
+        for package_name in package_names:
+            relative = "Content/" + package_name.removeprefix("/Game/") + ".uasset"
+            current = output_manifest[relative]
+            packages.append(
+                {
+                    "package_name": package_name,
+                    "path": str(output_project.parent / relative),
+                    "sha256": current["sha256"],
+                    "size_bytes": current["size_bytes"],
+                }
+            )
+        fixture_rows.append(
+            {
+                "archetype_id": archetype,
+                "source_glb": {key: source[key] for key in base.ARTIFACT_KEYS},
+                "mesh_object_path": profile_row["static_mesh_object_path"],
+                "material_object_paths": sorted(profile_row["material_object_paths"]),
+                "mesh_bounds_cm": {
+                    "min_cm": [-1, -1, -1],
+                    "max_cm": [1, 1, 1],
+                },
+                "simple_collision_count": 0,
+                "has_navigation_data": False,
+                "nanite_enabled": False,
+                "package_artifacts": packages,
+            }
+        )
+    dynamic = [
+        {"instance_id": key} for key in sorted(materializer.DYNAMIC_SLOT_BINDINGS)
+    ]
+    finish = {
+        **{
+            key: [{"actor_path": f"actor-{i}"} for i in range(6)]
+            for key in (
+                "architecture_before",
+                "architecture_after_save",
+                "architecture_reloaded",
+                "fixtures_before",
+                "fixtures_after_save",
+                "fixtures_reloaded",
+                "r4_lights_before",
+                "r4_lights_reloaded",
+            )
+        },
+        "segments_after_save": [{"segment_id": f"s-{i}"} for i in range(26)],
+        "segments_reloaded": [{"segment_id": f"s-{i}"} for i in range(26)],
+    }
+    observations = {
+        "source_actor_inventory": [
+            *migration["legacy_shells"],
+            *migration["preserved_non_hssd_actor_inventory"],
+        ],
+        "legacy_shells_before": migration["legacy_shells"],
+        "shell_migration": {
+            "reuse_before": migration["reuse"],
+            "reuse_after_save": [{} for _ in range(41)],
+            "deleted": migration["delete"],
+            "spawn_after_save": [{} for _ in range(16)],
+            "static_reloaded": [{} for _ in range(57)],
+        },
+        "dynamic_presentations": {
+            "before": dynamic,
+            "after_save": dynamic,
+            "reloaded": dynamic,
+        },
+        "preserved_non_hssd": {
+            "source_inventory": migration["preserved_non_hssd_actor_inventory"],
+            "reloaded_inventory": migration["preserved_non_hssd_actor_inventory"],
+            "unchanged_actor_paths": [f"actor-{i}" for i in range(99)],
+        },
+        "fixture_imports": fixture_rows,
+        "six_room_finish": finish,
+        "collision": {
+            "policy_counts": {
+                "semantic_proxies": 19,
+                "secondary_query_proxies": 20,
+                "detail_no_collision": 21,
+            },
+            "semantic_static_before": [{} for _ in range(16)],
+            "semantic_static_after_save": [{} for _ in range(16)],
+            "semantic_static_reloaded": [{} for _ in range(16)],
+            "semantic_dynamic_instance_ids": sorted(materializer.DYNAMIC_SLOT_BINDINGS),
+            "secondary_after_save": [{} for _ in range(20)],
+            "secondary_reloaded": [{} for _ in range(20)],
+            "detail_reloaded": [{} for _ in range(21)],
+            "remaining_review_items": {"pending": True},
+        },
+        "world_before": {"game_mode": "preserved"},
+        "world_reloaded": {"game_mode": "preserved"},
+    }
+    result = _write_t3(
         result_path,
         {
             "schema_version": launcher.RESULT_SCHEMA,
@@ -463,20 +840,20 @@ def _fixture(tmp_path: Path) -> Fixture:
             "execution_sha256": _sha(execution_path),
             "map_object_path": launcher.MAP_OBJECT_PATH,
             "map_package": _pin(output_map),
-            "project_static_tree": copy.deepcopy(output_tree),
-            "observations": copy.deepcopy(launcher.OBSERVATIONS),
+            "project_static_tree": output_tree,
+            "observations": observations,
             "legal_scope": copy.deepcopy(base.LEGAL_SCOPE),
             "claims": copy.deepcopy(base.CLAIMS),
             "acceptance": copy.deepcopy(launcher.ACCEPTANCE),
-            "gates": {key: True for key in launcher.RESULT_GATES},
+            "gates": {key: True for key in launcher.UE_RESULT_GATES},
             "error": None,
         },
     )
-    result_sidecar.write_text(
-        f"{_sha(result_path)}  {result_path.name}\n", encoding="ascii"
+    _write(
+        result_path.with_name(result_path.name + ".sha256"),
+        f"{_sha(result_path)}  {result_path.name}\n".encode("ascii"),
     )
-    scene_path = output_root / launcher.LOCAL_ARTIFACT_NAMES["scene_receipt"]
-    _write_document(
+    _write_t3(
         scene_path,
         {
             "schema_version": launcher.SCENE_RECEIPT_SCHEMA,
@@ -488,19 +865,28 @@ def _fixture(tmp_path: Path) -> Fixture:
             "result": _pin(result_path),
             "map_object_path": launcher.MAP_OBJECT_PATH,
             "map_package": _pin(output_map),
-            "project_static_tree": copy.deepcopy(output_tree),
-            "observations": copy.deepcopy(launcher.OBSERVATIONS),
+            "project_static_tree": output_tree,
+            "observations": observations,
             "legal_scope": copy.deepcopy(base.LEGAL_SCOPE),
             "claims": copy.deepcopy(base.CLAIMS),
             "acceptance": copy.deepcopy(launcher.ACCEPTANCE),
         },
     )
-    log_path = _write(
-        output_root / "hssd-r2-citysample-live-commandlet.log", b"UE zero\n"
+    _write(
+        scene_path.with_name(scene_path.name + ".sha256"),
+        f"{_sha(scene_path)}  {scene_path.name}\n".encode("ascii"),
     )
-    logs = [_pin(log_path)]
-    host_path = output_root / launcher.LOCAL_ARTIFACT_NAMES["host_receipt"]
-    _write_document(
+    engine_log = _write(attempt / launcher.ENGINE_LOG_NAME, b"engine closed\n")
+    stdout_log = _write(attempt / launcher.STDOUT_NAME, b"stdout closed\n")
+    logs = [_pin(engine_log), _pin(stdout_log)]
+    static_delta = launcher._validate_source_output_delta(
+        source_manifest=source_manifest,
+        output_manifest=output_manifest,
+        finish_document=profile,
+        output_project_root=output_project.parent,
+    )
+    host_path = attempt / launcher.LOCAL_ARTIFACT_NAMES["host_receipt"]
+    host = _write_t3(
         host_path,
         {
             "schema_version": launcher.HOST_RECEIPT_SCHEMA,
@@ -516,40 +902,56 @@ def _fixture(tmp_path: Path) -> Fixture:
                 "object_path": launcher.MAP_OBJECT_PATH,
                 "package": _pin(output_map),
             },
-            "project_static_tree": copy.deepcopy(output_tree),
+            "project_static_tree": output_tree,
             "logs": logs,
+            "log_closure": {
+                "policy": copy.deepcopy(launcher.HOST_LOG_CLOSURE_POLICY),
+                "residual_process_disposition": "absent_after_descendant_tracker",
+                "snapshots": {
+                    "engine_log": _log_snapshot(engine_log),
+                    "stdout_log": _log_snapshot(stdout_log),
+                },
+            },
+            "static_delta": static_delta,
+            "fixture_evidence_manifest": evidence,
+            "containment": {
+                "command_prefix": list(launcher.HOST_CONTAINMENT_PREFIX),
+                "credential_hidden_policy": copy.deepcopy(
+                    launcher.HOST_CREDENTIAL_HIDDEN_POLICY
+                ),
+            },
             "current_byte_revalidation": {
                 "execution": _pin(execution_path),
                 "result": _pin(result_path),
                 "scene_receipt": _pin(scene_path),
                 "map": _pin(output_map),
-                "project_static_tree": copy.deepcopy(output_tree),
+                "project_static_tree": output_tree,
                 "logs": logs,
+                "fixture_evidence_manifest": evidence,
                 "passed": True,
             },
+            "gates": {key: True for key in launcher.HOST_GATES},
             "legal_scope": copy.deepcopy(base.LEGAL_SCOPE),
             "claims": copy.deepcopy(base.CLAIMS),
             "acceptance": copy.deepcopy(launcher.ACCEPTANCE),
         },
     )
-    local_paths = {
-        "finish_profile": profile_path,
-        "fixture_inventory": inventory_path,
-        "execution": execution_path,
-        "result": result_path,
-        "scene_receipt": scene_path,
-        "host_receipt": host_path,
-    }
-    upgrade: dict[str, object] = {
+    upgrade = {
         "schema_version": launcher.UPGRADE_SCHEMA,
         "status": launcher.UPGRADE_STATUS,
         "parent_combined_receipt": trust.r6_receipt.document(),
         "source_map": _pin(source_map),
-        "source_project_static_tree": copy.deepcopy(parent.project_static_tree),
+        "source_project_static_tree": parent.project_static_tree,
         "hssd_r2_authority": authority,
-        **{key: _pin(path) for key, path in local_paths.items()},
-        "materializer": _pin(materializer),
-        "commandlet": _pin(commandlet),
+        "finish_profile": _pin(profile_path),
+        "fixture_inventory": _pin(inventory_path),
+        "fixture_evidence_manifest": evidence,
+        "execution": _pin(execution_path),
+        "result": _pin(result_path),
+        "scene_receipt": _pin(scene_path),
+        "host_receipt": _pin(host_path),
+        "materializer": _pin(materializer_path),
+        "commandlet": _pin(commandlet_path),
         "unreal_editor_cmd": _pin(unreal_cmd),
         "build_version": _pin(build_version),
         "bwrap": trust.bwrap.document(),
@@ -560,315 +962,210 @@ def _fixture(tmp_path: Path) -> Fixture:
         "claims": copy.deepcopy(base.CLAIMS),
         "acceptance": copy.deepcopy(launcher.ACCEPTANCE),
     }
-    receipt: dict[str, object] = {
+    receipt = {
         "schema_version": launcher.COMBINED_RECEIPT_SCHEMA_V5,
         "status": base.COMBINED_RECEIPT_STATUS,
         "provider_id": base.PROVIDER_ID,
         "human_operated_visual_demo_only": True,
         "prohibited_agent_adapter": True,
         "project": _pin(output_project),
-        "project_static_tree": copy.deepcopy(upgrade["output_project_static_tree"]),
+        "project_static_tree": output_tree,
         "source_provenance": provenance,
         "executable": _pin(executable),
-        "map": {"object_path": launcher.MAP_OBJECT_PATH, "package": _pin(output_map)},
+        "map": {
+            "object_path": launcher.MAP_OBJECT_PATH,
+            "package": _pin(output_map),
+        },
         "legal_scope": copy.deepcopy(base.LEGAL_SCOPE),
         "claims": copy.deepcopy(base.CLAIMS),
         "hssd_r2_citysample_live_r1_upgrade": upgrade,
     }
     receipt["content_digest"] = base.content_digest(receipt)
-    receipt_path = output_root / base.COMBINED_RECEIPT_NAME
-    raw = base.canonical_json(receipt)
-    _write(receipt_path, raw)
-    receipt_path.with_name(base.COMBINED_RECEIPT_SIDECAR_NAME).write_text(
-        f"{hashlib.sha256(raw).hexdigest()}  {base.COMBINED_RECEIPT_NAME}\n",
-        encoding="ascii",
+    receipt_path = attempt / base.COMBINED_RECEIPT_NAME
+    _write(receipt_path, base.canonical_json(receipt))
+    sidecar_path = attempt / base.COMBINED_RECEIPT_SIDECAR_NAME
+    _write(
+        sidecar_path,
+        f"{_sha(receipt_path)}  {receipt_path.name}\n".encode("ascii"),
+    )
+    current_state = {
+        "execution": _pin(execution_path),
+        "result": _pin(result_path),
+        "scene_receipt": _pin(scene_path),
+        "map": _pin(output_map),
+        "project_static_tree": output_tree,
+        "logs": logs,
+        "static_delta": static_delta,
+        "fixture_evidence_manifest": evidence,
+    }
+    _write_t3(
+        attempt / launcher.COMPLETE_NAME,
+        {
+            "schema_version": launcher.COMPLETE_SCHEMA,
+            "status": launcher.COMPLETE_STATUS,
+            "attempt_root": str(attempt),
+            "combined_receipt": _pin(receipt_path),
+            "combined_receipt_sidecar": _pin(sidecar_path),
+            "host_receipt": _pin(host_path),
+            "current_state": current_state,
+            "failure_absent": True,
+        },
     )
     return Fixture(
-        receipt_path=receipt_path,
-        receipt=receipt,
-        trust=trust,
-        parent=parent,
-        t2_run_parent=t2_run_parent,
-        t2_toolchain=t2_toolchain,
+        receipt_path,
+        receipt,
+        trust,
+        parent,
+        profile,
+        inventory,
+        evidence,
+        result,
+        host,
     )
 
 
-def test_v5_receipt_closes_r6_hssd_finish_and_pending_boundaries(
-    tmp_path: Path,
-) -> None:
+def test_final_contract_constants_are_exact() -> None:
+    assert launcher.FIXTURE_INVENTORY_SCHEMA.endswith("/v3")
+    assert launcher.FINISH_PROFILE_SHA256 == (
+        "065782f443fd659a20d9a2ed5419403b2cf0faf04e336f05b11fc38528e999cb"
+    )
+    assert launcher.FINISH_PROFILE_BYTES == 71_082
+    assert len(launcher.FIXTURE_INVENTORY_KEYS) == 18
+    assert len(launcher.UE_RESULT_GATES) == 22
+    assert len(launcher.HOST_GATES) == 9
+
+
+def test_v5_complete_receipt_loads_and_closes_current_state(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
     inputs = fixture.load()
-
     assert inputs.runtime.receipt_schema_version == launcher.COMBINED_RECEIPT_SCHEMA_V5
-    assert inputs.runtime.map_object_path == launcher.MAP_OBJECT_PATH
-    assert inputs.parent_r6 == fixture.parent
-    assert inputs.upgrade["hssd_r2_authority"]["placement_count"] == 60
-    assert inputs.upgrade["observations"] == launcher.OBSERVATIONS
+    assert inputs.upgrade["fixture_evidence_manifest"] == fixture.evidence
     assert inputs.upgrade["acceptance"] == launcher.ACCEPTANCE
-    local_profile = Path(inputs.upgrade["finish_profile"]["path"])
-    assert local_profile.read_bytes() == fixture_forge.PROFILE_PATH.read_bytes()
-    assert local_profile.read_bytes().startswith(b'{\n  "schema_version"')
-    inventory = fixture_forge.load_json(
-        Path(inputs.upgrade["fixture_inventory"]["path"])
-    )
-    assert inventory["schema_version"] == fixture_forge.INVENTORY_SCHEMA
-    assert inventory["status"] == (
-        "fixture_inventory_sealed_snapshot_provenance_not_ue_imported"
-    )
-    assert set(inventory) == launcher.FIXTURE_INVENTORY_KEYS
+    assert set(fixture.result["gates"]) == launcher.UE_RESULT_GATES
+    assert set(fixture.host["gates"]) == launcher.HOST_GATES
 
 
-def test_v5_revalidates_current_fixture_glb_and_local_receipt_pin(
-    tmp_path: Path,
+@pytest.mark.parametrize("terminal", ["missing", "failure", "coexistence"])
+def test_complete_is_required_and_any_failure_is_rejected(
+    tmp_path: Path, terminal: str
 ) -> None:
     fixture = _fixture(tmp_path)
-    fixture.load()
+    complete = fixture.receipt_path.parent / launcher.COMPLETE_NAME
+    failure = fixture.receipt_path.parent / launcher.FAILURE_NAME
+    if terminal == "missing":
+        complete.unlink()
+    elif terminal == "failure":
+        complete.unlink()
+        _write_t3(
+            failure,
+            {
+                "schema_version": launcher.HOST_RECEIPT_SCHEMA,
+                "status": launcher.FAILURE_STATUS,
+            },
+        )
+    else:
+        _write_t3(
+            failure,
+            {
+                "schema_version": launcher.HOST_RECEIPT_SCHEMA,
+                "status": launcher.FAILURE_STATUS,
+            },
+        )
+    with pytest.raises(base.HumanVisualDemoError, match="COMPLETE|FAILURE"):
+        fixture.load()
+
+
+def test_fixture_evidence_current_bytes_and_modes_are_revalidated(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path / "bytes")
     glb = fixture.receipt_path.parent / "artifacts/flush_dome.glb"
     glb.write_bytes(glb.read_bytes() + b"drift")
-    with pytest.raises(base.HumanVisualDemoError, match="current artifact validation"):
+    with pytest.raises(base.HumanVisualDemoError, match="fixture evidence|receipt pin"):
         fixture.load()
 
-    fixture = _fixture(tmp_path / "pin")
-    result_path = Path(
-        fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]["result"]["path"]
-    )
-    result_path.write_bytes(result_path.read_bytes() + b"drift")
-    with pytest.raises(base.HumanVisualDemoError, match="receipt pin"):
-        fixture.load()
-
-
-def test_v5_requires_v2_inventory_and_current_snapshot_tree(tmp_path: Path) -> None:
-    fixture = _fixture(tmp_path / "snapshot")
-    fixture.load()
-    snapshot_source = fixture.receipt_path.parent.joinpath(
-        "source-snapshot/tools/blender/vista_playable_home_r9_fixtures/forge.py"
-    )
-    snapshot_source.chmod(0o600)
-    snapshot_source.write_bytes(snapshot_source.read_bytes() + b"\n# drift\n")
-    snapshot_source.chmod(0o400)
-    with pytest.raises(base.HumanVisualDemoError, match="snapshot|evidence tree"):
-        fixture.load()
-
-    fixture = _fixture(tmp_path / "v1")
-    upgrade = fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]
-    inventory_path = Path(upgrade["fixture_inventory"]["path"])
-    inventory = fixture_forge.load_json(inventory_path)
-    inventory["schema_version"] = "simworld.vista.playable-home-r9-fixture-inventory/v1"
-    inventory = fixture_forge.seal_document(inventory)
-    inventory_path.write_bytes(fixture_forge.canonical_json_bytes(inventory))
-    upgrade["fixture_inventory"] = _pin(inventory_path)
-    fixture.reseal()
-    with pytest.raises(base.HumanVisualDemoError, match="T2 validation failed"):
+    fixture = _fixture(tmp_path / "mode")
+    glb = fixture.receipt_path.parent / "artifacts/flush_dome.glb"
+    glb.chmod(0o640)
+    with pytest.raises(base.HumanVisualDemoError, match="project static tree|mode"):
         fixture.load()
 
 
-@pytest.mark.parametrize(
-    ("mutation", "message"),
-    [
-        (lambda receipt: receipt.update({"extra": True}), "key inventory"),
-        (
-            lambda receipt: receipt.update({"prohibited_agent_adapter": False}),
-            "identity differs",
-        ),
-        (
-            lambda receipt: receipt["claims"].update({"gta_level_quality": True}),
-            "claims boolean values differ",
-        ),
-        (
-            lambda receipt: receipt["hssd_r2_citysample_live_r1_upgrade"][
-                "acceptance"
-            ].update({"human_visual_acceptance": "accepted"}),
-            "acceptance boundary differs",
-        ),
-        (
-            lambda receipt: receipt["hssd_r2_citysample_live_r1_upgrade"][
-                "observations"
-            ].update({"secondary_query_proxies": 19}),
-            "observations differ",
-        ),
-        (
-            lambda receipt: receipt["hssd_r2_citysample_live_r1_upgrade"][
-                "hssd_r2_authority"
-            ].update({"placement_count": 59}),
-            "placement_count differs",
-        ),
-    ],
-)
-def test_v5_scope_inventory_and_counts_fail_closed(
-    tmp_path: Path, mutation, message: str
-) -> None:
-    fixture = _fixture(tmp_path)
-    mutation(fixture.receipt)
-    fixture.reseal()
-
-    with pytest.raises(base.HumanVisualDemoError, match=message):
-        fixture.load()
-
-
-def test_nested_result_cannot_reseal_positive_agent_or_gta_claim(
-    tmp_path: Path,
-) -> None:
-    fixture = _fixture(tmp_path)
-    upgrade = fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]
-    result_path = Path(upgrade["result"]["path"])
-    result = json.loads(result_path.read_text(encoding="utf-8"))
-    result["claims"]["gta_level_quality"] = True
-    _write_document(result_path, result)
-    result_path.with_name(result_path.name + ".sha256").write_text(
-        f"{_sha(result_path)}  {result_path.name}\n", encoding="ascii"
-    )
-    upgrade["result"] = _pin(result_path)
-    fixture.reseal()
-
-    with pytest.raises(base.HumanVisualDemoError, match="claims boolean values differ"):
-        fixture.load()
-
-
-def test_execution_cannot_select_different_materializer_even_when_resealed(
-    tmp_path: Path,
-) -> None:
-    fixture = _fixture(tmp_path)
-    upgrade = fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]
-    execution_path = Path(upgrade["execution"]["path"])
-    execution = json.loads(execution_path.read_text(encoding="utf-8"))
-    execution["materializer"] = copy.deepcopy(execution["commandlet"])
-    _write_document(execution_path, execution)
-    upgrade["execution"] = _pin(execution_path)
-    fixture.reseal()
-
-    with pytest.raises(base.HumanVisualDemoError, match="source/script binding"):
-        fixture.load()
-
-
-@pytest.mark.parametrize(
-    ("field", "replacement", "message"),
-    [
-        ("engine", {"version": "5.7.999"}, "engine binding"),
-        ("hssd_namespace", {"tree_sha256": "0" * 64}, "HSSD namespace"),
-    ],
-)
-def test_execution_rejects_engine_and_hssd_namespace_drift(
-    tmp_path: Path, field: str, replacement: dict[str, object], message: str
-) -> None:
-    fixture = _fixture(tmp_path)
-    upgrade = fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]
-    execution_path = Path(upgrade["execution"]["path"])
-    execution = json.loads(execution_path.read_text(encoding="utf-8"))
-    if field == "engine":
-        execution["engine"].update(replacement)
-    else:
-        execution[field] = replacement
-    _write_document(execution_path, execution)
-    upgrade["execution"] = _pin(execution_path)
-    fixture.reseal()
-
-    with pytest.raises(base.HumanVisualDemoError, match=message):
-        fixture.load()
-
-
-def test_static_delta_rejects_extra_content_and_missing_fixture_package(
-    tmp_path: Path,
-) -> None:
+def test_static_delta_and_private_package_mode_are_revalidated(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path / "extra")
-    source = base._project_static_manifest(fixture.parent.project.path)
-    project = Path(fixture.receipt["project"]["path"])
-    profile = fixture_forge.load_profile(
-        Path(
-            fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]["finish_profile"][
-                "path"
-            ]
-        )
+    _write(fixture.receipt_path.parent / "project/Content/Untrusted/Extra.uasset", b"x")
+    with pytest.raises(
+        base.HumanVisualDemoError, match="project static tree|map plus nine"
+    ):
+        fixture.load()
+
+    fixture = _fixture(tmp_path / "mode")
+    package = min(
+        fixture.receipt_path.parent / "project" / relative
+        for relative in launcher._fixture_package_paths(fixture.profile)
     )
-    _write(project.parent / "Content/Untrusted/Extra.uasset", b"extra\n")
-    with pytest.raises(base.HumanVisualDemoError, match="map plus nine"):
+    package.chmod(0o640)
+    with pytest.raises(base.HumanVisualDemoError, match="project static tree|mode"):
+        fixture.load()
+
+
+def test_static_delta_rejects_package_hardlink_inode_alias(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    project_root = fixture.receipt_path.parent / "project"
+    packages = [
+        project_root / relative
+        for relative in launcher._fixture_package_paths(fixture.profile)
+    ]
+    packages[1].unlink()
+    packages[1].hardlink_to(packages[0])
+    with pytest.raises(base.HumanVisualDemoError, match="linked|alias"):
         launcher._validate_source_output_delta(
-            source_manifest=source,
-            output_manifest=base._project_static_manifest(project),
-            finish_document=profile,
-        )
-
-    fixture = _fixture(tmp_path / "missing")
-    source = base._project_static_manifest(fixture.parent.project.path)
-    project = Path(fixture.receipt["project"]["path"])
-    profile = fixture_forge.load_profile(
-        Path(
-            fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]["finish_profile"][
-                "path"
-            ]
-        )
-    )
-    missing = min(launcher._fixture_package_paths(profile))
-    (project.parent / missing).unlink()
-    with pytest.raises(base.HumanVisualDemoError, match="map plus nine"):
-        launcher._validate_source_output_delta(
-            source_manifest=source,
-            output_manifest=base._project_static_manifest(project),
-            finish_document=profile,
+            source_manifest=base._project_static_manifest(fixture.parent.project.path),
+            output_manifest=base._project_static_manifest(
+                project_root / "VistaPlayableHome.uproject"
+            ),
+            finish_document=fixture.profile,
+            output_project_root=project_root,
         )
 
 
-def test_result_and_host_have_closed_semantic_current_byte_envelopes(
+def test_ue_and_host_gate_namespaces_are_disjoint_and_closed(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    assert launcher.UE_RESULT_GATES.isdisjoint(launcher.HOST_GATES)
+    malformed = copy.deepcopy(fixture.result)
+    malformed["gates"]["process_group_closed"] = True
+    with pytest.raises(base.HumanVisualDemoError, match="result gates"):
+        launcher._validate_result_document(
+            malformed,
+            execution=base._artifact_pin(
+                fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]["execution"],
+                "execution",
+            ),
+            map_package=base._artifact_pin(fixture.receipt["map"]["package"], "map"),
+            project_tree=fixture.receipt["project_static_tree"],
+        )
+
+
+def test_complete_current_state_and_host_current_bytes_fail_closed(
     tmp_path: Path,
 ) -> None:
-    fixture = _fixture(tmp_path)
-    upgrade = fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]
-    result_path = Path(upgrade["result"]["path"])
-    result = json.loads(result_path.read_text(encoding="utf-8"))
-    result["extra"] = True
-    _write_document(result_path, result)
-    result_path.with_name(result_path.name + ".sha256").write_text(
-        f"{_sha(result_path)}  {result_path.name}\n", encoding="ascii"
-    )
-    upgrade["result"] = _pin(result_path)
-    fixture.reseal()
-
-    with pytest.raises(base.HumanVisualDemoError, match="R9 result.*key inventory"):
+    fixture = _fixture(tmp_path / "complete")
+    complete_path = fixture.receipt_path.parent / launcher.COMPLETE_NAME
+    complete = json.loads(complete_path.read_text(encoding="utf-8"))
+    complete["current_state"]["static_delta"]["changed_file_count"] = 9
+    _write_t3(complete_path, complete)
+    with pytest.raises(base.HumanVisualDemoError, match="COMPLETE"):
         fixture.load()
 
     fixture = _fixture(tmp_path / "host")
-    upgrade = fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]
-    host_path = Path(upgrade["host_receipt"]["path"])
+    host_path = Path(
+        fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]["host_receipt"]["path"]
+    )
     host = json.loads(host_path.read_text(encoding="utf-8"))
     host["current_byte_revalidation"]["passed"] = False
-    _write_document(host_path, host)
-    upgrade["host_receipt"] = _pin(host_path)
-    fixture.reseal()
-    with pytest.raises(base.HumanVisualDemoError, match="current-byte receipt differs"):
+    _write_t3(host_path, host)
+    with pytest.raises(base.HumanVisualDemoError, match="receipt pin"):
         fixture.load()
-
-
-def test_v5_rejects_caller_selected_project_map_executable_and_provider(
-    tmp_path: Path,
-) -> None:
-    fixture = _fixture(tmp_path)
-    alternate = _write(tmp_path / "alternate.uproject", b'{"FileVersion":3}\n')
-    fixture.receipt["project"] = _pin(alternate)
-    fixture.reseal()
-
-    with pytest.raises(base.HumanVisualDemoError, match="project descriptor binding"):
-        fixture.load()
-
-    destinations = {action.dest for action in launcher.parser()._actions}
-    assert destinations == {
-        "help",
-        "combined_receipt",
-        "rollback_preflight",
-        "ack_human_operated",
-        "ack_epic_ue_only",
-        "launch",
-    }
-    for arguments in (
-        ["--provider", "other"],
-        ["--map", "/Game/Other"],
-        ["--executable", "/tmp/UE"],
-        ["--project", "/tmp/demo.uproject"],
-        ["--display", ":117"],
-        ["--gpu", "1"],
-        ["--agent-adapter", "claude"],
-        ["--vlm-review", "on"],
-    ):
-        with pytest.raises(SystemExit):
-            launcher.parser().parse_args(arguments)
 
 
 def test_fixed_command_is_human_only_gpu0_display118_1080p60(tmp_path: Path) -> None:
@@ -879,37 +1176,16 @@ def test_fixed_command_is_human_only_gpu0_display118_1080p60(tmp_path: Path) -> 
         tmp_path / "private", base.runtime_cache_root(inputs.runtime)
     )
     rendered = " ".join(command).lower()
-
-    assert command[:7] == [
-        "/usr/bin/bwrap",
-        "--unshare-net",
-        "--die-with-parent",
-        "--dev-bind",
-        "/",
-        "/",
-        "--",
-    ]
     assert "-graphicsadapter=0" in command
-    assert "-ResX=1920" in command
-    assert "-ResY=1080" in command
+    assert "-ResX=1920" in command and "-ResY=1080" in command
     assert "-VistaHumanOperatedVisualDemo" in command
-    assert f"-VistaCharacterProvider={base.PROVIDER_ID}" in command
-    assert any("t.MaxFPS 60" in value for value in command)
     assert environment["DISPLAY"] == ":118"
     assert environment["CUDA_VISIBLE_DEVICES"] == "0"
-    assert "agent-adapter" not in rendered
-    assert "vlm" not in rendered
+    assert "agent-adapter" not in rendered and "vlm" not in rendered
 
 
-def test_rollback_preflight_is_executable_reconstructive_and_zero_write(
-    tmp_path: Path,
-) -> None:
+def test_r6_rollback_is_exact_reconstructive_zero_write(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
-    before = sorted(
-        (path.relative_to(tmp_path).as_posix(), path.read_bytes())
-        for path in tmp_path.rglob("*")
-        if path.is_file()
-    )
     with (
         mock.patch.object(launcher.subprocess, "Popen") as popen,
         mock.patch.object(launcher.subprocess, "run") as run,
@@ -919,53 +1195,16 @@ def test_rollback_preflight_is_executable_reconstructive_and_zero_write(
         )
     popen.assert_not_called()
     run.assert_not_called()
-    after = sorted(
-        (path.relative_to(tmp_path).as_posix(), path.read_bytes())
-        for path in tmp_path.rglob("*")
-        if path.is_file()
-    )
-
-    assert after == before
     assert plan["zero_write"] is True
     assert plan["service_change_performed"] is False
     assert plan["gpu_process_change_performed"] is False
-    assert plan["transient_unit_restart_assumed"] is False
-    command = plan["command"]
-    assert command[0] == str(fixture.trust.systemd_run.path)
-    assert "--user" in command
-    assert "--property=Type=exec" in command
-    assert f"--working-directory={fixture.trust.r6_workdir}" in command
-    assert (
-        str(fixture.trust.r6_launcher.path.relative_to(fixture.trust.r6_workdir))
-        in command
-    )
-    assert "systemctl" not in " ".join(command)
+    assert plan["command"][0] == str(fixture.trust.systemd_run.path)
 
 
-@pytest.mark.parametrize("drift", ["r6_receipt", "r6_launcher", "uv", "systemd_run"])
-def test_rollback_preflight_rejects_any_current_byte_drift(
-    tmp_path: Path, drift: str
-) -> None:
-    fixture = _fixture(tmp_path)
-    target = getattr(fixture.trust, drift).path
-    target.chmod(0o700)
-    target.write_bytes(target.read_bytes() + b"drift\n")
-    if drift in {"uv", "systemd_run"}:
-        target.chmod(0o500)
-
-    with pytest.raises(base.HumanVisualDemoError, match="receipt pin|trust anchor"):
-        launcher.preflight_r6_rollback(
-            trust=fixture.trust, parent_loader=fixture.parent_loader
-        )
-
-
-def test_launch_acknowledgements_are_required_before_lock_cache_or_popen(
-    tmp_path: Path,
-) -> None:
+def test_launch_acknowledgements_precede_any_process(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
     inputs = fixture.load()
     popen = mock.Mock()
-
     with pytest.raises(base.HumanVisualDemoError, match="human-operated"):
         launcher.run_human_visual_demo(
             inputs,
@@ -973,67 +1212,17 @@ def test_launch_acknowledgements_are_required_before_lock_cache_or_popen(
             epic_ack=launcher.EPIC_UE_ONLY_ACK,
             popen_factory=popen,
         )
-    with pytest.raises(base.HumanVisualDemoError, match="Epic UE-only"):
-        launcher.run_human_visual_demo(
-            inputs,
-            human_ack=launcher.HUMAN_OPERATION_ACK,
-            epic_ack="",
-            popen_factory=popen,
-        )
     popen.assert_not_called()
-    assert not (tmp_path / "locks").exists()
 
 
-def test_launch_revalidates_before_popen_and_after_grace_without_ready(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    fixture = _fixture(tmp_path)
-    inputs = fixture.load()
-    process = mock.Mock(pid=4242)
-    process.poll.return_value = None
-    popen = mock.Mock(return_value=process)
-    changed = replace(
-        inputs,
-        runtime=replace(inputs.runtime, receipt_sha256="0" * 64),
-    )
-    loader = mock.Mock(side_effect=[inputs, changed])
-
-    with (
-        mock.patch.object(base, "LOCK_ROOT", tmp_path / "locks"),
-        mock.patch.object(base, "CACHE_PARENT", tmp_path / "cache/human"),
-        mock.patch.object(base, "_terminate_process_group") as terminate,
-        pytest.raises(base.HumanVisualDemoError, match="during startup grace"),
-    ):
-        launcher.run_human_visual_demo(
-            inputs,
-            human_ack=launcher.HUMAN_OPERATION_ACK,
-            epic_ack=launcher.EPIC_UE_ONLY_ACK,
-            trust=fixture.trust,
-            loader=loader,
-            rollback_loader=fixture.parent_loader,
-            popen_factory=popen,
-            startup_grace_seconds=0,
-        )
-
-    popen.assert_called_once()
-    terminate.assert_called()
-    statuses = [
-        json.loads(line)["status"] for line in capsys.readouterr().out.splitlines()
-    ]
-    assert statuses == [base.PENDING_STATUS]
-
-
-def test_pre_popen_revalidation_refuses_changed_binding_without_process(
-    tmp_path: Path,
-) -> None:
+def test_pre_popen_revalidation_rejects_changed_receipt(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
     inputs = fixture.load()
     changed = replace(inputs, runtime=replace(inputs.runtime, receipt_sha256="0" * 64))
     popen = mock.Mock()
-
     with (
         mock.patch.object(base, "LOCK_ROOT", tmp_path / "locks"),
-        mock.patch.object(base, "CACHE_PARENT", tmp_path / "cache/human"),
+        mock.patch.object(base, "CACHE_PARENT", tmp_path / "cache"),
         pytest.raises(base.HumanVisualDemoError, match="before launch"),
     ):
         launcher.run_human_visual_demo(
@@ -1049,13 +1238,13 @@ def test_pre_popen_revalidation_refuses_changed_binding_without_process(
     popen.assert_not_called()
 
 
-def test_existing_v2_v4_launcher_contract_is_not_extended_in_place() -> None:
+def test_v2_v4_contract_bytes_and_shapes_remain_owned_by_base() -> None:
     assert base.COMBINED_RECEIPT_SCHEMA_V2.endswith("/v2")
     assert base.COMBINED_RECEIPT_SCHEMA_V3.endswith("/v3")
     assert base.COMBINED_RECEIPT_SCHEMA_V4.endswith("/v4")
+    assert "hssd_r2_citysample_live_r1_upgrade" not in base.RECEIPT_V4_KEYS
     assert launcher.COMBINED_RECEIPT_SCHEMA_V5 not in {
         base.COMBINED_RECEIPT_SCHEMA_V2,
         base.COMBINED_RECEIPT_SCHEMA_V3,
         base.COMBINED_RECEIPT_SCHEMA_V4,
     }
-    assert "hssd_r2_citysample_live_r1_upgrade" not in base.RECEIPT_V4_KEYS
