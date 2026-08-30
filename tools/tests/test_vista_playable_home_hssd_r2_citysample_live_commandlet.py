@@ -129,6 +129,19 @@ def _semantic_observation(
     placement: dict, index: int, binding: dict[str, object]
 ) -> dict:
     semantic_id = placement["semantic_target_id"] or f"semantic.synthetic.{index:02d}"
+    collision_mode, collision_profile_name = (
+        commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY[placement["instance_id"]]
+    )
+    component = _component(
+        f"SemanticComponent_{index:02d}",
+        query_only=True,
+        visible=False,
+        cast_shadow=False,
+        generate_overlap_events=bool(binding["generate_overlap_events"]),
+        can_ever_affect_navigation=bool(binding["can_ever_affect_navigation"]),
+    )
+    component["collision_mode"] = collision_mode
+    component["collision_profile_name"] = collision_profile_name
     return {
         "instance_id": placement["instance_id"],
         "semantic_id": semantic_id,
@@ -137,14 +150,7 @@ def _semantic_observation(
             tags=["VistaSemanticId=" + semantic_id],
             hidden=True,
             collision=True,
-            component=_component(
-                f"SemanticComponent_{index:02d}",
-                query_only=True,
-                visible=False,
-                cast_shadow=False,
-                generate_overlap_events=bool(binding["generate_overlap_events"]),
-                can_ever_affect_navigation=bool(binding["can_ever_affect_navigation"]),
-            ),
+            component=component,
         ),
     }
 
@@ -255,14 +261,17 @@ def _placement(instance_id: str, index: int, semantic_id: str | None = None) -> 
 
 def migration_fixture() -> dict:
     dynamic_ids = sorted(commandlet.DYNAMIC_SLOT_BINDINGS)
-    static_ids = [f"hssd.r1/bedroom.synthetic.{index:02d}" for index in range(57)]
+    static_ids = [
+        *sorted(commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY),
+        *[f"hssd.r1/bedroom.synthetic.{index:02d}" for index in range(41)],
+    ]
     placements = {
         instance_id: _placement(
             instance_id,
             index,
             (
                 f"home.r1/room.bedroom/entity.synthetic.{index:02d}"
-                if index < 16
+                if instance_id in commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY
                 else None
             ),
         )
@@ -858,6 +867,30 @@ def test_frozen_t2_and_t5_contract_constants_are_exact() -> None:
     assert commandlet.PROFILE_CONTENT_DIGEST == (
         "105fc5270594b0667b8616f2fa5a583757f45c25017db49a263be2d7e68967f2"
     )
+    assert commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST == (
+        "0ed6768227333ca708b133a184b101a9745215f2f6361d063c3b8da768082ed9"
+    )
+    assert len(commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY) == 16
+    assert {
+        instance_id
+        for instance_id, value in (
+            commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY.items()
+        )
+        if value == ("QueryAndPhysics", "BlockAll")
+    } == {
+        "hssd.r1/entry_hall.shoe_bench.01",
+        "hssd.r1/kitchen_dining.dining_table.01",
+        "hssd.r1/kitchen_dining.stove.01",
+        "hssd.r1/living_room.coffee_table.01",
+        "hssd.r1/living_room.sofa.01",
+    }
+    assert (
+        sum(
+            value == ("QueryOnly", "Custom")
+            for value in commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY.values()
+        )
+        == 11
+    )
     assert commandlet.FIXTURE_INVENTORY_SCHEMA.endswith("/v3")
     assert commandlet.FIXTURE_INVENTORY_NAME == (
         "hssd-r2-citysample-live-fixture-inventory.json"
@@ -1057,6 +1090,19 @@ def test_semantic_proxy_projection_rejects_resealed_state_or_dynamic_drift() -> 
         commandlet.semantic_proxy_bindings_from_authorities(scene, migration, r6_result)
 
 
+def test_hssd_source_semantic_projection_rejects_coherent_blockall_drift() -> None:
+    migration = migration_fixture()
+    scene, r6_result, _expected = _semantic_authority_documents(migration)
+    proxy = scene["semantic_proxies"][0]
+    for key in ("reloaded", "after_authority_repair_and_hide"):
+        component = proxy[key]["components"][0]
+        component["collision_mode"] = "QueryAndPhysics"
+        component["collision_profile"] = "BlockAll"
+
+    with pytest.raises(commandlet.CommandletFailure, match="component authority"):
+        commandlet.semantic_proxy_bindings_from_authorities(scene, migration, r6_result)
+
+
 @pytest.mark.parametrize(
     "mutator",
     [
@@ -1129,15 +1175,133 @@ def test_result_validator_rejects_consistently_resealed_semantic_flag_drift() ->
     }
     scene = commandlet.seal(scene)
 
-    with pytest.raises(commandlet.CommandletFailure, match="query authority differs"):
+    with pytest.raises(
+        commandlet.CommandletFailure, match="runtime collision authority differs"
+    ):
         commandlet.validate_result_document(execution, result, scene)
 
 
-def test_valid_t4_document_is_accepted_by_t5_nested_validator(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(
+    ("instance_id", "collision_mode", "collision_profile_name"),
+    [
+        (
+            "hssd.r1/entry_hall.shoe_bench.01",
+            "QueryOnly",
+            "Custom",
+        ),
+        (
+            "hssd.r1/bathroom_laundry.bathtub.01",
+            "QueryAndPhysics",
+            "BlockAll",
+        ),
+    ],
+)
+def test_result_validator_rejects_coherently_resealed_static_collision_drift(
+    instance_id: str,
+    collision_mode: str,
+    collision_profile_name: str,
 ) -> None:
     execution, result, scene = document_fixture()
-    commandlet.validate_result_document(execution, result, scene)
+    for key in (
+        "semantic_static_before",
+        "semantic_static_after_save",
+        "semantic_static_reloaded",
+    ):
+        row = next(
+            item
+            for item in result["observations"]["collision"][key]
+            if item["instance_id"] == instance_id
+        )
+        component = row["static_mesh_components"][0]
+        component["collision_mode"] = collision_mode
+        component["collision_profile_name"] = collision_profile_name
+    result = commandlet.seal(result)
+    scene["observations"] = copy.deepcopy(result["observations"])
+    result_raw = commandlet.canonical_json(result)
+    scene["result"] = {
+        "path": execution["result"]["result_path"],
+        "sha256": hashlib.sha256(result_raw).hexdigest(),
+        "size_bytes": len(result_raw),
+    }
+    scene = commandlet.seal(scene)
+
+    with pytest.raises(
+        commandlet.CommandletFailure, match="runtime collision authority differs"
+    ):
+        commandlet.validate_result_document(execution, result, scene)
+
+
+@pytest.mark.parametrize(
+    "instance_id",
+    [
+        "hssd.r1/entry_hall.shoe_bench.01",
+        "hssd.r1/bathroom_laundry.bathtub.01",
+    ],
+)
+def test_live_semantic_observation_enforces_per_instance_collision_authority(
+    instance_id: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    migration = migration_fixture()
+    bindings = {row["instance_id"]: row for row in _semantic_proxy_bindings(migration)}
+    placement = next(
+        row
+        for row in migration["final_static_slots"]
+        if row["instance_id"] == instance_id
+    )
+    binding = bindings[instance_id]
+    index = sorted(commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY).index(instance_id)
+    row = _semantic_observation(placement, index, binding)
+    actor = {
+        key: value
+        for key, value in row.items()
+        if key not in {"instance_id", "semantic_id"}
+    }
+    monkeypatch.setattr(
+        commandlet, "actor_observation", lambda _actor: copy.deepcopy(actor)
+    )
+
+    assert (
+        commandlet.semantic_proxy_observation(
+            object(), instance_id, row["semantic_id"], binding
+        )["instance_id"]
+        == instance_id
+    )
+
+    expected = commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY[instance_id]
+    bad_actor = copy.deepcopy(actor)
+    component = bad_actor["static_mesh_components"][0]
+    if expected == ("QueryAndPhysics", "BlockAll"):
+        component["collision_mode"] = "QueryOnly"
+        component["collision_profile_name"] = "Custom"
+    else:
+        component["collision_mode"] = "QueryAndPhysics"
+        component["collision_profile_name"] = "BlockAll"
+    monkeypatch.setattr(commandlet, "actor_observation", lambda _actor: bad_actor)
+    with pytest.raises(
+        commandlet.CommandletFailure, match="runtime collision authority differs"
+    ):
+        commandlet.semantic_proxy_observation(
+            object(), instance_id, row["semantic_id"], binding
+        )
+
+
+def test_valid_document_preserves_exact_static_collision_distribution() -> None:
+    _execution, result, _scene = document_fixture()
+    rows = result["observations"]["collision"]["semantic_static_reloaded"]
+    pairs = [
+        (
+            row["static_mesh_components"][0]["collision_mode"],
+            row["static_mesh_components"][0]["collision_profile_name"],
+        )
+        for row in rows
+    ]
+    assert pairs.count(("QueryAndPhysics", "BlockAll")) == 5
+    assert pairs.count(("QueryOnly", "Custom")) == 11
+
+
+def _t5_prepared(
+    execution: dict, result: dict, monkeypatch: pytest.MonkeyPatch
+) -> SimpleNamespace:
     finish = result["observations"]["six_room_finish"]
     profile = {
         "rooms": [
@@ -1172,8 +1336,69 @@ def test_valid_t4_document_is_accepted_by_t5_nested_validator(
         "_fixture_evidence_manifest",
         lambda _prepared: copy.deepcopy(execution["fixture_evidence_manifest"]),
     )
+    return prepared
+
+
+def test_valid_t4_document_is_accepted_by_t5_nested_validator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution, result, scene = document_fixture()
+    commandlet.validate_result_document(execution, result, scene)
+    prepared = _t5_prepared(execution, result, monkeypatch)
 
     materializer._validate_t4_contract(prepared, execution, result, scene)
+
+
+@pytest.mark.parametrize(
+    ("instance_id", "collision_mode", "collision_profile_name"),
+    [
+        (
+            "hssd.r1/entry_hall.shoe_bench.01",
+            "QueryOnly",
+            "Custom",
+        ),
+        (
+            "hssd.r1/bathroom_laundry.bathtub.01",
+            "QueryAndPhysics",
+            "BlockAll",
+        ),
+    ],
+)
+def test_t5_rejects_coherently_resealed_static_collision_drift(
+    instance_id: str,
+    collision_mode: str,
+    collision_profile_name: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution, result, scene = document_fixture()
+    for key in (
+        "semantic_static_before",
+        "semantic_static_after_save",
+        "semantic_static_reloaded",
+    ):
+        row = next(
+            item
+            for item in result["observations"]["collision"][key]
+            if item["instance_id"] == instance_id
+        )
+        component = row["static_mesh_components"][0]
+        component["collision_mode"] = collision_mode
+        component["collision_profile_name"] = collision_profile_name
+    result = commandlet.seal(result)
+    scene["observations"] = copy.deepcopy(result["observations"])
+    result_raw = commandlet.canonical_json(result)
+    scene["result"] = {
+        "path": execution["result"]["result_path"],
+        "sha256": hashlib.sha256(result_raw).hexdigest(),
+        "size_bytes": len(result_raw),
+    }
+    scene = commandlet.seal(scene)
+    prepared = _t5_prepared(execution, result, monkeypatch)
+
+    with pytest.raises(
+        materializer.R9PreflightError, match="runtime collision authority differs"
+    ):
+        materializer._validate_t4_contract(prepared, execution, result, scene)
 
 
 def test_result_validator_rejects_host_fact_injection_or_false_gate() -> None:

@@ -600,6 +600,54 @@ DYNAMIC_SLOT_BINDINGS = {
     ),
     "hssd.r1/kitchen_dining.pot.01": "home.r1/room.kitchen_dining/entity.pot.01",
 }
+
+# The HSSD R2 source scene normalizes all retained proxies to QueryOnly/Custom,
+# but the copied R6 gameplay map predates that normalization.  R9 must preserve
+# the exact R6 runtime authority instead of silently rewriting it.  This closed
+# table comes from the read-only, NullRHI observation of the pinned R6 map.
+# Diagnostic artifact SHA256:
+# c6c5c534944d7d544b882c6aae15d52431df109434505837c228eed3793579de
+# (34078 bytes); canonical content digest:
+# 8621f19e5601c0793cfc8eaf942fb55fa67e994e9cf4639bc98e436882a9c15f.
+STATIC_SEMANTIC_COLLISION_AUTHORITY: dict[str, tuple[str, str]] = {
+    "hssd.r1/bathroom_laundry.bathtub.01": ("QueryOnly", "Custom"),
+    "hssd.r1/bathroom_laundry.faucet.01": ("QueryOnly", "Custom"),
+    "hssd.r1/bathroom_laundry.laundry_basket.01": ("QueryOnly", "Custom"),
+    "hssd.r1/bathroom_laundry.washer.01": ("QueryOnly", "Custom"),
+    "hssd.r1/bedroom.bed.01": ("QueryOnly", "Custom"),
+    "hssd.r1/bedroom.nightstand.01": ("QueryOnly", "Custom"),
+    "hssd.r1/entry_hall.shoe_bench.01": ("QueryAndPhysics", "BlockAll"),
+    "hssd.r1/kitchen_dining.dining_table.01": ("QueryAndPhysics", "BlockAll"),
+    "hssd.r1/kitchen_dining.fridge.01": ("QueryOnly", "Custom"),
+    "hssd.r1/kitchen_dining.stove.01": ("QueryAndPhysics", "BlockAll"),
+    "hssd.r1/living_room.coffee_table.01": ("QueryAndPhysics", "BlockAll"),
+    "hssd.r1/living_room.sofa.01": ("QueryAndPhysics", "BlockAll"),
+    "hssd.r1/office.cabinet.01": ("QueryOnly", "Custom"),
+    "hssd.r1/office.desk.01": ("QueryOnly", "Custom"),
+    "hssd.r1/office.ladder.01": ("QueryOnly", "Custom"),
+    "hssd.r1/office.rolling_chair.01": ("QueryOnly", "Custom"),
+}
+
+
+def _static_semantic_collision_authority_content_digest() -> str:
+    rows = [
+        {
+            "collision_mode": values[0],
+            "collision_profile_name": values[1],
+            "instance_id": instance_id,
+        }
+        for instance_id, values in sorted(STATIC_SEMANTIC_COLLISION_AUTHORITY.items())
+    ]
+    return hashlib.sha256(
+        json.dumps(
+            rows, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST = (
+    _static_semantic_collision_authority_content_digest()
+)
 DELETION_INSTANCE_ID = "hssd.r1/bedroom.phone.01"
 
 LEGAL_SCOPE = copy.deepcopy(r6_launcher.LEGAL_SCOPE)
@@ -3195,12 +3243,17 @@ def _validate_semantic_proxy(
         and not row["light_components"],
         label + " identity differs",
     )
+    expected_collision = STATIC_SEMANTIC_COLLISION_AUTHORITY.get(row["instance_id"])
+    _require(
+        expected_collision is not None,
+        label + " static collision authority is not pinned",
+    )
     component = row["static_mesh_components"][0]
     _require(
         component["component_path"] == expected_binding["component_path"]
         and component["mesh_object_path"] is not None
-        and component["collision_mode"] == "QueryOnly"
-        and component["collision_profile_name"] == "Custom"
+        and component["collision_mode"] == expected_collision[0]
+        and component["collision_profile_name"] == expected_collision[1]
         and component["collision_responses"] == {"Pawn": "Block", "Visibility": "Block"}
         and component["simulate_physics"] is False
         and component["generate_overlap_events"]
@@ -3208,7 +3261,7 @@ def _validate_semantic_proxy(
         and component["can_ever_affect_navigation"]
         is expected_binding["can_ever_affect_navigation"]
         and component["visible"] is False,
-        label + " query authority differs",
+        label + " runtime collision authority differs",
     )
 
 
@@ -3575,6 +3628,10 @@ def _validate_t4_contract(
         if policy == "explicit_detail_no_collision"
     }
     static_semantic_ids = semantic_ids - set(DYNAMIC_SLOT_BINDINGS)
+    _require(
+        static_semantic_ids == set(STATIC_SEMANTIC_COLLISION_AUTHORITY),
+        "T4 static semantic collision authority inventory differs",
+    )
     for key in (
         "semantic_static_before",
         "semantic_static_after_save",
