@@ -533,15 +533,23 @@ def _fixture(tmp_path: Path) -> Fixture:
         },
     )
 
+    acquisition = profile["presentation_provenance"]["cc0_acquisition"]
+    acquisition_reference = {
+        "acquisition_manifest_sha256": acquisition["acquisition_manifest_sha256"],
+        "provider": acquisition["provider"],
+        "receipt_digest": acquisition["receipt_content_digest"],
+        "receipt_file_sha256": acquisition["receipt_file_sha256"],
+        "receipt_schema_version": acquisition["receipt_schema_version"],
+    }
     manifest, manifest_pin = _write_receipt(
         tmp_path / "provenance/presentation-manifest.json",
         {
             "schema_version": "simworld.vista.playable-home-presentation-manifest/v1",
-            "external_placement": {
-                "acquisition_receipt": profile["presentation_provenance"][
-                    "cc0_acquisition"
-                ]
-            },
+            "external_placement": {"acquisition_receipt": acquisition_reference},
+            "ue_import_bundles": [
+                {"external_content": {"acquisition_receipt": acquisition_reference}}
+                for _index in range(3)
+            ],
             "materials": [
                 {
                     "material_id": row["manifest_material_id"],
@@ -1198,6 +1206,35 @@ def test_provenance_pin_and_identity_drift_fail_closed(tmp_path: Path) -> None:
     )
     with pytest.raises(materializer.R10Error):
         materializer.build_plan(f"{ATTEMPT}-identity", config=config)
+
+
+def test_provenance_acquisition_reference_projection_fails_closed(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path)
+    manifest = copy.deepcopy(fixture.provenance_documents["manifest"])
+    manifest["external_placement"]["acquisition_receipt"]["provider"] = "caller"
+    _document, manifest_pin = _write_receipt(
+        fixture.config.provenance.manifest.path,
+        manifest,
+    )
+    profile = copy.deepcopy(fixture.profile)
+    _pin_profile_row(
+        profile["presentation_provenance"]["presentation_manifest"],
+        manifest_pin,
+    )
+    _profile, profile_pin = _write_profile(fixture.config.profile.path, profile)
+    config = dataclasses.replace(
+        fixture.config,
+        provenance=dataclasses.replace(
+            fixture.config.provenance,
+            manifest=manifest_pin,
+        ),
+        profile=profile_pin,
+    )
+
+    with pytest.raises(materializer.R10Error, match="acquisition reference"):
+        materializer.build_plan(ATTEMPT, config=config)
 
 
 def test_cli_surface_has_no_path_map_material_or_provider_override() -> None:

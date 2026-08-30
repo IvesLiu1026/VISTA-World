@@ -1315,11 +1315,35 @@ def _validate_provenance(
     )
     provenance = profile["presentation_provenance"]
     acquisition = provenance["cc0_acquisition"]
-    for key, value in acquisition.items():
-        _require(
-            _contains_scalar(manifest, value),
-            "R10_provenance CC0 acquisition linkage differs: " + key,
-        )
+    _require(
+        acquisition["license"] == "CC0-1.0",
+        "R10_provenance CC0 license authority differs",
+    )
+    acquisition_reference = {
+        "acquisition_manifest_sha256": acquisition["acquisition_manifest_sha256"],
+        "provider": acquisition["provider"],
+        "receipt_digest": acquisition["receipt_content_digest"],
+        "receipt_file_sha256": acquisition["receipt_file_sha256"],
+        "receipt_schema_version": acquisition["receipt_schema_version"],
+    }
+    external_placement = manifest.get("external_placement")
+    import_bundles = manifest.get("ue_import_bundles")
+    _require(
+        type(external_placement) is dict and type(import_bundles) is list,
+        "R10_provenance CC0 acquisition containers differ",
+    )
+    acquisition_references = [external_placement.get("acquisition_receipt")]
+    acquisition_references.extend(
+        bundle.get("external_content", {}).get("acquisition_receipt")
+        if type(bundle) is dict and type(bundle.get("external_content")) is dict
+        else None
+        for bundle in import_bundles
+    )
+    _require(
+        len(acquisition_references) == 4
+        and all(value == acquisition_reference for value in acquisition_references),
+        "R10_provenance CC0 acquisition reference projection differs",
+    )
     for link in provenance["external_material_links"]:
         for key in (
             "manifest_material_id",
