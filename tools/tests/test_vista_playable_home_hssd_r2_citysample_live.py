@@ -623,7 +623,7 @@ def test_dry_run_build_plan_is_deterministic_and_zero_write(
     assert first.report["mode"] == "dry_run_zero_write"
     assert first.report["will_write"] is False
     assert first.report["will_execute_unreal"] is False
-    assert first.report["t4_commandlet_available"] is False
+    assert first.report["t4_commandlet_available"] is True
     assert first.report["migration"]["counts"]["final_visual_slots"] == 60
     assert first.report["source"]["hssd_namespace"] == materializer.HSSD_NAMESPACE_TREE
     assert first.report["claims"] == materializer.CLAIMS
