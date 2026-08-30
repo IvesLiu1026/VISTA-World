@@ -4,6 +4,7 @@ import copy
 import hashlib
 import pathlib
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
@@ -750,6 +751,81 @@ def test_strict_json_rejects_duplicate_keys_and_nonfinite_values() -> None:
         commandlet.strict_json(b'{"a":NaN}\n', "fixture")
     with pytest.raises(commandlet.CommandletFailure, match="finite canonical"):
         commandlet.canonical_json({"a": float("inf")})
+
+
+class _SkyLightComponentFixture:
+    _PROPERTIES: ClassVar[dict[str, object]] = {
+        "visible": True,
+        "intensity": 1.0,
+        "cast_shadows": True,
+        "mobility": "Static",
+    }
+
+    def get_path_name(self) -> str:
+        return "/fixture/lights/SkyLightComponent_0"
+
+    def get_name(self) -> str:
+        return "SkyLightComponent_0"
+
+    def get_editor_property(self, name: str):
+        if name not in self._PROPERTIES:
+            raise RuntimeError("property is unavailable: " + name)
+        return self._PROPERTIES[name]
+
+
+def test_skylight_observation_preserves_inapplicable_temperature_as_null() -> None:
+    observed = commandlet.light_component_observation(_SkyLightComponentFixture())
+    assert observed == {
+        "component_path": "/fixture/lights/SkyLightComponent_0",
+        "component_name": "SkyLightComponent_0",
+        "visible": True,
+        "intensity": 1.0,
+        "temperature_k": None,
+        "use_temperature": None,
+        "cast_shadow": True,
+        "mobility": "Static",
+        "attenuation_radius_cm": None,
+        "intensity_units": None,
+    }
+    commandlet._validate_light_component_document(observed, "sky light")
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("use_temperature", "unsupported"),
+        ("temperature_k", float("inf")),
+    ],
+)
+def test_light_component_document_rejects_invalid_optional_values(
+    key: str, value
+) -> None:
+    observed = _light_component("PointLightComponent_0")
+    observed[key] = value
+    with pytest.raises(commandlet.CommandletFailure, match="values differ"):
+        commandlet._validate_light_component_document(observed, "light")
+
+
+def test_authored_fixture_light_still_requires_temperature_properties(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed = _actor_observation("AuthoredLight", light=True)
+    observed["light_components"][0]["temperature_k"] = None
+    monkeypatch.setattr(commandlet, "actor_observation", lambda _actor: observed)
+    binding = {
+        "light": {
+            "actor_path": observed["actor_path"],
+            "class_path": observed["actor_class_path"],
+            "transform": copy.deepcopy(observed["actor_transform"]),
+            "intensity": 1000.0,
+            "temperature_k": 4500.0,
+            "attenuation_radius_cm": 800.0,
+            "use_temperature": True,
+            "cast_shadow": True,
+        }
+    }
+    with pytest.raises(commandlet.CommandletFailure, match="properties differ"):
+        commandlet.validate_light(object(), binding)
 
 
 def test_migration_contract_closes_exact_42_to_57_plus_3_projection() -> None:
