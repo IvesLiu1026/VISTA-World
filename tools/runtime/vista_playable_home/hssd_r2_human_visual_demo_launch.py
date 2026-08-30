@@ -37,17 +37,21 @@ EXECUTION_STATUS = "authorized_apply_request"
 RESULT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-result/v1"
 SCENE_RECEIPT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-scene-receipt/v1"
 HOST_RECEIPT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-host-receipt/v1"
+FIXTURE_EVIDENCE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-fixture-evidence/v1"
+COMPLETE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-complete/v1"
+COMPLETE_STATUS = "hssd_r2_citysample_live_publication_complete"
+FAILURE_STATUS = "hssd_r2_citysample_live_attempt_quarantined_no_reuse"
 FINISH_PROFILE_SCHEMA = (
     "simworld.vista.playable-home-hssd-r2-citysample-live-profile/v1"
 )
-FIXTURE_INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v2"
+FIXTURE_INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v3"
 FINISH_PROFILE_CONTENT_DIGEST = (
-    "f90659d60384edfaabdc34cdfd4a5b3aa0cd8d0226b59fe694e018a86874b314"
+    "105fc5270594b0667b8616f2fa5a583757f45c25017db49a263be2d7e68967f2"
 )
 FINISH_PROFILE_SHA256 = (
-    "7805bb21089373991f94c025dde59e843bba76856c1ad2908da14e47e2f79ab9"
+    "065782f443fd659a20d9a2ed5419403b2cf0faf04e336f05b11fc38528e999cb"
 )
-FINISH_PROFILE_BYTES = 70_265
+FINISH_PROFILE_BYTES = 71_082
 ENGINE_VERSION = "5.7.3-50162420+++UE5+Release-5.7"
 HSSD_NAMESPACE_RELATIVE = (
     "Content/VISTA/PlayableHome/hssd_private_research_r5_phase1_diagnostic/"
@@ -84,6 +88,7 @@ UPGRADE_KEYS = frozenset(
         "hssd_r2_authority",
         "finish_profile",
         "fixture_inventory",
+        "fixture_evidence_manifest",
         "execution",
         "result",
         "scene_receipt",
@@ -127,6 +132,7 @@ EXECUTION_KEYS = frozenset(
         "commandlet",
         "finish_profile",
         "fixture_inventory",
+        "fixture_evidence_manifest",
         "parent_combined_receipt",
         "r6_accessory_result",
         "hssd_r2_authority",
@@ -197,7 +203,12 @@ HOST_RECEIPT_KEYS = frozenset(
         "map",
         "project_static_tree",
         "logs",
+        "log_closure",
+        "static_delta",
+        "fixture_evidence_manifest",
+        "containment",
         "current_byte_revalidation",
+        "gates",
         "legal_scope",
         "claims",
         "acceptance",
@@ -205,10 +216,26 @@ HOST_RECEIPT_KEYS = frozenset(
     }
 )
 EXECUTION_ENGINE_KEYS = frozenset(
-    {"version", "unreal_editor_cmd", "build_version", "bwrap", "null_rhi"}
+    {
+        "version",
+        "unreal_editor_cmd",
+        "build_version",
+        "bwrap",
+        "null_rhi",
+        "trace_server",
+        "gpu",
+        "display",
+    }
 )
 EXECUTION_MAP_KEYS = frozenset({"object_path", "relative_path", "source_package"})
-EXECUTION_RESULT_KEYS = frozenset({"path", "sidecar_path"})
+EXECUTION_RESULT_KEYS = frozenset(
+    {
+        "result_path",
+        "result_sidecar_path",
+        "scene_receipt_path",
+        "scene_receipt_sidecar_path",
+    }
+)
 CURRENT_BYTE_KEYS = frozenset(
     {
         "execution",
@@ -217,25 +244,46 @@ CURRENT_BYTE_KEYS = frozenset(
         "map",
         "project_static_tree",
         "logs",
+        "fixture_evidence_manifest",
         "passed",
     }
 )
-RESULT_GATES = frozenset(
+UE_RESULT_GATES = frozenset(
     {
-        "fixed_r6_parent_validated",
-        "fixed_hssd_r2_authority_validated",
+        "fixed_map_loaded",
+        "source_actor_inventory_exact",
         "legacy_hssd_shell_inventory_exact",
+        "exact_41_legacy_shells_reused",
+        "exact_legacy_phone_shell_deleted",
+        "exact_16_missing_shells_spawned",
         "visual_slots_57_plus_3_exact",
         "non_hssd_actor_identities_preserved",
-        "collision_inventory_19_20_21_exact",
+        "unchanged_actor_state_preserved",
+        "fixture_glbs_imported_exact",
+        "fixture_packages_saved_exact",
         "six_room_finish_exact",
+        "r4_light_authority_preserved",
+        "semantic_proxy_inventory_19_exact",
+        "secondary_query_proxy_inventory_20_exact",
+        "detail_no_collision_inventory_21_exact",
         "pickup_authority_preserved",
-        "only_map_plus_fixture_packages_changed",
+        "gameplay_authority_preserved",
         "map_saved",
         "map_cold_reloaded",
+        "reloaded_observations_exact",
+        "cold_reloaded_map_and_fixture_packages_sealed",
+    }
+)
+HOST_GATES = frozenset(
+    {
         "nullrhi_no_gpu",
         "private_network_namespace",
+        "host_credentials_and_sockets_hidden",
         "process_group_closed",
+        "logs_stable_post_exit",
+        "only_map_plus_fixture_packages_changed",
+        "commandlet_receipts_revalidated",
+        "fixture_evidence_manifest_revalidated",
         "current_bytes_revalidated",
     }
 )
@@ -259,6 +307,10 @@ LOCAL_ARTIFACT_NAMES = {
     "scene_receipt": "hssd-r2-citysample-live-scene-receipt.json",
     "host_receipt": "hssd-r2-citysample-live-host-receipt.json",
 }
+FAILURE_NAME = "hssd-r2-citysample-live-host-failure.json"
+COMPLETE_NAME = "hssd-r2-citysample-live-host-complete.json"
+STDOUT_NAME = "unreal-hssd-r2-citysample-live-stdout.log"
+ENGINE_LOG_NAME = "unreal-hssd-r2-citysample-live-engine.log"
 FINISH_PROFILE_KEYS = frozenset(
     {
         "schema_version",
@@ -276,9 +328,13 @@ FINISH_PROFILE_KEYS = frozenset(
 FIXTURE_INVENTORY_KEYS = frozenset(
     {
         "schema_version",
+        "archetypes",
+        "execution_policy",
+        "output_root",
         "profile",
         "recipe",
         "forge_plan",
+        "worker_request",
         "worker_result",
         "source_snapshot",
         "toolchain",
@@ -291,6 +347,124 @@ FIXTURE_INVENTORY_KEYS = frozenset(
         "content_digest",
     }
 )
+FIXTURE_EVIDENCE_KEYS = frozenset(
+    {"schema_version", "root", "files", "directories", "tree", "content_digest"}
+)
+FIXTURE_EVIDENCE_FILE_KEYS = frozenset(
+    {"relative_path", "path", "sha256", "size_bytes", "mode"}
+)
+FIXTURE_EVIDENCE_DIRECTORY_KEYS = frozenset({"relative_path", "path", "mode"})
+COMPLETE_KEYS = frozenset(
+    {
+        "schema_version",
+        "status",
+        "attempt_root",
+        "combined_receipt",
+        "combined_receipt_sidecar",
+        "host_receipt",
+        "current_state",
+        "failure_absent",
+        "content_digest",
+    }
+)
+COMPLETE_CURRENT_STATE_KEYS = frozenset(
+    {
+        "execution",
+        "result",
+        "scene_receipt",
+        "map",
+        "project_static_tree",
+        "logs",
+        "static_delta",
+        "fixture_evidence_manifest",
+    }
+)
+UE_OBSERVATION_KEYS = frozenset(
+    {
+        "source_actor_inventory",
+        "legacy_shells_before",
+        "shell_migration",
+        "dynamic_presentations",
+        "preserved_non_hssd",
+        "fixture_imports",
+        "six_room_finish",
+        "collision",
+        "world_before",
+        "world_reloaded",
+    }
+)
+COMPOSITION_KEYS = frozenset(
+    {
+        "migration",
+        "fixture_imports",
+        "collision_policy",
+        "finish_profile_content_digest",
+        "expected_counts",
+    }
+)
+COMPOSITION_EXPECTED_COUNTS = {
+    "legacy_observed": 42,
+    "reused": 41,
+    "deleted": 1,
+    "spawned": 16,
+    "final_static": 57,
+    "dynamic": 3,
+    "final_visual_slots": 60,
+    "preserved_non_hssd": 108,
+    "semantic_proxies": 19,
+    "secondary_query_proxies": 20,
+    "detail_no_collision": 21,
+    "finish_segments": 26,
+    "fixture_archetypes": 3,
+    "fixture_packages": 9,
+    "fixture_actors": 6,
+    "r4_lights": 6,
+}
+HOST_CONTAINMENT_PREFIX = (
+    "/usr/bin/bwrap",
+    "--unshare-net",
+    "--unshare-pid",
+    "--die-with-parent",
+    "--ro-bind",
+    "/",
+    "/",
+    "--tmpfs",
+    "/home",
+    "--tmpfs",
+    "/root",
+    "--tmpfs",
+    "/run",
+    "--dev",
+    "/dev",
+    "--proc",
+    "/proc",
+    "--tmpfs",
+    "/tmp",
+    "--tmpfs",
+    "/var/tmp",
+)
+HOST_CREDENTIAL_HIDDEN_POLICY = {
+    "host_home": "masked_private_tmpfs",
+    "host_root": "masked_private_tmpfs",
+    "host_run_and_user_sockets": "masked_private_tmpfs",
+    "host_tmp": "masked_private_tmpfs",
+    "host_var_tmp": "masked_private_tmpfs",
+    "environment": "fixed_allowlist_without_proxy_display_or_credentials",
+    "attempt": "only_writable_host_bind",
+    "engine_and_static_host_root": "read_only",
+}
+HOST_LOG_CLOSURE_POLICY = {
+    "observation_count": 3,
+    "interval_seconds": 0.2,
+    "required_unchanged_fields": [
+        "device",
+        "inode",
+        "size_bytes",
+        "mtime_ns",
+        "ctime_ns",
+        "sha256",
+    ],
+}
 OBSERVATIONS = {
     "legacy_hssd_shells_observed": 42,
     "reused_static_shells": 41,
@@ -545,13 +719,16 @@ def _read_receipt_pinned_file(
             observed_digest.update(chunk)
             chunks.append(chunk)
         after = os.fstat(descriptor)
-        identity = lambda row: (
-            row.st_dev,
-            row.st_ino,
-            row.st_size,
-            row.st_mtime_ns,
-            row.st_ctime_ns,
-        )
+
+        def identity(row: os.stat_result) -> tuple[int, int, int, int, int]:
+            return (
+                row.st_dev,
+                row.st_ino,
+                row.st_size,
+                row.st_mtime_ns,
+                row.st_ctime_ns,
+            )
+
         if identity(before) != identity(after):
             raise base.HumanVisualDemoError(f"{label} changed while read")
         raw = b"".join(chunks)
@@ -669,15 +846,27 @@ def _validate_finish_profile(
         or document.get("content_digest") != trust.finish_profile_content_digest
     ):
         raise base.HumanVisualDemoError("R9 finish profile fixed bytes differ")
-    forge = _fixture_forge_module()
-    try:
-        validated = forge.load_profile(pin.path)
-    except Exception as exc:
-        raise base.HumanVisualDemoError(
-            f"R9 finish profile T2 validation failed: {exc}"
-        ) from exc
-    if validated != document:
-        raise base.HumanVisualDemoError("R9 finish profile changed during validation")
+    fixture_forge = document.get("fixture_forge")
+    imports = document.get("fixture_imports")
+    inventory = document.get("hssd_r2_inventory")
+    claims = document.get("claims")
+    if (
+        document.get("schema_version") != FINISH_PROFILE_SCHEMA
+        or document.get("profile_id") != "hssd_r2_citysample_live_r1"
+        or not isinstance(fixture_forge, dict)
+        or fixture_forge.get("inventory_schema_version") != FIXTURE_INVENTORY_SCHEMA
+        or not isinstance(imports, dict)
+        or len(imports.get("exact_package_names", [])) != 9
+        or imports.get("exact_package_names")
+        != sorted(imports.get("exact_package_names", []))
+        or not isinstance(inventory, dict)
+        or inventory.get("visual_slot_count") != 60
+        or inventory.get("static_shell_count") != 57
+        or len(inventory.get("dynamic_presentation_instance_ids", [])) != 3
+        or not isinstance(claims, dict)
+        or any(value is not False for value in claims.values())
+    ):
+        raise base.HumanVisualDemoError("R9 finish profile v3 contract differs")
     rechecked, raw = _read_receipt_pinned_file(_pin_document(pin), "R9 finish profile")
     if (
         rechecked != pin
@@ -804,14 +993,6 @@ def _validate_fixture_inventory(
     finish_document: Mapping[str, Any],
 ) -> None:
     base._require_exact_keys(document, FIXTURE_INVENTORY_KEYS, "R9 fixture inventory")
-    forge = _fixture_forge_module()
-    try:
-        forge.validate_fixture_inventory(document)
-        recipe = forge.load_recipe()
-    except Exception as exc:
-        raise base.HumanVisualDemoError(
-            f"R9 fixture inventory T2 validation failed: {exc}"
-        ) from exc
     profile_pin = document.get("profile")
     if not isinstance(profile_pin, dict) or (
         profile_pin.get("sha256"),
@@ -835,109 +1016,44 @@ def _validate_fixture_inventory(
         or len(set(expected_packages)) != 9
     ):
         raise base.HumanVisualDemoError("R9 exact nine-package allowlist differs")
-
-    root = pin.path.parent
-    try:
-        forge_plan = _load_t2_relative_document(
-            root,
-            document["forge_plan"],
-            expected_path="forge-plan.json",
-            label="R9 fixture forge plan",
-        )
-        forge.validate_plan(forge_plan, expected_mode="apply")
-        worker_result = _load_t2_relative_document(
-            root,
-            document["worker_result"],
-            expected_path="worker-result.json",
-            label="R9 fixture worker result",
-        )
-        forge._validate_worker_result(worker_result, expected_plan=forge_plan)
-        snapshot_manifest = _load_t2_relative_document(
-            root,
-            document["source_snapshot"]["manifest"],
-            expected_path=forge.SOURCE_SNAPSHOT_MANIFEST_PATH.as_posix(),
-            label="R9 fixture source snapshot manifest",
-        )
-        observed_snapshot = forge._validate_source_snapshot(
-            root, expected_sources=forge_plan["builder_sources"]
-        )
-        _validate_t2_evidence_tree(root, forge)
-    except Exception as exc:
-        if isinstance(exc, base.HumanVisualDemoError):
-            raise
-        raise base.HumanVisualDemoError(
-            f"R9 fixture plan/worker/snapshot validation failed: {exc}"
-        ) from exc
+    artifacts = document.get("artifacts")
+    archetypes = document.get("archetypes")
     if (
-        forge_plan.get("profile") != document.get("profile")
-        or forge_plan.get("recipe") != document.get("recipe")
-        or forge_plan.get("toolchain") != document.get("toolchain")
-        or forge_plan.get("ue_package_inventory")
-        != document.get("ue_package_inventory")
-        or worker_result.get("plan_content_digest") != forge_plan.get("content_digest")
-        or worker_result.get("profile") != document.get("profile")
-        or worker_result.get("recipe") != document.get("recipe")
-        or worker_result.get("builder_sources") != forge_plan.get("builder_sources")
-        or worker_result.get("source_snapshot_content_digest")
-        != snapshot_manifest.get("content_digest")
-        or observed_snapshot != snapshot_manifest
-        or document["source_snapshot"].get("sources")
-        != forge_plan.get("builder_sources")
-        or document["source_snapshot"].get("tree_content_digest")
-        != snapshot_manifest.get("content_digest")
+        document.get("schema_version") != FIXTURE_INVENTORY_SCHEMA
+        or document.get("status")
+        != "fixture_inventory_sealed_snapshot_provenance_not_ue_imported"
+        or document.get("artifact_count") != 3
+        or document.get("binary_payload_in_git") is not False
+        or not isinstance(archetypes, list)
+        or len(archetypes) != 3
+        or not isinstance(artifacts, list)
+        or len(artifacts) != 3
+        or any(not isinstance(row, dict) for row in artifacts)
+        or {row.get("archetype_id") for row in artifacts}
+        != {"flush_dome", "linear_panel", "pendant"}
     ):
-        raise base.HumanVisualDemoError(
-            "R9 fixture plan/worker/snapshot cross-binding differs"
-        )
-
-    archetypes = {row["archetype_id"]: row for row in recipe["archetypes"]}
-    worker_by_id = {
-        row["archetype_id"]: row for row in worker_result.get("artifacts", [])
-    }
-    try:
-        for row in document["artifacts"]:
-            archetype = archetypes[row["archetype_id"]]
-            glb = forge.inspect_glb(
-                forge._safe_child(root, row["glb"]["path"]), archetype
-            )
-            preview = forge.inspect_png(
-                forge._safe_child(root, row["preview"]["path"]), recipe["preview"]
-            )
-            if row["glb"] != {"path": row["glb"]["path"], **glb}:
-                raise base.HumanVisualDemoError("R9 current fixture GLB differs")
-            if row["preview"] != {"path": row["preview"]["path"], **preview}:
-                raise base.HumanVisualDemoError("R9 current fixture preview differs")
-            receipt = _load_t2_relative_document(
-                root,
-                row["artifact_receipt"],
-                expected_path=row["artifact_receipt"]["path"],
-                label="R9 fixture artifact receipt",
-            )
-            forge._artifact_receipt(receipt, archetype)
+        raise base.HumanVisualDemoError("R9 fixture inventory v3 contract differs")
+    for row in artifacts:
+        if set(row) != {
+            "archetype_id",
+            "glb",
+            "preview",
+            "artifact_receipt",
+            "ue_import",
+        }:
+            raise base.HumanVisualDemoError("R9 fixture artifact keys differ")
+        for key in ("glb", "preview"):
+            artifact = row[key]
             if (
-                receipt.get("plan_content_digest") != forge_plan["content_digest"]
-                or receipt.get("builder_sources") != forge_plan["builder_sources"]
-                or receipt.get("source_snapshot_content_digest")
-                != snapshot_manifest["content_digest"]
+                not isinstance(artifact, dict)
+                or not isinstance(artifact.get("path"), str)
+                or not isinstance(artifact.get("sha256"), str)
+                or base.SHA256_RE.fullmatch(artifact["sha256"]) is None
+                or not isinstance(artifact.get("size_bytes"), int)
+                or isinstance(artifact.get("size_bytes"), bool)
+                or artifact["size_bytes"] <= 0
             ):
-                raise base.HumanVisualDemoError(
-                    "R9 current fixture receipt provenance differs"
-                )
-            if worker_by_id.get(row["archetype_id"]) != {
-                "archetype_id": row["archetype_id"],
-                "glb_sha256": row["glb"]["sha256"],
-                "preview_sha256": row["preview"]["sha256"],
-                "receipt_content_digest": row["artifact_receipt"]["content_digest"],
-            }:
-                raise base.HumanVisualDemoError(
-                    "R9 fixture worker/artifact cross-binding differs"
-                )
-    except base.HumanVisualDemoError:
-        raise
-    except Exception as exc:
-        raise base.HumanVisualDemoError(
-            f"R9 fixture current artifact validation failed: {exc}"
-        ) from exc
+                raise base.HumanVisualDemoError("R9 fixture artifact pin differs")
     rechecked, raw = _read_receipt_pinned_file(
         _pin_document(pin), "R9 fixture inventory"
     )
@@ -1001,7 +1117,138 @@ def _manifest_tree(manifest: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _fixture_package_paths(finish_document: Mapping[str, Any]) -> set[str]:
+def _safe_evidence_relative(value: Any, label: str) -> tuple[str, ...]:
+    if not isinstance(value, str) or not value:
+        raise base.HumanVisualDemoError(f"{label} relative path differs")
+    pure = Path(value)
+    if pure.is_absolute() or "." in pure.parts or ".." in pure.parts:
+        raise base.HumanVisualDemoError(f"{label} relative path is unsafe")
+    normalized = Path(*pure.parts).as_posix()
+    if normalized != value:
+        raise base.HumanVisualDemoError(f"{label} relative path is not canonical")
+    return pure.parts
+
+
+def _validate_fixture_evidence_manifest(
+    value: Any,
+    *,
+    receipt_parent: Path,
+    finish_profile: base.ArtifactPin,
+    fixture_inventory: base.ArtifactPin,
+    inventory_document: Mapping[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise base.HumanVisualDemoError(
+            "R9 fixture evidence manifest must be an object"
+        )
+    base._require_exact_keys(value, FIXTURE_EVIDENCE_KEYS, "R9 fixture evidence")
+    if (
+        value.get("schema_version") != FIXTURE_EVIDENCE_SCHEMA
+        or value.get("root") != str(receipt_parent)
+        or value.get("content_digest") != base.content_digest(value)
+    ):
+        raise base.HumanVisualDemoError("R9 fixture evidence identity differs")
+    files = value.get("files")
+    directories = value.get("directories")
+    if not isinstance(files, list) or not isinstance(directories, list):
+        raise base.HumanVisualDemoError("R9 fixture evidence rows differ")
+    if (
+        any(
+            not isinstance(row, dict) or set(row) != FIXTURE_EVIDENCE_FILE_KEYS
+            for row in files
+        )
+        or any(
+            not isinstance(row, dict) or set(row) != FIXTURE_EVIDENCE_DIRECTORY_KEYS
+            for row in directories
+        )
+        or [row["relative_path"] for row in files]
+        != sorted((row["relative_path"] for row in files), key=str.encode)
+        or [row["relative_path"] for row in directories]
+        != sorted((row["relative_path"] for row in directories), key=str.encode)
+        or len({row["relative_path"] for row in files}) != len(files)
+        or len({row["relative_path"] for row in directories}) != len(directories)
+    ):
+        raise base.HumanVisualDemoError("R9 fixture evidence ordering differs")
+    manifest: dict[str, dict[str, Any]] = {}
+    expected_directories: set[str] = set()
+    file_by_relative: dict[str, dict[str, Any]] = {}
+    for row in files:
+        relative = row["relative_path"]
+        parts = _safe_evidence_relative(relative, "R9 fixture evidence file")
+        path = receipt_parent.joinpath(*parts)
+        if row.get("path") != str(path):
+            raise base.HumanVisualDemoError("R9 fixture evidence file path differs")
+        pin, _raw = _read_receipt_pinned_file(
+            {key: row[key] for key in base.ARTIFACT_KEYS},
+            "R9 current fixture evidence file",
+        )
+        mode = stat.S_IMODE(os.lstat(path).st_mode)
+        if pin.path != path or row.get("mode") != mode:
+            raise base.HumanVisualDemoError("R9 fixture evidence file mode differs")
+        manifest[relative] = {
+            "sha256": pin.sha256,
+            "size_bytes": pin.size_bytes,
+            "mode": mode,
+        }
+        file_by_relative[relative] = row
+        parent = Path(relative).parent
+        while parent != Path("."):
+            expected_directories.add(parent.as_posix())
+            parent = parent.parent
+    observed_directories: set[str] = set()
+    for row in directories:
+        relative = row["relative_path"]
+        parts = _safe_evidence_relative(relative, "R9 fixture evidence directory")
+        path = receipt_parent.joinpath(*parts)
+        try:
+            metadata = os.lstat(path)
+            resolved = path.resolve(strict=True)
+        except OSError as exc:
+            raise base.HumanVisualDemoError(
+                "R9 fixture evidence directory unavailable"
+            ) from exc
+        if (
+            row.get("path") != str(path)
+            or resolved != path
+            or stat.S_ISLNK(metadata.st_mode)
+            or not stat.S_ISDIR(metadata.st_mode)
+            or row.get("mode") != stat.S_IMODE(metadata.st_mode)
+        ):
+            raise base.HumanVisualDemoError("R9 fixture evidence directory differs")
+        observed_directories.add(relative)
+    if observed_directories != expected_directories or value.get(
+        "tree"
+    ) != _manifest_tree(manifest):
+        raise base.HumanVisualDemoError("R9 fixture evidence tree differs")
+    expected_local = {
+        LOCAL_ARTIFACT_NAMES["finish_profile"]: _pin_document(finish_profile),
+        LOCAL_ARTIFACT_NAMES["fixture_inventory"]: _pin_document(fixture_inventory),
+    }
+    for relative, expected in expected_local.items():
+        row = file_by_relative.get(relative)
+        if row is None or {key: row[key] for key in base.ARTIFACT_KEYS} != expected:
+            raise base.HumanVisualDemoError("R9 local fixture evidence pin differs")
+    artifacts = inventory_document.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise base.HumanVisualDemoError("R9 inventory evidence artifacts differ")
+    for artifact in artifacts:
+        for key in ("glb", "preview"):
+            pin = artifact.get(key) if isinstance(artifact, dict) else None
+            row = (
+                file_by_relative.get(pin.get("path")) if isinstance(pin, dict) else None
+            )
+            if (
+                row is None
+                or row.get("sha256") != pin.get("sha256")
+                or row.get("size_bytes") != pin.get("size_bytes")
+            ):
+                raise base.HumanVisualDemoError(
+                    "R9 fixture artifact evidence projection differs"
+                )
+    return copy.deepcopy(value)
+
+
+def _fixture_package_paths(finish_document: Mapping[str, Any]) -> tuple[str, ...]:
     imports = finish_document.get("fixture_imports")
     if not isinstance(imports, dict):
         raise base.HumanVisualDemoError("R9 fixture imports are unavailable")
@@ -1016,7 +1263,88 @@ def _fixture_package_paths(finish_document: Mapping[str, Any]) -> set[str]:
         )
     ):
         raise base.HumanVisualDemoError("R9 fixture package allowlist differs")
-    return {"Content/" + row.removeprefix("/Game/") + ".uasset" for row in packages}
+    return tuple(
+        "Content/" + row.removeprefix("/Game/") + ".uasset" for row in packages
+    )
+
+
+def _static_file_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _seal_current_static_files(
+    *,
+    project_root: Path,
+    manifest: Mapping[str, Mapping[str, Any]],
+    relatives: tuple[str, ...],
+    label: str,
+) -> None:
+    """Bind current map/package bytes to distinct, single-link file identities."""
+
+    identities: set[tuple[int, int]] = set()
+    for relative in relatives:
+        parts = _safe_evidence_relative(relative, label)
+        path = project_root.joinpath(*parts)
+        expected = manifest.get(relative)
+        if not isinstance(expected, dict):
+            raise base.HumanVisualDemoError(f"{label} manifest row is absent")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+        try:
+            path_before = os.lstat(path)
+            descriptor = os.open(path, flags)
+        except OSError as exc:
+            raise base.HumanVisualDemoError(f"{label} file is unavailable") from exc
+        try:
+            opened_before = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(path_before.st_mode)
+                or not stat.S_ISREG(opened_before.st_mode)
+                or path_before.st_nlink != 1
+                or opened_before.st_nlink != 1
+                or (path_before.st_dev, path_before.st_ino)
+                != (opened_before.st_dev, opened_before.st_ino)
+            ):
+                raise base.HumanVisualDemoError(
+                    f"{label} file is linked, aliased, or not regular"
+                )
+            digest = hashlib.sha256()
+            while chunk := os.read(descriptor, 1024 * 1024):
+                digest.update(chunk)
+            opened_after = os.fstat(descriptor)
+            path_after = os.lstat(path)
+        finally:
+            os.close(descriptor)
+        if (
+            _static_file_identity(path_before) != _static_file_identity(opened_before)
+            or _static_file_identity(opened_before)
+            != _static_file_identity(opened_after)
+            or _static_file_identity(opened_after) != _static_file_identity(path_after)
+            or path.resolve(strict=True) != path
+        ):
+            raise base.HumanVisualDemoError(
+                f"{label} file identity changed while sealed"
+            )
+        observed = {
+            "sha256": digest.hexdigest(),
+            "size_bytes": opened_after.st_size,
+            "mode": stat.S_IMODE(opened_after.st_mode),
+        }
+        if expected != observed:
+            raise base.HumanVisualDemoError(
+                f"{label} manifest row differs from current file identity"
+            )
+        identity = (opened_after.st_dev, opened_after.st_ino)
+        if identity in identities:
+            raise base.HumanVisualDemoError(f"{label} files share an inode alias")
+        identities.add(identity)
 
 
 def _validate_source_output_delta(
@@ -1024,7 +1352,8 @@ def _validate_source_output_delta(
     source_manifest: Mapping[str, Mapping[str, Any]],
     output_manifest: Mapping[str, Mapping[str, Any]],
     finish_document: Mapping[str, Any],
-) -> None:
+    output_project_root: Path,
+) -> dict[str, Any]:
     map_relative = (
         "Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap"
     )
@@ -1045,6 +1374,115 @@ def _validate_source_output_delta(
         raise base.HumanVisualDemoError(
             "R9 source/output delta is not exactly map plus nine fixture packages"
         )
+    source_map = source_manifest[map_relative]
+    output_map = output_manifest[map_relative]
+    if (
+        source_map.get("mode") != output_map.get("mode")
+        or source_map.get("sha256") == output_map.get("sha256")
+        or not isinstance(output_map.get("size_bytes"), int)
+        or output_map["size_bytes"] <= 0
+    ):
+        raise base.HumanVisualDemoError("R9 map bytes or preserved mode differ")
+    for relative in fixture_paths:
+        row = output_manifest[relative]
+        if (
+            row.get("mode") != 0o600
+            or not isinstance(row.get("size_bytes"), int)
+            or row["size_bytes"] <= 0
+            or not isinstance(row.get("sha256"), str)
+            or base.SHA256_RE.fullmatch(row["sha256"]) is None
+        ):
+            raise base.HumanVisualDemoError("R9 fixture package mode or bytes differ")
+    _seal_current_static_files(
+        project_root=output_project_root,
+        manifest=output_manifest,
+        relatives=(map_relative, *fixture_paths),
+        label="R9 map/fixture static identity",
+    )
+    return {
+        "policy": "exact_map_plus_sealed_fixture_package_inventory/v1",
+        "changed_relative_paths": sorted(changed),
+        "map_relative_path": map_relative,
+        "fixture_package_relative_paths": list(fixture_paths),
+        "changed_file_count": 10,
+        "map_mode_preserved": True,
+        "fixture_package_mode": "0600",
+    }
+
+
+def _validate_fixture_package_bindings(
+    *,
+    result_document: Mapping[str, Any],
+    finish_document: Mapping[str, Any],
+    fixture_evidence: Mapping[str, Any],
+    project: base.ArtifactPin,
+    output_manifest: Mapping[str, Mapping[str, Any]],
+) -> None:
+    observations = result_document.get("observations")
+    rows = (
+        observations.get("fixture_imports") if isinstance(observations, dict) else None
+    )
+    profiles = finish_document.get("fixture_imports", {}).get("glb_inventory")
+    evidence_files = fixture_evidence.get("files")
+    if (
+        not isinstance(rows, list)
+        or len(rows) != 3
+        or not isinstance(profiles, list)
+        or len(profiles) != 3
+        or not isinstance(evidence_files, list)
+    ):
+        raise base.HumanVisualDemoError("R9 fixture package authority differs")
+    profile_by_id = {row.get("archetype_id"): row for row in profiles}
+    evidence_by_path = {row.get("path"): row for row in evidence_files}
+    if set(profile_by_id) != {"flush_dome", "linear_panel", "pendant"}:
+        raise base.HumanVisualDemoError("R9 fixture profile archetypes differ")
+    for row in rows:
+        archetype_id = row.get("archetype_id") if isinstance(row, dict) else None
+        profile = profile_by_id.get(archetype_id)
+        source = row.get("source_glb") if isinstance(row, dict) else None
+        evidence = (
+            evidence_by_path.get(source.get("path"))
+            if isinstance(source, dict)
+            else None
+        )
+        if (
+            not isinstance(profile, dict)
+            or not isinstance(source, dict)
+            or not isinstance(evidence, dict)
+            or {key: evidence.get(key) for key in base.ARTIFACT_KEYS} != source
+            or row.get("mesh_object_path") != profile.get("static_mesh_object_path")
+            or row.get("material_object_paths")
+            != sorted(profile.get("material_object_paths", []))
+        ):
+            raise base.HumanVisualDemoError("R9 fixture source binding differs")
+        package_names = sorted(
+            [
+                profile.get("static_mesh_package_name"),
+                *profile.get("material_package_names", []),
+            ]
+        )
+        expected_packages = []
+        for package_name in package_names:
+            if not isinstance(package_name, str) or not package_name.startswith(
+                "/Game/"
+            ):
+                raise base.HumanVisualDemoError("R9 fixture package name differs")
+            relative = "Content/" + package_name.removeprefix("/Game/") + ".uasset"
+            current = output_manifest.get(relative)
+            if not isinstance(current, dict) or current.get("mode") != 0o600:
+                raise base.HumanVisualDemoError(
+                    "R9 fixture package current mode differs"
+                )
+            expected_packages.append(
+                {
+                    "package_name": package_name,
+                    "path": str(project.path.parent / relative),
+                    "sha256": current.get("sha256"),
+                    "size_bytes": current.get("size_bytes"),
+                }
+            )
+        if row.get("package_artifacts") != expected_packages:
+            raise base.HumanVisualDemoError("R9 fixture package current bytes differ")
 
 
 def _validate_composition_contract(
@@ -1227,6 +1665,7 @@ def _validate_execution_document(
     finish_profile: base.ArtifactPin,
     finish_document: Mapping[str, Any],
     fixture_inventory: base.ArtifactPin,
+    fixture_evidence: Mapping[str, Any],
     parent_pin: base.ArtifactPin,
     parent: base.HumanVisualDemoInputs,
     authority: Mapping[str, Any],
@@ -1234,6 +1673,7 @@ def _validate_execution_document(
     build_version: base.ArtifactPin,
     bwrap: base.ArtifactPin,
     result: base.ArtifactPin,
+    scene_receipt: base.ArtifactPin,
     trust: LauncherTrust,
 ) -> None:
     _require_schema_status_keys(
@@ -1253,6 +1693,7 @@ def _validate_execution_document(
         or document.get("commandlet") != _pin_document(scripts["commandlet"])
         or document.get("finish_profile") != _pin_document(finish_profile)
         or document.get("fixture_inventory") != _pin_document(fixture_inventory)
+        or document.get("fixture_evidence_manifest") != fixture_evidence
         or document.get("parent_combined_receipt") != _pin_document(parent_pin)
         or document.get("r6_accessory_result") != r6_result
         or document.get("hssd_r2_authority") != authority
@@ -1279,14 +1720,26 @@ def _validate_execution_document(
         or _manifest_tree(namespace_manifest) != trust.hssd_namespace_tree
     ):
         raise base.HumanVisualDemoError("R9 execution HSSD namespace differs")
-    _validate_composition_contract(
-        document.get("composition_contract"), finish_document
-    )
+    composition = document.get("composition_contract")
+    if not isinstance(composition, dict):
+        raise base.HumanVisualDemoError("R9 composition wrapper must be an object")
+    base._require_exact_keys(composition, COMPOSITION_KEYS, "R9 composition wrapper")
+    if (
+        composition.get("fixture_imports") != finish_document.get("fixture_imports")
+        or composition.get("collision_policy")
+        != finish_document.get("collision_policy")
+        or composition.get("finish_profile_content_digest")
+        != finish_document.get("content_digest")
+        or composition.get("expected_counts") != COMPOSITION_EXPECTED_COUNTS
+    ):
+        raise base.HumanVisualDemoError("R9 composition/profile binding differs")
+    _validate_composition_contract(composition.get("migration"), finish_document)
     output_manifest = base._project_static_manifest(project.path)
     _validate_source_output_delta(
         source_manifest=source_manifest,
         output_manifest=output_manifest,
         finish_document=finish_document,
+        output_project_root=project.path.parent,
     )
 
     engine = document.get("engine")
@@ -1299,6 +1752,9 @@ def _validate_execution_document(
         or engine.get("build_version") != _pin_document(build_version)
         or engine.get("bwrap") != _pin_document(bwrap)
         or engine.get("null_rhi") is not True
+        or engine.get("trace_server") != "disabled"
+        or engine.get("gpu") is not None
+        or engine.get("display") is not None
     ):
         raise base.HumanVisualDemoError("R9 execution engine binding differs")
     map_payload = document.get("map")
@@ -1311,7 +1767,11 @@ def _validate_execution_document(
     if map_payload != {
         "object_path": MAP_OBJECT_PATH,
         "relative_path": expected_relative,
-        "source_package": _pin_document(parent.map_package),
+        "source_package": {
+            "path": str(receipt_parent / "project" / expected_relative),
+            "sha256": parent.map_package.sha256,
+            "size_bytes": parent.map_package.size_bytes,
+        },
     }:
         raise base.HumanVisualDemoError("R9 execution map binding differs")
     result_binding = document.get("result")
@@ -1320,12 +1780,24 @@ def _validate_execution_document(
     base._require_exact_keys(
         result_binding, EXECUTION_RESULT_KEYS, "R9 execution result binding"
     )
-    sidecar = result.path.with_name(result.path.name + ".sha256")
-    if result_binding != {"path": str(result.path), "sidecar_path": str(sidecar)}:
+    result_sidecar = result.path.with_name(result.path.name + ".sha256")
+    scene_sidecar = scene_receipt.path.with_name(scene_receipt.path.name + ".sha256")
+    if result_binding != {
+        "result_path": str(result.path),
+        "result_sidecar_path": str(result_sidecar),
+        "scene_receipt_path": str(scene_receipt.path),
+        "scene_receipt_sidecar_path": str(scene_sidecar),
+    }:
         raise base.HumanVisualDemoError("R9 execution result path binding differs")
-    sidecar_raw = base._sealed_bytes(sidecar, "R9 result sidecar", maximum_bytes=256)
-    if sidecar_raw != f"{result.sha256}  {result.path.name}\n".encode("ascii"):
-        raise base.HumanVisualDemoError("R9 result sidecar differs")
+    for pin, sidecar, label in (
+        (result, result_sidecar, "result"),
+        (scene_receipt, scene_sidecar, "scene receipt"),
+    ):
+        sidecar_raw = base._sealed_bytes(
+            sidecar, f"R9 {label} sidecar", maximum_bytes=256
+        )
+        if sidecar_raw != f"{pin.sha256}  {pin.path.name}\n".encode("ascii"):
+            raise base.HumanVisualDemoError(f"R9 {label} sidecar differs")
     acknowledgements = document.get("acknowledgements")
     if not isinstance(acknowledgements, dict):
         raise base.HumanVisualDemoError(
@@ -1343,6 +1815,77 @@ def _validate_execution_document(
     _validate_pending_boundaries(document, "R9 execution")
     if document.get("acceptance") != ACCEPTANCE:
         raise base.HumanVisualDemoError("R9 execution acceptance differs")
+
+
+def _validate_ue_observations(value: Any) -> None:
+    if not isinstance(value, dict):
+        raise base.HumanVisualDemoError("R9 UE observations must be an object")
+    base._require_exact_keys(value, UE_OBSERVATION_KEYS, "R9 UE observations")
+    shell = value.get("shell_migration")
+    dynamic = value.get("dynamic_presentations")
+    preserved = value.get("preserved_non_hssd")
+    finish = value.get("six_room_finish")
+    collision = value.get("collision")
+    if (
+        len(value.get("source_actor_inventory", [])) != 150
+        or len(value.get("legacy_shells_before", [])) != 42
+        or not isinstance(shell, dict)
+        or set(shell)
+        != {
+            "reuse_before",
+            "reuse_after_save",
+            "deleted",
+            "spawn_after_save",
+            "static_reloaded",
+        }
+        or len(shell.get("reuse_before", [])) != 41
+        or len(shell.get("reuse_after_save", [])) != 41
+        or len(shell.get("spawn_after_save", [])) != 16
+        or len(shell.get("static_reloaded", [])) != 57
+        or not isinstance(dynamic, dict)
+        or set(dynamic) != {"before", "after_save", "reloaded"}
+        or any(len(dynamic.get(key, [])) != 3 for key in dynamic)
+        or dynamic["before"] != dynamic["after_save"]
+        or dynamic["before"] != dynamic["reloaded"]
+        or not isinstance(preserved, dict)
+        or set(preserved)
+        != {"source_inventory", "reloaded_inventory", "unchanged_actor_paths"}
+        or len(preserved.get("source_inventory", [])) != 108
+        or preserved.get("source_inventory") != preserved.get("reloaded_inventory")
+        or len(preserved.get("unchanged_actor_paths", [])) != 99
+        or len(value.get("fixture_imports", [])) != 3
+        or not isinstance(finish, dict)
+        or any(
+            len(finish.get(key, [])) != count
+            for key, count in {
+                "architecture_before": 6,
+                "architecture_after_save": 6,
+                "architecture_reloaded": 6,
+                "fixtures_before": 6,
+                "fixtures_after_save": 6,
+                "fixtures_reloaded": 6,
+                "r4_lights_before": 6,
+                "r4_lights_reloaded": 6,
+                "segments_after_save": 26,
+                "segments_reloaded": 26,
+            }.items()
+        )
+        or not isinstance(collision, dict)
+        or collision.get("policy_counts")
+        != {
+            "semantic_proxies": 19,
+            "secondary_query_proxies": 20,
+            "detail_no_collision": 21,
+        }
+        or len(collision.get("semantic_static_reloaded", [])) != 16
+        or len(collision.get("semantic_dynamic_instance_ids", [])) != 3
+        or len(collision.get("secondary_reloaded", [])) != 20
+        or len(collision.get("detail_reloaded", [])) != 21
+        or value.get("world_before") != value.get("world_reloaded")
+    ):
+        raise base.HumanVisualDemoError(
+            "R9 UE observation counts or reload evidence differ"
+        )
 
 
 def _validate_result_document(
@@ -1364,16 +1907,16 @@ def _validate_result_document(
         or document.get("map_object_path") != MAP_OBJECT_PATH
         or document.get("map_package") != _pin_document(map_package)
         or document.get("project_static_tree") != project_tree
-        or document.get("observations") != OBSERVATIONS
         or document.get("error") is not None
     ):
         raise base.HumanVisualDemoError("R9 result lineage or observations differ")
     gates = document.get("gates")
     if not isinstance(gates, dict):
         raise base.HumanVisualDemoError("R9 result gates must be an object")
-    base._require_exact_keys(gates, RESULT_GATES, "R9 result gates")
+    base._require_exact_keys(gates, UE_RESULT_GATES, "R9 result gates")
     if any(value is not True for value in gates.values()):
         raise base.HumanVisualDemoError("R9 result gate is not true")
+    _validate_ue_observations(document.get("observations"))
     _validate_pending_boundaries(document, "R9 result")
 
 
@@ -1384,6 +1927,7 @@ def _validate_scene_document(
     result: base.ArtifactPin,
     map_package: base.ArtifactPin,
     project_tree: Mapping[str, Any],
+    result_document: Mapping[str, Any],
 ) -> None:
     _require_schema_status_keys(
         document,
@@ -1398,7 +1942,7 @@ def _validate_scene_document(
         or document.get("map_object_path") != MAP_OBJECT_PATH
         or document.get("map_package") != _pin_document(map_package)
         or document.get("project_static_tree") != project_tree
-        or document.get("observations") != OBSERVATIONS
+        or document.get("observations") != result_document.get("observations")
     ):
         raise base.HumanVisualDemoError("R9 scene receipt lineage differs")
     _validate_pending_boundaries(document, "R9 scene receipt")
@@ -1414,7 +1958,12 @@ def _validate_host_document(
     project: base.ArtifactPin,
     map_package: base.ArtifactPin,
     project_tree: Mapping[str, Any],
-) -> None:
+    finish_document: Mapping[str, Any],
+    fixture_evidence: Mapping[str, Any],
+    source_manifest: Mapping[str, Mapping[str, Any]],
+    output_manifest: Mapping[str, Mapping[str, Any]],
+    result_document: Mapping[str, Any],
+) -> dict[str, Any]:
     _require_schema_status_keys(
         document,
         keys=HOST_RECEIPT_KEYS,
@@ -1433,6 +1982,7 @@ def _validate_host_document(
         or document.get("project") != _pin_document(project)
         or document.get("map") != expected_map
         or document.get("project_static_tree") != project_tree
+        or document.get("fixture_evidence_manifest") != fixture_evidence
     ):
         raise base.HumanVisualDemoError("R9 host receipt lineage differs")
     logs_payload = document.get("logs")
@@ -1459,11 +2009,127 @@ def _validate_host_document(
         "map": _pin_document(map_package),
         "project_static_tree": dict(project_tree),
         "logs": logs,
+        "fixture_evidence_manifest": fixture_evidence,
         "passed": True,
     }
     if current != expected_current:
         raise base.HumanVisualDemoError("R9 current-byte receipt differs")
+    expected_delta = _validate_source_output_delta(
+        source_manifest=source_manifest,
+        output_manifest=output_manifest,
+        finish_document=finish_document,
+        output_project_root=project.path.parent,
+    )
+    if document.get("static_delta") != expected_delta:
+        raise base.HumanVisualDemoError("R9 host static delta differs")
+    gates = document.get("gates")
+    if not isinstance(gates, dict):
+        raise base.HumanVisualDemoError("R9 host gates must be an object")
+    base._require_exact_keys(gates, HOST_GATES, "R9 host gates")
+    if any(value is not True for value in gates.values()):
+        raise base.HumanVisualDemoError("R9 host gate is not true")
+    containment = document.get("containment")
+    if containment != {
+        "command_prefix": list(HOST_CONTAINMENT_PREFIX),
+        "credential_hidden_policy": HOST_CREDENTIAL_HIDDEN_POLICY,
+    }:
+        raise base.HumanVisualDemoError("R9 host containment differs")
+    closure = document.get("log_closure")
+    if (
+        not isinstance(closure, dict)
+        or set(closure) != {"policy", "residual_process_disposition", "snapshots"}
+        or closure.get("policy") != HOST_LOG_CLOSURE_POLICY
+        or closure.get("residual_process_disposition")
+        != "absent_after_descendant_tracker"
+        or not isinstance(closure.get("snapshots"), dict)
+        or set(closure["snapshots"]) != {"engine_log", "stdout_log"}
+    ):
+        raise base.HumanVisualDemoError("R9 host log closure differs")
+    log_by_name = {Path(row["path"]).name: row for row in logs}
+    for key, name in (("engine_log", ENGINE_LOG_NAME), ("stdout_log", STDOUT_NAME)):
+        snapshot = closure["snapshots"][key]
+        pin = log_by_name.get(name)
+        if (
+            not isinstance(snapshot, dict)
+            or set(snapshot)
+            != {"device", "inode", "size_bytes", "mtime_ns", "ctime_ns", "sha256"}
+            or pin is None
+            or snapshot.get("sha256") != pin["sha256"]
+            or snapshot.get("size_bytes") != pin["size_bytes"]
+        ):
+            raise base.HumanVisualDemoError("R9 host log snapshot differs")
+    _validate_fixture_package_bindings(
+        result_document=result_document,
+        finish_document=finish_document,
+        fixture_evidence=fixture_evidence,
+        project=project,
+        output_manifest=output_manifest,
+    )
     _validate_pending_boundaries(document, "R9 host receipt")
+    return copy.deepcopy(dict(document))
+
+
+def _current_artifact_pin(path: Path, label: str) -> base.ArtifactPin:
+    candidate, metadata = base._canonical_regular_file(
+        path, label, maximum_bytes=MAX_R9_DOCUMENT_BYTES
+    )
+    raw = base._sealed_bytes(candidate, label, maximum_bytes=MAX_R9_DOCUMENT_BYTES)
+    if metadata.st_nlink != 1 or stat.S_IMODE(metadata.st_mode) != 0o600:
+        raise base.HumanVisualDemoError(f"{label} mode or link identity differs")
+    return base.ArtifactPin(
+        path=candidate,
+        sha256=hashlib.sha256(raw).hexdigest(),
+        size_bytes=len(raw),
+    )
+
+
+def _validate_complete_document(
+    *,
+    receipt_path: Path,
+    receipt_sha256: str,
+    receipt_size_bytes: int,
+    host_receipt: base.ArtifactPin,
+    current_state: Mapping[str, Any],
+) -> dict[str, Any]:
+    parent = receipt_path.parent
+    failure = parent / FAILURE_NAME
+    complete_path = parent / COMPLETE_NAME
+    if os.path.lexists(failure):
+        raise base.HumanVisualDemoError("R9 FAILURE marker exists")
+    if not os.path.lexists(complete_path):
+        raise base.HumanVisualDemoError("R9 COMPLETE marker is missing")
+    complete_pin = _current_artifact_pin(complete_path, "R9 COMPLETE marker")
+    _pin, raw = _read_receipt_pinned_file(
+        _pin_document(complete_pin), "R9 COMPLETE marker"
+    )
+    document = _strict_document(raw, "R9 COMPLETE marker")
+    base._require_exact_keys(document, COMPLETE_KEYS, "R9 COMPLETE marker")
+    sidecar_path = receipt_path.with_name(base.COMBINED_RECEIPT_SIDECAR_NAME)
+    sidecar_pin = _current_artifact_pin(sidecar_path, "R9 combined receipt sidecar")
+    expected_state = copy.deepcopy(dict(current_state))
+    base._require_exact_keys(
+        expected_state, COMPLETE_CURRENT_STATE_KEYS, "R9 COMPLETE current state"
+    )
+    if (
+        raw != base.canonical_json(document)
+        or document.get("content_digest") != base.content_digest(document)
+        or document.get("schema_version") != COMPLETE_SCHEMA
+        or document.get("status") != COMPLETE_STATUS
+        or document.get("attempt_root") != str(parent)
+        or document.get("combined_receipt")
+        != {
+            "path": str(receipt_path),
+            "sha256": receipt_sha256,
+            "size_bytes": receipt_size_bytes,
+        }
+        or document.get("combined_receipt_sidecar") != _pin_document(sidecar_pin)
+        or document.get("host_receipt") != _pin_document(host_receipt)
+        or document.get("current_state") != expected_state
+        or document.get("failure_absent") is not True
+        or os.path.lexists(failure)
+    ):
+        raise base.HumanVisualDemoError("R9 COMPLETE marker lineage or state differs")
+    return copy.deepcopy(document)
 
 
 def _validate_workdir(path: Path, launcher: base.ArtifactPin) -> Path:
@@ -1597,6 +2263,7 @@ def _validate_upgrade(
     executable: base.ArtifactPin,
     map_package: base.ArtifactPin,
     source_provenance: Mapping[str, Any],
+    combined_receipt: base.ArtifactPin,
     trust: LauncherTrust,
     parent_loader: Callable[[Path], base.HumanVisualDemoInputs],
 ) -> tuple[dict[str, Any], base.HumanVisualDemoInputs]:
@@ -1695,6 +2362,13 @@ def _validate_upgrade(
         finish_profile=local_pins["finish_profile"],
         finish_document=local_json["finish_profile"],
     )
+    fixture_evidence = _validate_fixture_evidence_manifest(
+        payload.get("fixture_evidence_manifest"),
+        receipt_parent=receipt_parent,
+        finish_profile=local_pins["finish_profile"],
+        fixture_inventory=local_pins["fixture_inventory"],
+        inventory_document=local_json["fixture_inventory"],
+    )
 
     scripts: dict[str, base.ArtifactPin] = {}
     expected_script_names = {
@@ -1728,6 +2402,7 @@ def _validate_upgrade(
         finish_profile=local_pins["finish_profile"],
         finish_document=local_json["finish_profile"],
         fixture_inventory=local_pins["fixture_inventory"],
+        fixture_evidence=fixture_evidence,
         parent_pin=parent_pin,
         parent=parent,
         authority=authority,
@@ -1735,6 +2410,7 @@ def _validate_upgrade(
         build_version=build_version,
         bwrap=bwrap,
         result=local_pins["result"],
+        scene_receipt=local_pins["scene_receipt"],
         trust=trust,
     )
     _validate_result_document(
@@ -1749,8 +2425,11 @@ def _validate_upgrade(
         result=local_pins["result"],
         map_package=map_package,
         project_tree=project_tree,
+        result_document=local_json["result"],
     )
-    _validate_host_document(
+    source_manifest = base._project_static_manifest(parent.project.path)
+    output_manifest = base._project_static_manifest(project.path)
+    host_document = _validate_host_document(
         local_json["host_receipt"],
         receipt_parent=receipt_parent,
         execution=local_pins["execution"],
@@ -1759,12 +2438,34 @@ def _validate_upgrade(
         project=project,
         map_package=map_package,
         project_tree=project_tree,
+        finish_document=local_json["finish_profile"],
+        fixture_evidence=fixture_evidence,
+        source_manifest=source_manifest,
+        output_manifest=output_manifest,
+        result_document=local_json["result"],
+    )
+    _validate_complete_document(
+        receipt_path=combined_receipt.path,
+        receipt_sha256=combined_receipt.sha256,
+        receipt_size_bytes=combined_receipt.size_bytes,
+        host_receipt=local_pins["host_receipt"],
+        current_state={
+            "execution": _pin_document(local_pins["execution"]),
+            "result": _pin_document(local_pins["result"]),
+            "scene_receipt": _pin_document(local_pins["scene_receipt"]),
+            "map": _pin_document(map_package),
+            "project_static_tree": copy.deepcopy(dict(project_tree)),
+            "logs": copy.deepcopy(host_document["logs"]),
+            "static_delta": copy.deepcopy(host_document["static_delta"]),
+            "fixture_evidence_manifest": fixture_evidence,
+        },
     )
 
     result = copy.deepcopy(payload)
     result["parent_combined_receipt"] = _pin_document(parent_pin)
     result["source_map"] = _pin_document(source_map)
     result["hssd_r2_authority"] = authority
+    result["fixture_evidence_manifest"] = fixture_evidence
     for key, pin in local_pins.items():
         result[key] = _pin_document(pin)
     for key, pin in scripts.items():
@@ -1796,6 +2497,11 @@ def load_combined_receipt(
         receipt_path, "R9 combined receipt", maximum_bytes=base.MAX_RECEIPT_BYTES
     )
     receipt_sha256 = hashlib.sha256(raw).hexdigest()
+    combined_receipt = base.ArtifactPin(
+        path=receipt_path,
+        sha256=receipt_sha256,
+        size_bytes=len(raw),
+    )
     sidecar = base._sealed_bytes(
         receipt_path.with_name(base.COMBINED_RECEIPT_SIDECAR_NAME),
         "R9 combined receipt sidecar",
@@ -1862,6 +2568,7 @@ def load_combined_receipt(
         executable=executable,
         map_package=map_package,
         source_provenance=source_provenance,
+        combined_receipt=combined_receipt,
         trust=trust,
         parent_loader=parent_loader,
     )
@@ -1975,7 +2682,10 @@ def run_human_visual_demo(
             "R9 visual demo supervisor must run in the main thread"
         )
     if loader is None:
-        loader = lambda path: load_combined_receipt(path, trust=trust)
+
+        def loader(path: Path) -> R9HumanVisualDemoInputs:
+            return load_combined_receipt(path, trust=trust)
+
     preflight_r6_rollback(trust=trust, parent_loader=rollback_loader)
     lock_descriptor = base._acquire_launch_lock(inputs.runtime)
     process: subprocess.Popen[Any] | None = None
