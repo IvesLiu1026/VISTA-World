@@ -1394,14 +1394,203 @@ def _version_probe_command(*, distribution_fd: int) -> list[str]:
     ]
 
 
-def _verify_toolchain(*, execute_version_probe: bool = True) -> dict:
-    authority = _audit_fixed_blender_authority()
+def _sandbox_authority_projection(
+    expected_authority: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Revalidate the host-audited authority through its read-only worker mount.
+
+    Bubblewrap's unprivileged user namespace maps host root ownership to an
+    overflow UID/GID, so the host auditor cannot be rerun verbatim in the
+    worker.  The host still performs the complete audit before opening the
+    distribution FD and again after Blender exits.  Inside the worker we bind
+    that contract to the fixed read-only projection, its manifest bytes, and
+    both critical executable bytes.
+    """
+
+    _validate_blender_authority_contract(expected_authority)
+    try:
+        projected_root = os.lstat(pathlib.Path("/"))
+    except OSError as exc:
+        raise FixtureForgeError(
+            "FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+            "sandbox root identity is unavailable",
+        ) from exc
+    if (
+        not stat.S_ISDIR(projected_root.st_mode)
+        or stat.S_ISLNK(projected_root.st_mode)
+        or projected_root.st_uid == os.geteuid()
+        or projected_root.st_gid == os.getegid()
+        or not os.statvfs(pathlib.Path("/")).f_flag & os.ST_RDONLY
+    ):
+        _fail(
+            "FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+            "sandbox root is not a foreign-owned read-only projection",
+        )
+
+    directories = (
+        DEFAULT_BLENDER_AUTHORITY_ROOT,
+        DEFAULT_BLENDER_DISTRIBUTION_ROOT,
+    )
+    files = (
+        blender_authority.MANIFEST_PATH,
+        DEFAULT_BLENDER,
+        DEFAULT_BLENDER_DISTRIBUTION_ROOT
+        / blender_authority.WRAPPER_PYTHON_RELATIVE_PATH,
+    )
+    for path in (*directories, *files):
+        try:
+            metadata = os.lstat(path)
+            resolved = path.resolve(strict=True)
+            read_only = bool(os.statvfs(path).f_flag & os.ST_RDONLY)
+        except OSError as exc:
+            raise FixtureForgeError(
+                "FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+                f"sandbox authority path is unavailable: {path}",
+            ) from exc
+        expected_kind = stat.S_ISDIR if path in directories else stat.S_ISREG
+        if (
+            not expected_kind(metadata.st_mode)
+            or stat.S_ISLNK(metadata.st_mode)
+            or resolved != path
+            or metadata.st_uid != projected_root.st_uid
+            or metadata.st_gid != projected_root.st_gid
+            or stat.S_IMODE(metadata.st_mode) & 0o022
+            or not read_only
+            or (path in files and metadata.st_nlink != 1)
+        ):
+            _fail(
+                "FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+                f"sandbox authority path identity differs: {path}",
+            )
+
+    manifest_raw = _read_regular_file(
+        blender_authority.MANIFEST_PATH,
+        maximum_bytes=expected_authority["manifest"]["size_bytes"],
+    )
+    if (
+        hashlib.sha256(manifest_raw).hexdigest()
+        != expected_authority["manifest"]["sha256"]
+        or len(manifest_raw) != expected_authority["manifest"]["size_bytes"]
+    ):
+        _fail(
+            "FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+            "sandbox authority manifest bytes differ",
+        )
+    manifest = load_json(
+        blender_authority.MANIFEST_PATH,
+        maximum_bytes=expected_authority["manifest"]["size_bytes"],
+    )
+    expected_policy = {
+        "all_ancestors_root_owned": True,
+        "all_entries_root_owned": True,
+        "group_world_writable_prohibited": True,
+        "relative_non_escaping_symlinks_only": True,
+        "special_files_prohibited": True,
+    }
+    expected_critical_files = {
+        "blender": {
+            "path": str(blender_authority.BLENDER_RELATIVE_PATH),
+            "kind": "file",
+            "uid": 0,
+            "gid": 0,
+            "mode": "0555",
+            "sha256": expected_authority["blender"]["sha256"],
+            "size_bytes": expected_authority["blender"]["size_bytes"],
+        },
+        "wrapper_python": {
+            "path": str(blender_authority.WRAPPER_PYTHON_RELATIVE_PATH),
+            "kind": "file",
+            "uid": 0,
+            "gid": 0,
+            "mode": "0555",
+            "sha256": expected_authority["wrapper_python"]["sha256"],
+            "size_bytes": expected_authority["wrapper_python"]["size_bytes"],
+        },
+    }
+    if (
+        manifest.get("schema_version") != blender_authority.MANIFEST_SCHEMA_VERSION
+        or manifest.get("authority_id") != "blender-4.5.8-r1"
+        or manifest.get("source_archive") != expected_authority["source_archive"]
+        or manifest.get("content_tree_sha256")
+        != expected_authority["manifest"]["content_tree_sha256"]
+        or manifest.get("tree_sha256") != expected_authority["manifest"]["tree_sha256"]
+        or manifest.get("entry_count") != expected_authority["manifest"]["entry_count"]
+        or manifest.get("critical_files") != expected_critical_files
+        or manifest.get("policy") != expected_policy
+    ):
+        _fail(
+            "FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+            "sandbox authority manifest contract differs",
+        )
+    try:
+        content_entries = blender_authority._scan_content_entries(
+            DEFAULT_BLENDER_DISTRIBUTION_ROOT
+        )
+    except blender_authority.BlenderAuthorityError as exc:
+        raise FixtureForgeError(
+            "FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+            "sandbox authority distribution tree is invalid",
+        ) from exc
+    if (
+        len(content_entries) != expected_authority["manifest"]["entry_count"]
+        or blender_authority._content_digest(content_entries)
+        != expected_authority["manifest"]["content_tree_sha256"]
+    ):
+        _fail(
+            "FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+            "sandbox authority distribution content differs",
+        )
+    for path, pin, label in (
+        (DEFAULT_BLENDER, expected_authority["blender"], "Blender"),
+        (
+            DEFAULT_BLENDER_DISTRIBUTION_ROOT
+            / blender_authority.WRAPPER_PYTHON_RELATIVE_PATH,
+            expected_authority["wrapper_python"],
+            "wrapper Python",
+        ),
+    ):
+        observed = file_pin(path, maximum_bytes=pin["size_bytes"])
+        if observed != {
+            "path": str(path),
+            "sha256": pin["sha256"],
+            "size_bytes": pin["size_bytes"],
+        }:
+            _fail(
+                "FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+                f"sandbox authority {label} bytes differ",
+            )
+    return copy.deepcopy(dict(expected_authority))
+
+
+def _toolchain_contract(authority: Mapping[str, Any]) -> dict:
     bwrap = file_pin(DEFAULT_BWRAP, maximum_bytes=PINNED_BWRAP_BYTES + 1)
     if (
         bwrap["sha256"] != PINNED_BWRAP_SHA256
         or bwrap["size_bytes"] != PINNED_BWRAP_BYTES
     ):
         _fail("FIXTURE_BWRAP_DRIFT", "Bubblewrap binary pin drifted")
+    return {
+        "blender": {
+            "path": str(DEFAULT_BLENDER),
+            "sha256": PINNED_BLENDER_SHA256,
+            "size_bytes": PINNED_BLENDER_BYTES,
+            "version": PINNED_BLENDER_VERSION,
+            "execution_device": "CPU",
+            "authority": copy.deepcopy(dict(authority)),
+            "execution_binding": "root_owned_distribution_fd_read_only",
+        },
+        "bubblewrap": {
+            **bwrap,
+            "network_namespace": "unshared",
+            "device_policy": "private_dev_without_gpu_nodes",
+        },
+    }
+
+
+def _verify_toolchain(*, execute_version_probe: bool = True) -> dict:
+    """Verify the fixed authority from the host security namespace."""
+
+    authority = _audit_fixed_blender_authority()
     if execute_version_probe:
         distribution_fd = _open_authority_distribution(authority)
         try:
@@ -1429,22 +1618,26 @@ def _verify_toolchain(*, execute_version_probe: bool = True) -> dict:
         first_line = lines[0] if lines else ""
         if probe.returncode != 0 or first_line != f"Blender {PINNED_BLENDER_VERSION}":
             _fail("FIXTURE_BLENDER_VERSION_DRIFT", "Blender 4.5.8 LTS is required")
-    return {
-        "blender": {
-            "path": str(DEFAULT_BLENDER),
-            "sha256": PINNED_BLENDER_SHA256,
-            "size_bytes": PINNED_BLENDER_BYTES,
-            "version": PINNED_BLENDER_VERSION,
-            "execution_device": "CPU",
-            "authority": authority,
-            "execution_binding": "root_owned_distribution_fd_read_only",
-        },
-        "bubblewrap": {
-            **bwrap,
-            "network_namespace": "unshared",
-            "device_policy": "private_dev_without_gpu_nodes",
-        },
-    }
+    return _toolchain_contract(authority)
+
+
+def _verify_bound_worker_toolchain(expected_authority: Mapping[str, Any]) -> dict:
+    """Verify the authority only through the fixed read-only worker mount."""
+
+    authority = _sandbox_authority_projection(expected_authority)
+    return _toolchain_contract(authority)
+
+
+def _bound_authority_from_toolchain(
+    value: Any, *, error_code: str, error_message: str
+) -> Mapping[str, Any]:
+    if (
+        type(value) is not dict
+        or type(value.get("blender")) is not dict
+        or type(value["blender"].get("authority")) is not dict
+    ):
+        _fail(error_code, error_message)
+    return value["blender"]["authority"]
 
 
 @dataclass(frozen=True)
@@ -1609,7 +1802,11 @@ def build_plan(config: ForgeConfig) -> dict:
     )
 
 
-def validate_plan(plan: Mapping[str, Any], *, expected_mode: str | None = None) -> None:
+def _validate_plan_contract(
+    plan: Mapping[str, Any],
+    *,
+    expected_mode: str | None = None,
+) -> None:
     _require_keys(
         plan,
         {
@@ -1670,8 +1867,6 @@ def validate_plan(plan: Mapping[str, Any], *, expected_mode: str | None = None) 
     _validate_builder_sources(plan["builder_sources"], profile=profile, recipe=recipe)
     if plan["source_snapshot"] != _expected_snapshot_policy():
         _fail("FIXTURE_PLAN_INVALID", "source snapshot policy drifted")
-    if plan["toolchain"] != _verify_toolchain(execute_version_probe=False):
-        _fail("FIXTURE_PLAN_INVALID", "current toolchain differs from plan")
     if plan["archetypes"] != _expected_archetype_plan(recipe):
         _fail("FIXTURE_PLAN_INVALID", "archetype plan drifted")
     if plan["ue_package_inventory"] != _expected_ue_package_inventory(profile):
@@ -1698,6 +1893,41 @@ def validate_plan(plan: Mapping[str, Any], *, expected_mode: str | None = None) 
         else "dry_run_validated_zero_write_toolchain_probe_executed"
     )
     _require_string(plan["status"], expected_status, "plan status")
+
+
+def validate_plan(
+    plan: Mapping[str, Any],
+    *,
+    expected_mode: str | None = None,
+) -> None:
+    """Validate a plan against the complete host authority audit."""
+
+    _validate_plan_contract(
+        plan,
+        expected_mode=expected_mode,
+    )
+    if plan["toolchain"] != _verify_toolchain(execute_version_probe=False):
+        _fail("FIXTURE_PLAN_INVALID", "current toolchain differs from plan")
+
+
+def _validate_bound_worker_plan(
+    plan: Mapping[str, Any],
+    *,
+    expected_mode: str | None = None,
+) -> None:
+    """Validate a plan against the fixed fd-bound worker projection."""
+
+    _validate_plan_contract(
+        plan,
+        expected_mode=expected_mode,
+    )
+    authority = _bound_authority_from_toolchain(
+        plan["toolchain"],
+        error_code="FIXTURE_PLAN_INVALID",
+        error_message="current toolchain differs from plan",
+    )
+    if plan["toolchain"] != _verify_bound_worker_toolchain(authority):
+        _fail("FIXTURE_PLAN_INVALID", "current toolchain differs from plan")
 
 
 def _write_exclusive(path: pathlib.Path, raw: bytes, *, mode: int = 0o600) -> None:
@@ -2004,8 +2234,10 @@ def _worker_request(plan: Mapping[str, Any]) -> dict:
     )
 
 
-def validate_worker_request(
-    value: Mapping[str, Any], *, expected_plan: Mapping[str, Any] | None = None
+def _validate_worker_request_contract(
+    value: Mapping[str, Any],
+    *,
+    expected_plan: Mapping[str, Any] | None = None,
 ) -> None:
     _require_keys(
         value,
@@ -2066,8 +2298,6 @@ def validate_worker_request(
     )
     if value["archetypes"] != _expected_archetype_plan(recipe):
         _fail("FIXTURE_WORKER_REQUEST_INVALID", "request archetypes drifted")
-    if value["toolchain"] != _verify_toolchain(execute_version_probe=False):
-        _fail("FIXTURE_WORKER_REQUEST_INVALID", "request toolchain drifted")
     if value["ue_package_inventory"] != _expected_ue_package_inventory(profile):
         _fail("FIXTURE_WORKER_REQUEST_INVALID", "request packages drifted")
     if value["execution_policy"] != _expected_execution_policy():
@@ -2079,6 +2309,41 @@ def validate_worker_request(
         expected = _worker_request(expected_plan)
         if value != expected:
             _fail("FIXTURE_WORKER_REQUEST_INVALID", "request differs from forge plan")
+
+
+def validate_worker_request(
+    value: Mapping[str, Any],
+    *,
+    expected_plan: Mapping[str, Any] | None = None,
+) -> None:
+    """Validate a worker request against the complete host authority audit."""
+
+    _validate_worker_request_contract(
+        value,
+        expected_plan=expected_plan,
+    )
+    if value["toolchain"] != _verify_toolchain(execute_version_probe=False):
+        _fail("FIXTURE_WORKER_REQUEST_INVALID", "request toolchain drifted")
+
+
+def _validate_bound_worker_request(
+    value: Mapping[str, Any],
+    *,
+    expected_plan: Mapping[str, Any] | None = None,
+) -> None:
+    """Validate a request against the fixed fd-bound worker projection."""
+
+    _validate_worker_request_contract(
+        value,
+        expected_plan=expected_plan,
+    )
+    authority = _bound_authority_from_toolchain(
+        value["toolchain"],
+        error_code="FIXTURE_WORKER_REQUEST_INVALID",
+        error_message="request toolchain drifted",
+    )
+    if value["toolchain"] != _verify_bound_worker_toolchain(authority):
+        _fail("FIXTURE_WORKER_REQUEST_INVALID", "request toolchain drifted")
 
 
 def _glb_json(path: pathlib.Path) -> tuple[dict, bytes, bytes]:
@@ -2689,8 +2954,10 @@ def _artifact_receipt(value: Mapping[str, Any], archetype: Mapping[str, Any]) ->
     )
 
 
-def _validate_worker_result(
-    value: Mapping[str, Any], *, expected_plan: Mapping[str, Any] | None = None
+def _validate_worker_result_contract(
+    value: Mapping[str, Any],
+    *,
+    expected_plan: Mapping[str, Any] | None = None,
 ) -> None:
     _require_keys(
         value,
@@ -2750,8 +3017,6 @@ def _validate_worker_result(
         or not _SAFE_ATTEMPT_RE.fullmatch(output_root.name)
     ):
         _fail("FIXTURE_WORKER_RESULT_INVALID", "worker output root drifted")
-    if value["toolchain"] != _verify_toolchain(execute_version_probe=False):
-        _fail("FIXTURE_WORKER_RESULT_INVALID", "worker toolchain drifted")
     if value["archetypes"] != _expected_archetype_plan(recipe):
         _fail("FIXTURE_WORKER_RESULT_INVALID", "worker archetypes drifted")
     if value["ue_package_inventory"] != _expected_ue_package_inventory(profile):
@@ -2843,6 +3108,41 @@ def _validate_worker_result(
                     "FIXTURE_WORKER_RESULT_INVALID",
                     f"worker {key} source identity drifted",
                 )
+
+
+def _validate_worker_result(
+    value: Mapping[str, Any],
+    *,
+    expected_plan: Mapping[str, Any] | None = None,
+) -> None:
+    """Validate a worker result against the complete host authority audit."""
+
+    _validate_worker_result_contract(
+        value,
+        expected_plan=expected_plan,
+    )
+    if value["toolchain"] != _verify_toolchain(execute_version_probe=False):
+        _fail("FIXTURE_WORKER_RESULT_INVALID", "worker toolchain drifted")
+
+
+def _validate_bound_worker_result(
+    value: Mapping[str, Any],
+    *,
+    expected_plan: Mapping[str, Any] | None = None,
+) -> None:
+    """Validate a result against the fixed fd-bound worker projection."""
+
+    _validate_worker_result_contract(
+        value,
+        expected_plan=expected_plan,
+    )
+    authority = _bound_authority_from_toolchain(
+        value["toolchain"],
+        error_code="FIXTURE_WORKER_RESULT_INVALID",
+        error_message="worker toolchain drifted",
+    )
+    if value["toolchain"] != _verify_bound_worker_toolchain(authority):
+        _fail("FIXTURE_WORKER_RESULT_INVALID", "worker toolchain drifted")
 
 
 def _subprocess_environment(
