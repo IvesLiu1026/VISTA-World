@@ -11,10 +11,10 @@ from unittest import mock
 
 import pytest
 
+from tools.blender.vista_playable_home_r9_fixtures import forge as final_forge
 from tools.runtime.vista_playable_home import (
     hssd_r2_human_visual_demo_launch as launcher,
 )
-from tools.blender.vista_playable_home_r9_fixtures import forge as final_forge
 from tools.tests.test_vista_playable_home_hssd_r2_citysample_live_commandlet import (
     document_fixture as final_t4_document_fixture,
 )
@@ -140,8 +140,10 @@ BUILDER_SOURCE_RELATIVE_PATHS = (
     "tools/blender/vista_playable_home_r9_fixtures/blender_worker.py",
     "tools/blender/vista_playable_home_r9_fixtures/forge.py",
     "tools/blender/vista_playable_home_r9_fixtures/recipe.json",
-    "world_packs/vista_playable_home_r1/visual_profiles/"
-    "hssd_r2_citysample_live_r1.json",
+    (
+        "world_packs/vista_playable_home_r1/visual_profiles/"
+        "hssd_r2_citysample_live_r1.json"
+    ),
 )
 
 
