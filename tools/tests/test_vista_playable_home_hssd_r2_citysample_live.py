@@ -150,7 +150,10 @@ def _v3_fixture_inventory(
 
 def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureState]:
     dynamic_ids = list(materializer.DYNAMIC_SLOT_BINDINGS)
-    existing_static = [f"hssd.r1/test.existing.{index:02d}" for index in range(41)]
+    existing_static = [
+        *sorted(materializer.STATIC_SEMANTIC_COLLISION_AUTHORITY),
+        *[f"hssd.r1/test.existing.{index:02d}" for index in range(25)],
+    ]
     missing_static = [f"hssd.r1/test.missing.{index:02d}" for index in range(16)]
     legacy_ids = [materializer.DELETION_INSTANCE_ID, *existing_static]
     static_ids = [*existing_static, *missing_static]
@@ -158,7 +161,10 @@ def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureSta
     placements = []
     for index, instance_id in enumerate(placement_ids):
         semantic_id = materializer.DYNAMIC_SLOT_BINDINGS.get(instance_id)
-        if semantic_id is None and instance_id in static_ids[:16]:
+        if (
+            semantic_id is None
+            and instance_id in materializer.STATIC_SEMANTIC_COLLISION_AUTHORITY
+        ):
             semantic_id = f"home.r1/room.bedroom/entity.static.{index:02d}"
         placements.append(
             {
@@ -210,7 +216,9 @@ def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureSta
             "generate_overlap_events": False,
             "can_ever_affect_navigation": index < 15,
         }
-        for index, instance_id in enumerate(sorted(static_ids[:16]))
+        for index, instance_id in enumerate(
+            sorted(materializer.STATIC_SEMANTIC_COLLISION_AUTHORITY)
+        )
     ]
     dynamic_by_semantic = {row["semantic_id"]: row for row in [phone, cup, pot]}
     for instance_id, semantic_id in materializer.DYNAMIC_SLOT_BINDINGS.items():
@@ -226,7 +234,10 @@ def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureSta
             }
         )
     semantic_bindings.sort(key=lambda row: row["instance_id"])
-    semantic_instance_ids = {*static_ids[:16], *dynamic_ids}
+    semantic_instance_ids = {
+        *materializer.STATIC_SEMANTIC_COLLISION_AUTHORITY,
+        *dynamic_ids,
+    }
     secondary_instance_ids = set(static_ids[16:36])
     collision = []
     for instance_id in placement_ids:
@@ -463,6 +474,22 @@ def test_source_semantic_proxy_projection_rejects_replaced_dynamic_identity() ->
 
     with pytest.raises(materializer.R9PreflightError, match="dynamic semantic"):
         materializer._semantic_proxy_bindings(scene, placements, source.r6_result)
+
+
+def test_source_semantic_proxy_projection_rejects_coherent_blockall_drift() -> None:
+    source, _fixtures = _fixture_inputs()
+    expected = copy.deepcopy(source.hssd_authority["semantic_proxy_bindings"])
+    scene = _semantic_scene(expected)
+    proxy = scene["semantic_proxies"][0]
+    for key in ("reloaded", "after_authority_repair_and_hide"):
+        component = proxy[key]["components"][0]
+        component["collision_mode"] = "QueryAndPhysics"
+        component["collision_profile"] = "BlockAll"
+
+    with pytest.raises(materializer.R9PreflightError, match="component authority"):
+        materializer._semantic_proxy_bindings(
+            scene, source.placements, source.r6_result
+        )
 
 
 def _apply_fixture(

@@ -1294,6 +1294,18 @@ def test_final_contract_constants_are_exact() -> None:
     assert launcher.HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST == (
         final_commandlet.HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST
     )
+    assert launcher.STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST == (
+        "0ed6768227333ca708b133a184b101a9745215f2f6361d063c3b8da768082ed9"
+    )
+    assert launcher.STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST == (
+        final_materializer.STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST
+    )
+    assert launcher.STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST == (
+        final_commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST
+    )
+    assert final_materializer.STATIC_SEMANTIC_COLLISION_AUTHORITY == (
+        final_commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY
+    )
     assert launcher.EXECUTION_SCHEMA.endswith("execution/v2")
     assert launcher.UPGRADE_SCHEMA.endswith("upgrade/v2")
     assert launcher.FIXTURE_INVENTORY_SCHEMA.endswith("/v3")
