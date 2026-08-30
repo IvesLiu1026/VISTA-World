@@ -502,9 +502,15 @@ def run(argv: Sequence[str] | None = None) -> pathlib.Path:
             "request must be the fixed output-root child",
         )
     expected_plan = forge.load_json(output_root / "forge-plan.json")
-    forge.validate_plan(expected_plan, expected_mode="apply")
+    forge._validate_bound_worker_plan(
+        expected_plan,
+        expected_mode="apply",
+    )
     request = forge.load_json(request_path)
-    forge.validate_worker_request(request, expected_plan=expected_plan)
+    forge._validate_bound_worker_request(
+        request,
+        expected_plan=expected_plan,
+    )
     if request["output_root"] != str(output_root):
         forge._fail("FIXTURE_WORKER_REQUEST_INVALID", "output root pin drifted")
     expected_snapshot_root = output_root / forge.SOURCE_SNAPSHOT_ROOT.as_posix()
@@ -578,7 +584,10 @@ def run(argv: Sequence[str] | None = None) -> pathlib.Path:
     forge._validate_source_snapshot(
         output_root, expected_sources=expected_plan["builder_sources"]
     )
-    forge._validate_worker_result(result, expected_plan=expected_plan)
+    forge._validate_bound_worker_result(
+        result,
+        expected_plan=expected_plan,
+    )
     forge._validate_output_tree(output_root, stage="worker_payload")
     print(
         forge.canonical_json_bytes(
