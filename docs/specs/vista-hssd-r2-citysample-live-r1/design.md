@@ -180,6 +180,12 @@ actors. No caller asset or transform override exists.
 9. scene, host and combined receipt publication;
 10. immediate standalone current-byte revalidation.
 
+The commandlet publishes each terminal marker through one channel only:
+`unreal.log` in UE and `print` only for pure-Python contract tests. Attempt
+`hssd-r2-citysample-live-r5-20260830g` proved that emitting through both routes
+creates two byte-identical `LogPython` lines and correctly fails the exact host
+inventory. The host parser remains strict and does not collapse duplicates.
+
 All JSON rejects duplicates/non-finite values, uses canonical digests and exact
 key sets, and compares booleans type-strictly. Execution binds parent receipt,
 trees/maps, HSSD plan/projections, 42→57+3 actors, 108 preserved actors,

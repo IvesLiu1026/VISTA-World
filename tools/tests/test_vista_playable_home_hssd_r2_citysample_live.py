@@ -421,6 +421,17 @@ def _artifact(path: pathlib.Path) -> materializer.Artifact:
     return materializer.Artifact(path, hashlib.sha256(raw).hexdigest(), len(raw))
 
 
+def test_marker_parser_preserves_duplicate_inventory(tmp_path: pathlib.Path) -> None:
+    payload = {"path": "/sealed/result.json", "sha256": "a" * 64}
+    line = materializer.RESULT_MARKER + json.dumps(payload, sort_keys=True)
+    stdout = _write(tmp_path / "stdout.log", f"{line}\n{line}\n".encode("utf-8"))
+
+    assert materializer._marker_payloads(stdout, materializer.RESULT_MARKER) == [
+        payload,
+        payload,
+    ]
+
+
 def test_source_semantic_proxy_projection_is_exact_and_dynamic_cross_bound() -> None:
     source, _fixtures = _fixture_inputs()
     expected = copy.deepcopy(source.hssd_authority["semantic_proxy_bindings"])
