@@ -1172,14 +1172,38 @@ def _validate_parent_documents(
     _require(type(observations) is dict, "R10_parent scene observations are absent")
     six_room = observations.get("six_room_finish")
     collision = observations.get("collision")
+    semantic_static = (
+        collision.get("semantic_static_reloaded", []) if type(collision) is dict else []
+    )
+    semantic_dynamic = (
+        collision.get("semantic_dynamic_instance_ids", [])
+        if type(collision) is dict
+        else []
+    )
+    policy_counts = collision.get("policy_counts") if type(collision) is dict else None
     _require(
         type(six_room) is dict
         and type(collision) is dict
         and len(six_room.get("fixtures_reloaded", [])) == 6
-        and len(collision.get("semantic_static_reloaded", [])) == 19
+        and type(semantic_static) is list
+        and len(semantic_static) == 16
+        and type(semantic_dynamic) is list
+        and len(semantic_dynamic) == 3
+        and all(type(value) is str and value for value in semantic_dynamic)
+        and len(set(semantic_dynamic)) == 3
+        and len(semantic_static) + len(semantic_dynamic) == 19
         and len(collision.get("secondary_reloaded", [])) == 20
         and len(collision.get("detail_reloaded", [])) == 21,
         "R10_parent protected scene counts differ",
+    )
+    _require(
+        policy_counts
+        == {
+            "detail_no_collision": 21,
+            "secondary_query_proxies": 20,
+            "semantic_proxies": 19,
+        },
+        "R10_parent protected collision policy counts differ",
     )
     architecture = {
         row.get("actor_path"): row
