@@ -2908,6 +2908,31 @@ def _unique_rows(value: Any, count: int, key: str, label: str) -> list[dict]:
     return value
 
 
+def _finish_owned_actor_paths(profile: Mapping[str, Any]) -> set[str]:
+    rooms = _unique_rows(profile.get("rooms"), 6, "room_id", "finish profile rooms")
+    paths: list[str] = []
+    for room in rooms:
+        architecture = room.get("architecture_actor")
+        fixture = room.get("fixture_light_binding")
+        _require(
+            type(room["room_id"]) is str
+            and room["room_id"]
+            and type(architecture) is dict
+            and type(architecture.get("actor_path")) is str
+            and architecture["actor_path"]
+            and type(fixture) is dict
+            and type(fixture.get("fixture_actor_path")) is str
+            and fixture["fixture_actor_path"],
+            "finish profile actor authority differs",
+        )
+        paths.extend([architecture["actor_path"], fixture["fixture_actor_path"]])
+    _require(
+        len(paths) == len(set(paths)) == 12,
+        "finish profile owned actor partition differs",
+    )
+    return set(paths)
+
+
 def _validate_t4_contract(
     prepared: PreparedPlan,
     execution: Mapping[str, Any],
@@ -3099,7 +3124,7 @@ def _validate_t4_contract(
         and preserved["reloaded_inventory"]
         == migration["preserved_non_hssd_actor_inventory"]
         and type(unchanged) is list
-        and len(unchanged) == len(set(unchanged)) == 99
+        and len(unchanged) == len(set(unchanged))
         and unchanged == sorted(unchanged)
         and set(unchanged).issubset(preserved_paths),
         "T4 preserved actor evidence differs",
@@ -3162,6 +3187,17 @@ def _validate_t4_contract(
         and finish["r4_lights_before"] == finish["r4_lights_reloaded"]
         and segments_after == segments_reloaded,
         "T4 finish cold-reload evidence differs",
+    )
+    finish_owned_paths = {
+        row["actor_path"] for row in finish["architecture_before"]
+    } | {row["actor_path"] for row in finish["fixtures_before"]}
+    authority_owned_paths = _finish_owned_actor_paths(prepared.fixtures.profile)
+    _require(
+        finish_owned_paths == authority_owned_paths
+        and authority_owned_paths.issubset(preserved_paths)
+        and len(unchanged) == 96
+        and unchanged == sorted(preserved_paths - authority_owned_paths),
+        "T4 finish-owned versus unchanged actor partition differs",
     )
     collision = _exact_object(
         observations["collision"], COLLISION_OBSERVATION_KEYS, "collision"
