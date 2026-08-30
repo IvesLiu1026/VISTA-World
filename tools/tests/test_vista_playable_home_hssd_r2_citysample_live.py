@@ -11,6 +11,9 @@ from types import SimpleNamespace
 import pytest
 
 from tools.ue.vista_playable_home import (
+    compose_hssd_r2_citysample_live_commandlet as commandlet,
+)
+from tools.ue.vista_playable_home import (
     materialize_hssd_r2_citysample_live as materializer,
 )
 
@@ -196,7 +199,22 @@ def _fixture_inputs() -> tuple[materializer.SourceState, materializer.FixtureSta
             policy = "secondary_simple_aabb_candidate_review_pending"
         else:
             policy = "explicit_detail_no_collision"
-        collision.append({"instance_id": instance_id, "collision_policy": policy})
+        collision.append(
+            {
+                "instance_id": instance_id,
+                "collision_policy": policy,
+                "blocking_contact_instance_ids": [],
+                "runtime_authority": {
+                    "retained_r1_semantic_proxy_authority_unchanged": (
+                        "unchanged_r1_proxy"
+                    ),
+                    "secondary_simple_aabb_candidate_review_pending": (
+                        "none_until_ue_collision_receipt"
+                    ),
+                    "explicit_detail_no_collision": "explicit_no_collision",
+                }[policy],
+            }
+        )
     r6_inputs = SimpleNamespace(
         receipt=pathlib.Path("/sealed/human-visual-demo-combined-receipt.json"),
         receipt_sha256=materializer.R6_RECEIPT_SHA256,
@@ -569,6 +587,42 @@ def test_migration_contract_is_exact_minimal_mutation() -> None:
         "secondary_simple_aabb_candidate_review_pending": 20,
         "explicit_detail_no_collision": 21,
     }
+
+
+def test_commandlet_accepts_exact_collision_ledger_and_rejects_authority_drift() -> (
+    None
+):
+    source, _fixtures = _fixture_inputs()
+    migration = materializer.build_migration_contract(
+        source.r6_result["actor_inventory_reloaded"],
+        source.placements,
+        source.r6_result,
+        source.collision_ledger,
+    )
+    all_ids = {row["instance_id"] for row in migration["collision"]["rows"]}
+    assert (
+        commandlet._validate_collision_migration(migration["collision"], all_ids)
+        == migration["collision"]
+    )
+
+    runtime_drift = copy.deepcopy(migration)
+    runtime_drift["collision"]["rows"][0]["runtime_authority"] = (
+        "none_until_ue_collision_receipt"
+    )
+    with pytest.raises(commandlet.CommandletFailure, match="authority differs"):
+        commandlet._validate_collision_migration(runtime_drift["collision"], all_ids)
+
+    contact_drift = copy.deepcopy(migration)
+    contact_drift["collision"]["rows"][0]["blocking_contact_instance_ids"] = [
+        "unreviewed-contact"
+    ]
+    with pytest.raises(commandlet.CommandletFailure, match="authority differs"):
+        commandlet._validate_collision_migration(contact_drift["collision"], all_ids)
+
+    schema_drift = copy.deepcopy(migration)
+    schema_drift["collision"]["rows"][0].pop("runtime_authority")
+    with pytest.raises(commandlet.CommandletFailure, match="collision row keys differ"):
+        commandlet._validate_collision_migration(schema_drift["collision"], all_ids)
 
 
 def test_dynamic_slots_preserve_complete_r6_fit_not_raw_r2_transform() -> None:
