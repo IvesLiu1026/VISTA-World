@@ -45,6 +45,17 @@ embed and cross-check the same projection. This closes factual parent-state
 validation without turning the diagnostic into visual or interaction
 acceptance.
 
+The R6 map package path and the loaded UE object paths are separate values.
+A network-isolated, GPU-free observation pins the world to
+`.../VistaPlayableHome.VistaPlayableHome`, WorldSettings to
+`...VistaPlayableHome:PersistentLevel.WorldSettings`, the default game mode to
+`/Script/VistaPlayableHome.VistaPlayableHomeGameMode`, and dynamic lighting to
+true. Its 742-byte evidence has SHA-256 `461273f4...de20a` and retains a false
+runtime-acceptance claim. Commandlet, trusted host validator and live launcher
+carry the same closed projection digest `1a4d65d6...a1fb7` and reject a coherent
+before/reload reseal. No document schema changes because the four-field
+observation shape is unchanged.
+
 ## Repository file plan
 
 - `world_packs/vista_playable_home_r1/visual_profiles/hssd_r2_citysample_live_r1.json`
@@ -205,6 +216,11 @@ contract and the R6 runtime 5×QueryAndPhysics/BlockAll plus
 11×QueryOnly/Custom projection. They reject unknown/missing identities and
 both directions of consistently resealed mode/profile drift at live UE,
 commandlet-document and trusted host-validation boundaries.
+
+World tests likewise distinguish the package path from the UE object path and
+reject coherent world, WorldSettings, game-mode and lighting drift at the
+commandlet and trusted host boundaries; the launcher independently pins the
+same authority.
 
 Retained NullRHI evidence must show UE zero, cold reload, exact inventories,
 map-plus-fixture delta, delayed current-byte validation and all acceptance

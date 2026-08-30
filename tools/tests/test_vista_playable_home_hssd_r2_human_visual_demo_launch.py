@@ -1086,8 +1086,8 @@ def _fixture(tmp_path: Path) -> Fixture:
             "detail_reloaded": [{} for _ in range(21)],
             "remaining_review_items": {"pending": True},
         },
-        "world_before": {"game_mode": "preserved"},
-        "world_reloaded": {"game_mode": "preserved"},
+        "world_before": copy.deepcopy(launcher.WORLD_OBSERVATION_AUTHORITY),
+        "world_reloaded": copy.deepcopy(launcher.WORLD_OBSERVATION_AUTHORITY),
     }
     result = _write_t3(
         result_path,
@@ -1306,6 +1306,33 @@ def test_final_contract_constants_are_exact() -> None:
     assert final_materializer.STATIC_SEMANTIC_COLLISION_AUTHORITY == (
         final_commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY
     )
+    assert launcher.WORLD_OBSERVATION_AUTHORITY == {
+        "world_path": (
+            "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/"
+            "VistaPlayableHome.VistaPlayableHome"
+        ),
+        "world_settings_path": (
+            "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/"
+            "VistaPlayableHome.VistaPlayableHome:PersistentLevel.WorldSettings"
+        ),
+        "default_game_mode": ("/Script/VistaPlayableHome.VistaPlayableHomeGameMode"),
+        "force_no_precomputed_lighting": True,
+    }
+    assert launcher.WORLD_OBSERVATION_AUTHORITY == (
+        final_materializer.WORLD_OBSERVATION_AUTHORITY
+    )
+    assert launcher.WORLD_OBSERVATION_AUTHORITY == (
+        final_commandlet.WORLD_OBSERVATION_AUTHORITY
+    )
+    assert launcher.WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST == (
+        "1a4d65d65387c5b023fe7716f5ee2ac3897d1e5ce55e84681f0f8d1fed5a1fb7"
+    )
+    assert launcher.WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST == (
+        final_materializer.WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST
+    )
+    assert launcher.WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST == (
+        final_commandlet.WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST
+    )
     assert launcher.EXECUTION_SCHEMA.endswith("execution/v2")
     assert launcher.UPGRADE_SCHEMA.endswith("upgrade/v2")
     assert launcher.FIXTURE_INVENTORY_SCHEMA.endswith("/v3")
@@ -1317,6 +1344,40 @@ def test_final_contract_constants_are_exact() -> None:
     assert len(launcher.UE_RESULT_GATES) == 22
     assert len(launcher.HOST_GATES) == 9
     assert len(launcher.HSSD_AUTHORITY_KEYS) == 9
+
+
+@pytest.mark.parametrize("drift", ["mapping", "digest"])
+def test_production_consumer_gate_rejects_world_authority_drift(
+    drift: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        launcher, "_composition_materializer_module", lambda: final_materializer
+    )
+    monkeypatch.setattr(
+        launcher, "_composition_commandlet_module", lambda: final_commandlet
+    )
+    if drift == "mapping":
+        malformed = copy.deepcopy(final_materializer.WORLD_OBSERVATION_AUTHORITY)
+        malformed["world_path"] = launcher.MAP_OBJECT_PATH + ".WrongWorld"
+        monkeypatch.setattr(
+            final_materializer, "WORLD_OBSERVATION_AUTHORITY", malformed
+        )
+    else:
+        monkeypatch.setattr(
+            final_materializer,
+            "WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST",
+            "0" * 64,
+        )
+
+    with pytest.raises(base.HumanVisualDemoError, match="world authority consumer"):
+        launcher._validate_semantic_proxy_lineage(
+            authority={},
+            migration={},
+            parent=SimpleNamespace(),
+            execution_document={},
+            trust=launcher.PRODUCTION_TRUST,
+        )
 
 
 @pytest.mark.parametrize("drift", ["paths", "flags"])
@@ -1562,6 +1623,50 @@ def test_real_final_t4_documents_pass_and_nested_drift_is_rejected(
             execution=execution_pin,
             map_package=map_pin,
             project_tree=malformed["project_static_tree"],
+            finish_document=finish_document,
+            migration=execution["composition_contract"]["migration"],
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "drifted_value"),
+    [
+        ("world_path", launcher.MAP_OBJECT_PATH + ".WrongWorld"),
+        (
+            "world_settings_path",
+            launcher.WORLD_OBJECT_PATH + ":PersistentLevel.WorldSettings_1",
+        ),
+        ("default_game_mode", "/Script/Engine.GameModeBase"),
+        ("force_no_precomputed_lighting", False),
+    ],
+)
+def test_launcher_rejects_coherently_resealed_world_authority_drift(
+    field: str,
+    drifted_value: object,
+) -> None:
+    execution, result, _scene = final_t4_document_fixture()
+    observations = copy.deepcopy(result["observations"])
+    for key in ("world_before", "world_reloaded"):
+        observations[key][field] = drifted_value
+    finish = observations["six_room_finish"]
+    finish_document = {
+        "rooms": [
+            {
+                "room_id": f"room-{index}",
+                "architecture_actor": {
+                    "actor_path": finish["architecture_before"][index]["actor_path"]
+                },
+                "fixture_light_binding": {
+                    "fixture_actor_path": finish["fixtures_before"][index]["actor_path"]
+                },
+            }
+            for index in range(6)
+        ]
+    }
+
+    with pytest.raises(base.HumanVisualDemoError, match="R9 world before values"):
+        launcher._validate_ue_observations(
+            observations,
             finish_document=finish_document,
             migration=execution["composition_contract"]["migration"],
         )

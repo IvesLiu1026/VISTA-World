@@ -38,7 +38,7 @@ Depends on: requirements.md, design.md
   - Validation: exact 41 shell reuse/reposition, one legacy phone-shell delete,
     16 shell spawns, three presentations, 108 preserved actors, six-room finish,
     19/20/21 collision, exact static 5+11 runtime projection and cold-reload
-    receipt
+    receipt; exact package/world/WorldSettings/game-mode/lighting authority
 
 - [ ] T5. Close containment, map-plus-fixture publication and current-byte receipts
   - Requirements: R1, R6
@@ -58,8 +58,8 @@ Depends on: requirements.md, design.md
   - Requirements: R1-R9
   - Depends on: T2-T6
   - Validation: focused plus R4/R6/HSSD/launcher regressions, bidirectional
-    coherent collision drift rejection, Ruff, format, diff-check and
-    independent review with no P0/P1
+    coherent collision drift rejection, coherent world-authority drift
+    rejection, Ruff, format, diff-check and independent review with no P0/P1
 
 - [ ] T8. Execute one fresh append-only NullRHI candidate
   - Requirements: R1-R6, R9

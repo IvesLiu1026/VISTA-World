@@ -72,6 +72,24 @@ STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST = (
 MAP_OBJECT_PATH = (
     "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome"
 )
+WORLD_OBJECT_PATH = MAP_OBJECT_PATH + ".VistaPlayableHome"
+WORLD_SETTINGS_OBJECT_PATH = WORLD_OBJECT_PATH + ":PersistentLevel.WorldSettings"
+DEFAULT_GAME_MODE_OBJECT_PATH = "/Script/VistaPlayableHome.VistaPlayableHomeGameMode"
+WORLD_OBSERVATION_AUTHORITY = {
+    "world_path": WORLD_OBJECT_PATH,
+    "world_settings_path": WORLD_SETTINGS_OBJECT_PATH,
+    "default_game_mode": DEFAULT_GAME_MODE_OBJECT_PATH,
+    "force_no_precomputed_lighting": True,
+}
+WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST = hashlib.sha256(
+    json.dumps(
+        WORLD_OBSERVATION_AUTHORITY,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+).hexdigest()
 ROLLBACK_PLAN_SCHEMA = "simworld.vista.hssd-r2-citysample-r6-rollback-plan/v1"
 LAUNCH_PLAN_SCHEMA = "simworld.vista.hssd-r2-citysample-human-launch-plan/v1"
 STARTUP_GRACE_SECONDS = 3.0
@@ -414,6 +432,7 @@ UE_OBSERVATION_KEYS = frozenset(
         "world_reloaded",
     }
 )
+WORLD_OBSERVATION_KEYS = frozenset(WORLD_OBSERVATION_AUTHORITY)
 COMPOSITION_KEYS = frozenset(
     {
         "migration",
@@ -2015,6 +2034,17 @@ def _finish_owned_actor_paths(
     return architecture_paths, fixture_paths
 
 
+def _validate_world_observation(value: Any, label: str) -> None:
+    if not isinstance(value, dict):
+        raise base.HumanVisualDemoError(f"{label} must be an object")
+    base._require_exact_keys(value, WORLD_OBSERVATION_KEYS, label)
+    if not (
+        value == WORLD_OBSERVATION_AUTHORITY
+        and type(value["force_no_precomputed_lighting"]) is bool
+    ):
+        raise base.HumanVisualDemoError(f"{label} values differ")
+
+
 def _validate_ue_observations(
     value: Any,
     *,
@@ -2029,6 +2059,8 @@ def _validate_ue_observations(
     preserved = value.get("preserved_non_hssd")
     finish = value.get("six_room_finish")
     collision = value.get("collision")
+    _validate_world_observation(value.get("world_before"), "R9 world before")
+    _validate_world_observation(value.get("world_reloaded"), "R9 world reloaded")
     if (
         len(value.get("source_actor_inventory", [])) != 150
         or len(value.get("legacy_shells_before", [])) != 42
@@ -2711,9 +2743,25 @@ def _validate_semantic_proxy_lineage(
         == STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST
         and getattr(materializer, "STATIC_SEMANTIC_COLLISION_AUTHORITY", None)
         == getattr(commandlet, "STATIC_SEMANTIC_COLLISION_AUTHORITY", None)
+        and getattr(materializer, "WORLD_OBSERVATION_AUTHORITY", None)
+        == WORLD_OBSERVATION_AUTHORITY
+        and getattr(commandlet, "WORLD_OBSERVATION_AUTHORITY", None)
+        == WORLD_OBSERVATION_AUTHORITY
+        and getattr(
+            materializer,
+            "WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST",
+            None,
+        )
+        == WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST
+        and getattr(
+            commandlet,
+            "WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST",
+            None,
+        )
+        == WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST
     ):
         raise base.HumanVisualDemoError(
-            "R9 placement or static collision authority consumer constants differ"
+            "R9 placement, collision, or world authority consumer constants differ"
         )
 
     observed_placement_digest = _placement_authority_content_digest(migration)

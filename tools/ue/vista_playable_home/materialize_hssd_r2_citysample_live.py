@@ -53,6 +53,24 @@ PROJECT_NAME = "VistaPlayableHome.uproject"
 MAP_OBJECT_PATH = (
     "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome"
 )
+WORLD_OBJECT_PATH = MAP_OBJECT_PATH + ".VistaPlayableHome"
+WORLD_SETTINGS_OBJECT_PATH = WORLD_OBJECT_PATH + ":PersistentLevel.WorldSettings"
+DEFAULT_GAME_MODE_OBJECT_PATH = "/Script/VistaPlayableHome.VistaPlayableHomeGameMode"
+WORLD_OBSERVATION_AUTHORITY = {
+    "world_path": WORLD_OBJECT_PATH,
+    "world_settings_path": WORLD_SETTINGS_OBJECT_PATH,
+    "default_game_mode": DEFAULT_GAME_MODE_OBJECT_PATH,
+    "force_no_precomputed_lighting": True,
+}
+WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST = hashlib.sha256(
+    json.dumps(
+        WORLD_OBSERVATION_AUTHORITY,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+).hexdigest()
 MAP_RELATIVE_PATH = pathlib.PurePosixPath(
     "Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap"
 )
@@ -3268,10 +3286,7 @@ def _validate_semantic_proxy(
 def _validate_world(value: Any, label: str) -> None:
     row = _exact_object(value, WORLD_OBSERVATION_KEYS, label)
     _require(
-        row["world_path"] == MAP_OBJECT_PATH
-        and type(row["world_settings_path"]) is str
-        and row["world_settings_path"].startswith(MAP_OBJECT_PATH + ".")
-        and (row["default_game_mode"] is None or type(row["default_game_mode"]) is str)
+        row == WORLD_OBSERVATION_AUTHORITY
         and type(row["force_no_precomputed_lighting"]) is bool,
         label + " values differ",
     )
