@@ -14,6 +14,13 @@ import pytest
 from tools.runtime.vista_playable_home import (
     hssd_r2_human_visual_demo_launch as launcher,
 )
+from tools.blender.vista_playable_home_r9_fixtures import forge as final_forge
+from tools.tests.test_vista_playable_home_hssd_r2_citysample_live_commandlet import (
+    document_fixture as final_t4_document_fixture,
+)
+from tools.ue.vista_playable_home import (
+    compose_hssd_r2_citysample_live_commandlet as final_commandlet,
+)
 
 base = launcher.base
 
@@ -125,6 +132,53 @@ materializer = SimpleNamespace(
     STATIC_MESH_CLASS=STATIC_MESH_CLASS,
     build_migration_contract=_build_migration_contract,
 )
+BUILDER_SOURCE_RELATIVE_PATHS = (
+    "tools/admin/__init__.py",
+    "tools/admin/vista_blender_authority.py",
+    "tools/blender/vista_playable_home_r9_fixtures/__init__.py",
+    "tools/blender/vista_playable_home_r9_fixtures/__main__.py",
+    "tools/blender/vista_playable_home_r9_fixtures/blender_worker.py",
+    "tools/blender/vista_playable_home_r9_fixtures/forge.py",
+    "tools/blender/vista_playable_home_r9_fixtures/recipe.json",
+    "world_packs/vista_playable_home_r1/visual_profiles/"
+    "hssd_r2_citysample_live_r1.json",
+)
+
+
+def _expected_t2_tree(_stage: str) -> dict[str, tuple[str, int]]:
+    value = {
+        "artifacts": ("directory", 0o700),
+        "previews": ("directory", 0o700),
+        "receipts": ("directory", 0o700),
+        "source-snapshot": ("directory", 0o500),
+        "source-snapshot.json": ("file", 0o600),
+        "forge-plan.json": ("file", 0o600),
+        "worker-request.json": ("file", 0o600),
+        "worker-result.json": ("file", 0o600),
+        "blender-worker.log": ("file", 0o600),
+        "fixture-inventory.json": ("file", 0o600),
+    }
+    for archetype in ("flush_dome", "linear_panel", "pendant"):
+        value[f"artifacts/{archetype}.glb"] = ("file", 0o600)
+        value[f"previews/{archetype}.png"] = ("file", 0o600)
+        value[f"receipts/{archetype}.json"] = ("file", 0o600)
+    for relative in BUILDER_SOURCE_RELATIVE_PATHS:
+        path = Path("source-snapshot") / relative
+        value[path.as_posix()] = ("file", 0o400)
+        parent = path.parent
+        while parent != Path("."):
+            value[parent.as_posix()] = ("directory", 0o500)
+            if parent == Path("source-snapshot"):
+                break
+            parent = parent.parent
+    return value
+
+
+fixture_forge = SimpleNamespace(
+    PROFILE_SCHEMA=launcher.FINISH_PROFILE_SCHEMA,
+    INVENTORY_SCHEMA=launcher.FIXTURE_INVENTORY_SCHEMA,
+    _expected_output_tree=_expected_t2_tree,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -132,6 +186,13 @@ def _use_final_materializer_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         launcher, "_composition_materializer_module", lambda: materializer
     )
+    monkeypatch.setattr(
+        launcher,
+        "_composition_commandlet_module",
+        lambda: SimpleNamespace(validate_result_document=lambda *_args: None),
+    )
+    monkeypatch.setattr(launcher, "_fixture_forge_module", lambda: fixture_forge)
+    monkeypatch.setattr(launcher, "_validate_copied_t2_bundle", lambda *_args: None)
 
 
 def _sha(path: Path) -> str:
@@ -231,7 +292,20 @@ def _profile() -> dict[str, object]:
         "schema_version": launcher.FINISH_PROFILE_SCHEMA,
         "profile_id": "hssd_r2_citysample_live_r1",
         "source_lineage": {"fixture": True},
-        "rooms": [{"room_id": f"room-{index}"} for index in range(6)],
+        "rooms": [
+            {
+                "room_id": f"room-{index}",
+                "architecture_actor": {
+                    "actor_path": f"{launcher.MAP_OBJECT_PATH}.Actor_{42 + index:03d}"
+                },
+                "fixture_light_binding": {
+                    "fixture_actor_path": (
+                        f"{launcher.MAP_OBJECT_PATH}.Actor_{48 + index:03d}"
+                    )
+                },
+            }
+            for index in range(6)
+        ],
         "fixture_forge": {
             "inventory_schema_version": launcher.FIXTURE_INVENTORY_SCHEMA,
             "inventory_status": "fixture_inventory_sealed_snapshot_provenance_not_ue_imported",
@@ -548,9 +622,27 @@ def _fixture(tmp_path: Path) -> Fixture:
         "worker-request.json",
         "worker-result.json",
         "source-snapshot.json",
-        "source-snapshot/forge.py",
     ):
         _write_t2(attempt / relative, {"fixture": relative})
+    _write(attempt / "blender-worker.log", b"Blender worker completed\n")
+    for relative in BUILDER_SOURCE_RELATIVE_PATHS:
+        _write(
+            attempt / "source-snapshot" / relative,
+            ("snapshot:" + relative + "\n").encode(),
+            mode=0o400,
+        )
+    snapshot_directories = sorted(
+        {
+            parent
+            for relative in BUILDER_SOURCE_RELATIVE_PATHS
+            for parent in (attempt / "source-snapshot" / relative).parents
+            if parent != attempt and attempt in parent.parents
+        },
+        key=lambda path: len(path.parts),
+        reverse=True,
+    )
+    for directory in snapshot_directories:
+        directory.chmod(0o500)
 
     by_profile = {
         row["archetype_id"]: row for row in profile["fixture_imports"]["glb_inventory"]
@@ -615,8 +707,9 @@ def _fixture(tmp_path: Path) -> Fixture:
         "forge-plan.json",
         "worker-request.json",
         "worker-result.json",
+        "blender-worker.log",
         "source-snapshot.json",
-        "source-snapshot/forge.py",
+        *["source-snapshot/" + value for value in BUILDER_SOURCE_RELATIVE_PATHS],
         *[
             f"artifacts/{value}.glb"
             for value in ("flush_dome", "linear_panel", "pendant")
@@ -769,22 +862,31 @@ def _fixture(tmp_path: Path) -> Fixture:
     dynamic = [
         {"instance_id": key} for key in sorted(materializer.DYNAMIC_SLOT_BINDINGS)
     ]
+    architecture_rows = [
+        {"actor_path": room["architecture_actor"]["actor_path"]}
+        for room in profile["rooms"]
+    ]
+    fixture_actor_rows = [
+        {"actor_path": room["fixture_light_binding"]["fixture_actor_path"]}
+        for room in profile["rooms"]
+    ]
     finish = {
-        **{
-            key: [{"actor_path": f"actor-{i}"} for i in range(6)]
-            for key in (
-                "architecture_before",
-                "architecture_after_save",
-                "architecture_reloaded",
-                "fixtures_before",
-                "fixtures_after_save",
-                "fixtures_reloaded",
-                "r4_lights_before",
-                "r4_lights_reloaded",
-            )
-        },
+        "architecture_before": copy.deepcopy(architecture_rows),
+        "architecture_after_save": copy.deepcopy(architecture_rows),
+        "architecture_reloaded": copy.deepcopy(architecture_rows),
+        "fixtures_before": copy.deepcopy(fixture_actor_rows),
+        "fixtures_after_save": copy.deepcopy(fixture_actor_rows),
+        "fixtures_reloaded": copy.deepcopy(fixture_actor_rows),
+        "r4_lights_before": [{"actor_path": f"light-{i}"} for i in range(6)],
+        "r4_lights_reloaded": [{"actor_path": f"light-{i}"} for i in range(6)],
         "segments_after_save": [{"segment_id": f"s-{i}"} for i in range(26)],
         "segments_reloaded": [{"segment_id": f"s-{i}"} for i in range(26)],
+    }
+    preserved_paths = {
+        row["actor_path"] for row in migration["preserved_non_hssd_actor_inventory"]
+    }
+    finish_owned_paths = {
+        row["actor_path"] for row in architecture_rows + fixture_actor_rows
     }
     observations = {
         "source_actor_inventory": [
@@ -807,7 +909,7 @@ def _fixture(tmp_path: Path) -> Fixture:
         "preserved_non_hssd": {
             "source_inventory": migration["preserved_non_hssd_actor_inventory"],
             "reloaded_inventory": migration["preserved_non_hssd_actor_inventory"],
-            "unchanged_actor_paths": [f"actor-{i}" for i in range(99)],
+            "unchanged_actor_paths": sorted(preserved_paths - finish_owned_paths),
         },
         "fixture_imports": fixture_rows,
         "six_room_finish": finish,
@@ -1043,6 +1145,149 @@ def test_v5_complete_receipt_loads_and_closes_current_state(tmp_path: Path) -> N
     assert inputs.upgrade["acceptance"] == launcher.ACCEPTANCE
     assert set(fixture.result["gates"]) == launcher.UE_RESULT_GATES
     assert set(fixture.host["gates"]) == launcher.HOST_GATES
+    preserved = fixture.result["observations"]["preserved_non_hssd"]
+    finish = fixture.result["observations"]["six_room_finish"]
+    finish_owned = {
+        row["actor_path"]
+        for row in [*finish["architecture_before"], *finish["fixtures_before"]]
+    }
+    preserved_paths = {row["actor_path"] for row in preserved["source_inventory"]}
+    assert len(finish_owned) == 12
+    assert preserved["unchanged_actor_paths"] == sorted(preserved_paths - finish_owned)
+    assert len(preserved["unchanged_actor_paths"]) == 96
+
+
+def test_real_final_t4_documents_pass_and_nested_drift_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution, result, scene = final_t4_document_fixture()
+    finish = result["observations"]["six_room_finish"]
+    finish_document = {
+        "rooms": [
+            {
+                "room_id": f"room-{index}",
+                "architecture_actor": {
+                    "actor_path": finish["architecture_before"][index]["actor_path"]
+                },
+                "fixture_light_binding": {
+                    "fixture_actor_path": finish["fixtures_before"][index]["actor_path"]
+                },
+            }
+            for index in range(6)
+        ]
+    }
+    monkeypatch.setattr(
+        launcher, "_composition_commandlet_module", lambda: final_commandlet
+    )
+    execution_pin = base.ArtifactPin(
+        Path(scene["execution"]["path"]),
+        result["execution_sha256"],
+        scene["execution"]["size_bytes"],
+    )
+    map_pin = base.ArtifactPin(
+        Path(result["map_package"]["path"]),
+        result["map_package"]["sha256"],
+        result["map_package"]["size_bytes"],
+    )
+    launcher._validate_result_document(
+        result,
+        execution_document=execution,
+        scene_document=scene,
+        execution=execution_pin,
+        map_package=map_pin,
+        project_tree=result["project_static_tree"],
+        finish_document=finish_document,
+        migration=execution["composition_contract"]["migration"],
+    )
+
+    malformed = copy.deepcopy(result)
+    malformed["observations"]["shell_migration"]["static_reloaded"][0]["component"][
+        "mesh_object_path"
+    ] = "/Game/Malformed.Mismatched"
+    malformed = final_commandlet.seal(malformed)
+    malformed_raw = final_commandlet.canonical_json(malformed)
+    malformed_scene = copy.deepcopy(scene)
+    malformed_scene["result"] = {
+        "path": scene["result"]["path"],
+        "sha256": hashlib.sha256(malformed_raw).hexdigest(),
+        "size_bytes": len(malformed_raw),
+    }
+    malformed_scene["observations"] = copy.deepcopy(malformed["observations"])
+    malformed_scene = final_commandlet.seal(malformed_scene)
+    with pytest.raises(base.HumanVisualDemoError, match="T4 nested"):
+        launcher._validate_result_document(
+            malformed,
+            execution_document=execution,
+            scene_document=malformed_scene,
+            execution=execution_pin,
+            map_package=map_pin,
+            project_tree=malformed["project_static_tree"],
+            finish_document=finish_document,
+            migration=execution["composition_contract"]["migration"],
+        )
+
+
+def test_execution_acknowledgements_require_exact_confirmed_values() -> None:
+    launcher._validate_execution_acknowledgements(
+        copy.deepcopy(launcher.EXECUTION_ACKNOWLEDGEMENTS)
+    )
+    malformed = copy.deepcopy(launcher.EXECUTION_ACKNOWLEDGEMENTS)
+    malformed["hssd_attribution"] = "yes"
+    with pytest.raises(base.HumanVisualDemoError, match="acknowledgement"):
+        launcher._validate_execution_acknowledgements(malformed)
+
+
+@pytest.mark.parametrize("drift", ["missing", "extra", "mode"])
+def test_final_t2_evidence_tree_rejects_omission_extra_and_mode_drift(
+    tmp_path: Path, drift: str
+) -> None:
+    fixture = _fixture(tmp_path)
+    files = {
+        row["relative_path"]: copy.deepcopy(row) for row in fixture.evidence["files"]
+    }
+    directories = {
+        row["relative_path"]: copy.deepcopy(row)
+        for row in fixture.evidence["directories"]
+    }
+    if drift == "missing":
+        files.pop("worker-request.json")
+    elif drift == "extra":
+        extra = fixture.receipt_path.parent / "artifacts/unexpected.bin"
+        _write(extra, b"unexpected")
+    else:
+        files["blender-worker.log"]["mode"] = 0o640
+    with pytest.raises(base.HumanVisualDemoError, match="evidence|namespace"):
+        launcher._validate_t2_evidence_tree(
+            fixture.receipt_path.parent,
+            fixture_forge,
+            file_rows=files,
+            directory_rows=directories,
+        )
+
+
+def test_final_forge_contract_accepts_the_complete_copied_evidence_tree(
+    tmp_path: Path,
+) -> None:
+    fixture = _fixture(tmp_path)
+    launcher._validate_t2_evidence_tree(
+        fixture.receipt_path.parent,
+        final_forge,
+        file_rows={row["relative_path"]: row for row in fixture.evidence["files"]},
+        directory_rows={
+            row["relative_path"]: row for row in fixture.evidence["directories"]
+        },
+    )
+
+
+def test_fixture_manifest_invokes_full_copied_t2_bundle_validator(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path)
+    validator = mock.Mock()
+    monkeypatch.setattr(launcher, "_validate_copied_t2_bundle", validator)
+    fixture.load()
+    validator.assert_called_once()
+    assert validator.call_args.args[1] == fixture.inventory
 
 
 @pytest.mark.parametrize("terminal", ["missing", "failure", "coexistence"])
@@ -1132,17 +1377,32 @@ def test_static_delta_rejects_package_hardlink_inode_alias(tmp_path: Path) -> No
 def test_ue_and_host_gate_namespaces_are_disjoint_and_closed(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
     assert launcher.UE_RESULT_GATES.isdisjoint(launcher.HOST_GATES)
+    execution = json.loads(
+        Path(
+            fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]["execution"]["path"]
+        ).read_text(encoding="utf-8")
+    )
     malformed = copy.deepcopy(fixture.result)
     malformed["gates"]["process_group_closed"] = True
     with pytest.raises(base.HumanVisualDemoError, match="result gates"):
         launcher._validate_result_document(
             malformed,
+            execution_document=execution,
+            scene_document=json.loads(
+                Path(
+                    fixture.receipt["hssd_r2_citysample_live_r1_upgrade"][
+                        "scene_receipt"
+                    ]["path"]
+                ).read_text(encoding="utf-8")
+            ),
             execution=base._artifact_pin(
                 fixture.receipt["hssd_r2_citysample_live_r1_upgrade"]["execution"],
                 "execution",
             ),
             map_package=base._artifact_pin(fixture.receipt["map"]["package"], "map"),
             project_tree=fixture.receipt["project_static_tree"],
+            finish_document=fixture.profile,
+            migration=execution["composition_contract"]["migration"],
         )
 
 
