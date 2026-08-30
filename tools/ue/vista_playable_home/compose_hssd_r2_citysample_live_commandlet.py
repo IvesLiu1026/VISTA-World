@@ -1859,6 +1859,12 @@ def static_component_observation(component: Any) -> dict[str, Any]:
 
 
 def light_component_observation(component: Any) -> dict[str, Any]:
+    temperature = property_or_none(component, "temperature")
+    use_temperature = property_or_none(component, "use_temperature")
+    require(
+        use_temperature is None or type(use_temperature) is bool,
+        "light component optional boolean differs: use_temperature",
+    )
     result = {
         "component_path": str(component.get_path_name()),
         "component_name": str(component.get_name()),
@@ -1866,12 +1872,10 @@ def light_component_observation(component: Any) -> dict[str, Any]:
         "intensity": normalized_number(
             property_value(component, "intensity", "light component")
         ),
-        "temperature_k": normalized_number(
-            property_value(component, "temperature", "light component")
+        "temperature_k": (
+            normalized_number(temperature) if temperature is not None else None
         ),
-        "use_temperature": bool_property(
-            component, "use_temperature", "light component"
-        ),
+        "use_temperature": use_temperature,
         "cast_shadow": bool_property(component, "cast_shadows", "light component"),
         "mobility": component_mobility(component),
     }
@@ -2596,7 +2600,11 @@ def validate_light(actor: Any, binding: Mapping[str, Any]) -> dict[str, Any]:
     )
     component = observed["light_components"][0]
     require(
-        math.isclose(
+        type(component["intensity"]) in {int, float}
+        and type(component["temperature_k"]) in {int, float}
+        and type(component["attenuation_radius_cm"]) in {int, float}
+        and type(component["use_temperature"]) is bool
+        and math.isclose(
             component["intensity"],
             normalized_number(spec["intensity"]),
             rel_tol=0.0,
@@ -2968,13 +2976,17 @@ def _validate_light_component_document(value: Any, label: str) -> None:
         and value["component_path"]
         and type(value["component_name"]) is str
         and value["component_name"]
-        and all(
-            type(value[key]) is bool
-            for key in ("visible", "use_temperature", "cast_shadow")
-        )
-        and all(
-            type(value[key]) in {int, float} and math.isfinite(float(value[key]))
-            for key in ("intensity", "temperature_k")
+        and type(value["visible"]) is bool
+        and type(value["cast_shadow"]) is bool
+        and (value["use_temperature"] is None or type(value["use_temperature"]) is bool)
+        and type(value["intensity"]) in {int, float}
+        and math.isfinite(float(value["intensity"]))
+        and (
+            value["temperature_k"] is None
+            or (
+                type(value["temperature_k"]) in {int, float}
+                and math.isfinite(float(value["temperature_k"]))
+            )
         )
         and (
             value["attenuation_radius_cm"] is None
