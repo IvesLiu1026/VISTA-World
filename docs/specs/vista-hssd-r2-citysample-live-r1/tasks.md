@@ -29,14 +29,16 @@ Depends on: requirements.md, design.md
   - Requirements: R1-R3, R6, R9
   - Depends on: T2
   - Validation: exact R6 receipt/tree/map/legal scope, HSSD v4/namespace,
-    scripts and deterministic no-write plan
+    separate HSSD-source and R6-runtime semantic authorities, scripts and
+    deterministic no-write plan
 
 - [ ] T4. Implement the UE composition commandlet
   - Requirements: R2-R5
   - Depends on: T2, T3
   - Validation: exact 41 shell reuse/reposition, one legacy phone-shell delete,
     16 shell spawns, three presentations, 108 preserved actors, six-room finish,
-    19/20/21 collision and cold-reload receipt
+    19/20/21 collision, exact static 5+11 runtime projection and cold-reload
+    receipt
 
 - [ ] T5. Close containment, map-plus-fixture publication and current-byte receipts
   - Requirements: R1, R6
@@ -55,8 +57,9 @@ Depends on: requirements.md, design.md
 - [ ] T7. Run focused and related CPU review gates
   - Requirements: R1-R9
   - Depends on: T2-T6
-  - Validation: focused plus R4/R6/HSSD/launcher regressions, Ruff, format,
-    diff-check and independent review with no P0/P1
+  - Validation: focused plus R4/R6/HSSD/launcher regressions, bidirectional
+    coherent collision drift rejection, Ruff, format, diff-check and
+    independent review with no P0/P1
 
 - [ ] T8. Execute one fresh append-only NullRHI candidate
   - Requirements: R1-R6, R9

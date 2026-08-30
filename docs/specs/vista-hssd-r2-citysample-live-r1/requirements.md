@@ -1,7 +1,15 @@
 # Requirements: VISTA HSSD R2 + City Sample Live R1
 
-Status: Approved for implementation within the existing playable-home goal
+Status: Approved for implementation within the existing playable-home goal;
+R5 amended from pinned R6 evidence during implementation
 Updated: 2026-08-30
+
+The R5 amendment resolves a contradiction discovered by failed append-only
+attempt `hssd-r2-citysample-live-r5-20260830d`: the original text treated the
+standalone HSSD R2 source state as the copied R6 runtime state, while R1 and R3
+require the R6 parent to remain exact. The amendment is preservation-only. It
+does not promote the diagnostic, collision, interaction, runtime, visual or
+GTA acceptance; all such acceptance remains human-owned and pending.
 
 ## Problem
 
@@ -65,6 +73,14 @@ quality.
   and `4b2ded463a0be4caf26cd326a06944ab171d93c917d5de530fd36ca9b3ae9de2`.
 - R6 and HSSD R2 contain byte-identical 208-file HSSD namespaces; the
   implementation independently recomputes and pins that equality.
+- A read-only NullRHI observation of the pinned R6 map records the 16 static
+  semantic proxies in a 34,078-byte diagnostic with SHA-256
+  `c6c5c534944d7d544b882c6aae15d52431df109434505837c228eed3793579de`
+  and canonical content digest
+  `8621f19e5601c0793cfc8eaf942fb55fa67e994e9cf4639bc98e436882a9c15f`.
+  Its `accepted_as_runtime_authority` claim remains false; it is factual parent
+  evidence used only to prevent the upgrader from rewriting or misreporting
+  the copied R6 state.
 - Sunshine, Xvfb `:118` and the input relay stay running. R6 is the rollback
   baseline.
 
@@ -143,8 +159,19 @@ WHEN composed THEN the system SHALL preserve 19 semantic proxies, create 20
 deterministic secondary query proxies and retain 21 detail no-collision rows.
 
 Acceptance notes:
-- Sixteen static semantic proxies retain hidden QueryOnly Pawn/Visibility
-  authority; three pickup proxies retain R6 presentation/collision policy.
+- The standalone HSSD R2 source contract remains exactly 19 hidden
+  QueryOnly/Custom semantic proxies; it cannot overwrite the copied R6 runtime
+  state.
+- The copied R6 runtime has one exact 16-instance static collision authority,
+  digest
+  `0ed6768227333ca708b133a184b101a9745215f2f6361d063c3b8da768082ed9`.
+  Shoe bench, dining table, stove, coffee table and sofa retain
+  QueryAndPhysics/BlockAll; the other eleven retain QueryOnly/Custom. Every row
+  stays hidden, non-simulating, Pawn/Visibility blocking, and preserves its
+  pinned overlap and navigation flags. Missing, extra, swapped or coherently
+  resealed mode/profile rows fail closed.
+- Three pickup proxies independently retain their complete R6
+  presentation/collision policy.
 - Secondary boxes use pinned derived bounds, QueryOnly Pawn/Visibility block,
   no physics, overlap events or navigation authority.
 - Five protected portals remain conflict-free in the static ledger.
@@ -207,6 +234,8 @@ receipts and attribution/provenance metadata.
 - A broad label matches but exact identity tags do not.
 - HSSD namespaces agree in count but differ in bytes/tree digest.
 - A secondary proxy intersects a protected portal or gains physics/nav state.
+- HSSD source QueryOnly state is mistaken for copied R6 runtime state, or one
+  static runtime proxy is consistently resealed into another permitted pair.
 - UE exits zero but evidence changes after first validation.
 - Live startup fails after R6 stops; rollback must restore R6 without restarting
   Sunshine.

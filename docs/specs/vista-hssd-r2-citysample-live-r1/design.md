@@ -36,6 +36,15 @@ The exact 208-file HSSD namespace already inside R6 is re-sealed against the
 R2 project. No HSSD payload is re-imported or copied. The standalone HSSD map
 `60c4f719...f4d1` is authority evidence, never the base map.
 
+The R6 static-semantic diagnostic is a read-only NullRHI observation, SHA-256
+`c6c5c534...3579de`, 34,078 bytes, with canonical content digest
+`8621f19e...9c15f`. Its negative acceptance claim is retained. The closed
+16-row mode/profile projection derived from those observations has digest
+`0ed67682...082ed9`; the pinned commandlet and host validator independently
+embed and cross-check the same projection. This closes factual parent-state
+validation without turning the diagnostic into visual or interaction
+acceptance.
+
 ## Repository file plan
 
 - `world_packs/vista_playable_home_r1/visual_profiles/hssd_r2_citysample_live_r1.json`
@@ -86,13 +95,28 @@ duplicate shell exists; it never recomputes the fit.
 
 ## Collision model
 
-Visual meshes remain NoCollision. Sixteen static semantic proxies preserve
-hidden QueryOnly authority; three pickup proxies preserve R6 presentation and
-pickup state. Twenty secondary objects receive deterministic QueryOnly box
-components derived from pinned R2 bounds. Twenty-one details remain explicit
-NoCollision. Each receipt records owner, extent, transform, mode, responses,
+Visual meshes remain NoCollision. Collision has two deliberately separate
+semantic layers:
+
+- The standalone HSSD R2 source receipt must continue to expose all 19 hidden
+  proxies as QueryOnly/Custom. It supplies semantic identity, component path,
+  overlap and navigation binding evidence, not copied-map runtime mode/profile.
+- The copied R6 map must preserve the exact 16 static-proxy projection: shoe
+  bench, dining table, stove, coffee table and sofa are
+  QueryAndPhysics/BlockAll; the remaining eleven are QueryOnly/Custom. All are
+  hidden, non-simulating and Pawn/Visibility blocking. Exact instance IDs and
+  the `0ed67682...082ed9` projection digest prevent distribution-preserving or
+  coherent reseal drift.
+- Three pickup proxies preserve complete R6 presentation, collision and pickup
+  state independently of the static projection.
+
+Twenty secondary objects receive deterministic QueryOnly box components
+derived from pinned R2 bounds. Twenty-one details remain explicit NoCollision.
+Each receipt records owner, extent, transform, mode, responses,
 physics/nav/overlap flags and reloaded observation. Human walking remains the
-promotion gate.
+promotion gate. No serialized JSON shape changes, so execution/plan/upgrade
+remain v2; the unsuccessful v2 attempt `20260830d` is quarantined and every
+execution pins the exact commandlet and materializer bytes.
 
 ## Six-room finish profile
 
@@ -168,6 +192,12 @@ Pure CPU tests cover zero-write behavior, fixed source pins, namespace equality,
 six-room finish, deterministic fixture forge/GLB inspection, no overrides/
 network/GPU/AI review, terminal/log/map/fixture drift, exact artifact mutation
 and launcher command/rollback metadata.
+
+Collision tests separately enforce the HSSD source 19×QueryOnly/Custom
+contract and the R6 runtime 5×QueryAndPhysics/BlockAll plus
+11×QueryOnly/Custom projection. They reject unknown/missing identities and
+both directions of consistently resealed mode/profile drift at live UE,
+commandlet-document and trusted host-validation boundaries.
 
 Retained NullRHI evidence must show UE zero, cold reload, exact inventories,
 map-plus-fixture delta, delayed current-byte validation and all acceptance
