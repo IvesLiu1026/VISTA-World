@@ -16,6 +16,22 @@ if str(REPOSITORY_ROOT) not in sys.path:
 
 from tools.blender.vista_playable_home_r9_fixtures import forge
 
+GLTF_EXPORT_OPTIONS = {
+    "export_format": "GLB",
+    "use_selection": True,
+    "export_apply": True,
+    "export_yup": True,
+    "export_cameras": False,
+    "export_lights": False,
+    "export_animations": False,
+    "export_materials": "EXPORT",
+    "export_texcoords": True,
+    "export_normals": True,
+    "export_tangents": False,
+    "export_vertex_color": "NONE",
+    "export_extras": True,
+}
+
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -284,19 +300,7 @@ def _export_glb(bpy: Any, mesh: Any, path: pathlib.Path) -> None:
     bpy.context.view_layer.objects.active = mesh
     result = bpy.ops.export_scene.gltf(
         filepath=str(path),
-        export_format="GLB",
-        use_selection=True,
-        export_apply=True,
-        export_yup=True,
-        export_cameras=False,
-        export_lights=False,
-        export_animations=False,
-        export_materials="EXPORT",
-        export_texcoords=True,
-        export_normals=True,
-        export_tangents=False,
-        export_colors=False,
-        export_extras=True,
+        **GLTF_EXPORT_OPTIONS,
     )
     if "FINISHED" not in result:
         forge._fail("FIXTURE_WORKER_EXPORT_FAILED", "Blender GLB export failed")
