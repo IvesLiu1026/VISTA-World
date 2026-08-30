@@ -23,6 +23,60 @@ FBX, Blend, Unreal packages, logs, and receipts remain outside Git.
 This stage does **not** claim UE animation import, montage-notify authoring,
 runtime interaction, motion quality, photorealism, or GTA-level quality.
 
+## Fresh sealed Blender publication (2026-08-30)
+
+The reviewed root publisher completed one fresh CPU-only publication at:
+
+```text
+/data/vista-published/vista-action-world-r1/
+  makehuman-cc0-animation-r8-20260830a/
+```
+
+The complete published tree is root-owned, contains seven directories and ten
+regular files, uses mode `0555` for directories and `0444` for files, and has
+no symlinks or special entries. The external tree remains outside Git and is
+sealed by:
+
+- Host receipt: 3,515 bytes, SHA-256
+  `d96fa45b890f421fe450068b032705ddc4e04afb051e25f18283b948596d49c9`,
+  content digest
+  `bf21a2b42d845a9d72d9b68cdae8e4e541d90d9fc95db50d66b5aea50432f952`.
+- Worker receipt: 8,811 bytes, SHA-256
+  `66e95bf9af82fef094143a8e75276ecf8dc4c64dc12ec704026563dd913f76e3`,
+  content digest
+  `5d31baf3aebd19ae296d2eba9b9fdd604ea5af1192cd559d8d51b7d0b29b91cb`.
+- Build plan: 38,969 bytes, SHA-256
+  `a28e0cab6a8b6bc713b7abad9b0625370888d93f09166d14b77e48b376eec02a`,
+  content digest
+  `3259611d398d50098d58135e5b445bc4de855c75ae985b86917eb1c64f78d851`.
+- Blender log: 10,213 bytes, SHA-256
+  `f74346af26ee7706ba02eef3cbdafca9a7093788d8502bf630400626716b150d`.
+
+Published artifacts:
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `fbx/AS_VistaCC0Idle.fbx` | 529,580 | `d6cfe851ec0efb1409242cc5fea4cdd98a999d7ed5cf4d1e997763a63e60cd2c` |
+| `fbx/AS_VistaCC0Walk.fbx` | 466,332 | `fbd0e170a55d9e69d3da23c47f984d930ad89dec12f20a69b18333f12c9ec3b5` |
+| `fbx/AS_VistaCC0Run.fbx` | 416,748 | `db5135d29a1cfd11824934a80c17566af88086f29c788049ef126dd5826adbdb` |
+| `fbx/AS_VistaCC0MugPickupCountertop.fbx` | 532,748 | `ad162125d9aca6439b1960acf2ac4f555bd0bfe3386afc934e1bf5e58fd38e38` |
+| `fbx/AS_VistaCC0MugPlaceCountertop.fbx` | 532,604 | `c43115778766a1b9fb34cd18c714b0bd760547d873ab68a6a54df8c21bd203ba` |
+| `library/vista_cc0_animation_library_r8.blend` | 27,281,262 | `378bac0ce788c4a185ef32117b73731bf090cc1046765fd5d2ce8f9f46a32dbb` |
+
+Independent read-only audit used the pinned Blender 4.5.8 authority to open the
+sealed library and re-import every FBX. The library contains exactly the five
+named actions with frame ranges 60/30/20/60/60 and two copies of the exact
+53-bone armature. Each FBX independently round-trips to one 53-bone armature,
+one action with the expected duration, and no linked Blender library. The
+library retains eleven external MakeHuman visual-texture paths; therefore it
+is a motion/rig authority, not a self-contained textured-character delivery.
+This does not affect animation transfer onto the separately sealed UE
+character, but it must not be represented as standalone visual acceptance.
+
+The host receipt truthfully remains `accepted: false`. Remaining gates are
+UE 5.7 animation import, UE-authored typed montage notifies, dedicated-server
+two-client runtime proof, and human motion-quality review.
+
 ## Bound source evidence
 
 - Blender character source:

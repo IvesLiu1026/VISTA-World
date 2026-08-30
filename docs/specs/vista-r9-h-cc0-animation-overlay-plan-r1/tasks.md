@@ -63,7 +63,11 @@ Depends on: requirements.md, design.md
 ## Notes
 
 - Candidate `h` remains the immutable visual baseline.
-- The current expected production result is blocked only on fresh root R8
-  animation publication and reviewed root BuildPlugin authority.
+- Fresh root R8 Blender animation publication completed at
+  `makehuman-cc0-animation-r8-20260830a`; its host receipt SHA-256 is
+  `d96fa45b890f421fe450068b032705ddc4e04afb051e25f18283b948596d49c9`.
+  This clears the offline Blender-authoring prerequisite only. The production
+  overlay remains blocked on reviewed root BuildPlugin authority and fresh R8
+  UE executor host/runtime receipts.
 - A future materializer, Unreal run, or human-motion acceptance is a separate
   approved task and must not be inferred from completion of this plan.
