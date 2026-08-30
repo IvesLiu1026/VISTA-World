@@ -3864,11 +3864,18 @@ def validate_result_document(
     static_reloaded = _rows_unique(
         shell["static_reloaded"], 57, "instance_id", "static reloaded"
     )
+    reuse_instance_ids = set(reuse_source_by_id)
+    spawn_instance_ids = set(placement_by_id) - reuse_instance_ids
     require(
         {row["instance_id"] for row in [*reuse_after, *spawn_after]}
         == {row["instance_id"] for row in static_reloaded}
         == set(placement_by_id),
         "shell migration evidence differs",
+    )
+    require(
+        {row["instance_id"] for row in reuse_after} == reuse_instance_ids
+        and {row["instance_id"] for row in spawn_after} == spawn_instance_ids,
+        "shell reuse/spawn identity partition differs",
     )
     for row in [*reuse_after, *spawn_after, *static_reloaded]:
         _validate_shell_against_placement(
@@ -3878,7 +3885,10 @@ def validate_result_document(
         reuse_before
         == sorted(reuse_source_by_id.values(), key=lambda row: row["actor_path"])
         and all(
-            row["actor"] == reuse_source_by_id[row["instance_id"]]
+            row["actor"]["actor_path"]
+            == reuse_source_by_id[row["instance_id"]]["actor_path"]
+            and row["actor"]["actor_class_path"]
+            == reuse_source_by_id[row["instance_id"]]["actor_class_path"]
             for row in reuse_after
         )
         and shell["deleted"] == migration["delete"],

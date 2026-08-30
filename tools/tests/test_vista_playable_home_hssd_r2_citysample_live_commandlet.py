@@ -289,6 +289,13 @@ def migration_fixture() -> dict:
         instance_id: _actor(f"Legacy_{index:02d}", instance_id=instance_id)
         for index, instance_id in enumerate(reuse_ids)
     }
+    for instance_id in reuse_ids[:12]:
+        legacy_by_id[instance_id]["tags"] = sorted(
+            [
+                *legacy_by_id[instance_id]["tags"],
+                "VistaRole=hssd_curated_overlay",
+            ]
+        )
     legacy_by_id[commandlet.DELETION_INSTANCE_ID] = _actor(
         "Legacy_phone", instance_id=commandlet.DELETION_INSTANCE_ID
     )
@@ -581,10 +588,11 @@ def document_fixture() -> tuple[dict, dict, dict]:
         ],
         key=lambda row: row["actor_path"],
     )
-    reuse_after = [
-        _shell_observation(row["r2_placement"], row["source_actor"])
-        for row in migration["reuse"]
-    ]
+    reuse_after = []
+    for row in migration["reuse"]:
+        actor = copy.deepcopy(row["source_actor"])
+        actor["tags"] = copy.deepcopy(row["r2_placement"]["tags"])
+        reuse_after.append(_shell_observation(row["r2_placement"], actor))
     spawn_after = [
         _shell_observation(
             row,
@@ -1150,6 +1158,109 @@ def test_result_and_scene_validator_binds_nested_identities_not_only_counts() ->
     malformed_scene = commandlet.seal(malformed_scene)
     with pytest.raises(commandlet.CommandletFailure, match="shell migration evidence"):
         commandlet.validate_result_document(execution, malformed, malformed_scene)
+
+
+@pytest.mark.parametrize(
+    ("actor_field", "replacement"),
+    [
+        (
+            "actor_path",
+            commandlet.MAP_OBJECT_PATH
+            + ".VistaPlayableHome:PersistentLevel.ReplacementShell_0",
+        ),
+        ("actor_class_path", "/Script/Engine.Actor"),
+    ],
+)
+def test_reuse_lineage_allows_closed_tag_normalization_but_rejects_replacement(
+    actor_field: str,
+    replacement: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution, result, scene = document_fixture()
+    migration = execution["composition_contract"]["migration"]
+    source_by_id = {
+        row["r2_placement"]["instance_id"]: row["source_actor"]
+        for row in migration["reuse"]
+    }
+    reuse_after = result["observations"]["shell_migration"]["reuse_after_save"]
+    normalized = [
+        row
+        for row in reuse_after
+        if "VistaRole=hssd_curated_overlay" in source_by_id[row["instance_id"]]["tags"]
+    ]
+    assert len(normalized) == 12
+    assert all(
+        "VistaRole=hssd_curated_overlay" not in row["actor"]["tags"]
+        and row["actor"]["tags"]
+        == next(
+            item["r2_placement"]["tags"]
+            for item in migration["reuse"]
+            if item["r2_placement"]["instance_id"] == row["instance_id"]
+        )
+        for row in normalized
+    )
+    commandlet.validate_result_document(execution, result, scene)
+    prepared = _t5_prepared(execution, result, monkeypatch)
+    materializer._validate_t4_contract(prepared, execution, result, scene)
+
+    target = reuse_after[0]
+    target["actor"][actor_field] = replacement
+    reloaded = next(
+        row
+        for row in result["observations"]["shell_migration"]["static_reloaded"]
+        if row["instance_id"] == target["instance_id"]
+    )
+    reloaded["actor"][actor_field] = replacement
+    result = commandlet.seal(result)
+    scene["observations"] = copy.deepcopy(result["observations"])
+    result_raw = commandlet.canonical_json(result)
+    scene["result"] = {
+        "path": execution["result"]["result_path"],
+        "sha256": hashlib.sha256(result_raw).hexdigest(),
+        "size_bytes": len(result_raw),
+    }
+    scene = commandlet.seal(scene)
+
+    with pytest.raises(
+        commandlet.CommandletFailure, match="shell (observation|migration)"
+    ):
+        commandlet.validate_result_document(execution, result, scene)
+    with pytest.raises(
+        materializer.R9PreflightError, match="shell (observation|migration)"
+    ):
+        materializer._validate_t4_contract(prepared, execution, result, scene)
+
+
+def test_reuse_and_spawn_partitions_cannot_be_coherently_swapped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution, result, scene = document_fixture()
+    shell = result["observations"]["shell_migration"]
+    reused = shell["reuse_after_save"].pop()
+    spawned = shell["spawn_after_save"].pop()
+    shell["reuse_after_save"].append(spawned)
+    shell["spawn_after_save"].append(reused)
+    shell["reuse_after_save"].sort(key=lambda row: row["instance_id"])
+    shell["spawn_after_save"].sort(key=lambda row: row["instance_id"])
+    result = commandlet.seal(result)
+    scene["observations"] = copy.deepcopy(result["observations"])
+    result_raw = commandlet.canonical_json(result)
+    scene["result"] = {
+        "path": execution["result"]["result_path"],
+        "sha256": hashlib.sha256(result_raw).hexdigest(),
+        "size_bytes": len(result_raw),
+    }
+    scene = commandlet.seal(scene)
+    prepared = _t5_prepared(execution, result, monkeypatch)
+
+    with pytest.raises(
+        commandlet.CommandletFailure, match="reuse/spawn identity partition"
+    ):
+        commandlet.validate_result_document(execution, result, scene)
+    with pytest.raises(
+        materializer.R9PreflightError, match="reuse/spawn identity partition"
+    ):
+        materializer._validate_t4_contract(prepared, execution, result, scene)
 
 
 def test_result_validator_rejects_consistently_resealed_semantic_flag_drift() -> None:
