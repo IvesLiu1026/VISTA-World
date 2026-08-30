@@ -2690,6 +2690,69 @@ def _paeth(left: int, above: int, upper_left: int) -> int:
     return upper_left
 
 
+def canonical_png_bytes(raw: bytes) -> bytes:
+    """Strip Blender tEXt timing metadata while preserving encoded RGBA pixels."""
+
+    signature = b"\x89PNG\r\n\x1a\n"
+    if not raw.startswith(signature):
+        _fail("FIXTURE_PREVIEW_INVALID", "preview is not PNG")
+    offset = len(signature)
+    kept: list[bytes] = []
+    saw_header = False
+    saw_data = False
+    saw_end = False
+    while offset < len(raw):
+        if offset + 12 > len(raw):
+            _fail("FIXTURE_PREVIEW_INVALID", "PNG chunk is truncated")
+        length = struct.unpack_from(">I", raw, offset)[0]
+        end = offset + 12 + length
+        if end > len(raw):
+            _fail("FIXTURE_PREVIEW_INVALID", "PNG payload is truncated")
+        chunk_type = raw[offset + 4 : offset + 8]
+        payload = raw[offset + 8 : offset + 8 + length]
+        if (
+            len(chunk_type) != 4
+            or not chunk_type.isalpha()
+            or not chunk_type[2:3].isupper()
+        ):
+            _fail("FIXTURE_PREVIEW_INVALID", "PNG chunk type is invalid")
+        expected_crc = struct.unpack_from(">I", raw, offset + 8 + length)[0]
+        if zlib.crc32(chunk_type + payload) & 0xFFFFFFFF != expected_crc:
+            _fail("FIXTURE_PREVIEW_INVALID", "PNG CRC is invalid")
+        chunk = raw[offset:end]
+        if chunk_type == b"IHDR":
+            if saw_header or kept or length != 13:
+                _fail("FIXTURE_PREVIEW_INVALID", "PNG header ordering is invalid")
+            saw_header = True
+            kept.append(chunk)
+        elif chunk_type == b"IDAT":
+            if not saw_header or saw_end:
+                _fail("FIXTURE_PREVIEW_INVALID", "PNG data ordering is invalid")
+            saw_data = True
+            kept.append(chunk)
+        elif chunk_type == b"IEND":
+            if not saw_header or not saw_data or saw_end or length != 0:
+                _fail("FIXTURE_PREVIEW_INVALID", "PNG end ordering is invalid")
+            saw_end = True
+            kept.append(chunk)
+        elif not saw_header or saw_data or saw_end:
+            _fail("FIXTURE_PREVIEW_INVALID", "PNG ancillary ordering is invalid")
+        elif chunk_type in {b"eXIf", b"oFFs", b"pHYs"}:
+            kept.append(chunk)
+        elif chunk_type == b"tEXt":
+            pass
+        elif chunk_type[:1].isupper():
+            _fail("FIXTURE_PREVIEW_INVALID", "unknown critical PNG chunk")
+        else:
+            _fail("FIXTURE_PREVIEW_INVALID", "unknown ancillary PNG chunk")
+        offset = end
+        if saw_end:
+            break
+    if not saw_end or offset != len(raw):
+        _fail("FIXTURE_PREVIEW_INVALID", "PNG end or trailing bytes are invalid")
+    return signature + b"".join(kept)
+
+
 def inspect_png(path: pathlib.Path, preview_contract: Mapping[str, Any]) -> dict:
     raw = _read_regular_file(path, maximum_bytes=8 * 1024 * 1024)
     if not raw.startswith(b"\x89PNG\r\n\x1a\n"):

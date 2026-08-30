@@ -351,6 +351,20 @@ def _png_bytes(*, blank: bool = False) -> bytes:
     )
 
 
+def _png_with_text_chunks(raw: bytes, values: tuple[bytes, ...]) -> bytes:
+    def chunk(payload: bytes) -> bytes:
+        kind = b"tEXt"
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    ihdr_end = 8 + 12 + 13
+    return raw[:ihdr_end] + b"".join(chunk(value) for value in values) + raw[ihdr_end:]
+
+
 def _write_artifact_fixture(
     root: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[dict, dict]:
@@ -817,6 +831,50 @@ def test_empty_factory_scene_gets_a_fixed_preview_world() -> None:
     assert world.use_nodes is True
     assert color.default_value == blender_worker.PREVIEW_WORLD_COLOR_RGBA
     assert strength.default_value == blender_worker.PREVIEW_WORLD_STRENGTH
+
+
+def test_blender_png_metadata_is_removed_before_determinism_comparison(
+    tmp_path: pathlib.Path,
+) -> None:
+    canonical = _png_bytes()
+    first = _png_with_text_chunks(
+        canonical,
+        (b"Date\x002026/08/30 09:51:37", b"RenderTime\x0000:00.02"),
+    )
+    second = _png_with_text_chunks(
+        canonical,
+        (b"Date\x002026/08/30 09:51:38", b"RenderTime\x0000:00.01"),
+    )
+    assert first != second
+    assert forge.canonical_png_bytes(first) == canonical
+    assert forge.canonical_png_bytes(second) == canonical
+
+    preview = tmp_path / "preview.png"
+    preview.write_bytes(first)
+    blender_worker._canonicalize_preview(preview)
+    assert preview.read_bytes() == canonical
+    assert preview.stat().st_mode & 0o777 == 0o600
+
+    critical = b"ABCD"
+    payload = b"unsupported"
+    chunk = (
+        struct.pack(">I", len(payload))
+        + critical
+        + payload
+        + struct.pack(">I", zlib.crc32(critical + payload) & 0xFFFFFFFF)
+    )
+    with pytest.raises(forge.FixtureForgeError, match="unknown critical PNG chunk"):
+        forge.canonical_png_bytes(canonical[:33] + chunk + canonical[33:])
+
+    ancillary = b"aAAa"
+    chunk = (
+        struct.pack(">I", len(payload))
+        + ancillary
+        + payload
+        + struct.pack(">I", zlib.crc32(ancillary + payload) & 0xFFFFFFFF)
+    )
+    with pytest.raises(forge.FixtureForgeError, match="unknown ancillary PNG chunk"):
+        forge.canonical_png_bytes(canonical[:33] + chunk + canonical[33:])
 
 
 def test_root_owned_authority_is_required_and_runtime_tree_drift_fails(
