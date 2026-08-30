@@ -113,7 +113,7 @@ PROFILE_BYTES = 71_082
 PROFILE_CONTENT_DIGEST = (
     "105fc5270594b0667b8616f2fa5a583757f45c25017db49a263be2d7e68967f2"
 )
-FIXTURE_INVENTORY_PATH = RUN_PARENT / "vista-r9-fixture-forge-r1/fixture-inventory.json"
+FIXTURE_INVENTORY_PATH = RUN_PARENT / "vista-r9-fixture-forge-r5/fixture-inventory.json"
 FIXTURE_INVENTORY_SCHEMA = "simworld.vista.playable-home-r9-fixture-inventory/v3"
 FIXTURE_INVENTORY_STATUS = (
     "fixture_inventory_sealed_snapshot_provenance_not_ue_imported"

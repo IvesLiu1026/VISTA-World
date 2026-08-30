@@ -513,6 +513,9 @@ def test_production_lineage_constants_are_exact() -> None:
         "105fc5270594b0667b8616f2fa5a583757f45c25017db49a263be2d7e68967f2"
     )
     assert materializer.FIXTURE_INVENTORY_SCHEMA.endswith("inventory/v3")
+    assert materializer.FIXTURE_INVENTORY_PATH == (
+        materializer.RUN_PARENT / "vista-r9-fixture-forge-r5/fixture-inventory.json"
+    )
     assert materializer.FIXTURE_INVENTORY_KEYS == frozenset(
         {
             "artifact_count",
