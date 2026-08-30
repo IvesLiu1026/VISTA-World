@@ -3269,6 +3269,83 @@ def _validate_t4_contract(
     )
 
 
+def _static_file_identity(item: os.stat_result) -> tuple[int, ...]:
+    return (
+        item.st_dev,
+        item.st_ino,
+        item.st_mode,
+        item.st_nlink,
+        item.st_size,
+        item.st_mtime_ns,
+        item.st_ctime_ns,
+    )
+
+
+def _seal_current_static_files(
+    prepared: PreparedPlan,
+    manifest: Mapping[str, Mapping[str, Any]],
+    relatives: Sequence[str],
+    *,
+    label: str,
+) -> dict[str, tuple[int, int]]:
+    """Bind current manifest rows to distinct, single-link file identities."""
+
+    project_root = prepared.attempt_root / "project"
+    identities: dict[str, tuple[int, int]] = {}
+    for relative in relatives:
+        parts = _safe_relative_path(relative, label)
+        path = project_root.joinpath(*parts)
+        expected = manifest.get(relative)
+        _require(type(expected) is dict, label + " manifest row is absent")
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+        try:
+            path_before = os.lstat(path)
+            descriptor = os.open(path, flags)
+        except OSError as exc:
+            raise R9PreflightError(label + " file is unavailable") from exc
+        try:
+            opened_before = os.fstat(descriptor)
+            _require(
+                stat.S_ISREG(path_before.st_mode)
+                and stat.S_ISREG(opened_before.st_mode)
+                and path_before.st_nlink == opened_before.st_nlink == 1
+                and (path_before.st_dev, path_before.st_ino)
+                == (opened_before.st_dev, opened_before.st_ino),
+                label + " file is linked, aliased, or not regular",
+            )
+            digest = hashlib.sha256()
+            while chunk := os.read(descriptor, 1024 * 1024):
+                digest.update(chunk)
+            opened_after = os.fstat(descriptor)
+            path_after = os.lstat(path)
+        finally:
+            os.close(descriptor)
+        _require(
+            _static_file_identity(path_before)
+            == _static_file_identity(opened_before)
+            == _static_file_identity(opened_after)
+            == _static_file_identity(path_after)
+            and path.resolve(strict=True) == path,
+            label + " file identity changed while sealed",
+        )
+        mode = stat.S_IMODE(opened_after.st_mode)
+        _require(
+            expected
+            == {
+                "sha256": digest.hexdigest(),
+                "size_bytes": opened_after.st_size,
+                "mode": mode,
+            },
+            label + " manifest row differs from current file identity",
+        )
+        identities[relative] = (opened_after.st_dev, opened_after.st_ino)
+    _require(
+        len(set(identities.values())) == len(identities),
+        label + " files share an inode alias",
+    )
+    return identities
+
+
 def _exact_static_delta(
     prepared: PreparedPlan,
     *,
@@ -3314,6 +3391,12 @@ def _exact_static_delta(
             and SHA256_RE.fullmatch(row["sha256"]) is not None,
             "R9 fixture package must be a nonempty private sealed file",
         )
+    _seal_current_static_files(
+        prepared,
+        output_manifest,
+        [MAP_RELATIVE_PATH.as_posix(), *fixture_paths],
+        label="R9 map/fixture static identity",
+    )
     return {
         "policy": "exact_map_plus_sealed_fixture_package_inventory/v1",
         "changed_relative_paths": sorted(changed),
@@ -3352,6 +3435,12 @@ def _validate_fixture_import_host_bindings(
         == {row["archetype_id"] for row in rows}
         and None not in inventory_by_id,
         "fixture host archetype authority differs",
+    )
+    _seal_current_static_files(
+        prepared,
+        output_manifest,
+        list(_fixture_package_paths(prepared.fixtures.profile)),
+        label="R9 fixture package host identity",
     )
     for row in rows:
         archetype_id = row["archetype_id"]

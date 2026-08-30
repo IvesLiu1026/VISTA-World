@@ -4,6 +4,7 @@ import copy
 import dataclasses
 import hashlib
 import json
+import os
 import pathlib
 from types import SimpleNamespace
 
@@ -1347,14 +1348,28 @@ def test_static_delta_rejects_mode_or_content_drift(
 ) -> None:
     prepared = _apply_fixture(tmp_path, monkeypatch)
     map_relative = materializer.MAP_RELATIVE_PATH.as_posix()
+    project_root = prepared.attempt_root / "project"
+    output_map = _write(project_root / map_relative, b"sealed R9 output map\n")
+    output_map_artifact = _artifact(output_map)
     baseline = {map_relative: {"sha256": "a" * 64, "size_bytes": 10, "mode": 0o600}}
-    output = {map_relative: {"sha256": "b" * 64, "size_bytes": 11, "mode": 0o600}}
+    output = {
+        map_relative: {
+            "sha256": output_map_artifact.sha256,
+            "size_bytes": output_map_artifact.size_bytes,
+            "mode": 0o600,
+        }
+    }
     for index, relative in enumerate(
         materializer._fixture_package_paths(prepared.fixtures.profile)
     ):
+        package = _write(
+            project_root / relative,
+            (f"sealed R9 fixture package {index}\n").encode(),
+        )
+        artifact = _artifact(package)
         output[relative] = {
-            "sha256": format(index + 1, "064x"),
-            "size_bytes": index + 1,
+            "sha256": artifact.sha256,
+            "size_bytes": artifact.size_bytes,
             "mode": 0o600,
         }
     first_package = materializer._fixture_package_paths(prepared.fixtures.profile)[0]
@@ -1368,6 +1383,52 @@ def test_static_delta_rejects_mode_or_content_drift(
         output[first_package]["size_bytes"] = 0
 
     with pytest.raises(materializer.R9PreflightError, match=message):
+        materializer._exact_static_delta(
+            prepared, baseline_manifest=baseline, output_manifest=output
+        )
+
+
+def test_static_delta_rejects_hardlink_inode_alias(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prepared = _apply_fixture(tmp_path, monkeypatch)
+    project_root = prepared.attempt_root / "project"
+    map_relative = materializer.MAP_RELATIVE_PATH.as_posix()
+    output_map = _write(project_root / map_relative, b"sealed R9 output map\n")
+    map_artifact = _artifact(output_map)
+    baseline = {map_relative: {"sha256": "a" * 64, "size_bytes": 10, "mode": 0o600}}
+    output = {
+        map_relative: {
+            "sha256": map_artifact.sha256,
+            "size_bytes": map_artifact.size_bytes,
+            "mode": 0o600,
+        }
+    }
+    package_paths = materializer._fixture_package_paths(prepared.fixtures.profile)
+    for index, relative in enumerate(package_paths):
+        package = _write(
+            project_root / relative,
+            (f"sealed R9 fixture package {index}\n").encode(),
+        )
+        artifact = _artifact(package)
+        output[relative] = {
+            "sha256": artifact.sha256,
+            "size_bytes": artifact.size_bytes,
+            "mode": 0o600,
+        }
+
+    first = project_root / package_paths[0]
+    second = project_root / package_paths[1]
+    second.unlink()
+    os.link(first, second)
+    aliased = _artifact(second)
+    output[package_paths[1]] = {
+        "sha256": aliased.sha256,
+        "size_bytes": aliased.size_bytes,
+        "mode": 0o600,
+    }
+
+    with pytest.raises(materializer.R9PreflightError, match="linked, aliased"):
         materializer._exact_static_delta(
             prepared, baseline_manifest=baseline, output_manifest=output
         )
@@ -1408,9 +1469,14 @@ def _host_binding_contract(
         packages = []
         for package_index, name in enumerate(sorted(names)):
             relative = "Content/" + name.removeprefix("/Game/") + ".uasset"
+            package = _write(
+                prepared.attempt_root / "project" / relative,
+                (f"sealed host package {archetype_id} {package_index}\n").encode(),
+            )
+            artifact = _artifact(package)
             pin = {
-                "sha256": format(index * 3 + package_index + 40, "064x"),
-                "size_bytes": 200 + index * 3 + package_index,
+                "sha256": artifact.sha256,
+                "size_bytes": artifact.size_bytes,
                 "mode": 0o600,
             }
             output_manifest[relative] = pin
