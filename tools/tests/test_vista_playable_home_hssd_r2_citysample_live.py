@@ -1159,6 +1159,35 @@ def test_schema_and_local_artifact_names_match_v5_launcher_contract() -> None:
     assert materializer.COMPLETE_NAME == "hssd-r2-citysample-live-host-complete.json"
 
 
+def test_finish_owned_actor_authority_is_exact_and_disjoint() -> None:
+    profile = {
+        "rooms": [
+            {
+                "room_id": f"room-{index}",
+                "architecture_actor": {"actor_path": f"/Map.Architecture_{index}"},
+                "fixture_light_binding": {
+                    "fixture_actor_path": f"/Map.Fixture_{index}"
+                },
+            }
+            for index in range(6)
+        ]
+    }
+    assert materializer._finish_owned_actor_paths(profile) == {
+        *{f"/Map.Architecture_{index}" for index in range(6)},
+        *{f"/Map.Fixture_{index}" for index in range(6)},
+    }
+
+    duplicate = copy.deepcopy(profile)
+    duplicate["rooms"][1]["fixture_light_binding"]["fixture_actor_path"] = duplicate[
+        "rooms"
+    ][0]["architecture_actor"]["actor_path"]
+    with pytest.raises(
+        materializer.R9PreflightError,
+        match="owned actor partition differs",
+    ):
+        materializer._finish_owned_actor_paths(duplicate)
+
+
 def _copy_manifest_inputs(prepared: materializer.PreparedPlan) -> None:
     prepared.attempt_root.mkdir(mode=0o700)
     _write(
