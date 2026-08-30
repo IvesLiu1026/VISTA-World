@@ -795,6 +795,30 @@ def test_blender_458_gltf_export_contract_uses_current_vertex_color_api() -> Non
     assert "export_colors" not in blender_worker.GLTF_EXPORT_OPTIONS
 
 
+def test_empty_factory_scene_gets_a_fixed_preview_world() -> None:
+    color = SimpleNamespace(default_value=None)
+    strength = SimpleNamespace(default_value=None)
+    background = SimpleNamespace(inputs={"Color": color, "Strength": strength})
+    world = SimpleNamespace(
+        use_nodes=False,
+        node_tree=SimpleNamespace(nodes={"Background": background}),
+    )
+
+    class Worlds:
+        def new(self, name: str) -> SimpleNamespace:
+            assert name == blender_worker.PREVIEW_WORLD_NAME
+            return world
+
+    scene = SimpleNamespace(world=None)
+    bpy = SimpleNamespace(data=SimpleNamespace(worlds=Worlds()))
+    blender_worker._configure_preview_world(bpy, scene)
+
+    assert scene.world is world
+    assert world.use_nodes is True
+    assert color.default_value == blender_worker.PREVIEW_WORLD_COLOR_RGBA
+    assert strength.default_value == blender_worker.PREVIEW_WORLD_STRENGTH
+
+
 def test_root_owned_authority_is_required_and_runtime_tree_drift_fails(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

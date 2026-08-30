@@ -31,6 +31,9 @@ GLTF_EXPORT_OPTIONS = {
     "export_vertex_color": "NONE",
     "export_extras": True,
 }
+PREVIEW_WORLD_NAME = "VISTA_R9_PREVIEW_WORLD"
+PREVIEW_WORLD_COLOR_RGBA = (0.025, 0.025, 0.025, 1.0)
+PREVIEW_WORLD_STRENGTH = 1.0
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -311,6 +314,20 @@ def _point_at(camera: Any, target: tuple[float, float, float], mathutils: Any) -
     camera.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
 
 
+def _configure_preview_world(bpy: Any, scene: Any) -> None:
+    world = bpy.data.worlds.new(PREVIEW_WORLD_NAME)
+    world.use_nodes = True
+    background = world.node_tree.nodes.get("Background")
+    if background is None:
+        forge._fail(
+            "FIXTURE_WORKER_WORLD_FAILED",
+            "preview World Background node is missing",
+        )
+    background.inputs["Color"].default_value = PREVIEW_WORLD_COLOR_RGBA
+    background.inputs["Strength"].default_value = PREVIEW_WORLD_STRENGTH
+    scene.world = world
+
+
 def _configure_preview(
     bpy: Any,
     mathutils: Any,
@@ -333,7 +350,7 @@ def _configure_preview(
     scene.render.use_file_extension = True
     scene.render.use_overwrite = False
     scene.view_settings.look = "AgX - Medium High Contrast"
-    scene.world.color = (0.025, 0.025, 0.025)
+    _configure_preview_world(bpy, scene)
 
     camera_data = bpy.data.cameras.new("VISTA_R9_PREVIEW_CAMERA_DATA")
     camera = bpy.data.objects.new("VISTA_R9_PREVIEW_CAMERA", camera_data)
