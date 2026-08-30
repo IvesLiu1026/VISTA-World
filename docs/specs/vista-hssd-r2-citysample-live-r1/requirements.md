@@ -81,6 +81,13 @@ quality.
   Its `accepted_as_runtime_authority` claim remains false; it is factual parent
   evidence used only to prevent the upgrader from rewriting or misreporting
   the copied R6 state.
+- A separate read-only NullRHI observation of that same pinned R6 map records
+  the exact Unreal world authority in a 742-byte diagnostic with SHA-256
+  `461273f4dee09a8667a17e450edabc8d3f3fec4239aecbc81e28d8419dfde20a`
+  and canonical content digest
+  `b91bcd403e50412f9b2585912804767c77b75fe6a1e0d94ca1925f92c7df4c71`.
+  Its `accepted_as_runtime_authority` claim remains false; the observation is
+  factual parent evidence for exact preservation only.
 - Sunshine, Xvfb `:118` and the input relay stay running. R6 is the rollback
   baseline.
 
@@ -134,6 +141,11 @@ navigation, VISTA overlay, player controls and pickup state.
 
 Acceptance notes:
 - City Sample remains runtime-spawned by `VistaPlayableHomeGameMode`.
+- The package path stays
+  `/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome`,
+  while the UE world object, WorldSettings object, game-mode class and dynamic
+  lighting flag must exactly equal the pinned R6 observations before save and
+  after cold reload. Package and object paths are not interchangeable.
 - Phone/cup/pot PresentationMesh identity, pickup collision and attachment state
   are verified after cold reload.
 - All non-owned actors use closed before/after observations.
@@ -195,6 +207,9 @@ Acceptance notes:
 - Process-group and log closure precede host publication.
 - Save/reload receipts close actor, material, collision, pickup and negative
   claim schemas.
+- World observations use the unchanged receipt shape but enforce the exact R6
+  object paths, `VistaPlayableHomeGameMode` and
+  `force_no_precomputed_lighting=true`; coherently resealed alternatives fail.
 - Current execution, scene, map and logs are revalidated after host receipt.
 
 ### R7. Live launch is separate and reversible

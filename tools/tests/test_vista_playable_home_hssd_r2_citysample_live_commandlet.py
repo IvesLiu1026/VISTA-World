@@ -739,10 +739,7 @@ def document_fixture() -> tuple[dict, dict, dict]:
     shell_by_id = {row["instance_id"]: row for row in static_reloaded}
     detail_rows = [copy.deepcopy(shell_by_id[key]) for key in detail_instance_ids]
     world = {
-        "world_path": commandlet.MAP_OBJECT_PATH,
-        "world_settings_path": commandlet.MAP_OBJECT_PATH + ".WorldSettings_0",
-        "default_game_mode": "/Script/Engine.GameModeBase",
-        "force_no_precomputed_lighting": True,
+        **commandlet.WORLD_OBSERVATION_AUTHORITY,
     }
     observations = {
         "source_actor_inventory": source_inventory,
@@ -877,6 +874,27 @@ def test_frozen_t2_and_t5_contract_constants_are_exact() -> None:
     )
     assert commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST == (
         "0ed6768227333ca708b133a184b101a9745215f2f6361d063c3b8da768082ed9"
+    )
+    assert commandlet.WORLD_OBSERVATION_AUTHORITY == {
+        "world_path": (
+            "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/"
+            "VistaPlayableHome.VistaPlayableHome"
+        ),
+        "world_settings_path": (
+            "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/"
+            "VistaPlayableHome.VistaPlayableHome:PersistentLevel.WorldSettings"
+        ),
+        "default_game_mode": ("/Script/VistaPlayableHome.VistaPlayableHomeGameMode"),
+        "force_no_precomputed_lighting": True,
+    }
+    assert materializer.WORLD_OBSERVATION_AUTHORITY == (
+        commandlet.WORLD_OBSERVATION_AUTHORITY
+    )
+    assert commandlet.WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST == (
+        "1a4d65d65387c5b023fe7716f5ee2ac3897d1e5ce55e84681f0f8d1fed5a1fb7"
+    )
+    assert materializer.WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST == (
+        commandlet.WORLD_OBSERVATION_AUTHORITY_CONTENT_DIGEST
     )
     assert len(commandlet.STATIC_SEMANTIC_COLLISION_AUTHORITY) == 16
     assert {
@@ -1461,6 +1479,43 @@ def test_valid_t4_document_is_accepted_by_t5_nested_validator(
 
 
 @pytest.mark.parametrize(
+    ("field", "drifted_value"),
+    [
+        ("world_path", commandlet.MAP_OBJECT_PATH + ".WrongWorld"),
+        (
+            "world_settings_path",
+            commandlet.WORLD_OBJECT_PATH + ":PersistentLevel.WorldSettings_1",
+        ),
+        ("default_game_mode", "/Script/Engine.GameModeBase"),
+        ("force_no_precomputed_lighting", False),
+    ],
+)
+def test_t4_and_t5_reject_coherently_resealed_world_authority_drift(
+    field: str,
+    drifted_value: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution, result, scene = document_fixture()
+    for key in ("world_before", "world_reloaded"):
+        result["observations"][key][field] = drifted_value
+    result = commandlet.seal(result)
+    scene["observations"] = copy.deepcopy(result["observations"])
+    result_raw = commandlet.canonical_json(result)
+    scene["result"] = {
+        "path": execution["result"]["result_path"],
+        "sha256": hashlib.sha256(result_raw).hexdigest(),
+        "size_bytes": len(result_raw),
+    }
+    scene = commandlet.seal(scene)
+    prepared = _t5_prepared(execution, result, monkeypatch)
+
+    with pytest.raises(commandlet.CommandletFailure, match="world before values"):
+        commandlet.validate_result_document(execution, result, scene)
+    with pytest.raises(materializer.R9PreflightError, match="world before values"):
+        materializer._validate_t4_contract(prepared, execution, result, scene)
+
+
+@pytest.mark.parametrize(
     ("instance_id", "collision_mode", "collision_profile_name"),
     [
         (
@@ -1551,6 +1606,10 @@ def test_source_has_one_terminal_entrypoint_and_no_runtime_or_review_surface() -
     source = pathlib.Path(commandlet.__file__).read_text(encoding="utf-8")
     assert source.count('if __name__ == "__main__":') == 1
     assert source.count("level_subsystem.load_level(MAP_OBJECT_PATH)") == 2
+    assert (
+        "world_before = world_observation(world)\n    _validate_world_document("
+        'world_before, "world before")'
+    ) in source
     assert "EditorLoadingAndSavingUtils.save_map" in source
     assert "VISTA_HSSD_R2_CITYSAMPLE_LIVE_RESULT:" in source
     assert "VISTA_HSSD_R2_CITYSAMPLE_LIVE_SCENE_RECEIPT:" in source
