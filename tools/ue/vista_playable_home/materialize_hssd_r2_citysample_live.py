@@ -3444,11 +3444,18 @@ def _validate_t4_contract(
     reloaded = _unique_rows(
         shell["static_reloaded"], 57, "instance_id", "static reloaded"
     )
+    reuse_instance_ids = set(reuse_sources)
+    spawn_instance_ids = set(placements) - reuse_instance_ids
     _require(
         {row["instance_id"] for row in [*reuse_after, *spawn_after]}
         == {row["instance_id"] for row in reloaded}
         == set(placements),
         "T4 shell identities differ",
+    )
+    _require(
+        {row["instance_id"] for row in reuse_after} == reuse_instance_ids
+        and {row["instance_id"] for row in spawn_after} == spawn_instance_ids,
+        "T4 shell reuse/spawn identity partition differs",
     )
     for row in [*reuse_after, *spawn_after, *reloaded]:
         _validate_shell(row, placements[row["instance_id"]], "shell observation")
@@ -3456,7 +3463,11 @@ def _validate_t4_contract(
         reuse_before
         == sorted(reuse_sources.values(), key=lambda row: row["actor_path"])
         and all(
-            row["actor"] == reuse_sources[row["instance_id"]] for row in reuse_after
+            row["actor"]["actor_path"]
+            == reuse_sources[row["instance_id"]]["actor_path"]
+            and row["actor"]["actor_class_path"]
+            == reuse_sources[row["instance_id"]]["actor_class_path"]
+            for row in reuse_after
         )
         and shell["deleted"] == migration["delete"]
         and reloaded

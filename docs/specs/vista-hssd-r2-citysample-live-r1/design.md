@@ -71,6 +71,13 @@ and paths. Deletion authority is a separate exact singleton: only
 The other 41 rows may receive only their closed R2 transform/tags/component
 policy. A prefix alone grants neither deletion nor mutation authority.
 
+For each reuse, the before evidence records the complete source actor identity.
+The after-save and cold-reload evidence must retain the same actor path and
+class while matching the complete R2 placement tags. This intentionally permits
+the 12 observed legacy `VistaRole=hssd_curated_overlay` tags to disappear; it
+does not permit replacing the actor under the same instance ID. Both the UE
+validator and trusted host validator enforce that lineage split.
+
 Final projection:
 
 - 57 HSSD NoCollision shells at R2 remediated transforms;

@@ -109,6 +109,10 @@ Acceptance notes:
 - Exactly 41 valid legacy shells are reused at their R2 transforms, the legacy
   bedroom-phone shell is removed, and exactly 16 missing shells are spawned;
   the resulting 57 slots are HSSD NoCollision `StaticMeshActor` shells.
+- Every reused shell retains its exact source actor path and class while its
+  label, tags, transform, mesh and component policy become the exact R2
+  placement state. Legacy-only tags such as `VistaRole=hssd_curated_overlay`
+  are not required to survive that closed migration.
 - Bedroom phone, kitchen coffee cup and kitchen pot retain existing dynamic
   presentation authorities as the other three slots.
 - All slots bind R2 instance, room and source asset. The 57 static shells bind
