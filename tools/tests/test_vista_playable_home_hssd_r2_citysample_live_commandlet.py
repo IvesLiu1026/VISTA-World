@@ -3,11 +3,15 @@ from __future__ import annotations
 import copy
 import hashlib
 import pathlib
+from types import SimpleNamespace
 
 import pytest
 
 from tools.ue.vista_playable_home import (
     compose_hssd_r2_citysample_live_commandlet as commandlet,
+)
+from tools.ue.vista_playable_home import (
+    materialize_hssd_r2_citysample_live as materializer,
 )
 
 
@@ -793,6 +797,46 @@ def test_result_and_scene_validator_binds_nested_identities_not_only_counts() ->
     malformed_scene = commandlet.seal(malformed_scene)
     with pytest.raises(commandlet.CommandletFailure, match="shell migration evidence"):
         commandlet.validate_result_document(execution, malformed, malformed_scene)
+
+
+def test_valid_t4_document_is_accepted_by_t5_nested_validator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution, result, scene = document_fixture()
+    commandlet.validate_result_document(execution, result, scene)
+    finish = result["observations"]["six_room_finish"]
+    profile = {
+        "rooms": [
+            {
+                "room_id": f"room-{index}",
+                "architecture_actor": {
+                    "actor_path": finish["architecture_before"][index]["actor_path"]
+                },
+                "fixture_light_binding": {
+                    "fixture_actor_path": finish["fixtures_before"][index]["actor_path"]
+                },
+            }
+            for index in range(6)
+        ],
+        "fixture_imports": copy.deepcopy(
+            execution["composition_contract"]["fixture_imports"]
+        ),
+        "collision_policy": copy.deepcopy(
+            execution["composition_contract"]["collision_policy"]
+        ),
+    }
+    prepared = SimpleNamespace(
+        attempt_root=pathlib.Path(execution["attempt_root"]),
+        migration=copy.deepcopy(execution["composition_contract"]["migration"]),
+        fixtures=SimpleNamespace(profile=profile),
+    )
+    monkeypatch.setattr(
+        materializer,
+        "_fixture_evidence_manifest",
+        lambda _prepared: copy.deepcopy(execution["fixture_evidence_manifest"]),
+    )
+
+    materializer._validate_t4_contract(prepared, execution, result, scene)
 
 
 def test_result_validator_rejects_host_fact_injection_or_false_gate() -> None:
