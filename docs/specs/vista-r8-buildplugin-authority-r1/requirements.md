@@ -96,16 +96,19 @@ Acceptance notes:
 ### R4 — Installed root execution boundary
 
 IF publication is requested THEN the helper SHALL refuse unless effective UID
-is root and the helper is the exact root-owned, single-link, mode `0500` file
-`/root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py`,
-executed by the pinned root-owned `/usr/bin/python3.10` in isolated, no-bytecode
-mode with user site disabled.
+is root, the helper is the exact root-owned, single-link, mode `0500` file
+`/root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py`, and
+the fixed root-owned admin launcher has opened and passed an FD that live-matches
+its sealed sibling install receipt. The helper SHALL run under the pinned
+root-owned `/usr/bin/python3.10` in isolated, no-bytecode mode with user site
+disabled.
 
 Acceptance notes:
 - Every existing helper/interpreter ancestor SHALL be root-owned and not group-
   or world-writable.
-- Running `--publish` from a worktree, copied user path, alternate Python, or as
-  a non-root user SHALL fail before opening a staging output.
+- Running `--publish` from a worktree, copied user path, alternate Python,
+  without the validated admin-launcher FD, or as a non-root user SHALL fail
+  before opening a staging output.
 - A held `/proc/self/exe` FD, its inode, size, and SHA-256 SHALL exactly match the
   separately opened pinned interpreter path; `sys.executable` alone is not an
   execution-authority proof.
@@ -142,7 +145,11 @@ negative runtime/quality claims.
 Acceptance notes:
 - `manifest.json` SHALL contain the complete 273-entry source inventory and
   destination modes. `receipt.json` SHALL bind the canonical manifest and
-  payload projection with a content digest.
+  payload projection with a content digest. Receipt v2 SHALL additionally bind
+  the exact immutable admin authority, launcher, sibling install receipt,
+  bootstrap provenance, and the requirement that a trusted root process open
+  and pass the admin-launcher FD. Consumers SHALL reject v1 and any omitted,
+  unknown, tampered, or rebound admin-publication field.
 - Publication may assert only that this BuildPlugin authority was freshly and
   immutably published; it SHALL not assert that UE imported, loaded, or executed
   it.

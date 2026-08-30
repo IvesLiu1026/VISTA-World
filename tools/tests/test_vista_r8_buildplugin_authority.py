@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import contextlib
 import hashlib
 import json
 import os
@@ -200,7 +202,7 @@ def test_production_contract_and_critical_pins_are_exact() -> None:
     )
 
 
-def test_separate_runbook_literal_pins_finalized_helper_without_hash_cycle() -> None:
+def test_runbook_pins_finalized_helper_and_receipt_bound_admin_chain() -> None:
     helper = Path(authority.__file__)
     raw = helper.read_bytes()
     runbook = RUNBOOK.read_text(encoding="utf-8")
@@ -211,9 +213,10 @@ def test_separate_runbook_literal_pins_finalized_helper_without_hash_cycle() -> 
     assert size_match is not None
     assert hashlib.sha256(raw).hexdigest() == digest_match.group(1)
     assert len(raw) == int(size_match.group(1))
-    assert "post-install verification closes" in runbook
-    assert "EXPECTED=$(sha256sum mutable-checkout-file)" in runbook
-    assert "EXPECTED=$(sha256sum tools/admin" not in runbook
+    assert "separately reviewed initial R8 one-shot" in runbook
+    assert "publish-reconcile-buildplugin:0500, receipt.json:0444" in runbook
+    assert "/usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/bash" in runbook
+    assert "sudo install" not in runbook
 
 
 def test_fake_tree_audit_holds_every_fd_and_is_zero_write(
@@ -467,6 +470,292 @@ def test_live_proc_exe_is_bound_to_pinned_path_inode_and_hash(
         authority._bind_live_interpreter()
 
 
+@pytest.mark.parametrize(
+    "hazard",
+    ["extra", "missing", "symlink", "hardlink", "mode", "owner"],
+)
+def test_installed_helper_root_is_exact_immutable_single_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, hazard: str
+) -> None:
+    uid, gid = os.getuid(), os.getgid()
+    root = tmp_path / "vista-r8-buildplugin-authority-r1"
+    root.mkdir(mode=0o755)
+    helper = root / "vista_r8_buildplugin_authority.py"
+    helper.write_bytes(b"reviewed helper\n")
+    helper.chmod(0o500)
+    root.chmod(0o555)
+    monkeypatch.setattr(authority, "INSTALLED_ROOT", root)
+    monkeypatch.setattr(authority, "INSTALLED_HELPER", helper)
+    monkeypatch.setattr(authority, "ROOT_UID", uid)
+    monkeypatch.setattr(authority, "ROOT_GID", gid)
+
+    assert authority._require_exact_installed_helper_root().sha256 == (
+        hashlib.sha256(helper.read_bytes()).hexdigest()
+    )
+
+    if hazard == "owner":
+        monkeypatch.setattr(authority, "ROOT_UID", uid + 1)
+    else:
+        root.chmod(0o755)
+        if hazard == "extra":
+            (root / "extra").write_bytes(b"unexpected")
+        elif hazard == "missing":
+            helper.unlink()
+        elif hazard == "symlink":
+            helper.unlink()
+            helper.symlink_to("target")
+        elif hazard == "hardlink":
+            os.link(helper, tmp_path / "helper-hardlink")
+        elif hazard == "mode":
+            helper.chmod(0o400)
+        root.chmod(0o555)
+
+    with pytest.raises(
+        authority.BuildPluginAuthorityError,
+        match="BUILDPLUGIN_AUTHORITY_ROOT_REQUIRED",
+    ):
+        authority._require_exact_installed_helper_root()
+
+
+def _admin_authority_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path, authority.FilePin, authority.FilePin]:
+    uid, gid = os.getuid(), os.getgid()
+    root = tmp_path / "vista-r8-buildplugin-admin-r1"
+    root.mkdir(mode=0o755)
+    launcher = root / "publish-reconcile-buildplugin"
+    launcher.write_bytes(b"#!/bin/sh\n# reviewed admin\n")
+    launcher.chmod(0o500)
+    helper_pin = authority.FilePin("1" * 64, 11, 0o500)
+    interpreter_pin = authority.FilePin("2" * 64, 22, 0o755)
+    launcher_raw = launcher.read_bytes()
+    receipt = authority._seal_document(
+        {
+            "schema": authority.ADMIN_RECEIPT_SCHEMA,
+            "status": "root_installed_immutable_buildplugin_admin_authority",
+            "accepted": True,
+            "authority_root": str(root),
+            "launcher": {
+                "path": str(launcher),
+                "pin": {
+                    "sha256": hashlib.sha256(launcher_raw).hexdigest(),
+                    "size_bytes": len(launcher_raw),
+                },
+                "mode": "0500",
+            },
+            "helper": {
+                "path": str(tmp_path / "installed-helper.py"),
+                "pin": {
+                    "sha256": helper_pin.sha256,
+                    "size_bytes": helper_pin.size_bytes,
+                },
+                "mode": "0500",
+            },
+            "interpreter": {
+                "path": str(tmp_path / "python3.10"),
+                "pin": {
+                    "sha256": interpreter_pin.sha256,
+                    "size_bytes": interpreter_pin.size_bytes,
+                },
+                "mode": "0755",
+            },
+            "bootstrap_provenance": {
+                "core_review_audit_pin": {
+                    "sha256": "3" * 64,
+                    "size_bytes": 33,
+                },
+                "content_digest": "4" * 64,
+            },
+            "claims": {
+                "fresh_no_replace": True,
+                "final_and_parent_fsynced": True,
+                "admin_launcher_fd_required": True,
+                "launcher_receipt_live_bound": True,
+            },
+        }
+    )
+    receipt_path = root / "receipt.json"
+    receipt_path.write_bytes(authority.canonical_json(receipt))
+    receipt_path.chmod(0o444)
+    root.chmod(0o555)
+    monkeypatch.setattr(authority, "ROOT_UID", uid)
+    monkeypatch.setattr(authority, "ROOT_GID", gid)
+    monkeypatch.setattr(authority, "ADMIN_ROOT", root)
+    monkeypatch.setattr(authority, "ADMIN_LAUNCHER", launcher)
+    monkeypatch.setattr(authority, "ADMIN_RECEIPT", receipt_path)
+    monkeypatch.setattr(authority, "_ancestor_chain", lambda _path: (root,))
+    monkeypatch.setattr(authority, "INSTALLED_HELPER", tmp_path / "installed-helper.py")
+    monkeypatch.setattr(authority, "PINNED_PYTHON", tmp_path / "python3.10")
+    return root, launcher, helper_pin, interpreter_pin
+
+
+def _fake_admin_publication() -> dict[str, object]:
+    return {
+        "authority_root": str(authority.ADMIN_ROOT),
+        "authority_mode": "0555",
+        "launcher": {
+            "name": authority.ADMIN_LAUNCHER.name,
+            "path": str(authority.ADMIN_LAUNCHER),
+            "sha256": "c" * 64,
+            "size_bytes": 41,
+            "mode": "0500",
+        },
+        "receipt": {
+            "name": authority.ADMIN_RECEIPT.name,
+            "path": str(authority.ADMIN_RECEIPT),
+            "sha256": "d" * 64,
+            "size_bytes": 42,
+            "mode": "0444",
+            "schema": authority.ADMIN_RECEIPT_SCHEMA,
+            "content_digest": "e" * 64,
+        },
+        "bootstrap_provenance": {
+            "core_review_audit_pin": {"sha256": "f" * 64, "size_bytes": 43},
+            "content_digest": "0" * 64,
+        },
+        "admin_launcher_fd_required": True,
+    }
+
+
+def test_buildplugin_admin_receipt_and_held_self_are_live_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _root, launcher, helper_pin, interpreter_pin = _admin_authority_fixture(
+        tmp_path, monkeypatch
+    )
+    descriptor = os.open(launcher, os.O_RDONLY | os.O_CLOEXEC)
+    copied = tmp_path / "copied-admin"
+    copied.write_bytes(launcher.read_bytes())
+    copied.chmod(0o500)
+    copied_fd = os.open(copied, os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        publication = authority._require_admin_launcher_invocation(
+            descriptor, helper_pin, interpreter_pin
+        )
+        assert publication["admin_launcher_fd_required"] is True
+        assert publication["authority_root"] == str(authority.ADMIN_ROOT)
+        assert publication["launcher"]["path"] == str(authority.ADMIN_LAUNCHER)
+        assert publication["receipt"]["path"] == str(authority.ADMIN_RECEIPT)
+        with pytest.raises(
+            authority.BuildPluginAuthorityError,
+            match="BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+        ):
+            authority._require_admin_launcher_invocation(
+                copied_fd, helper_pin, interpreter_pin
+            )
+    finally:
+        os.close(copied_fd)
+        os.close(descriptor)
+
+
+@pytest.mark.parametrize(
+    "hazard",
+    ["extra", "missing", "receipt-tamper", "symlink", "hardlink", "mode", "owner"],
+)
+def test_buildplugin_admin_authority_hazards_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, hazard: str
+) -> None:
+    root, launcher, helper_pin, interpreter_pin = _admin_authority_fixture(
+        tmp_path, monkeypatch
+    )
+    receipt = root / "receipt.json"
+    root.chmod(0o755)
+    if hazard == "extra":
+        (root / "extra").write_bytes(b"unexpected")
+    elif hazard == "missing":
+        receipt.unlink()
+    elif hazard == "receipt-tamper":
+        receipt.chmod(0o644)
+        receipt.write_bytes(b"{}\n")
+        receipt.chmod(0o444)
+    elif hazard == "symlink":
+        receipt.unlink()
+        receipt.symlink_to("missing")
+    elif hazard == "hardlink":
+        os.link(receipt, tmp_path / "receipt-hardlink")
+    elif hazard == "mode":
+        launcher.chmod(0o400)
+    elif hazard == "owner":
+        monkeypatch.setattr(authority, "ROOT_UID", os.getuid() + 1)
+    root.chmod(0o555)
+    descriptor = os.open(launcher, os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        with pytest.raises(
+            authority.BuildPluginAuthorityError,
+            match="BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+        ):
+            authority._require_admin_launcher_invocation(
+                descriptor, helper_pin, interpreter_pin
+            )
+    finally:
+        os.close(descriptor)
+
+
+def test_privileged_buildplugin_helper_requires_admin_fd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    helper_pin = authority.FilePin("1" * 64, 11, 0o500)
+    interpreter_pin = authority.FilePin("2" * 64, 22, 0o755)
+    monkeypatch.setattr(
+        authority,
+        "_require_installed_root_helper",
+        lambda: (helper_pin, interpreter_pin),
+    )
+
+    with pytest.raises(
+        authority.BuildPluginAuthorityError,
+        match="BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+    ):
+        authority.publish_fixed_authority(authority.ACKNOWLEDGEMENT)
+
+
+@pytest.mark.parametrize("operation", ("publish", "reconcile"))
+def test_privileged_operations_forward_validated_admin_publication(
+    monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    helper_pin = authority.FilePin("1" * 64, 11, 0o500)
+    interpreter_pin = authority.FilePin("2" * 64, 22, 0o755)
+    admin_publication = _fake_admin_publication()
+    captured: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        authority,
+        "_require_installed_root_helper",
+        lambda: (helper_pin, interpreter_pin),
+    )
+    monkeypatch.setattr(
+        authority,
+        "_require_admin_launcher_invocation",
+        lambda *_args: admin_publication,
+    )
+    monkeypatch.setattr(
+        authority, "_require_authority_parent", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        authority,
+        "hold_source_tree",
+        lambda _contract: contextlib.nullcontext(object()),
+    )
+    if operation == "publish":
+        monkeypatch.setattr(
+            authority,
+            "_publish_held_tree",
+            lambda _tree, _contract, _helper, _interpreter, publication, **_kwargs: (
+                captured.append(publication) or {"accepted": True}
+            ),
+        )
+        authority.publish_fixed_authority(authority.ACKNOWLEDGEMENT, 8)
+    else:
+        monkeypatch.setattr(
+            authority,
+            "_reconcile_held_tree",
+            lambda _tree, _contract, _helper, _interpreter, publication, **_kwargs: (
+                captured.append(publication) or {"accepted": True}
+            ),
+        )
+        authority.reconcile_fixed_authority(authority.RECONCILIATION_ACKNOWLEDGEMENT, 8)
+    assert captured == [admin_publication]
+
+
 def test_nonroot_and_worktree_publish_are_preoutput_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -509,12 +798,15 @@ def test_private_staging_copies_held_fds_and_publishes_immutable_tree(
             contract,
             fake_pin,
             authority.FilePin("b" * 64, 34, 0o755),
+            _fake_admin_publication(),
             owner=owner,
             rename_function=_test_noreplace,
         )
 
     assert receipt["accepted"] is True
+    assert receipt["schema_version"] == authority.RECEIPT_SCHEMA
     assert receipt["status"] == "root_published_immutable_buildplugin_authority"
+    assert receipt["admin_publication"] == _fake_admin_publication()
     assert receipt["claims"] == authority.NEGATIVE_CLAIMS
     assert receipt["content_digest"] == authority._content_digest(receipt)
     assert stat.S_IMODE(contract.authority_root.stat().st_mode) == 0o555
@@ -532,6 +824,75 @@ def test_private_staging_copies_held_fds_and_publishes_immutable_tree(
     assert (contract.authority_root / "payload/README.md").read_bytes() == (
         b"fake package\n"
     )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "missing",
+        "extra",
+        "root",
+        "launcher-path",
+        "receipt-schema",
+        "bootstrap-pin",
+        "fd-false",
+        "fd-integer",
+    ),
+)
+def test_admin_publication_schema_is_closed_and_strict(mutation: str) -> None:
+    publication = copy.deepcopy(_fake_admin_publication())
+    if mutation == "missing":
+        publication.pop("receipt")
+    elif mutation == "extra":
+        publication["unexpected"] = True
+    elif mutation == "root":
+        publication["authority_root"] = "/root/rebound"
+    elif mutation == "launcher-path":
+        publication["launcher"]["path"] = "/root/rebound/launcher"
+    elif mutation == "receipt-schema":
+        publication["receipt"]["schema"] = "rebound/v1"
+    elif mutation == "bootstrap-pin":
+        publication["bootstrap_provenance"]["core_review_audit_pin"]["size_bytes"] = 0
+    elif mutation == "fd-false":
+        publication["admin_launcher_fd_required"] = False
+    else:
+        publication["admin_launcher_fd_required"] = 1
+    with pytest.raises(
+        authority.BuildPluginAuthorityError,
+        match="BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+    ):
+        authority._validate_admin_publication(publication)
+
+
+def test_reconcile_rejects_admin_publication_rebind(
+    fake_package: tuple[Path, authority.Contract],
+) -> None:
+    _source, contract = fake_package
+    owner = (os.getuid(), os.getgid())
+    helper_pin = authority.FilePin("a" * 64, 1, 0o500)
+    interpreter_pin = authority.FilePin("b" * 64, 1, 0o755)
+    publication = _fake_admin_publication()
+    with authority.hold_source_tree(contract) as tree:
+        authority._publish_held_tree(
+            tree,
+            contract,
+            helper_pin,
+            interpreter_pin,
+            publication,
+            owner=owner,
+            rename_function=_test_noreplace,
+        )
+        rebound = copy.deepcopy(publication)
+        rebound["launcher"]["sha256"] = "9" * 64
+        with pytest.raises(authority.BuildPluginAuthorityError):
+            authority._reconcile_held_tree(
+                tree,
+                contract,
+                helper_pin,
+                interpreter_pin,
+                rebound,
+                owner=owner,
+            )
 
 
 def test_existing_destination_refuses_before_staging(
@@ -559,6 +920,7 @@ def test_existing_destination_refuses_before_staging(
             contract,
             authority.FilePin("a" * 64, 1, 0o500),
             authority.FilePin("b" * 64, 1, 0o755),
+            _fake_admin_publication(),
             owner=(os.getuid(), os.getgid()),
             rename_function=_test_noreplace,
         )
@@ -588,6 +950,7 @@ def test_rename_collision_cleans_only_fresh_staging(
             contract,
             authority.FilePin("a" * 64, 1, 0o500),
             authority.FilePin("b" * 64, 1, 0o755),
+            _fake_admin_publication(),
             owner=(os.getuid(), os.getgid()),
             rename_function=collide,
         )
@@ -626,6 +989,7 @@ def test_post_rename_parent_fsync_failure_is_durability_unknown_and_reconcilable
                 contract,
                 helper_pin,
                 interpreter_pin,
+                _fake_admin_publication(),
                 owner=owner,
                 rename_function=_test_noreplace,
             )
@@ -643,6 +1007,7 @@ def test_post_rename_parent_fsync_failure_is_durability_unknown_and_reconcilable
             contract,
             helper_pin,
             interpreter_pin,
+            _fake_admin_publication(),
             owner=owner,
         )
 

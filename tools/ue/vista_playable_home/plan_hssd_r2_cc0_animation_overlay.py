@@ -54,7 +54,8 @@ R8_HOST_STATUS = "sealed_ue57_animation_import_pending_runtime_and_human_review"
 R8_RUNTIME_SCHEMA = "vista.makehuman-cc0-ue57-animation-runtime-receipt/v1"
 R8_RUNTIME_STATUS = "cc0_animation_runtime_assets_saved_reloaded_pending_runtime"
 BUILDPLUGIN_MANIFEST_SCHEMA = "vista.r8-buildplugin-authority-manifest/v1"
-BUILDPLUGIN_RECEIPT_SCHEMA = "vista.r8-buildplugin-authority-receipt/v1"
+BUILDPLUGIN_RECEIPT_SCHEMA = "vista.r8-buildplugin-authority-receipt/v2"
+BUILDPLUGIN_ADMIN_RECEIPT_SCHEMA = "vista.r8-buildplugin-admin-install-receipt/v1"
 BUILDPLUGIN_RECEIPT_STATUS = "root_published_immutable_buildplugin_authority"
 
 SOURCE_PROVIDER = "citysample_crowd_visual_demo_v1"
@@ -159,6 +160,7 @@ BUILDPLUGIN_RECEIPT_KEYS = frozenset(
         "source",
         "authority",
         "publisher",
+        "admin_publication",
         "policy",
         "claims",
         "content_digest",
@@ -188,15 +190,20 @@ BUILDPLUGIN_HELPER_PATH = Path(
     "/root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py"
 )
 BUILDPLUGIN_HELPER_SHA256 = (
-    "9db9ca95ccb4fb8d97e08addafa0b8e85bfd3464644ce8f2907003a5b1544c91"
+    "e3a62276111da8f832d41145580f1dc79fe4c56ff04b44e8ba6ec2d4ee89b772"
 )
-BUILDPLUGIN_HELPER_SIZE_BYTES = 60_785
+BUILDPLUGIN_HELPER_SIZE_BYTES = 74_019
 BUILDPLUGIN_INTERPRETER = {
     "path": "/usr/bin/python3.10",
     "mode": "0755",
     "sha256": "7d51cd6b48b521277f5caa4610a82126e315fa2be4df069823a8b1eeb5bd4a86",
     "size_bytes": 5_917_224,
 }
+BUILDPLUGIN_ADMIN_AUTHORITY_ROOT = Path("/root/vista-r8-buildplugin-admin-r1")
+BUILDPLUGIN_ADMIN_LAUNCHER = (
+    BUILDPLUGIN_ADMIN_AUTHORITY_ROOT / "publish-reconcile-buildplugin"
+)
+BUILDPLUGIN_ADMIN_RECEIPT = BUILDPLUGIN_ADMIN_AUTHORITY_ROOT / "receipt.json"
 
 LEGAL_SCOPE = {
     "epic_ue_only_content_entitlement_confirmed": True,
@@ -1614,6 +1621,76 @@ def _payload_namespace(
     return directories, files
 
 
+def _valid_positive_pin(value: Any) -> bool:
+    return (
+        type(value) is dict
+        and set(value) == {"sha256", "size_bytes"}
+        and type(value.get("sha256")) is str
+        and SHA256_RE.fullmatch(value["sha256"]) is not None
+        and type(value.get("size_bytes")) is int
+        and value["size_bytes"] > 0
+    )
+
+
+def _valid_buildplugin_admin_publication(value: Any) -> bool:
+    if type(value) is not dict or set(value) != {
+        "authority_root",
+        "authority_mode",
+        "launcher",
+        "receipt",
+        "bootstrap_provenance",
+        "admin_launcher_fd_required",
+    }:
+        return False
+    launcher = value.get("launcher")
+    receipt = value.get("receipt")
+    bootstrap = value.get("bootstrap_provenance")
+    return bool(
+        value.get("authority_root") == str(BUILDPLUGIN_ADMIN_AUTHORITY_ROOT)
+        and value.get("authority_mode") == "0555"
+        and value.get("admin_launcher_fd_required") is True
+        and type(launcher) is dict
+        and set(launcher) == {"name", "path", "sha256", "size_bytes", "mode"}
+        and launcher.get("name") == BUILDPLUGIN_ADMIN_LAUNCHER.name
+        and launcher.get("path") == str(BUILDPLUGIN_ADMIN_LAUNCHER)
+        and launcher.get("mode") == "0500"
+        and _valid_positive_pin(
+            {
+                "sha256": launcher.get("sha256"),
+                "size_bytes": launcher.get("size_bytes"),
+            }
+        )
+        and type(receipt) is dict
+        and set(receipt)
+        == {
+            "name",
+            "path",
+            "sha256",
+            "size_bytes",
+            "mode",
+            "schema",
+            "content_digest",
+        }
+        and receipt.get("name") == BUILDPLUGIN_ADMIN_RECEIPT.name
+        and receipt.get("path") == str(BUILDPLUGIN_ADMIN_RECEIPT)
+        and receipt.get("mode") == "0444"
+        and receipt.get("schema") == BUILDPLUGIN_ADMIN_RECEIPT_SCHEMA
+        and _valid_positive_pin(
+            {
+                "sha256": receipt.get("sha256"),
+                "size_bytes": receipt.get("size_bytes"),
+            }
+        )
+        and type(receipt.get("content_digest")) is str
+        and SHA256_RE.fullmatch(receipt["content_digest"]) is not None
+        and type(bootstrap) is dict
+        and set(bootstrap) == {"core_review_audit_pin", "content_digest"}
+        and _valid_positive_pin(bootstrap.get("core_review_audit_pin"))
+        and type(bootstrap.get("content_digest")) is str
+        and SHA256_RE.fullmatch(bootstrap["content_digest"]) is not None
+    )
+
+
 def _validate_buildplugin(
     config: Config,
 ) -> tuple[dict[str, Any], str | None]:
@@ -1878,6 +1955,7 @@ def _validate_buildplugin(
         and helper.get("sha256") == BUILDPLUGIN_HELPER_SHA256
         and helper.get("size_bytes") == BUILDPLUGIN_HELPER_SIZE_BYTES
         and publisher.get("interpreter") == BUILDPLUGIN_INTERPRETER
+        and _valid_buildplugin_admin_publication(receipt.get("admin_publication"))
         and receipt.get("policy") == BUILDPLUGIN_POLICY
         and receipt.get("claims") == BUILDPLUGIN_NEGATIVE_CLAIMS,
         "OVERLAY_BUILDPLUGIN_RECEIPT_INVALID",

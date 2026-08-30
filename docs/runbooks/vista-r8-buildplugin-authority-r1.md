@@ -9,8 +9,8 @@ The reviewed helper source has this exact record:
 
 ```text
 relative_path: tools/admin/vista_r8_buildplugin_authority.py
-sha256: 9db9ca95ccb4fb8d97e08addafa0b8e85bfd3464644ce8f2907003a5b1544c91
-size_bytes: 60785
+sha256: e3a62276111da8f832d41145580f1dc79fe4c56ff04b44e8ba6ec2d4ee89b772
+size_bytes: 74019
 installed_path: /root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py
 installed_owner: root:root
 installed_mode: 0500
@@ -22,58 +22,39 @@ the literal from the reviewed commit or an independent reviewer channel, not by
 dynamically assigning `EXPECTED=$(sha256sum mutable-checkout-file)` during the
 installation session.
 
-The root helper records its observed digest in the authority receipt but does
-not self-authorize it. The authoritative bootstrap gate is the administrator's
-post-install comparison of the root-owned installed file against the independent
-literal above.
+The root helper records its observed digest but does not self-authorize it. The
+authoritative bootstrap gate is the separately reviewed initial R8 one-shot,
+which consumes the sealed core-review audit and copies the exact reviewed bytes
+through held descriptors. It also installs the distinct BuildPlugin admin
+authority and its closed receipt.
 
 ## Administrator boundary
 
 These are future administrator actions. They were not executed by the Codex
 implementation lane.
 
-1. Independently copy the expected SHA-256 above from the reviewed commit or
-   reviewer handoff.
-2. A pre-install checksum of the checkout is useful diagnostics, but is not an
-   authority because the same UID can still replace it before `install` reads
-   it.
-3. Install the helper to the literal root path as root:root mode `0500`.
-4. Recompute SHA-256 and byte size from the installed `/root` file and compare
-   them to the independent literal. This post-install verification closes the
-   checkout precheck-to-install race. Do not execute a mismatch.
-5. Require `/data/vista-authorities` itself to be root:root mode `0555`. Do not
-   point the helper at an alternate parent.
-
-One possible administrator transcript, after independently fixing `EXPECTED`
-to the reviewed literal, is:
-
-```bash
-EXPECTED=9db9ca95ccb4fb8d97e08addafa0b8e85bfd3464644ce8f2907003a5b1544c91
-
-sudo install -d -o root -g root -m 0700 \
-  /root/vista-r8-buildplugin-authority-r1
-sudo install -o root -g root -m 0500 \
-  tools/admin/vista_r8_buildplugin_authority.py \
-  /root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py
-
-printf '%s  %s\n' "$EXPECTED" \
-  /root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py \
-  | sudo sha256sum -c -
-sudo stat -c '%s %a %U %G %n' \
-  /root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py
-```
-
-Expected stat fields are `60785 500 root root` and the exact installed path.
-The administrator must separately ensure the authority parent exists safely;
-the helper refuses to create or relax it.
+1. Complete the two-commit R8 review sequence and freeze the engine source pin,
+   BuildPlugin helper/admin candidate, and canonical zero-write core audit.
+2. Independently review the later literal-pinned initial one-shot bootstrap.
+   It must publish the BuildPlugin helper root as root:root `0555` with exact
+   sole file `vista_r8_buildplugin_authority.py:0500`.
+3. The same append-only bootstrap publishes a separate root:root `0555` admin
+   authority with exact
+   `{publish-reconcile-buildplugin:0500, receipt.json:0444}`. The receipt binds
+   the helper, pinned Python, admin script, and core-review provenance.
+4. Never directly install or execute a checkout or `/tmp` wrapper. Operationally,
+   privileged helper modes are entered only after a trusted root process opens
+   and passes the fixed admin-launcher FD. This is an exact live-validation gate,
+   not a claim that root is structurally unable to construct such an FD. Require
+   `/data/vista-authorities` itself to be root:root `0555`; the helper refuses to
+   create or relax it.
 
 ## Audit, publish, and reconciliation
 
-First run the zero-write audit from the installed helper:
+The zero-write source audit remains available before privileged publication:
 
 ```bash
-sudo /usr/bin/python3.10 -I -B \
-  /root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py \
+/usr/bin/python3.10 -I -B tools/admin/vista_r8_buildplugin_authority.py \
   --audit-source
 ```
 
@@ -91,14 +72,29 @@ checkout audit does not invoke the installed-root execution gate. Only
 `--publish` or `--reconcile-published` validates the live `/proc/self/exe`
 binding after the independent post-install helper check.
 
-Only after the audit and independent installed-helper check may the
-administrator choose one fresh publication:
+Only after the audit, four-root bootstrap, and parent seal may the administrator
+choose one fresh publication. The generated admin is never directly/shebang
+invoked; use fixed `env -i` system bash. It holds its own FD, and the helper
+cross-checks that FD against the immutable sibling receipt before any write:
+
+The resulting BuildPlugin authority receipt uses
+`vista.r8-buildplugin-authority-receipt/v2`. Its closed `admin_publication`
+record binds the fixed admin root/mode, launcher name/path/pin/mode, sibling
+receipt name/path/pin/mode/schema/content digest, bootstrap provenance, and
+`admin_launcher_fd_required:true`. Runtime consumers rehash that fixed admin
+authority; v1, omitted, unknown, tampered, or rebound bindings fail closed.
+The root-side R2 loader and terminal executor also re-open the publisher helper
+authority as exact root:root `0555` inventory
+`{vista_r8_buildplugin_authority.py:0500}`, require one single-link helper, and
+rehash it against `receipt.publisher.helper`. The BuildPlugin publisher
+interpreter pin must equal the root policy's live Python pin; runtime publication
+provenance separately rehashes the same fixed `/usr/bin/python3.10` bytes before
+the complete terminal authority set is accepted.
 
 ```bash
-sudo /usr/bin/python3.10 -I -B \
-  /root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py \
-  --publish \
-  --acknowledgement \
+sudo /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/bash \
+  /root/vista-r8-buildplugin-admin-r1/publish-reconcile-buildplugin \
+  publish-buildplugin \
   'I acknowledge one fresh publication of the reviewed VISTA R8 UE 5.7 BuildPlugin authority.'
 ```
 
@@ -109,10 +105,9 @@ but the authority-parent fsync did not. The final path may exist. Do not retry
 Reconcile the existing immutable tree instead:
 
 ```bash
-sudo /usr/bin/python3.10 -I -B \
-  /root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py \
-  --reconcile-published \
-  --acknowledgement \
+sudo /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/bash \
+  /root/vista-r8-buildplugin-admin-r1/publish-reconcile-buildplugin \
+  reconcile-buildplugin \
   'I acknowledge reconciliation of the existing VISTA R8 UE 5.7 BuildPlugin authority without republishing it.'
 ```
 

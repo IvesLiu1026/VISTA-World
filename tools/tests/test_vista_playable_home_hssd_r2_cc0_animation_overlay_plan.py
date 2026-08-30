@@ -565,6 +565,34 @@ def _with_buildplugin(config: planner.Config) -> planner.Config:
                 },
                 "interpreter": planner.BUILDPLUGIN_INTERPRETER,
             },
+            "admin_publication": {
+                "authority_root": str(planner.BUILDPLUGIN_ADMIN_AUTHORITY_ROOT),
+                "authority_mode": "0555",
+                "launcher": {
+                    "name": planner.BUILDPLUGIN_ADMIN_LAUNCHER.name,
+                    "path": str(planner.BUILDPLUGIN_ADMIN_LAUNCHER),
+                    "sha256": "a" * 64,
+                    "size_bytes": 101,
+                    "mode": "0500",
+                },
+                "receipt": {
+                    "name": planner.BUILDPLUGIN_ADMIN_RECEIPT.name,
+                    "path": str(planner.BUILDPLUGIN_ADMIN_RECEIPT),
+                    "sha256": "b" * 64,
+                    "size_bytes": 102,
+                    "mode": "0444",
+                    "schema": planner.BUILDPLUGIN_ADMIN_RECEIPT_SCHEMA,
+                    "content_digest": "c" * 64,
+                },
+                "bootstrap_provenance": {
+                    "core_review_audit_pin": {
+                        "sha256": "d" * 64,
+                        "size_bytes": 103,
+                    },
+                    "content_digest": "e" * 64,
+                },
+                "admin_launcher_fd_required": True,
+            },
             "policy": planner.BUILDPLUGIN_POLICY,
             "claims": planner.BUILDPLUGIN_NEGATIVE_CLAIMS,
         },
@@ -1093,6 +1121,20 @@ def test_buildplugin_rejects_unmanifested_payload_bytes(tmp_path: Path) -> None:
     [
         lambda receipt: receipt.__setitem__("publisher", {}),
         lambda receipt: receipt.__setitem__("policy", {}),
+        lambda receipt: receipt.__setitem__(
+            "schema_version", "vista.r8-buildplugin-authority-receipt/v1"
+        ),
+        lambda receipt: receipt.pop("admin_publication"),
+        lambda receipt: receipt["admin_publication"].__setitem__("unexpected", True),
+        lambda receipt: receipt["admin_publication"].__setitem__(
+            "admin_launcher_fd_required", False
+        ),
+        lambda receipt: receipt["admin_publication"].__setitem__(
+            "admin_launcher_fd_required", 1
+        ),
+        lambda receipt: receipt["admin_publication"]["receipt"].__setitem__(
+            "path", "/root/rebound/receipt.json"
+        ),
         lambda receipt: receipt["claims"].__setitem__(
             "private_epic_content_used", True
         ),

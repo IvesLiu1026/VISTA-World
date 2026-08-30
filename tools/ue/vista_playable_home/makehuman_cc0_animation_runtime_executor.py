@@ -41,10 +41,19 @@ COMMANDLET_EXECUTION_SCHEMA = "vista.makehuman-cc0-ue57-animation-runtime-execut
 COMMANDLET_RECEIPT_SCHEMA = "vista.makehuman-cc0-ue57-animation-runtime-receipt/v1"
 COMMANDLET_RESULT_SCHEMA = "vista.makehuman-cc0-ue57-animation-runtime-result/v1"
 HOST_RECEIPT_SCHEMA = "vista.r8-sealed-ue57-animation-host-receipt/v1"
-BUNDLE_MANIFEST_SCHEMA = "vista.r8-sealed-ue57-executor-bundle/v1"
-ROOT_POLICY_SCHEMA = "vista.r8-sealed-ue57-executor-root-policy/v1"
+BUNDLE_MANIFEST_SCHEMA = "vista.r8-sealed-ue57-executor-bundle/v2"
+ROOT_POLICY_SCHEMA = "vista.r8-sealed-ue57-executor-root-policy/v3"
 ENGINE_MANIFEST_SCHEMA = "vista.r5-immutable-engine-tree/v1"
+ENGINE_RECEIPT_SCHEMA = "vista.r8-ue57-engine-authority-receipt/v1"
 SOURCE_HOST_RECEIPT_SCHEMA = "vista.makehuman-cc0-animation-host-receipt/v1"
+HOST_RUNTIME_MANIFEST_SCHEMA = "vista.r8-ue57-host-runtime-authority-manifest/v1"
+HOST_RUNTIME_RECEIPT_SCHEMA = "vista.r8-ue57-host-runtime-authority-receipt/v2"
+RUNTIME_INPUT_PIN_SCHEMA = "vista.r8-ue57-host-runtime-input-pin/v1"
+BUNDLE_INPUT_PIN_SCHEMA = "vista.r8-ue57-executor-bundle-input-pin/v1"
+REVIEWED_PLAN_PIN_SCHEMA = "vista.r8-ue57-reviewed-audit-plan-pin/v2"
+BUILDPLUGIN_MANIFEST_SCHEMA = "vista.r8-buildplugin-authority-manifest/v1"
+BUILDPLUGIN_RECEIPT_SCHEMA = "vista.r8-buildplugin-authority-receipt/v2"
+BUILDPLUGIN_ADMIN_RECEIPT_SCHEMA = "vista.r8-buildplugin-admin-install-receipt/v1"
 
 SUCCESS_STATUS = "cc0_animation_runtime_assets_saved_reloaded_pending_runtime"
 SOURCE_SUCCESS_STATUS = (
@@ -56,9 +65,7 @@ EXECUTION_ACKNOWLEDGEMENT = (
     "unaccepted until runtime, two-client, and human-motion review gates pass"
 )
 
-ATTEMPT_RE = re.compile(
-    r"^makehuman-cc0-animation-ue57-r1-[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
-)
+APPROVED_ATTEMPT_NAME = "makehuman-cc0-animation-ue57-r1-20260830a"
 R8_ATTEMPT_RE = re.compile(
     r"^makehuman-cc0-animation-r8-[a-z0-9](?:[a-z0-9-]{0,94}[a-z0-9])?$"
 )
@@ -94,7 +101,7 @@ SANDBOX_HOST_EXECUTION_PATH = SANDBOX_INPUT_ROOT / "host-execution.json"
 SANDBOX_SOURCE_RECEIPT_PATH = SANDBOX_INPUT_ROOT / "source-host-receipt.json"
 SANDBOX_COMMANDLET_PATH = SANDBOX_INPUT_ROOT / "commandlet.py"
 SANDBOX_WRAPPER_PATH = SANDBOX_INPUT_ROOT / "wrapper.py"
-SANDBOX_PYTHON_PATH = Path("/usr/bin/python3.10")
+SANDBOX_PYTHON_PATH = SANDBOX_RUNTIME_ROOT / "usr/bin/python3.10"
 SANDBOX_IMPORT_RECEIPT_PATH = (
     SANDBOX_WORK_ROOT / "makehuman-cc0-animation-runtime-receipt.json"
 )
@@ -110,18 +117,68 @@ R3_PROJECT_ROOT = R3_RUN_ROOT / "project"
 R3_RECEIPT_PATH = R3_RUN_ROOT / "makehuman-cc0-import-host-receipt.json"
 R8_PUBLISHED_PARENT = Path("/data/vista-published/vista-action-world-r1")
 PUBLISHED_PARENT = Path("/data/vista-published/vista-action-world-r1")
-ROOT_BUNDLE = Path("/root/vista-r8-ue57-executor-r1")
-ROOT_POLICY_PATH = Path("/root/vista-r8-ue57-executor-r1-policy.json")
+ROOT_AUTHORITY = Path("/root/vista-r8-ue57-executor-r2")
+ROOT_BUNDLE = ROOT_AUTHORITY / "bundle"
+ROOT_POLICY_PATH = ROOT_AUTHORITY / "policy.json"
+BOOTSTRAP_AUTHORITY_ROOT = Path("/root/vista-r8-ue57-authority-r2")
+BOOTSTRAP_HELPER_PATH = BOOTSTRAP_AUTHORITY_ROOT / "vista_r8_ue57_authority_admin.py"
+OPERATION_LOCK_PATH = BOOTSTRAP_AUTHORITY_ROOT / ".executor.lock"
+PUBLISHER_PYTHON_PATH = Path("/usr/bin/python3.10")
+RUNTIME_INPUT_AUTHORITY_ROOT = Path("/root/vista-r8-ue57-runtime-input-r1")
+RUNTIME_INPUT_PIN_PATH = RUNTIME_INPUT_AUTHORITY_ROOT / "input-pin.json"
+RUNTIME_PLAN_AUTHORITY_ROOT = Path("/root/vista-r8-ue57-runtime-plan-r1")
+RUNTIME_REVIEWED_PLAN_PIN_PATH = RUNTIME_PLAN_AUTHORITY_ROOT / "reviewed-plan-pin.json"
+RUNTIME_ADMIN_LAUNCHER_PATH = RUNTIME_PLAN_AUTHORITY_ROOT / "publish-reconcile-r8-ue57"
+BUNDLE_INPUT_AUTHORITY_ROOT = Path("/root/vista-r8-ue57-bundle-input-r1")
+BUNDLE_INPUT_PIN_PATH = BUNDLE_INPUT_AUTHORITY_ROOT / "input-pin.json"
+BUNDLE_REVIEWED_LAUNCHER_PATH = BUNDLE_INPUT_AUTHORITY_ROOT / "launch-r8-ue57"
+BUNDLE_PLAN_AUTHORITY_ROOT = Path("/root/vista-r8-ue57-bundle-plan-r1")
+BUNDLE_REVIEWED_PLAN_PIN_PATH = BUNDLE_PLAN_AUTHORITY_ROOT / "reviewed-plan-pin.json"
+BUNDLE_ADMIN_LAUNCHER_PATH = BUNDLE_PLAN_AUTHORITY_ROOT / "publish-reconcile-r8-ue57"
 IMMUTABLE_ENGINE_ROOT = Path("/data/vista-authorities/ue-5.7.3-r1/engine")
 IMMUTABLE_ENGINE_MANIFEST = Path(
     "/data/vista-authorities/ue-5.7.3-r1/engine-full-tree-manifest.json"
 )
-HOST_RUNTIME_ROOT = Path("/data/vista-authorities/ue-5.7.3-r1/host-runtime")
-BUILDPLUGIN_ROOT = Path(
-    "/data/vista-authorities/ue-5.7.3-r1/VistaPlayableHome-BuildPlugin"
+IMMUTABLE_ENGINE_RECEIPT = Path("/data/vista-authorities/ue-5.7.3-r1/receipt.json")
+HOST_RUNTIME_AUTHORITY_ROOT = Path(
+    "/data/vista-authorities/vista-r8-ue57-host-runtime-r1"
 )
-WRAPPER_PYTHON = Path("/usr/bin/python3.10")
-BWRAP_PATH = Path("/usr/bin/bwrap")
+HOST_RUNTIME_ROOT = HOST_RUNTIME_AUTHORITY_ROOT / "payload"
+HOST_RUNTIME_MANIFEST = HOST_RUNTIME_AUTHORITY_ROOT / "manifest.json"
+HOST_RUNTIME_RECEIPT = HOST_RUNTIME_AUTHORITY_ROOT / "receipt.json"
+BUILDPLUGIN_AUTHORITY_ROOT = Path(
+    "/data/vista-authorities/vista-r8-ue-animation-buildplugin-r1"
+)
+BUILDPLUGIN_ROOT = BUILDPLUGIN_AUTHORITY_ROOT / "payload"
+BUILDPLUGIN_MANIFEST = BUILDPLUGIN_AUTHORITY_ROOT / "manifest.json"
+BUILDPLUGIN_RECEIPT = BUILDPLUGIN_AUTHORITY_ROOT / "receipt.json"
+BUILDPLUGIN_PUBLISHER_HELPER_ROOT = Path("/root/vista-r8-buildplugin-authority-r1")
+BUILDPLUGIN_PUBLISHER_HELPER = (
+    BUILDPLUGIN_PUBLISHER_HELPER_ROOT / "vista_r8_buildplugin_authority.py"
+)
+BUILDPLUGIN_ADMIN_AUTHORITY_ROOT = Path("/root/vista-r8-buildplugin-admin-r1")
+BUILDPLUGIN_ADMIN_LAUNCHER = (
+    BUILDPLUGIN_ADMIN_AUTHORITY_ROOT / "publish-reconcile-buildplugin"
+)
+BUILDPLUGIN_ADMIN_RECEIPT = BUILDPLUGIN_ADMIN_AUTHORITY_ROOT / "receipt.json"
+WRAPPER_PYTHON = HOST_RUNTIME_ROOT / "usr/bin/python3.10"
+BWRAP_PATH = HOST_RUNTIME_ROOT / "usr/bin/bwrap"
+HOST_LOADER_PATH = HOST_RUNTIME_ROOT / "lib64/ld-linux-x86-64.so.2"
+HOST_LIBRARY_RELATIVE_PATHS = (
+    "lib/x86_64-linux-gnu",
+    "usr/lib/x86_64-linux-gnu",
+    "lib64",
+    "usr/lib64",
+)
+LAUNCHER_NAME = "launch-r8-ue57"
+LIVE_EXECUTABLE_PATH = Path("/proc/self/exe")
+PRODUCTION_ENVIRONMENT = {
+    "PATH": "/usr/bin:/bin",
+    "HOME": "/nonexistent",
+    "LANG": "C.UTF-8",
+    "PYTHONNOUSERSITE": "1",
+    "PYTHONDONTWRITEBYTECODE": "1",
+}
 
 HOST_RUNTIME_REQUIRED_DIRECTORIES = frozenset(
     {"etc", "lib", "lib64", "usr", "usr/lib", "usr/share"}
@@ -373,7 +430,7 @@ MAX_STDERR_BYTES = 32 * 1024 * 1024
 CHUNK_BYTES = 1024 * 1024
 SANDBOX_UID = 65534
 SANDBOX_GID = 65534
-TRUSTED_PATH = "/usr/bin"
+TRUSTED_PATH = f"{SANDBOX_RUNTIME_ROOT}/usr/bin"
 
 AUTHORITY_LSTAT: Callable[[os.PathLike[str] | str], os.stat_result] = os.lstat
 GETEUID = os.geteuid
@@ -487,15 +544,25 @@ class CriticalFilePin:
 class AuthorityPolicy:
     policy_path: Path | None = None
     policy_content_digest: str | None = None
+    approved_attempt_name: str | None = None
+    invocation_ledger_path: Path | None = None
+    operation_lock_path: Path = OPERATION_LOCK_PATH
     bundle_root: Path = ROOT_BUNDLE
     bundle_manifest_pin: FilePin | None = None
     bundle_manifest_content_digest: str | None = None
     executor_pin: FilePin | None = None
     wrapper_pin: FilePin | None = None
     commandlet_pin: FilePin | None = None
+    launcher_pin: FilePin | None = None
     wrapper_python: Path = WRAPPER_PYTHON
-    wrapper_python_pin: FilePin | None = None
+    live_python_pin: FilePin | None = None
     host_runtime_root: Path = HOST_RUNTIME_ROOT
+    host_runtime_manifest: Path = HOST_RUNTIME_MANIFEST
+    host_runtime_manifest_pin: FilePin | None = None
+    host_runtime_manifest_content_digest: str | None = None
+    host_runtime_receipt: Path = HOST_RUNTIME_RECEIPT
+    host_runtime_receipt_pin: FilePin | None = None
+    host_runtime_receipt_content_digest: str | None = None
     host_runtime_tree_digest: str | None = None
     host_runtime_file_count: int | None = None
     host_runtime_directory_count: int | None = None
@@ -504,6 +571,9 @@ class AuthorityPolicy:
     engine_manifest: Path = IMMUTABLE_ENGINE_MANIFEST
     engine_manifest_pin: FilePin | None = None
     engine_manifest_content_digest: str | None = None
+    engine_receipt: Path = IMMUTABLE_ENGINE_RECEIPT
+    engine_receipt_pin: FilePin | None = None
+    engine_receipt_content_digest: str | None = None
     engine_tree_digest: str | None = None
     engine_critical_files: tuple[CriticalFilePin, ...] = ()
     r3_project_root: Path = R3_PROJECT_ROOT
@@ -526,6 +596,12 @@ class AuthorityPolicy:
     r8_receipt_pin: FilePin | None = None
     r8_receipt_content_digest: str | None = None
     plugin_root: Path | None = BUILDPLUGIN_ROOT
+    plugin_manifest: Path = BUILDPLUGIN_MANIFEST
+    plugin_manifest_pin: FilePin | None = None
+    plugin_manifest_content_digest: str | None = None
+    plugin_receipt: Path = BUILDPLUGIN_RECEIPT
+    plugin_receipt_pin: FilePin | None = None
+    plugin_receipt_content_digest: str | None = None
     plugin_tree_digest: str | None = None
     plugin_file_count: int | None = None
     plugin_directory_count: int | None = None
@@ -549,6 +625,10 @@ class AuthorityPolicy:
     @property
     def commandlet_path(self) -> Path:
         return self.bundle_root / "makehuman_cc0_animation_runtime_commandlet.py"
+
+    @property
+    def launcher_path(self) -> Path:
+        return self.bundle_root / LAUNCHER_NAME
 
     @property
     def bundle_manifest_path(self) -> Path:
@@ -597,11 +677,16 @@ class ValidatedAuthorities:
     running_executor: FileRecord
     wrapper: FileRecord
     commandlet: FileRecord
+    launcher: FileRecord
     wrapper_python: FileRecord
     host_runtime: TreeSnapshot
+    host_runtime_manifest: FileRecord
+    host_runtime_receipt: FileRecord
     bwrap: FileRecord
+    host_loader: FileRecord
     engine: TreeSnapshot
     engine_manifest: FileRecord
+    engine_receipt: FileRecord
     engine_manifest_content_digest: str
     engine_tree_digest: str
     engine_build_id: str
@@ -610,6 +695,8 @@ class ValidatedAuthorities:
     r8_receipt: FileRecord
     r8_fbx: tuple[FileRecord, ...]
     plugin: TreeSnapshot
+    plugin_manifest: FileRecord
+    plugin_receipt: FileRecord
 
 
 @dataclasses.dataclass(frozen=True)
@@ -657,6 +744,10 @@ def authority_blockers(
         policy.policy_path != ROOT_POLICY_PATH
         or policy.policy_content_digest is None
         or SHA256_RE.fullmatch(str(policy.policy_content_digest)) is None
+        or policy.approved_attempt_name != APPROVED_ATTEMPT_NAME
+        or policy.invocation_ledger_path
+        != PUBLISHED_PARENT / f".{APPROVED_ATTEMPT_NAME}.invocation.json"
+        or policy.operation_lock_path != OPERATION_LOCK_PATH
     ):
         blockers.append("external_root_policy_bootstrap")
     bundle_values = (
@@ -665,7 +756,8 @@ def authority_blockers(
         policy.executor_pin,
         policy.wrapper_pin,
         policy.commandlet_pin,
-        policy.wrapper_python_pin,
+        policy.launcher_pin,
+        policy.live_python_pin,
     )
     if (
         any(value is None for value in bundle_values)
@@ -676,7 +768,8 @@ def authority_blockers(
                 policy.executor_pin,
                 policy.wrapper_pin,
                 policy.commandlet_pin,
-                policy.wrapper_python_pin,
+                policy.launcher_pin,
+                policy.live_python_pin,
             )
         )
         or not isinstance(policy.bundle_manifest_content_digest, str)
@@ -692,16 +785,21 @@ def authority_blockers(
     engine_values = (
         policy.engine_manifest_pin,
         policy.engine_manifest_content_digest,
+        policy.engine_receipt_pin,
+        policy.engine_receipt_content_digest,
         policy.engine_tree_digest,
     )
     if (
         any(value is None for value in engine_values)
         or not _pin_complete(policy.engine_manifest_pin)
+        or not _pin_complete(policy.engine_receipt_pin)
+        or policy.engine_receipt != IMMUTABLE_ENGINE_RECEIPT
         or not policy.engine_critical_files
         or any(
             not SHA256_RE.fullmatch(str(value))
             for value in (
                 policy.engine_manifest_content_digest,
+                policy.engine_receipt_content_digest,
                 policy.engine_tree_digest,
             )
         )
@@ -710,6 +808,12 @@ def authority_blockers(
     if (
         policy.wrapper_python != WRAPPER_PYTHON
         or policy.host_runtime_root != HOST_RUNTIME_ROOT
+        or policy.host_runtime_manifest != HOST_RUNTIME_MANIFEST
+        or policy.host_runtime_receipt != HOST_RUNTIME_RECEIPT
+        or not _pin_complete(policy.host_runtime_manifest_pin)
+        or not _pin_complete(policy.host_runtime_receipt_pin)
+        or not SHA256_RE.fullmatch(str(policy.host_runtime_manifest_content_digest))
+        or not SHA256_RE.fullmatch(str(policy.host_runtime_receipt_content_digest))
         or policy.host_runtime_tree_digest is None
         or policy.host_runtime_file_count is None
         or policy.host_runtime_directory_count is None
@@ -727,6 +831,12 @@ def authority_blockers(
         blockers.append("fresh_root_published_r8_authority_pins")
     if (
         policy.plugin_root != BUILDPLUGIN_ROOT
+        or policy.plugin_manifest != BUILDPLUGIN_MANIFEST
+        or policy.plugin_receipt != BUILDPLUGIN_RECEIPT
+        or not _pin_complete(policy.plugin_manifest_pin)
+        or not _pin_complete(policy.plugin_receipt_pin)
+        or not SHA256_RE.fullmatch(str(policy.plugin_manifest_content_digest))
+        or not SHA256_RE.fullmatch(str(policy.plugin_receipt_content_digest))
         or policy.plugin_tree_digest is None
         or policy.plugin_file_count is None
         or policy.plugin_directory_count is None
@@ -751,9 +861,8 @@ def build_plan(
     """Return a deterministic zero-write plan; never validate mutable paths."""
 
     _require(
-        ATTEMPT_RE.fullmatch(attempt_name) is not None
-        and PurePosixPath(attempt_name).name == attempt_name,
-        "attempt name is not one closed direct child",
+        attempt_name == APPROVED_ATTEMPT_NAME,
+        "attempt name differs from the one approved R8 UE 5.7 invocation",
     )
     if execute:
         _require(
@@ -844,7 +953,10 @@ def _authority_chain(path: Path, label: str) -> None:
         except OSError as exc:
             raise ExecutorError(f"{label} authority path is missing") from exc
         _require(not stat.S_ISLNK(info.st_mode), f"{label} authority has symlink")
-        _require(info.st_uid == 0, f"{label} authority is not root-owned")
+        _require(
+            info.st_uid == 0 and info.st_gid == 0,
+            f"{label} authority is not root-owned by root:root",
+        )
         _require(
             stat.S_IMODE(info.st_mode) & 0o022 == 0,
             f"{label} authority is group/world writable",
@@ -857,6 +969,7 @@ def _require_root_immutable_regular(path: Path, label: str) -> None:
     _require(
         stat.S_ISREG(info.st_mode)
         and info.st_uid == 0
+        and info.st_gid == 0
         and stat.S_IMODE(info.st_mode) == 0o444,
         f"{label} is not immutable root-owned 0444",
     )
@@ -871,7 +984,10 @@ def _read_regular(path: Path, relative: str, label: str) -> tuple[bytes, FileRec
         raise ExecutorError(f"{label} cannot be opened") from exc
     try:
         before = os.fstat(descriptor)
-        _require(stat.S_ISREG(before.st_mode), f"{label} is not regular")
+        _require(
+            stat.S_ISREG(before.st_mode) and before.st_nlink == 1,
+            f"{label} is not one single-link regular file",
+        )
         digest = hashlib.sha256()
         chunks: list[bytes] = []
         observed = 0
@@ -901,6 +1017,495 @@ def _read_regular(path: Path, relative: str, label: str) -> tuple[bytes, FileRec
         )
     finally:
         os.close(descriptor)
+
+
+def _validate_stage_authority(
+    root: Path,
+    expected_files: Mapping[str, tuple[int, str]],
+    label: str,
+) -> dict[str, tuple[bytes, FileRecord]]:
+    """Open one fixed two-file bootstrap stage with exact immutable inventory."""
+
+    _authority_chain(root, label)
+    info = AUTHORITY_LSTAT(root)
+    _require(
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == 0
+        and info.st_gid == 0
+        and stat.S_IMODE(info.st_mode) == 0o555
+        and set(os.listdir(root)) == set(expected_files),
+        f"{label} root inventory or metadata differs",
+    )
+    result: dict[str, tuple[bytes, FileRecord]] = {}
+    for name, (mode, file_label) in expected_files.items():
+        path = root / name
+        _authority_chain(path, file_label)
+        metadata = AUTHORITY_LSTAT(path)
+        _require(
+            stat.S_ISREG(metadata.st_mode)
+            and metadata.st_uid == 0
+            and metadata.st_gid == 0
+            and stat.S_IMODE(metadata.st_mode) & 0o022 == 0,
+            f"{file_label} metadata differs",
+        )
+        raw, record = _read_regular(path, name, file_label)
+        _require(record.mode == mode, f"{file_label} opened mode differs")
+        result[name] = (raw, record)
+    return result
+
+
+def _validate_stage_document(
+    raw: bytes,
+    *,
+    expected_schema: str,
+    label: str,
+) -> dict[str, Any]:
+    document = strict_json(raw, label)
+    _require(
+        document.get("schema") == expected_schema
+        and type(document.get("content_digest")) is str
+        and SHA256_RE.fullmatch(document["content_digest"]) is not None
+        and document["content_digest"] == content_digest(document),
+        f"{label} seal or schema differs",
+    )
+    if expected_schema == RUNTIME_INPUT_PIN_SCHEMA:
+        _validate_runtime_input_stage_shape(document)
+    elif expected_schema == BUNDLE_INPUT_PIN_SCHEMA:
+        _validate_bundle_input_stage_shape(document)
+    return document
+
+
+def _normal_absolute_path(value: Any, label: str) -> str:
+    _require(
+        type(value) is str
+        and Path(value).is_absolute()
+        and os.path.normpath(value) == value,
+        f"{label} is not a normalized absolute path",
+    )
+    return value
+
+
+def _validate_stage_publication_binding(value: Any, label: str) -> None:
+    _require(
+        type(value) is dict
+        and set(value)
+        == {
+            "manifest_pin",
+            "manifest_content_digest",
+            "receipt_pin",
+            "receipt_content_digest",
+            "payload",
+        }
+        and type(value.get("manifest_content_digest")) is str
+        and SHA256_RE.fullmatch(value["manifest_content_digest"]) is not None
+        and type(value.get("receipt_content_digest")) is str
+        and SHA256_RE.fullmatch(value["receipt_content_digest"]) is not None,
+        f"{label} publication binding fields differ",
+    )
+    _policy_pin(value["manifest_pin"], f"{label} manifest", executable=False)
+    _policy_pin(value["receipt_pin"], f"{label} receipt", executable=False)
+    _policy_projection(value["payload"], f"{label} payload")
+
+
+def _validate_runtime_input_stage_shape(document: Mapping[str, Any]) -> None:
+    expected_keys = {
+        "schema",
+        "fixed_paths",
+        "engine",
+        "buildplugin",
+        "tool_pins",
+        "inventory",
+        "symlink_resolutions",
+        "elf_seeds",
+        "elf_graph",
+        "generated_etc",
+        "data_allowlist",
+        "executable_destinations",
+        "final_projection",
+        "content_digest",
+    }
+    fixed_path_keys = {
+        "engine_authority",
+        "engine_payload",
+        "buildplugin_authority",
+        "buildplugin_payload",
+        "runtime_authority",
+        "runtime_payload",
+        "python_stdlib",
+    }
+    _require(
+        set(document) == expected_keys
+        and type(document.get("fixed_paths")) is dict
+        and set(document["fixed_paths"]) == fixed_path_keys,
+        "runtime input pin closed fields differ",
+    )
+    for key, value in document["fixed_paths"].items():
+        _normal_absolute_path(value, f"runtime input fixed path {key}")
+    _validate_stage_publication_binding(document["engine"], "runtime input engine")
+    _validate_stage_publication_binding(
+        document["buildplugin"], "runtime input BuildPlugin"
+    )
+    tools = document.get("tool_pins")
+    _require(
+        type(tools) is dict and set(tools) == {"python", "bwrap", "readelf"},
+        "runtime input tool pin fields differ",
+    )
+    for name, item in tools.items():
+        _require(
+            type(item) is dict
+            and set(item) == {"source", "destination", "pin"}
+            and type(item.get("destination")) is str
+            and item["destination"]
+            and not PurePosixPath(item["destination"]).is_absolute()
+            and ".." not in PurePosixPath(item["destination"]).parts,
+            f"runtime input tool {name} fields differ",
+        )
+        _normal_absolute_path(item["source"], f"runtime input tool {name} source")
+        _policy_pin(item["pin"], f"runtime input tool {name}", executable=True)
+    _require(
+        all(
+            type(document[key]) is list
+            for key in (
+                "inventory",
+                "symlink_resolutions",
+                "elf_seeds",
+                "elf_graph",
+                "data_allowlist",
+                "executable_destinations",
+            )
+        )
+        and type(document.get("generated_etc")) is dict
+        and all(
+            type(key) is str and type(value) is str
+            for key, value in document["generated_etc"].items()
+        ),
+        "runtime input collection fields differ",
+    )
+    _policy_projection(document["final_projection"], "runtime input final projection")
+
+
+def _validate_bundle_input_stage_shape(document: Mapping[str, Any]) -> None:
+    expected_keys = {
+        "schema",
+        "fixed_paths",
+        "git",
+        "source_pins",
+        "launcher_build",
+        "launcher_binary_pin",
+        "engine",
+        "host_runtime",
+        "buildplugin",
+        "runtime_executables",
+        "r3",
+        "r8",
+        "content_digest",
+    }
+    fixed_path_keys = {
+        "root_execution_authority",
+        "root_bundle",
+        "root_policy",
+        "engine_authority",
+        "runtime_authority",
+        "buildplugin_authority",
+        "r3_project",
+        "r3_receipt",
+        "r8_authority",
+        "launcher_review_candidate",
+        "bundle_input_launcher",
+    }
+    _require(
+        set(document) == expected_keys
+        and type(document.get("fixed_paths")) is dict
+        and set(document["fixed_paths"]) == fixed_path_keys,
+        "bundle input pin closed fields differ",
+    )
+    for key, value in document["fixed_paths"].items():
+        _normal_absolute_path(value, f"bundle input fixed path {key}")
+    for key, label in (
+        ("engine", "bundle input engine"),
+        ("host_runtime", "bundle input host runtime"),
+        ("buildplugin", "bundle input BuildPlugin"),
+    ):
+        _validate_stage_publication_binding(document[key], label)
+
+    git = document.get("git")
+    _require(
+        type(git) is dict
+        and set(git)
+        == {"checkout_root", "commit", "git_canonical", "git_pin", "tracked_paths"}
+        and type(git.get("commit")) is str
+        and re.fullmatch(r"[0-9a-f]{40}", git["commit"]) is not None
+        and type(git.get("tracked_paths")) is list
+        and all(type(path) is str and path for path in git["tracked_paths"]),
+        "bundle input Git binding fields differ",
+    )
+    _normal_absolute_path(git["checkout_root"], "bundle input checkout root")
+    _normal_absolute_path(git["git_canonical"], "bundle input Git canonical path")
+    _policy_pin(git["git_pin"], "bundle input Git", executable=True)
+
+    source_pins = document.get("source_pins")
+    _require(
+        type(source_pins) is dict and bool(source_pins), "bundle source pins differ"
+    )
+    for name, item in source_pins.items():
+        _require(
+            type(name) is str
+            and name
+            and type(item) is dict
+            and set(item) == {"path", "pin"},
+            "bundle source pin fields differ",
+        )
+        _normal_absolute_path(item["path"], f"bundle source {name}")
+        _policy_pin(item["pin"], f"bundle source {name}", executable=False)
+
+    build = document.get("launcher_build")
+    _require(
+        type(build) is dict
+        and set(build)
+        == {
+            "compiler_path",
+            "compiler_canonical",
+            "compiler_driver_pin",
+            "toolchain_artifact_ledger",
+            "source_path",
+            "source_pin",
+            "flags",
+            "defines",
+            "environment",
+        }
+        and type(build.get("flags")) is list
+        and bool(build["flags"])
+        and all(type(flag) is str and flag for flag in build["flags"])
+        and type(build.get("defines")) is dict
+        and type(build.get("environment")) is dict,
+        "bundle input launcher build fields differ",
+    )
+    for key in ("compiler_path", "compiler_canonical", "source_path"):
+        _normal_absolute_path(build[key], f"bundle launcher {key}")
+    _policy_pin(
+        build["compiler_driver_pin"], "bundle launcher compiler", executable=True
+    )
+    _policy_pin(build["source_pin"], "bundle launcher source", executable=False)
+    ledger = build.get("toolchain_artifact_ledger")
+    _require(
+        type(ledger) is list and bool(ledger), "bundle toolchain ledger is missing"
+    )
+    ledger_paths: list[str] = []
+    for index, item in enumerate(ledger):
+        _require(
+            type(item) is dict and set(item) == {"path", "canonical", "pin"},
+            f"bundle toolchain ledger entry {index} fields differ",
+        )
+        path = _normal_absolute_path(item["path"], f"bundle toolchain path {index}")
+        _normal_absolute_path(
+            item["canonical"], f"bundle toolchain canonical path {index}"
+        )
+        _policy_pin(item["pin"], f"bundle toolchain entry {index}", executable=False)
+        ledger_paths.append(path)
+    _require(
+        len(ledger_paths) == len(set(ledger_paths)),
+        "bundle toolchain ledger contains duplicate paths",
+    )
+    _policy_pin(
+        document["launcher_binary_pin"], "bundle launcher binary", executable=True
+    )
+    runtime_executables = document.get("runtime_executables")
+    _require(
+        type(runtime_executables) is dict
+        and set(runtime_executables) == {"python", "bwrap", "loader"},
+        "bundle runtime executable fields differ",
+    )
+    for name, item in runtime_executables.items():
+        _require(
+            type(item) is dict and set(item) == {"path", "pin"},
+            f"bundle runtime executable {name} fields differ",
+        )
+        _normal_absolute_path(item["path"], f"bundle runtime executable {name}")
+        _policy_pin(item["pin"], f"bundle runtime executable {name}", executable=True)
+    _require(
+        type(document.get("r3")) is dict and type(document.get("r8")) is dict,
+        "bundle scene authority bindings differ",
+    )
+
+
+def _require_public_pin(
+    record: FileRecord,
+    expected: Any,
+    label: str,
+    *,
+    executable: bool = False,
+) -> None:
+    pin = _policy_pin(expected, label, executable=executable)
+    _require(
+        (record.sha256, record.size_bytes) == (pin.sha256, pin.size_bytes),
+        f"{label} bytes differ from provenance pin",
+    )
+
+
+def _read_live_executable() -> FileRecord:
+    """Hash the kernel-resolved executable inode behind ``/proc/self/exe``."""
+
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+    try:
+        descriptor = os.open(LIVE_EXECUTABLE_PATH, flags)
+    except OSError as exc:
+        raise ExecutorError("live Python executable cannot be opened") from exc
+    try:
+        before = os.fstat(descriptor)
+        _require(
+            stat.S_ISREG(before.st_mode) and before.st_nlink == 1,
+            "live Python executable is not one single-link regular file",
+        )
+        digest = hashlib.sha256()
+        observed = 0
+        while True:
+            block = os.read(descriptor, CHUNK_BYTES)
+            if not block:
+                break
+            digest.update(block)
+            observed += len(block)
+        after = os.fstat(descriptor)
+        identity = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns)
+        _require(
+            identity == (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+            and observed == before.st_size,
+            "live Python executable changed while reading",
+        )
+        return FileRecord(
+            relative_path="/proc/self/exe",
+            path=LIVE_EXECUTABLE_PATH,
+            sha256=digest.hexdigest(),
+            size_bytes=observed,
+            mode=stat.S_IMODE(before.st_mode),
+            device=before.st_dev,
+            inode=before.st_ino,
+            mtime_ns=before.st_mtime_ns,
+        )
+    finally:
+        os.close(descriptor)
+
+
+def _validate_live_python_runtime(
+    policy: AuthorityPolicy,
+    *,
+    runtime_flags: Any | None = None,
+    effective_uid: int | None = None,
+    environment: Mapping[str, str] | None = None,
+    executable: str | None = None,
+    prefix: str | None = None,
+    base_prefix: str | None = None,
+    path_entries: Sequence[str] | None = None,
+    modules: Sequence[Any] | None = None,
+) -> FileRecord:
+    """Bind production execution to the launcher-held isolated Python inode."""
+
+    _require(
+        policy.wrapper_python == WRAPPER_PYTHON,
+        "live Python path differs from fixed python3.10 authority",
+    )
+    _, pinned = _read_regular(
+        policy.wrapper_python, policy.wrapper_python.name, "policy-pinned live Python"
+    )
+    _require_pin(pinned, policy.live_python_pin, "policy-pinned live Python")
+    _authority_chain(policy.wrapper_python, "policy-pinned live Python")
+    live = _read_live_executable()
+    _require_pin(live, policy.live_python_pin, "live /proc/self/exe Python")
+    _require(
+        (live.device, live.inode, live.size_bytes)
+        == (pinned.device, pinned.inode, pinned.size_bytes),
+        "live /proc/self/exe does not identify the policy-pinned Python inode",
+    )
+    flags = sys.flags if runtime_flags is None else runtime_flags
+    _require(
+        getattr(flags, "isolated", None) == 1,
+        "production Python requires isolated mode (-I)",
+    )
+    _require(
+        getattr(flags, "dont_write_bytecode", None) == 1,
+        "production Python requires disabled bytecode writes (-B)",
+    )
+    _require(
+        getattr(flags, "no_user_site", None) == 1,
+        "production Python requires disabled user site",
+    )
+    uid = GETEUID() if effective_uid is None else effective_uid
+    _require(uid == 0, "production Python requires root EUID")
+    observed_environment = (
+        dict(os.environ) if environment is None else dict(environment)
+    )
+    _require(
+        _type_strict_equal(observed_environment, PRODUCTION_ENVIRONMENT),
+        "production Python environment differs from the cleared launcher contract",
+    )
+    expected_prefix = str(HOST_RUNTIME_ROOT / "usr")
+    observed_prefix = sys.prefix if prefix is None else prefix
+    observed_base_prefix = sys.base_prefix if base_prefix is None else base_prefix
+    observed_executable = sys.executable if executable is None else executable
+    _require(
+        observed_prefix == expected_prefix and observed_base_prefix == expected_prefix,
+        "production Python prefix escaped immutable host runtime",
+    )
+    _require(
+        observed_executable == str(WRAPPER_PYTHON),
+        "production sys.executable differs from immutable runtime Python argv0",
+    )
+
+    def allowed_origin(value: str) -> bool:
+        candidate = Path(value)
+        if not candidate.is_absolute() or os.path.normpath(value) != value:
+            return False
+        try:
+            resolved_candidate = candidate.resolve(strict=False)
+            resolved_roots = tuple(
+                root.resolve(strict=True) for root in (HOST_RUNTIME_ROOT, ROOT_BUNDLE)
+            )
+        except OSError:
+            return False
+        return any(
+            resolved_candidate == root or resolved_candidate.is_relative_to(root)
+            for root in resolved_roots
+        )
+
+    observed_paths = tuple(sys.path if path_entries is None else path_entries)
+    _require(
+        bool(observed_paths)
+        and all(type(item) is str and allowed_origin(item) for item in observed_paths),
+        "production Python sys.path escaped immutable authorities",
+    )
+    observed_modules = (
+        tuple(sys.modules.values()) if modules is None else tuple(modules)
+    )
+    for module in observed_modules:
+        module_file = getattr(module, "__file__", None)
+        if module_file is not None:
+            _require(
+                type(module_file) is str and allowed_origin(module_file),
+                "production Python import file escaped immutable authorities",
+            )
+        spec = getattr(module, "__spec__", None)
+        origin = getattr(spec, "origin", None)
+        if origin not in (None, "built-in", "frozen"):
+            _require(
+                type(origin) is str and allowed_origin(origin),
+                "production Python import origin escaped immutable authorities",
+            )
+        search_locations = getattr(spec, "submodule_search_locations", None)
+        if search_locations is not None:
+            try:
+                observed_locations = tuple(search_locations)
+            except TypeError as exc:
+                raise ExecutorError(
+                    "production Python namespace locations are not iterable"
+                ) from exc
+            _require(
+                bool(observed_locations)
+                and all(
+                    type(location) is str and allowed_origin(location)
+                    for location in observed_locations
+                ),
+                "production Python namespace location escaped immutable authorities",
+            )
+    return live
 
 
 def _require_pin(record: FileRecord, pin: FilePin | None, label: str) -> None:
@@ -973,23 +1578,32 @@ def load_root_policy(path: Path | None = None) -> AuthorityPolicy:
     document = strict_json(raw, "root policy")
     expected_keys = {
         "schema",
+        "approved_attempt_name",
+        "invocation_ledger_path",
+        "operation_lock_path",
         "bundle_manifest_pin",
         "bundle_manifest_content_digest",
         "executor_pin",
         "wrapper_pin",
         "commandlet_pin",
-        "wrapper_python_pin",
+        "launcher_pin",
+        "live_python_pin",
         "host_runtime",
         "engine",
         "r3",
         "r8",
-        "plugin",
+        "buildplugin",
         "bwrap_pin",
+        "publication_provenance",
         "content_digest",
     }
     _require(
         set(document) == expected_keys
         and document.get("schema") == ROOT_POLICY_SCHEMA
+        and document.get("approved_attempt_name") == APPROVED_ATTEMPT_NAME
+        and document.get("invocation_ledger_path")
+        == str(PUBLISHED_PARENT / f".{APPROVED_ATTEMPT_NAME}.invocation.json")
+        and document.get("operation_lock_path") == str(OPERATION_LOCK_PATH)
         and document.get("content_digest") == content_digest(document),
         "root policy closed contract differs",
     )
@@ -999,6 +1613,121 @@ def load_root_policy(path: Path | None = None) -> AuthorityPolicy:
             and SHA256_RE.fullmatch(document[key]) is not None,
             f"root policy {key} differs",
         )
+    publication_provenance = document["publication_provenance"]
+    _require(
+        type(publication_provenance) is dict
+        and set(publication_provenance)
+        == {
+            "bundle_input_pin",
+            "reviewed_plan_pin",
+            "audit_plan",
+            "publisher",
+            "launcher_build",
+        },
+        "root policy publication provenance fields differ",
+    )
+    for key, label in (
+        ("bundle_input_pin", "bundle input document"),
+        ("reviewed_plan_pin", "bundle reviewed plan document"),
+    ):
+        document_reference = publication_provenance[key]
+        _require(
+            type(document_reference) is dict
+            and set(document_reference) == {"pin", "content_digest"}
+            and type(document_reference["content_digest"]) is str
+            and SHA256_RE.fullmatch(document_reference["content_digest"]) is not None,
+            f"root policy {label} reference fields differ",
+        )
+        reference_pin = _policy_pin(document_reference["pin"], label, executable=False)
+        _require(reference_pin.size_bytes > 0, f"root policy {label} is empty")
+    audit_plan_reference = publication_provenance["audit_plan"]
+    _require(
+        type(audit_plan_reference) is dict
+        and set(audit_plan_reference) == {"sha256", "size_bytes", "content_digest"}
+        and type(audit_plan_reference["sha256"]) is str
+        and SHA256_RE.fullmatch(audit_plan_reference["sha256"]) is not None
+        and type(audit_plan_reference["size_bytes"]) is int
+        and audit_plan_reference["size_bytes"] > 0
+        and type(audit_plan_reference["content_digest"]) is str
+        and SHA256_RE.fullmatch(audit_plan_reference["content_digest"]) is not None,
+        "root policy audit plan reference fields differ",
+    )
+    provenance_publisher = publication_provenance["publisher"]
+    _require(
+        type(provenance_publisher) is dict
+        and set(provenance_publisher)
+        == {
+            "helper_pin",
+            "bundle_admin_launcher_pin",
+            "interpreter_pin",
+        },
+        "root policy publisher provenance fields differ",
+    )
+    provenance_helper_pin = _policy_pin(
+        provenance_publisher["helper_pin"],
+        "bundle publisher helper",
+        executable=True,
+    )
+    provenance_admin_launcher_pin = _policy_pin(
+        provenance_publisher["bundle_admin_launcher_pin"],
+        "bundle admin launcher",
+        executable=True,
+    )
+    provenance_interpreter_pin = _policy_pin(
+        provenance_publisher["interpreter_pin"],
+        "bundle publisher interpreter",
+        executable=True,
+    )
+    launcher_build = publication_provenance["launcher_build"]
+    _require(
+        type(launcher_build) is dict
+        and set(launcher_build)
+        == {
+            "source_pin",
+            "compiler_driver_pin",
+            "toolchain_artifact_ledger_digest",
+            "output_pin",
+        }
+        and type(launcher_build["toolchain_artifact_ledger_digest"]) is str
+        and SHA256_RE.fullmatch(launcher_build["toolchain_artifact_ledger_digest"])
+        is not None,
+        "root policy launcher build provenance fields differ",
+    )
+    launcher_source_pin = _policy_pin(
+        launcher_build["source_pin"], "launcher source", executable=False
+    )
+    launcher_compiler_driver_pin = _policy_pin(
+        launcher_build["compiler_driver_pin"],
+        "launcher compiler driver",
+        executable=True,
+    )
+    launcher_output_pin = _policy_pin(
+        launcher_build["output_pin"], "launcher output", executable=True
+    )
+    live_python_pin = _policy_pin(
+        document["live_python_pin"], "live Python", executable=True
+    )
+    policy_launcher_pin = _policy_pin(
+        document["launcher_pin"], "launcher", executable=True
+    )
+    _require(
+        all(
+            pin.size_bytes > 0
+            for pin in (
+                provenance_helper_pin,
+                provenance_admin_launcher_pin,
+                provenance_interpreter_pin,
+                launcher_source_pin,
+                launcher_compiler_driver_pin,
+                launcher_output_pin,
+            )
+        )
+        and (provenance_interpreter_pin.sha256, provenance_interpreter_pin.size_bytes)
+        == (live_python_pin.sha256, live_python_pin.size_bytes)
+        and (launcher_output_pin.sha256, launcher_output_pin.size_bytes)
+        == (policy_launcher_pin.sha256, policy_launcher_pin.size_bytes),
+        "root policy publication provenance pins differ",
+    )
     engine = document["engine"]
     _require(
         type(engine) is dict
@@ -1006,12 +1735,18 @@ def load_root_policy(path: Path | None = None) -> AuthorityPolicy:
         == {
             "manifest_pin",
             "manifest_content_digest",
+            "receipt_pin",
+            "receipt_content_digest",
             "tree_digest",
             "critical_files",
         }
         and all(
             type(engine[key]) is str and SHA256_RE.fullmatch(engine[key]) is not None
-            for key in ("manifest_content_digest", "tree_digest")
+            for key in (
+                "manifest_content_digest",
+                "receipt_content_digest",
+                "tree_digest",
+            )
         )
         and type(engine["critical_files"]) is list
         and bool(engine["critical_files"]),
@@ -1058,12 +1793,39 @@ def load_root_policy(path: Path | None = None) -> AuthorityPolicy:
         and SHA256_RE.fullmatch(r3["receipt_content_digest"]) is not None,
         "root policy R3 contract differs",
     )
-    host_runtime = _policy_projection(document["host_runtime"], "host runtime")
+    host_runtime_document = document["host_runtime"]
+    buildplugin_document = document["buildplugin"]
+    publication_keys = {
+        "manifest_pin",
+        "manifest_content_digest",
+        "receipt_pin",
+        "receipt_content_digest",
+        "payload",
+    }
+    for value, label in (
+        (host_runtime_document, "host runtime"),
+        (buildplugin_document, "BuildPlugin"),
+    ):
+        _require(
+            type(value) is dict
+            and set(value) == publication_keys
+            and all(
+                type(value[key]) is str and SHA256_RE.fullmatch(value[key]) is not None
+                for key in ("manifest_content_digest", "receipt_content_digest")
+            ),
+            f"root policy {label} publication contract differs",
+        )
+    host_runtime = _policy_projection(
+        host_runtime_document["payload"], "host runtime payload"
+    )
     r3_project = _policy_projection(r3["project"], "R3 project")
-    plugin = _policy_projection(document["plugin"], "BuildPlugin")
+    plugin = _policy_projection(buildplugin_document["payload"], "BuildPlugin payload")
     return AuthorityPolicy(
         policy_path=policy_path,
         policy_content_digest=document["content_digest"],
+        approved_attempt_name=document["approved_attempt_name"],
+        invocation_ledger_path=Path(document["invocation_ledger_path"]),
+        operation_lock_path=Path(document["operation_lock_path"]),
         bundle_root=ROOT_BUNDLE,
         bundle_manifest_pin=_policy_pin(
             document["bundle_manifest_pin"], "bundle manifest", executable=False
@@ -1074,11 +1836,28 @@ def load_root_policy(path: Path | None = None) -> AuthorityPolicy:
         commandlet_pin=_policy_pin(
             document["commandlet_pin"], "commandlet", executable=False
         ),
+        launcher_pin=policy_launcher_pin,
         wrapper_python=WRAPPER_PYTHON,
-        wrapper_python_pin=_policy_pin(
-            document["wrapper_python_pin"], "wrapper Python", executable=True
-        ),
+        live_python_pin=live_python_pin,
         host_runtime_root=HOST_RUNTIME_ROOT,
+        host_runtime_manifest=HOST_RUNTIME_MANIFEST,
+        host_runtime_manifest_pin=_policy_pin(
+            host_runtime_document["manifest_pin"],
+            "host runtime manifest",
+            executable=False,
+        ),
+        host_runtime_manifest_content_digest=host_runtime_document[
+            "manifest_content_digest"
+        ],
+        host_runtime_receipt=HOST_RUNTIME_RECEIPT,
+        host_runtime_receipt_pin=_policy_pin(
+            host_runtime_document["receipt_pin"],
+            "host runtime receipt",
+            executable=False,
+        ),
+        host_runtime_receipt_content_digest=host_runtime_document[
+            "receipt_content_digest"
+        ],
         host_runtime_tree_digest=host_runtime[0],
         host_runtime_file_count=host_runtime[1],
         host_runtime_directory_count=host_runtime[2],
@@ -1089,6 +1868,11 @@ def load_root_policy(path: Path | None = None) -> AuthorityPolicy:
             engine["manifest_pin"], "engine manifest", executable=False
         ),
         engine_manifest_content_digest=engine["manifest_content_digest"],
+        engine_receipt=IMMUTABLE_ENGINE_RECEIPT,
+        engine_receipt_pin=_policy_pin(
+            engine["receipt_pin"], "engine receipt", executable=False
+        ),
+        engine_receipt_content_digest=engine["receipt_content_digest"],
         engine_tree_digest=engine["tree_digest"],
         engine_critical_files=tuple(critical_files),
         r3_project_root=R3_PROJECT_ROOT,
@@ -1104,6 +1888,20 @@ def load_root_policy(path: Path | None = None) -> AuthorityPolicy:
         r8_receipt_pin=_policy_pin(r8["receipt_pin"], "R8 receipt", executable=False),
         r8_receipt_content_digest=r8["receipt_content_digest"],
         plugin_root=BUILDPLUGIN_ROOT,
+        plugin_manifest=BUILDPLUGIN_MANIFEST,
+        plugin_manifest_pin=_policy_pin(
+            buildplugin_document["manifest_pin"],
+            "BuildPlugin manifest",
+            executable=False,
+        ),
+        plugin_manifest_content_digest=buildplugin_document["manifest_content_digest"],
+        plugin_receipt=BUILDPLUGIN_RECEIPT,
+        plugin_receipt_pin=_policy_pin(
+            buildplugin_document["receipt_pin"],
+            "BuildPlugin receipt",
+            executable=False,
+        ),
+        plugin_receipt_content_digest=buildplugin_document["receipt_content_digest"],
         plugin_tree_digest=plugin[0],
         plugin_file_count=plugin[1],
         plugin_directory_count=plugin[2],
@@ -1162,6 +1960,7 @@ def snapshot_tree(root: Path, label: str, *, immutable_authority: bool) -> TreeS
         _require(
             stat.S_ISDIR(trusted_root.st_mode)
             and trusted_root.st_uid == 0
+            and trusted_root.st_gid == 0
             and stat.S_IMODE(trusted_root.st_mode) == 0o555,
             f"{label} root is not immutable 0555",
         )
@@ -1180,6 +1979,7 @@ def snapshot_tree(root: Path, label: str, *, immutable_authority: bool) -> TreeS
             _require(
                 stat.S_ISDIR(current_info.st_mode)
                 and current_info.st_uid == 0
+                and current_info.st_gid == 0
                 and stat.S_IMODE(current_info.st_mode) == 0o555,
                 f"{label} contains mutable directory",
             )
@@ -1205,6 +2005,7 @@ def snapshot_tree(root: Path, label: str, *, immutable_authority: bool) -> TreeS
                 _require(
                     stat.S_ISREG(trusted.st_mode)
                     and trusted.st_uid == 0
+                    and trusted.st_gid == 0
                     and stat.S_IMODE(trusted.st_mode) in (0o444, 0o555),
                     f"{label} contains mutable file",
                 )
@@ -1225,16 +2026,42 @@ def snapshot_tree(root: Path, label: str, *, immutable_authority: bool) -> TreeS
 
 def _validate_bundle(
     policy: AuthorityPolicy, running_executor_path: Path
-) -> tuple[FileRecord, FileRecord, FileRecord]:
+) -> tuple[FileRecord, FileRecord, FileRecord, FileRecord]:
     _require(
         running_executor_path == policy.executor_path,
         "ROOT_EXECUTOR_BUNDLE_REQUIRED: running executor path differs",
+    )
+    _require(
+        policy.bundle_root == ROOT_BUNDLE
+        and policy.policy_path == ROOT_POLICY_PATH
+        and policy.bundle_root.parent == ROOT_AUTHORITY
+        and policy.policy_path.parent == ROOT_AUTHORITY,
+        "atomic root authority layout differs",
+    )
+    _authority_chain(ROOT_AUTHORITY, "atomic root execution authority")
+    root_authority_info = AUTHORITY_LSTAT(ROOT_AUTHORITY)
+    _require(
+        stat.S_ISDIR(root_authority_info.st_mode)
+        and stat.S_IMODE(root_authority_info.st_mode) == 0o555
+        and set(os.listdir(ROOT_AUTHORITY)) == {"bundle", "policy.json"},
+        "atomic root authority inventory differs",
     )
     _authority_chain(policy.bundle_root, "executor bundle")
     root_info = AUTHORITY_LSTAT(policy.bundle_root)
     _require(
         stat.S_ISDIR(root_info.st_mode) and stat.S_IMODE(root_info.st_mode) == 0o555,
         "executor bundle root is not immutable 0555",
+    )
+    _require(
+        set(os.listdir(policy.bundle_root))
+        == {
+            "bundle-manifest.json",
+            Path(__file__).name,
+            "makehuman_cc0_animation_runtime_sandbox_wrapper.py",
+            "makehuman_cc0_animation_runtime_commandlet.py",
+            LAUNCHER_NAME,
+        },
+        "executor bundle contains an unexpected path",
     )
     raw_manifest, manifest_record = _read_regular(
         policy.bundle_manifest_path, "bundle-manifest.json", "bundle manifest"
@@ -1252,9 +2079,10 @@ def _validate_bundle(
         Path(__file__).name: policy.executor_pin,
         "makehuman_cc0_animation_runtime_sandbox_wrapper.py": policy.wrapper_pin,
         "makehuman_cc0_animation_runtime_commandlet.py": policy.commandlet_pin,
+        LAUNCHER_NAME: policy.launcher_pin,
     }
     entries = manifest.get("files")
-    _require(type(entries) is list and len(entries) == 3, "bundle file set differs")
+    _require(type(entries) is list and len(entries) == 4, "bundle file set differs")
     _require(
         all(
             type(item) is dict
@@ -1287,6 +2115,7 @@ def _validate_bundle(
         required_mode = 0o555 if pin and pin.executable else 0o444
         _require(
             trusted.st_uid == 0
+            and trusted.st_gid == 0
             and stat.S_ISREG(trusted.st_mode)
             and stat.S_IMODE(trusted.st_mode) == required_mode,
             f"bundle file mode/owner differs: {relative}",
@@ -1296,12 +2125,21 @@ def _validate_bundle(
         records[Path(__file__).name],
         records["makehuman_cc0_animation_runtime_sandbox_wrapper.py"],
         records["makehuman_cc0_animation_runtime_commandlet.py"],
+        records[LAUNCHER_NAME],
     )
 
 
 def _validate_engine(
     policy: AuthorityPolicy,
-) -> tuple[TreeSnapshot, FileRecord, str, str, str]:
+) -> tuple[TreeSnapshot, FileRecord, FileRecord, str, str, str]:
+    authority_root = policy.engine_root.parent
+    _require(
+        policy.engine_manifest.parent == authority_root
+        and policy.engine_receipt.parent == authority_root
+        and set(os.listdir(authority_root))
+        == {"engine", "engine-full-tree-manifest.json", "receipt.json"},
+        "immutable engine authority inventory differs",
+    )
     raw, manifest_record = _read_regular(
         policy.engine_manifest,
         policy.engine_manifest.name,
@@ -1444,7 +2282,135 @@ def _validate_engine(
         ),
         "engine version differs",
     )
-    return tree, manifest_record, str(manifest["content_digest"]), tree_digest, build_id
+    receipt, receipt_record = _validate_publication_document(
+        policy.engine_receipt,
+        policy.engine_receipt_pin,
+        policy.engine_receipt_content_digest,
+        "immutable engine receipt",
+    )
+    engine_projection = {
+        "tree_digest": tree.sha256,
+        "file_count": len(tree.files),
+        "directory_count": len(tree.directories),
+        "total_bytes": tree.total_bytes,
+    }
+    critical_projection = [
+        {
+            "relative_path": item.relative_path,
+            "sha256": item.sha256,
+            "size_bytes": item.size_bytes,
+            "executable": item.executable,
+        }
+        for item in policy.engine_critical_files
+    ]
+    reviewed_source = receipt.get("reviewed_source_manifest")
+    source_projections = receipt.get("source_projections")
+    publisher = receipt.get("publisher")
+
+    def source_phase_valid(value: Any) -> bool:
+        return (
+            type(value) is dict
+            and set(value)
+            == {"projection", "manifest_sha256", "manifest_content_digest"}
+            and _type_strict_equal(value.get("projection"), engine_projection)
+            and type(value.get("manifest_sha256")) is str
+            and SHA256_RE.fullmatch(value["manifest_sha256"]) is not None
+            and type(value.get("manifest_content_digest")) is str
+            and SHA256_RE.fullmatch(value["manifest_content_digest"]) is not None
+        )
+
+    _require(
+        set(receipt)
+        == {
+            "schema",
+            "status",
+            "accepted",
+            "authority_root",
+            "manifest",
+            "reviewed_source_manifest",
+            "source_projections",
+            "final_projection",
+            "critical_engine_files",
+            "publisher",
+            "publication_policy",
+            "claims",
+            "content_digest",
+        }
+        and receipt.get("schema") == ENGINE_RECEIPT_SCHEMA
+        and receipt.get("status") == "root_published_immutable_ue57_engine_authority"
+        and receipt.get("accepted") is True
+        and receipt.get("authority_root") == str(policy.engine_root.parent)
+        and _type_strict_equal(
+            receipt.get("manifest"),
+            {
+                "pin": {
+                    "sha256": manifest_record.sha256,
+                    "size_bytes": manifest_record.size_bytes,
+                },
+                "content_digest": policy.engine_manifest_content_digest,
+            },
+        )
+        and type(reviewed_source) is dict
+        and set(reviewed_source)
+        == {"sha256", "size_bytes", "content_digest", "tree_digest", "projection"}
+        and all(
+            type(reviewed_source.get(key)) is str
+            and SHA256_RE.fullmatch(reviewed_source[key]) is not None
+            for key in ("sha256", "content_digest", "tree_digest")
+        )
+        and type(reviewed_source.get("size_bytes")) is int
+        and reviewed_source["size_bytes"] > 0
+        and _type_strict_equal(reviewed_source.get("projection"), engine_projection)
+        and type(source_projections) is dict
+        and set(source_projections) == {"pre", "post"}
+        and source_phase_valid(source_projections["pre"])
+        and source_phase_valid(source_projections["post"])
+        and _type_strict_equal(source_projections["pre"], source_projections["post"])
+        and source_projections["pre"]["manifest_sha256"] == reviewed_source["sha256"]
+        and source_projections["pre"]["manifest_content_digest"]
+        == reviewed_source["content_digest"]
+        and _type_strict_equal(receipt.get("final_projection"), engine_projection)
+        and _type_strict_equal(
+            receipt.get("critical_engine_files"), critical_projection
+        )
+        and type(publisher) is dict
+        and set(publisher) == {"helper_pin", "interpreter_pin"}
+        and all(
+            type(value) is dict
+            and set(value) == {"sha256", "size_bytes"}
+            and _policy_pin(value, "engine publisher", executable=False)
+            for value in publisher.values()
+        )
+        and _type_strict_equal(
+            receipt.get("publication_policy"),
+            {
+                "copy_from_nofollow_descriptors": True,
+                "xattrs_acls_caps_inherited": False,
+                "source_pre_post_full_projection_equal": True,
+                "renameat2_noreplace": True,
+                "final_and_parent_fsynced": True,
+            },
+        )
+        and _type_strict_equal(
+            receipt.get("claims"),
+            {
+                "host_runtime_included": False,
+                "buildplugin_included": False,
+                "runtime_interaction_verified": False,
+                "human_motion_quality_accepted": False,
+                "gta_level_quality": False,
+            },
+        ),
+        "immutable engine receipt does not bind manifest and tree",
+    )
+    return (
+        tree,
+        manifest_record,
+        receipt_record,
+        str(manifest["content_digest"]),
+        tree_digest,
+        build_id,
+    )
 
 
 def _validate_r3(policy: AuthorityPolicy) -> tuple[TreeSnapshot, FileRecord]:
@@ -1569,7 +2535,511 @@ def _validate_r8(policy: AuthorityPolicy) -> tuple[FileRecord, tuple[FileRecord,
     return receipt_record, tuple(records)
 
 
-def _validate_plugin(policy: AuthorityPolicy, engine_build_id: str) -> TreeSnapshot:
+def _validate_publication_document(
+    path: Path,
+    pin: FilePin | None,
+    expected_content_digest: str | None,
+    label: str,
+) -> tuple[dict[str, Any], FileRecord]:
+    _require_root_immutable_regular(path, label)
+    raw, record = _read_regular(path, path.name, label)
+    _require_pin(record, pin, label)
+    document = strict_json(raw, label)
+    _require(
+        type(expected_content_digest) is str
+        and SHA256_RE.fullmatch(expected_content_digest) is not None
+        and content_digest(document) == expected_content_digest
+        and (
+            "content_digest" not in document
+            or document.get("content_digest") == expected_content_digest
+        ),
+        f"{label} content digest differs",
+    )
+    return document, record
+
+
+_BUILDPLUGIN_NEGATIVE_CLAIMS = {
+    "ue_plugin_loaded": False,
+    "ue_commandlet_executed": False,
+    "animation_runtime_verified": False,
+    "pickup_place_verified": False,
+    "two_client_verified": False,
+    "human_motion_quality_accepted": False,
+    "photoreal_character_accepted": False,
+    "gta_level_quality": False,
+    "private_epic_content_used": False,
+}
+
+
+def _buildplugin_flat_pin(value: Any, label: str) -> FilePin:
+    _require(
+        type(value) is dict
+        and set(value) == {"sha256", "size_bytes"}
+        and type(value.get("sha256")) is str
+        and SHA256_RE.fullmatch(value["sha256"]) is not None
+        and type(value.get("size_bytes")) is int
+        and value["size_bytes"] > 0,
+        f"{label} differs",
+    )
+    return FilePin(value["sha256"], value["size_bytes"])
+
+
+def _validate_buildplugin_publisher(value: Any) -> dict[str, Any]:
+    _require(
+        type(value) is dict and set(value) == {"helper", "interpreter"},
+        "BuildPlugin publisher fields differ",
+    )
+    helper = value["helper"]
+    interpreter = value["interpreter"]
+    for item, path, mode, label in (
+        (
+            helper,
+            BUILDPLUGIN_PUBLISHER_HELPER,
+            "0500",
+            "BuildPlugin publisher helper",
+        ),
+        (
+            interpreter,
+            PUBLISHER_PYTHON_PATH,
+            "0755",
+            "BuildPlugin publisher interpreter",
+        ),
+    ):
+        _require(
+            type(item) is dict
+            and set(item) == {"path", "sha256", "size_bytes", "mode"}
+            and item.get("path") == str(path)
+            and item.get("mode") == mode,
+            f"{label} fields differ",
+        )
+        _buildplugin_flat_pin(
+            {"sha256": item.get("sha256"), "size_bytes": item.get("size_bytes")},
+            label,
+        )
+    return {"helper": dict(helper), "interpreter": dict(interpreter)}
+
+
+def _require_buildplugin_admin_file(
+    path: Path, *, mode: int, label: str
+) -> tuple[bytes, FileRecord]:
+    _authority_chain(path, label)
+    info = AUTHORITY_LSTAT(path)
+    observed = os.lstat(path)
+    _require(
+        stat.S_ISREG(info.st_mode)
+        and stat.S_ISREG(observed.st_mode)
+        and observed.st_nlink == 1
+        and info.st_uid == 0
+        and info.st_gid == 0
+        and stat.S_IMODE(info.st_mode) == mode,
+        f"{label} metadata differs",
+    )
+    return _read_regular(path, path.name, label)
+
+
+def _validate_buildplugin_admin_receipt(
+    document: Any,
+    *,
+    launcher_pin: FilePin,
+    publisher: Mapping[str, Any],
+    bootstrap_provenance: Mapping[str, Any],
+) -> None:
+    _require(
+        type(document) is dict
+        and set(document)
+        == {
+            "schema",
+            "status",
+            "accepted",
+            "authority_root",
+            "launcher",
+            "helper",
+            "interpreter",
+            "bootstrap_provenance",
+            "claims",
+            "content_digest",
+        }
+        and document.get("schema") == BUILDPLUGIN_ADMIN_RECEIPT_SCHEMA
+        and document.get("status")
+        == "root_installed_immutable_buildplugin_admin_authority"
+        and document.get("accepted") is True
+        and document.get("authority_root") == str(BUILDPLUGIN_ADMIN_AUTHORITY_ROOT)
+        and document.get("content_digest") == content_digest(document)
+        and _type_strict_equal(
+            document.get("launcher"),
+            {
+                "path": str(BUILDPLUGIN_ADMIN_LAUNCHER),
+                "pin": {
+                    "sha256": launcher_pin.sha256,
+                    "size_bytes": launcher_pin.size_bytes,
+                },
+                "mode": "0500",
+            },
+        )
+        and _type_strict_equal(
+            document.get("helper"),
+            {
+                "path": str(BUILDPLUGIN_PUBLISHER_HELPER),
+                "pin": {
+                    "sha256": publisher["helper"]["sha256"],
+                    "size_bytes": publisher["helper"]["size_bytes"],
+                },
+                "mode": "0500",
+            },
+        )
+        and _type_strict_equal(
+            document.get("interpreter"),
+            {
+                "path": str(PUBLISHER_PYTHON_PATH),
+                "pin": {
+                    "sha256": publisher["interpreter"]["sha256"],
+                    "size_bytes": publisher["interpreter"]["size_bytes"],
+                },
+                "mode": "0755",
+            },
+        )
+        and _type_strict_equal(
+            document.get("bootstrap_provenance"), dict(bootstrap_provenance)
+        )
+        and _type_strict_equal(
+            document.get("claims"),
+            {
+                "fresh_no_replace": True,
+                "final_and_parent_fsynced": True,
+                "admin_launcher_fd_required": True,
+                "launcher_receipt_live_bound": True,
+            },
+        ),
+        "BuildPlugin admin receipt binding differs",
+    )
+
+
+def _validate_buildplugin_admin_publication(
+    value: Any, publisher: Mapping[str, Any], policy: AuthorityPolicy
+) -> None:
+    _require(
+        type(value) is dict
+        and set(value)
+        == {
+            "authority_root",
+            "authority_mode",
+            "launcher",
+            "receipt",
+            "bootstrap_provenance",
+            "admin_launcher_fd_required",
+        },
+        "BuildPlugin admin publication fields differ",
+    )
+    launcher = value["launcher"]
+    receipt = value["receipt"]
+    bootstrap = value["bootstrap_provenance"]
+    _require(
+        value.get("authority_root") == str(BUILDPLUGIN_ADMIN_AUTHORITY_ROOT)
+        and value.get("authority_mode") == "0555"
+        and value.get("admin_launcher_fd_required") is True
+        and type(launcher) is dict
+        and set(launcher) == {"name", "path", "sha256", "size_bytes", "mode"}
+        and launcher.get("name") == BUILDPLUGIN_ADMIN_LAUNCHER.name
+        and launcher.get("path") == str(BUILDPLUGIN_ADMIN_LAUNCHER)
+        and launcher.get("mode") == "0500"
+        and type(receipt) is dict
+        and set(receipt)
+        == {
+            "name",
+            "path",
+            "sha256",
+            "size_bytes",
+            "mode",
+            "schema",
+            "content_digest",
+        }
+        and receipt.get("name") == BUILDPLUGIN_ADMIN_RECEIPT.name
+        and receipt.get("path") == str(BUILDPLUGIN_ADMIN_RECEIPT)
+        and receipt.get("mode") == "0444"
+        and receipt.get("schema") == BUILDPLUGIN_ADMIN_RECEIPT_SCHEMA
+        and type(receipt.get("content_digest")) is str
+        and SHA256_RE.fullmatch(receipt["content_digest"]) is not None
+        and type(bootstrap) is dict
+        and set(bootstrap) == {"core_review_audit_pin", "content_digest"}
+        and type(bootstrap.get("content_digest")) is str
+        and SHA256_RE.fullmatch(bootstrap["content_digest"]) is not None,
+        "BuildPlugin admin publication binding differs",
+    )
+    launcher_pin = _buildplugin_flat_pin(
+        {"sha256": launcher.get("sha256"), "size_bytes": launcher.get("size_bytes")},
+        "BuildPlugin admin launcher pin",
+    )
+    receipt_pin = _buildplugin_flat_pin(
+        {"sha256": receipt.get("sha256"), "size_bytes": receipt.get("size_bytes")},
+        "BuildPlugin admin receipt pin",
+    )
+    _buildplugin_flat_pin(
+        bootstrap.get("core_review_audit_pin"), "BuildPlugin core review pin"
+    )
+    helper_pin = _buildplugin_flat_pin(
+        {
+            "sha256": publisher["helper"]["sha256"],
+            "size_bytes": publisher["helper"]["size_bytes"],
+        },
+        "BuildPlugin publisher helper pin",
+    )
+    interpreter_pin = _buildplugin_flat_pin(
+        {
+            "sha256": publisher["interpreter"]["sha256"],
+            "size_bytes": publisher["interpreter"]["size_bytes"],
+        },
+        "BuildPlugin publisher interpreter pin",
+    )
+    _authority_chain(
+        BUILDPLUGIN_PUBLISHER_HELPER_ROOT, "BuildPlugin publisher helper authority"
+    )
+    helper_root_info = AUTHORITY_LSTAT(BUILDPLUGIN_PUBLISHER_HELPER_ROOT)
+    _require(
+        stat.S_ISDIR(helper_root_info.st_mode)
+        and helper_root_info.st_uid == 0
+        and helper_root_info.st_gid == 0
+        and stat.S_IMODE(helper_root_info.st_mode) == 0o555
+        and set(os.listdir(BUILDPLUGIN_PUBLISHER_HELPER_ROOT))
+        == {BUILDPLUGIN_PUBLISHER_HELPER.name},
+        "BuildPlugin publisher helper authority inventory differs",
+    )
+    _helper_raw, helper_record = _require_buildplugin_admin_file(
+        BUILDPLUGIN_PUBLISHER_HELPER,
+        mode=0o500,
+        label="BuildPlugin publisher helper",
+    )
+    _require(
+        (helper_record.sha256, helper_record.size_bytes)
+        == (helper_pin.sha256, helper_pin.size_bytes),
+        "BuildPlugin publisher helper live pin differs",
+    )
+    _require(
+        policy.live_python_pin is not None
+        and (interpreter_pin.sha256, interpreter_pin.size_bytes)
+        == (policy.live_python_pin.sha256, policy.live_python_pin.size_bytes),
+        "BuildPlugin publisher interpreter differs from policy Python",
+    )
+    # Runtime-publication provenance separately rehashes the same fixed
+    # /usr/bin/python3.10 bytes against policy.live_python_pin before this
+    # terminal executor accepts the complete authority set.
+    _authority_chain(BUILDPLUGIN_ADMIN_AUTHORITY_ROOT, "BuildPlugin admin authority")
+    root_info = AUTHORITY_LSTAT(BUILDPLUGIN_ADMIN_AUTHORITY_ROOT)
+    _require(
+        stat.S_ISDIR(root_info.st_mode)
+        and root_info.st_uid == 0
+        and root_info.st_gid == 0
+        and stat.S_IMODE(root_info.st_mode) == 0o555
+        and set(os.listdir(BUILDPLUGIN_ADMIN_AUTHORITY_ROOT))
+        == {BUILDPLUGIN_ADMIN_LAUNCHER.name, BUILDPLUGIN_ADMIN_RECEIPT.name},
+        "BuildPlugin admin authority inventory differs",
+    )
+    _launcher_raw, launcher_record = _require_buildplugin_admin_file(
+        BUILDPLUGIN_ADMIN_LAUNCHER, mode=0o500, label="BuildPlugin admin launcher"
+    )
+    receipt_raw, receipt_record = _require_buildplugin_admin_file(
+        BUILDPLUGIN_ADMIN_RECEIPT, mode=0o444, label="BuildPlugin admin receipt"
+    )
+    _require(
+        (launcher_record.sha256, launcher_record.size_bytes)
+        == (launcher_pin.sha256, launcher_pin.size_bytes)
+        and (receipt_record.sha256, receipt_record.size_bytes)
+        == (receipt_pin.sha256, receipt_pin.size_bytes),
+        "BuildPlugin admin publication live pins differ",
+    )
+    admin_receipt = strict_json(receipt_raw, "BuildPlugin admin receipt")
+    _require(
+        admin_receipt.get("content_digest") == receipt["content_digest"],
+        "BuildPlugin admin receipt content digest differs",
+    )
+    _validate_buildplugin_admin_receipt(
+        admin_receipt,
+        launcher_pin=launcher_pin,
+        publisher=publisher,
+        bootstrap_provenance=bootstrap,
+    )
+
+
+def _validate_buildplugin_publication(
+    policy: AuthorityPolicy, tree: TreeSnapshot
+) -> tuple[FileRecord, FileRecord]:
+    _require(
+        policy.plugin_root == BUILDPLUGIN_ROOT
+        and policy.plugin_manifest == BUILDPLUGIN_MANIFEST
+        and policy.plugin_receipt == BUILDPLUGIN_RECEIPT,
+        "BuildPlugin publication paths differ from the fixed authority",
+    )
+    _require(
+        set(os.listdir(BUILDPLUGIN_AUTHORITY_ROOT))
+        == {"payload", "manifest.json", "receipt.json"},
+        "BuildPlugin authority inventory differs",
+    )
+    manifest, manifest_record = _validate_publication_document(
+        policy.plugin_manifest,
+        policy.plugin_manifest_pin,
+        policy.plugin_manifest_content_digest,
+        "BuildPlugin manifest",
+    )
+    _require(
+        set(manifest)
+        == {"schema_version", "source", "authority", "critical_files", "entries"}
+        and manifest.get("schema_version") == BUILDPLUGIN_MANIFEST_SCHEMA,
+        "BuildPlugin manifest closed contract differs",
+    )
+    projection = {
+        "projection_sha256": tree.sha256,
+        "file_count": len(tree.files),
+        "directory_count": len(tree.directories),
+        "total_bytes": tree.total_bytes,
+    }
+    source = manifest.get("source")
+    authority = manifest.get("authority")
+    _require(
+        type(source) is dict
+        and set(source)
+        == {
+            "path",
+            "projection_sha256",
+            "inventory_sha256",
+            "file_count",
+            "directory_count",
+            "total_bytes",
+        }
+        and all(source.get(key) == value for key, value in projection.items())
+        and type(source.get("path")) is str
+        and type(source.get("inventory_sha256")) is str
+        and SHA256_RE.fullmatch(source["inventory_sha256"]) is not None,
+        "BuildPlugin manifest source projection differs",
+    )
+    _require(
+        _type_strict_equal(
+            authority,
+            {
+                "root": str(BUILDPLUGIN_AUTHORITY_ROOT),
+                "payload": str(BUILDPLUGIN_ROOT),
+                "directory_mode": "0555",
+                "file_mode": "0444",
+            },
+        ),
+        "BuildPlugin manifest authority paths differ",
+    )
+    entries = manifest.get("entries")
+    _require(type(entries) is list, "BuildPlugin manifest entries are missing")
+    manifest_paths: set[str] = set()
+    tree_files = tree.by_relative()
+    for item in entries:
+        _require(type(item) is dict, "BuildPlugin manifest entry differs")
+        kind = item.get("kind")
+        relative = item.get("path")
+        _require(
+            kind in ("directory", "file")
+            and type(relative) is str
+            and (relative == "." or _safe_relative_path(relative))
+            and relative not in manifest_paths,
+            "BuildPlugin manifest entry path differs",
+        )
+        manifest_paths.add(relative)
+        if kind == "directory":
+            _require(
+                set(item) == {"kind", "path", "source_mode", "authority_mode"}
+                and item.get("authority_mode") == "0555"
+                and relative in tree.directories,
+                f"BuildPlugin manifest directory differs: {relative}",
+            )
+        else:
+            record = tree_files.get(relative)
+            _require(
+                set(item)
+                == {
+                    "kind",
+                    "path",
+                    "source_mode",
+                    "size_bytes",
+                    "sha256",
+                    "authority_mode",
+                }
+                and item.get("authority_mode") == "0444"
+                and record is not None
+                and (item.get("sha256"), item.get("size_bytes"))
+                == (record.sha256, record.size_bytes),
+                f"BuildPlugin manifest file differs: {relative}",
+            )
+    _require(
+        manifest_paths
+        == {*tree.directories, *(item.relative_path for item in tree.files)},
+        "BuildPlugin manifest inventory differs from payload",
+    )
+    receipt, receipt_record = _validate_publication_document(
+        policy.plugin_receipt,
+        policy.plugin_receipt_pin,
+        policy.plugin_receipt_content_digest,
+        "BuildPlugin receipt",
+    )
+    publisher = _validate_buildplugin_publisher(receipt.get("publisher"))
+    _validate_buildplugin_admin_publication(
+        receipt.get("admin_publication"), publisher, policy
+    )
+    _require(
+        set(receipt)
+        == {
+            "schema_version",
+            "accepted",
+            "status",
+            "source",
+            "authority",
+            "publisher",
+            "admin_publication",
+            "policy",
+            "claims",
+            "content_digest",
+        }
+        and receipt.get("schema_version") == BUILDPLUGIN_RECEIPT_SCHEMA
+        and receipt.get("accepted") is True
+        and receipt.get("status") == "root_published_immutable_buildplugin_authority"
+        and receipt.get("content_digest") == policy.plugin_receipt_content_digest
+        and _type_strict_equal(receipt.get("source"), source),
+        "BuildPlugin receipt closed contract differs",
+    )
+    receipt_authority = receipt.get("authority")
+    _require(
+        _type_strict_equal(
+            receipt_authority,
+            {
+                "root": str(BUILDPLUGIN_AUTHORITY_ROOT),
+                "payload": str(BUILDPLUGIN_ROOT),
+                "payload_projection_sha256": tree.sha256,
+                "manifest": {
+                    "path": policy.plugin_manifest.name,
+                    "sha256": manifest_record.sha256,
+                    "size_bytes": manifest_record.size_bytes,
+                },
+                "root_owned_nonwritable": True,
+            },
+        ),
+        "BuildPlugin receipt does not bind manifest and payload",
+    )
+    _require(
+        _type_strict_equal(receipt.get("publisher"), publisher)
+        and _type_strict_equal(
+            receipt.get("policy"),
+            {
+                "copy_from_held_source_descriptors_only": True,
+                "all_source_file_descriptors_held": True,
+                "source_namespace_revalidated_after_copy": True,
+                "fresh_staging_only": True,
+                "atomic_publish": "renameat2_noreplace",
+                "output_directory_mode": "0555",
+                "output_file_mode": "0444",
+            },
+        )
+        and _type_strict_equal(receipt.get("claims"), _BUILDPLUGIN_NEGATIVE_CLAIMS),
+        "BuildPlugin receipt publisher, policy, or claims differ",
+    )
+    return manifest_record, receipt_record
+
+
+def _validate_plugin(
+    policy: AuthorityPolicy, engine_build_id: str
+) -> tuple[TreeSnapshot, FileRecord, FileRecord]:
     _require(policy.plugin_root is not None, "BuildPlugin authority path missing")
     tree = snapshot_tree(policy.plugin_root, "BuildPlugin", immutable_authority=True)
     _require(
@@ -1623,13 +3093,143 @@ def _validate_plugin(policy: AuthorityPolicy, engine_build_id: str) -> TreeSnaps
                 handle.read(4) == b"\x7fELF",
                 f"BuildPlugin binary is not ELF: {relative}",
             )
-    return tree
+    manifest_record, receipt_record = _validate_buildplugin_publication(policy, tree)
+    return tree, manifest_record, receipt_record
 
 
-def _validate_host_runtime(policy: AuthorityPolicy) -> TreeSnapshot:
+def _validate_runtime_publication_provenance(
+    receipt: Mapping[str, Any], policy: AuthorityPolicy
+) -> None:
+    reviewed = receipt["reviewed_publication"]
+    publisher = receipt["publisher"]
+    input_stage = _validate_stage_authority(
+        RUNTIME_INPUT_AUTHORITY_ROOT,
+        {
+            RUNTIME_INPUT_PIN_PATH.name: (0o444, "runtime input pin"),
+        },
+        "runtime input authority",
+    )
+    plan_stage = _validate_stage_authority(
+        RUNTIME_PLAN_AUTHORITY_ROOT,
+        {
+            RUNTIME_REVIEWED_PLAN_PIN_PATH.name: (
+                0o444,
+                "runtime reviewed plan pin",
+            ),
+            RUNTIME_ADMIN_LAUNCHER_PATH.name: (
+                0o555,
+                "runtime admin launcher",
+            ),
+        },
+        "runtime plan authority",
+    )
+    input_raw, input_record = input_stage[RUNTIME_INPUT_PIN_PATH.name]
+    plan_raw, plan_record = plan_stage[RUNTIME_REVIEWED_PLAN_PIN_PATH.name]
+    input_document = _validate_stage_document(
+        input_raw,
+        expected_schema=RUNTIME_INPUT_PIN_SCHEMA,
+        label="runtime input pin",
+    )
+    plan_document = _validate_stage_document(
+        plan_raw,
+        expected_schema=REVIEWED_PLAN_PIN_SCHEMA,
+        label="runtime reviewed plan pin",
+    )
+    _require_public_pin(
+        input_record,
+        reviewed["input_pin"]["pin"],
+        "runtime input pin",
+    )
+    _require_public_pin(
+        plan_record,
+        reviewed["reviewed_plan_pin"]["pin"],
+        "runtime reviewed plan pin",
+    )
     _require(
-        policy.host_runtime_root == HOST_RUNTIME_ROOT,
-        "host runtime path differs from fixed closure",
+        input_document["content_digest"] == reviewed["input_pin"]["content_digest"]
+        and plan_document["content_digest"]
+        == reviewed["reviewed_plan_pin"]["content_digest"]
+        and set(plan_document)
+        == {
+            "schema",
+            "plan_schema",
+            "plan_sha256",
+            "plan_size_bytes",
+            "plan_content_digest",
+            "admin_launcher_pin",
+            "content_digest",
+        }
+        and _type_strict_equal(
+            plan_document["admin_launcher_pin"],
+            publisher["runtime_admin_launcher_pin"],
+        )
+        and _type_strict_equal(
+            reviewed["audit_plan"],
+            {
+                "sha256": plan_document["plan_sha256"],
+                "size_bytes": plan_document["plan_size_bytes"],
+                "content_digest": plan_document["plan_content_digest"],
+            },
+        ),
+        "runtime reviewed plan provenance differs",
+    )
+    for path, expected_mode, expected_pin, label in (
+        (
+            RUNTIME_ADMIN_LAUNCHER_PATH,
+            0o555,
+            publisher["runtime_admin_launcher_pin"],
+            "runtime admin launcher",
+        ),
+        (
+            BOOTSTRAP_HELPER_PATH,
+            0o500,
+            publisher["helper_pin"],
+            "runtime publisher helper",
+        ),
+        (
+            PUBLISHER_PYTHON_PATH,
+            0o755,
+            publisher["interpreter_pin"],
+            "runtime publisher interpreter",
+        ),
+    ):
+        _authority_chain(path, label)
+        metadata = AUTHORITY_LSTAT(path)
+        _require(
+            stat.S_ISREG(metadata.st_mode)
+            and metadata.st_uid == 0
+            and metadata.st_gid == 0
+            and stat.S_IMODE(metadata.st_mode) & 0o022 == 0,
+            f"{label} metadata differs",
+        )
+        _raw, record = _read_regular(path, path.name, label)
+        _require(record.mode == expected_mode, f"{label} opened mode differs")
+        _require_public_pin(record, expected_pin, label, executable=True)
+    _require(
+        _type_strict_equal(
+            publisher["interpreter_pin"],
+            {
+                "sha256": policy.live_python_pin.sha256,
+                "size_bytes": policy.live_python_pin.size_bytes,
+            },
+        ),
+        "runtime publisher interpreter differs from policy Python",
+    )
+
+
+def _validate_host_runtime(
+    policy: AuthorityPolicy,
+) -> tuple[TreeSnapshot, FileRecord, FileRecord]:
+    _require(
+        policy.host_runtime_root == HOST_RUNTIME_ROOT
+        and policy.host_runtime_manifest == HOST_RUNTIME_MANIFEST
+        and policy.host_runtime_receipt == HOST_RUNTIME_RECEIPT,
+        "host runtime publication paths differ from fixed closure",
+    )
+    _require(
+        set(os.listdir(HOST_RUNTIME_AUTHORITY_ROOT))
+        == {"payload", "manifest.json", "receipt.json"},
+        "host runtime authority inventory differs",
     )
     tree = snapshot_tree(
         policy.host_runtime_root, "host runtime", immutable_authority=True
@@ -1645,7 +3245,396 @@ def _validate_host_runtime(policy: AuthorityPolicy) -> TreeSnapshot:
         HOST_RUNTIME_REQUIRED_DIRECTORIES.issubset(tree.directories),
         "host runtime required directory closure differs",
     )
-    return tree
+    manifest, manifest_record = _validate_publication_document(
+        policy.host_runtime_manifest,
+        policy.host_runtime_manifest_pin,
+        policy.host_runtime_manifest_content_digest,
+        "host runtime manifest",
+    )
+    projection = {
+        "tree_digest": tree.sha256,
+        "file_count": len(tree.files),
+        "directory_count": len(tree.directories),
+        "total_bytes": tree.total_bytes,
+    }
+    _require(
+        set(manifest)
+        == {
+            "schema",
+            "authority_root",
+            "payload_root",
+            "entries",
+            "projection",
+            "content_digest",
+        }
+        and manifest.get("schema") == HOST_RUNTIME_MANIFEST_SCHEMA
+        and manifest.get("authority_root") == str(HOST_RUNTIME_AUTHORITY_ROOT)
+        and manifest.get("payload_root") == str(HOST_RUNTIME_ROOT)
+        and type(manifest.get("entries")) is list
+        and _type_strict_equal(manifest.get("projection"), projection),
+        "host runtime manifest closed contract differs",
+    )
+    entry_paths: set[str] = set()
+    runtime_files = tree.by_relative()
+    for item in manifest["entries"]:
+        _require(
+            type(item) is dict
+            and set(item)
+            == {"path", "type", "mode", "uid", "gid", "size_bytes", "sha256"},
+            "host runtime manifest entry fields differ",
+        )
+        relative = item.get("path")
+        kind = item.get("type")
+        _require(
+            type(relative) is str
+            and _safe_relative_path(relative)
+            and relative not in entry_paths
+            and kind in ("directory", "file")
+            and type(item.get("mode")) is int
+            and type(item.get("uid")) is int
+            and type(item.get("gid")) is int
+            and type(item.get("size_bytes")) is int
+            and item.get("uid") == 0
+            and item.get("gid") == 0,
+            "host runtime manifest entry identity differs",
+        )
+        entry_paths.add(relative)
+        if kind == "directory":
+            metadata = AUTHORITY_LSTAT(policy.host_runtime_root / relative)
+            _require(
+                relative in tree.directories
+                and item.get("mode") == stat.S_IMODE(metadata.st_mode) == 0o555
+                and item.get("size_bytes") == 0
+                and item.get("sha256") == "",
+                f"host runtime manifest directory differs: {relative}",
+            )
+        else:
+            record = runtime_files.get(relative)
+            _require(
+                record is not None
+                and item.get("mode") == record.mode
+                and item.get("mode") in (0o444, 0o555)
+                and (item.get("size_bytes"), item.get("sha256"))
+                == (record.size_bytes, record.sha256),
+                f"host runtime manifest file differs: {relative}",
+            )
+    _require(
+        entry_paths
+        == {
+            *(relative for relative in tree.directories if relative != "."),
+            *(record.relative_path for record in tree.files),
+        },
+        "host runtime manifest inventory differs from payload",
+    )
+    receipt, receipt_record = _validate_publication_document(
+        policy.host_runtime_receipt,
+        policy.host_runtime_receipt_pin,
+        policy.host_runtime_receipt_content_digest,
+        "host runtime receipt",
+    )
+    reviewed_publication = receipt.get("reviewed_publication")
+    publisher = receipt.get("publisher")
+    _require(
+        type(reviewed_publication) is dict
+        and set(reviewed_publication)
+        == {"input_pin", "reviewed_plan_pin", "audit_plan"},
+        "host runtime reviewed publication fields differ",
+    )
+    for key, label in (
+        ("input_pin", "host runtime input document"),
+        ("reviewed_plan_pin", "host runtime reviewed plan document"),
+    ):
+        document_reference = reviewed_publication[key]
+        _require(
+            type(document_reference) is dict
+            and set(document_reference) == {"pin", "content_digest"}
+            and type(document_reference["content_digest"]) is str
+            and SHA256_RE.fullmatch(document_reference["content_digest"]) is not None,
+            f"{label} reference fields differ",
+        )
+        reference_pin = _policy_pin(document_reference["pin"], label, executable=False)
+        _require(reference_pin.size_bytes > 0, f"{label} is empty")
+    audit_plan_reference = reviewed_publication["audit_plan"]
+    _require(
+        type(audit_plan_reference) is dict
+        and set(audit_plan_reference) == {"sha256", "size_bytes", "content_digest"}
+        and type(audit_plan_reference["sha256"]) is str
+        and SHA256_RE.fullmatch(audit_plan_reference["sha256"]) is not None
+        and type(audit_plan_reference["size_bytes"]) is int
+        and audit_plan_reference["size_bytes"] > 0
+        and type(audit_plan_reference["content_digest"]) is str
+        and SHA256_RE.fullmatch(audit_plan_reference["content_digest"]) is not None,
+        "host runtime audit plan reference fields differ",
+    )
+    _require(
+        type(publisher) is dict
+        and set(publisher)
+        == {
+            "helper_pin",
+            "runtime_admin_launcher_pin",
+            "interpreter_pin",
+        },
+        "host runtime publisher fields differ",
+    )
+    helper_pin = _policy_pin(
+        publisher["helper_pin"], "host runtime publisher helper", executable=True
+    )
+    admin_launcher_pin = _policy_pin(
+        publisher["runtime_admin_launcher_pin"],
+        "host runtime admin launcher",
+        executable=True,
+    )
+    interpreter_pin = _policy_pin(
+        publisher["interpreter_pin"],
+        "host runtime publisher interpreter",
+        executable=True,
+    )
+    _require(
+        helper_pin.size_bytes > 0
+        and admin_launcher_pin.size_bytes > 0
+        and interpreter_pin.size_bytes > 0
+        and (interpreter_pin.sha256, interpreter_pin.size_bytes)
+        == (policy.live_python_pin.sha256, policy.live_python_pin.size_bytes),
+        "host runtime publisher pins differ",
+    )
+    _require(
+        set(receipt)
+        == {
+            "schema",
+            "status",
+            "accepted",
+            "authority_root",
+            "manifest_pin",
+            "manifest_content_digest",
+            "payload",
+            "source_authorities",
+            "tool_pins",
+            "reviewed_publication",
+            "publisher",
+            "claims",
+            "content_digest",
+        }
+        and receipt.get("schema") == HOST_RUNTIME_RECEIPT_SCHEMA
+        and receipt.get("status") == "root_published_immutable_host_runtime_authority"
+        and receipt.get("accepted") is True
+        and receipt.get("authority_root") == str(HOST_RUNTIME_AUTHORITY_ROOT)
+        and _type_strict_equal(
+            receipt.get("manifest_pin"),
+            {
+                "sha256": manifest_record.sha256,
+                "size_bytes": manifest_record.size_bytes,
+            },
+        )
+        and receipt.get("manifest_content_digest")
+        == policy.host_runtime_manifest_content_digest
+        and _type_strict_equal(receipt.get("payload"), projection)
+        and _type_strict_equal(
+            receipt.get("source_authorities"),
+            {
+                "engine_manifest_pin": {
+                    "sha256": policy.engine_manifest_pin.sha256,
+                    "size_bytes": policy.engine_manifest_pin.size_bytes,
+                },
+                "buildplugin_manifest_pin": {
+                    "sha256": policy.plugin_manifest_pin.sha256,
+                    "size_bytes": policy.plugin_manifest_pin.size_bytes,
+                },
+                "buildplugin_receipt_pin": {
+                    "sha256": policy.plugin_receipt_pin.sha256,
+                    "size_bytes": policy.plugin_receipt_pin.size_bytes,
+                },
+            },
+        )
+        and type(receipt.get("tool_pins")) is dict
+        and set(receipt["tool_pins"]) == {"python_pin", "readelf_pin"}
+        and _type_strict_equal(
+            receipt["tool_pins"]["python_pin"],
+            {
+                "sha256": policy.live_python_pin.sha256,
+                "size_bytes": policy.live_python_pin.size_bytes,
+            },
+        )
+        and _policy_pin(
+            receipt["tool_pins"]["readelf_pin"],
+            "host runtime readelf",
+            executable=False,
+        )
+        and _type_strict_equal(
+            receipt.get("claims"),
+            {
+                "allowlisted_runtime_closure_only": True,
+                "ldd_executed": False,
+                "final_contains_symlinks": False,
+                "secrets_copied": False,
+                "gpu_runtime_included": False,
+            },
+        ),
+        "host runtime receipt does not bind manifest and payload",
+    )
+    _validate_runtime_publication_provenance(receipt, policy)
+    return tree, manifest_record, receipt_record
+
+
+def _validate_bundle_publication_provenance(policy: AuthorityPolicy) -> None:
+    raw, _record = _read_regular(ROOT_POLICY_PATH, ROOT_POLICY_PATH.name, "root policy")
+    document = strict_json(raw, "root policy")
+    _require(
+        document.get("schema") == ROOT_POLICY_SCHEMA
+        and document.get("content_digest") == policy.policy_content_digest
+        and document.get("content_digest") == content_digest(document),
+        "root policy changed before provenance audit",
+    )
+    provenance = document["publication_provenance"]
+    publisher = provenance["publisher"]
+    input_stage = _validate_stage_authority(
+        BUNDLE_INPUT_AUTHORITY_ROOT,
+        {
+            BUNDLE_INPUT_PIN_PATH.name: (0o444, "bundle input pin"),
+            BUNDLE_REVIEWED_LAUNCHER_PATH.name: (
+                0o555,
+                "reviewed launcher binary",
+            ),
+        },
+        "bundle input authority",
+    )
+    plan_stage = _validate_stage_authority(
+        BUNDLE_PLAN_AUTHORITY_ROOT,
+        {
+            BUNDLE_REVIEWED_PLAN_PIN_PATH.name: (
+                0o444,
+                "bundle reviewed plan pin",
+            ),
+            BUNDLE_ADMIN_LAUNCHER_PATH.name: (
+                0o555,
+                "bundle admin launcher",
+            ),
+        },
+        "bundle plan authority",
+    )
+    input_raw, input_record = input_stage[BUNDLE_INPUT_PIN_PATH.name]
+    plan_raw, plan_record = plan_stage[BUNDLE_REVIEWED_PLAN_PIN_PATH.name]
+    input_document = _validate_stage_document(
+        input_raw,
+        expected_schema=BUNDLE_INPUT_PIN_SCHEMA,
+        label="bundle input pin",
+    )
+    plan_document = _validate_stage_document(
+        plan_raw,
+        expected_schema=REVIEWED_PLAN_PIN_SCHEMA,
+        label="bundle reviewed plan pin",
+    )
+    _require_public_pin(
+        input_record,
+        provenance["bundle_input_pin"]["pin"],
+        "bundle input pin",
+    )
+    _require_public_pin(
+        plan_record,
+        provenance["reviewed_plan_pin"]["pin"],
+        "bundle reviewed plan pin",
+    )
+    _launcher_raw, reviewed_launcher_record = input_stage[
+        BUNDLE_REVIEWED_LAUNCHER_PATH.name
+    ]
+    _require_public_pin(
+        reviewed_launcher_record,
+        provenance["launcher_build"]["output_pin"],
+        "reviewed launcher binary",
+        executable=True,
+    )
+    input_launcher_build = input_document.get("launcher_build")
+    input_toolchain_ledger = (
+        input_launcher_build.get("toolchain_artifact_ledger")
+        if type(input_launcher_build) is dict
+        else None
+    )
+    _require(
+        type(input_launcher_build) is dict
+        and set(provenance["launcher_build"])
+        == {
+            "source_pin",
+            "compiler_driver_pin",
+            "toolchain_artifact_ledger_digest",
+            "output_pin",
+        }
+        and _type_strict_equal(
+            input_launcher_build.get("source_pin"),
+            provenance["launcher_build"]["source_pin"],
+        )
+        and _type_strict_equal(
+            input_launcher_build.get("compiler_driver_pin"),
+            provenance["launcher_build"]["compiler_driver_pin"],
+        )
+        and type(input_toolchain_ledger) is list
+        and hashlib.sha256(canonical_json(input_toolchain_ledger)).hexdigest()
+        == provenance["launcher_build"]["toolchain_artifact_ledger_digest"]
+        and _type_strict_equal(
+            input_document.get("launcher_binary_pin"),
+            provenance["launcher_build"]["output_pin"],
+        ),
+        "bundle input launcher provenance differs from root policy",
+    )
+    _require(
+        input_document["content_digest"]
+        == provenance["bundle_input_pin"]["content_digest"]
+        and plan_document["content_digest"]
+        == provenance["reviewed_plan_pin"]["content_digest"]
+        and set(plan_document)
+        == {
+            "schema",
+            "plan_schema",
+            "plan_sha256",
+            "plan_size_bytes",
+            "plan_content_digest",
+            "admin_launcher_pin",
+            "content_digest",
+        }
+        and _type_strict_equal(
+            plan_document["admin_launcher_pin"],
+            publisher["bundle_admin_launcher_pin"],
+        )
+        and _type_strict_equal(
+            provenance["audit_plan"],
+            {
+                "sha256": plan_document["plan_sha256"],
+                "size_bytes": plan_document["plan_size_bytes"],
+                "content_digest": plan_document["plan_content_digest"],
+            },
+        ),
+        "bundle reviewed plan provenance differs",
+    )
+    for path, expected_mode, expected_pin, label in (
+        (
+            BUNDLE_ADMIN_LAUNCHER_PATH,
+            0o555,
+            publisher["bundle_admin_launcher_pin"],
+            "bundle admin launcher",
+        ),
+        (
+            BOOTSTRAP_HELPER_PATH,
+            0o500,
+            publisher["helper_pin"],
+            "bundle publisher helper",
+        ),
+        (
+            PUBLISHER_PYTHON_PATH,
+            0o755,
+            publisher["interpreter_pin"],
+            "bundle publisher interpreter",
+        ),
+    ):
+        _authority_chain(path, label)
+        metadata = AUTHORITY_LSTAT(path)
+        _require(
+            stat.S_ISREG(metadata.st_mode)
+            and metadata.st_uid == 0
+            and metadata.st_gid == 0
+            and stat.S_IMODE(metadata.st_mode) & 0o022 == 0,
+            f"{label} metadata differs",
+        )
+        _raw, record = _read_regular(path, path.name, label)
+        _require(record.mode == expected_mode, f"{label} opened mode differs")
+        _require_public_pin(record, expected_pin, label, executable=True)
 
 
 def validate_authorities(
@@ -1658,36 +3647,95 @@ def validate_authorities(
         and load_root_policy(policy.policy_path) == policy,
         "external root policy changed or was not the policy source",
     )
-    executor, wrapper, commandlet = _validate_bundle(policy, running_executor_path)
+    _validate_bundle_publication_provenance(policy)
+    executor, wrapper, commandlet, launcher = _validate_bundle(
+        policy, running_executor_path
+    )
+    host_runtime, host_runtime_manifest, host_runtime_receipt = _validate_host_runtime(
+        policy
+    )
     _require(
         policy.wrapper_python == WRAPPER_PYTHON,
-        "wrapper Python path differs from direct python3.10 authority",
+        "wrapper Python path differs from immutable host runtime",
     )
     _, python_record = _read_regular(
         policy.wrapper_python, policy.wrapper_python.name, "wrapper Python"
     )
-    _require_pin(python_record, policy.wrapper_python_pin, "wrapper Python")
-    _authority_chain(policy.wrapper_python, "wrapper Python")
-    host_runtime = _validate_host_runtime(policy)
+    _require_pin(python_record, policy.live_python_pin, "wrapper Python")
+    runtime_python = host_runtime.by_relative().get("usr/bin/python3.10")
+    _require(
+        runtime_python is not None
+        and (
+            runtime_python.path,
+            runtime_python.sha256,
+            runtime_python.size_bytes,
+            runtime_python.device,
+            runtime_python.inode,
+        )
+        == (
+            python_record.path,
+            python_record.sha256,
+            python_record.size_bytes,
+            python_record.device,
+            python_record.inode,
+        ),
+        "wrapper Python is not the host-runtime manifest file",
+    )
     _, bwrap_record = _read_regular(policy.bwrap, policy.bwrap.name, "bubblewrap")
     _require_pin(bwrap_record, policy.bwrap_pin, "bubblewrap")
-    _authority_chain(policy.bwrap, "bubblewrap")
-    engine, engine_manifest, manifest_digest, tree_digest, build_id = _validate_engine(
-        policy
+    runtime_bwrap = host_runtime.by_relative().get("usr/bin/bwrap")
+    _require(
+        policy.bwrap == BWRAP_PATH
+        and runtime_bwrap is not None
+        and (
+            runtime_bwrap.path,
+            runtime_bwrap.sha256,
+            runtime_bwrap.size_bytes,
+            runtime_bwrap.device,
+            runtime_bwrap.inode,
+        )
+        == (
+            bwrap_record.path,
+            bwrap_record.sha256,
+            bwrap_record.size_bytes,
+            bwrap_record.device,
+            bwrap_record.inode,
+        ),
+        "bubblewrap is not the host-runtime manifest file",
     )
+    loader_record = host_runtime.by_relative().get(
+        HOST_LOADER_PATH.relative_to(HOST_RUNTIME_ROOT).as_posix()
+    )
+    _require(
+        loader_record is not None and loader_record.mode & 0o111,
+        "immutable host-runtime loader is missing or not executable",
+    )
+    (
+        engine,
+        engine_manifest,
+        engine_receipt,
+        manifest_digest,
+        tree_digest,
+        build_id,
+    ) = _validate_engine(policy)
     r3_project, r3_receipt = _validate_r3(policy)
     r8_receipt, r8_fbx = _validate_r8(policy)
-    plugin = _validate_plugin(policy, build_id)
+    plugin, plugin_manifest, plugin_receipt = _validate_plugin(policy, build_id)
     return ValidatedAuthorities(
         policy=policy,
         running_executor=executor,
         wrapper=wrapper,
         commandlet=commandlet,
+        launcher=launcher,
         wrapper_python=python_record,
         host_runtime=host_runtime,
+        host_runtime_manifest=host_runtime_manifest,
+        host_runtime_receipt=host_runtime_receipt,
         bwrap=bwrap_record,
+        host_loader=loader_record,
         engine=engine,
         engine_manifest=engine_manifest,
+        engine_receipt=engine_receipt,
         engine_manifest_content_digest=manifest_digest,
         engine_tree_digest=tree_digest,
         engine_build_id=build_id,
@@ -1696,6 +3744,8 @@ def validate_authorities(
         r8_receipt=r8_receipt,
         r8_fbx=r8_fbx,
         plugin=plugin,
+        plugin_manifest=plugin_manifest,
+        plugin_receipt=plugin_receipt,
     )
 
 
@@ -1835,6 +3885,7 @@ def prepare_execution(dry_plan: DryPlan) -> ExecutionPlan:
     _require(
         not dry_plan.report["blockers"], "execution plan retains authority blockers"
     )
+    _validate_live_python_runtime(dry_plan.policy)
     authorities = validate_authorities(
         dry_plan.policy, running_executor_path=dry_plan.running_executor_path
     )
@@ -1949,6 +4000,7 @@ def immutable_snapshot(plan: ExecutionPlan) -> Iterator[ImmutableSnapshot]:
     fds: dict[str, int] = {}
     r3_tokens: dict[str, str] = {}
     try:
+        fds["loader"] = _open_held(auth.host_loader, "host-runtime loader")
         fds["bwrap"] = _open_held(auth.bwrap, "bubblewrap")
         fds["python"] = _open_held(auth.wrapper_python, "wrapper Python")
         fds["host_runtime"] = _open_held(
@@ -2012,7 +4064,13 @@ def _sandbox_command(
     r3_tokens: Mapping[str, str],
     r3_directories: Sequence[str],
 ) -> tuple[str, ...]:
+    runtime_fd_root = f"/proc/self/fd/{fds['host_runtime']}"
     command = [
+        f"/proc/self/fd/{fds['loader']}",
+        "--library-path",
+        ":".join(
+            f"{runtime_fd_root}/{relative}" for relative in HOST_LIBRARY_RELATIVE_PATHS
+        ),
         f"/proc/self/fd/{fds['bwrap']}",
         "--die-with-parent",
         "--new-session",
@@ -2150,6 +4208,7 @@ def _normalized_sandbox_command(
     fds: dict[str, object] = {
         key: f"__{key.upper()}_FD__"
         for key in (
+            "loader",
             "bwrap",
             "python",
             "host_runtime",
@@ -2919,7 +4978,7 @@ def publish_validated(
     _require(final.parent == parent, "publication target escaped fixed parent")
     if require_root:
         _require(GETEUID() == 0, "root publication authority is required")
-        _authority_chain(parent, "publication parent")
+    _require_publication_parent(parent, require_root=require_root)
     _require(not os.path.lexists(final), "publication final name already exists")
     stage = Path(
         tempfile.mkdtemp(prefix=f".{plan.dry_plan.attempt_name}.staging-", dir=parent)
@@ -2982,9 +5041,13 @@ def publish_validated(
                     "engine_tree_digest": plan.authorities.engine_tree_digest,
                     "engine_build_id": plan.authorities.engine_build_id,
                     "host_runtime_tree_digest": plan.authorities.host_runtime.sha256,
+                    "host_runtime_manifest_sha256": plan.authorities.host_runtime_manifest.sha256,
+                    "host_runtime_receipt_sha256": plan.authorities.host_runtime_receipt.sha256,
                     "r3_project_tree_digest": plan.authorities.r3_project.sha256,
                     "r8_host_receipt_sha256": plan.authorities.r8_receipt.sha256,
                     "buildplugin_tree_digest": plan.authorities.plugin.sha256,
+                    "buildplugin_manifest_sha256": plan.authorities.plugin_manifest.sha256,
+                    "buildplugin_receipt_sha256": plan.authorities.plugin_receipt.sha256,
                     "sandbox_archive_sha256": hashlib.sha256(archive_raw).hexdigest(),
                     "commandlet_receipt_content_digest": receipt["content_digest"],
                     "commandlet_result_receipt_sha256": result["receipt_sha256"],
@@ -3030,24 +5093,445 @@ def publish_validated(
         _fsync_directory(parent)
         RENAME_NOREPLACE(stage, final)
         renamed = True
-        _fsync_directory(parent)
+        try:
+            _fsync_directory(final)
+            _fsync_directory(parent)
+        except OSError as exc:
+            raise ExecutorError(
+                "PUBLICATION_DURABILITY_UNKNOWN: final preserved; reconcile without retry"
+            ) from exc
         published = True
         return host_receipt
     finally:
         if not published:
-            cleanup = final if renamed else stage
-            if os.path.lexists(cleanup):
-                if renamed:
-                    _remove_publication_tree(cleanup)
-                    _fsync_directory(parent)
-                else:
-                    try:
-                        _remove_publication_tree(cleanup)
-                    except OSError:
-                        pass
+            if not renamed and os.path.lexists(stage):
+                try:
+                    _remove_publication_tree(stage)
+                except OSError:
+                    pass
 
 
 ChildRunner = Callable[..., tuple[bytes, bytes, int]]
+
+
+def _require_publication_parent(parent: Path, *, require_root: bool) -> None:
+    _require(parent == PUBLISHED_PARENT, "publication parent path differs")
+    if require_root:
+        _authority_chain(parent, "publication parent")
+        metadata = AUTHORITY_LSTAT(parent)
+        _require(
+            stat.S_ISDIR(metadata.st_mode)
+            and metadata.st_uid == 0
+            and metadata.st_gid == 0
+            and stat.S_IMODE(metadata.st_mode) == 0o555,
+            "publication parent is not exact root:root 0555",
+        )
+    else:
+        metadata = os.lstat(parent)
+        _require(
+            stat.S_ISDIR(metadata.st_mode) and not stat.S_ISLNK(metadata.st_mode),
+            "test publication parent is not one directory",
+        )
+
+
+@contextlib.contextmanager
+def operation_lock(policy: AuthorityPolicy, *, require_root: bool) -> Iterator[None]:
+    path = policy.operation_lock_path
+    _require(path == OPERATION_LOCK_PATH, "executor operation lock path differs")
+    try:
+        before = os.lstat(path)
+        descriptor = os.open(
+            path,
+            os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+        )
+    except OSError as exc:
+        raise ExecutorError("executor operation lock is unavailable") from exc
+    try:
+        opened = os.fstat(descriptor)
+        before_identity = (
+            before.st_dev,
+            before.st_ino,
+            before.st_mode,
+            before.st_nlink,
+            before.st_uid,
+            before.st_gid,
+        )
+        opened_identity = (
+            opened.st_dev,
+            opened.st_ino,
+            opened.st_mode,
+            opened.st_nlink,
+            opened.st_uid,
+            opened.st_gid,
+        )
+        _require(
+            stat.S_ISREG(opened.st_mode)
+            and opened.st_nlink == 1
+            and stat.S_IMODE(opened.st_mode) == 0o600
+            and before_identity == opened_identity
+            and (not require_root or (opened.st_uid == 0 and opened.st_gid == 0)),
+            "executor operation lock identity differs",
+        )
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise ExecutorError("another executor operation is already active") from exc
+        yield
+    finally:
+        os.close(descriptor)
+
+
+def _invocation_ledger_document(plan: ExecutionPlan) -> dict[str, Any]:
+    return seal_document(
+        {
+            "schema": "vista.r8-sealed-ue57-invocation-ledger/v1",
+            "status": "invocation_claimed_before_child_launch",
+            "accepted": False,
+            "attempt_name": APPROVED_ATTEMPT_NAME,
+            "root_policy_content_digest": plan.authorities.policy.policy_content_digest,
+            "executor_sha256": plan.authorities.running_executor.sha256,
+            "execution_acknowledgement": EXECUTION_ACKNOWLEDGEMENT,
+            "claims": dict(NEGATIVE_CLAIMS),
+        }
+    )
+
+
+def _claim_invocation_ledger(plan: ExecutionPlan, *, require_root: bool) -> FileRecord:
+    policy = plan.authorities.policy
+    path = policy.invocation_ledger_path
+    expected = policy.published_parent / f".{APPROVED_ATTEMPT_NAME}.invocation.json"
+    _require(path == expected, "invocation ledger path differs")
+    if require_root:
+        _require(GETEUID() == 0, "root invocation-ledger authority is required")
+    _require_publication_parent(policy.published_parent, require_root=require_root)
+    _require(not os.path.lexists(path), "approved invocation was already consumed")
+    raw = canonical_json(_invocation_ledger_document(plan))
+    flags = (
+        os.O_WRONLY
+        | os.O_CREAT
+        | os.O_EXCL
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(path, flags, 0o600)
+        view = memoryview(raw)
+        while view:
+            written = os.write(descriptor, view)
+            _require(written > 0, "invocation ledger write failed")
+            view = view[written:]
+        if require_root:
+            os.fchown(descriptor, 0, 0)
+        os.fchmod(descriptor, 0o444)
+        os.fsync(descriptor)
+    except BaseException as exc:
+        raise ExecutorError(
+            "INVOCATION_LEDGER_DURABILITY_UNKNOWN: preserve ledger; do not launch or retry"
+        ) from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+    try:
+        _fsync_directory(policy.published_parent)
+    except OSError as exc:
+        raise ExecutorError(
+            "INVOCATION_LEDGER_DURABILITY_UNKNOWN: preserve ledger; do not launch or retry"
+        ) from exc
+    _, record = _read_regular(path, path.name, "invocation ledger")
+    trusted = AUTHORITY_LSTAT(path) if require_root else os.lstat(path)
+    _require(
+        record.sha256 == hashlib.sha256(raw).hexdigest()
+        and record.size_bytes == len(raw)
+        and stat.S_ISREG(trusted.st_mode)
+        and stat.S_IMODE(trusted.st_mode) == 0o444
+        and (not require_root or (trusted.st_uid == 0 and trusted.st_gid == 0)),
+        "invocation ledger seal differs",
+    )
+    return record
+
+
+def audit_installed_authorities(
+    plan: ExecutionPlan,
+    *,
+    require_root_lock: bool = True,
+    operation_lock_held: bool = False,
+) -> dict[str, Any]:
+    """Run the exact production preflight without creating any output."""
+
+    if not operation_lock_held:
+        with operation_lock(plan.authorities.policy, require_root=require_root_lock):
+            return audit_installed_authorities(
+                plan,
+                require_root_lock=require_root_lock,
+                operation_lock_held=True,
+            )
+
+    _validate_live_python_runtime(plan.authorities.policy)
+    revalidate_authorities(plan.authorities)
+    policy = plan.authorities.policy
+    _require_publication_parent(policy.published_parent, require_root=require_root_lock)
+    _require(
+        not os.path.lexists(policy.invocation_ledger_path),
+        "approved invocation was already consumed",
+    )
+    _require(
+        not os.path.lexists(policy.published_parent / APPROVED_ATTEMPT_NAME),
+        "approved final output already exists",
+    )
+    return seal_document(
+        {
+            "schema": "vista.r8-sealed-ue57-authority-audit/v1",
+            "status": "installed_authorities_audited_zero_write",
+            "accepted": False,
+            "attempt_name": APPROVED_ATTEMPT_NAME,
+            "zero_output_writes": True,
+            "root_policy_content_digest": policy.policy_content_digest,
+            "bundle_manifest_content_digest": policy.bundle_manifest_content_digest,
+            "engine_tree_digest": plan.authorities.engine_tree_digest,
+            "host_runtime_tree_digest": plan.authorities.host_runtime.sha256,
+            "buildplugin_tree_digest": plan.authorities.plugin.sha256,
+            "claims": dict(NEGATIVE_CLAIMS),
+        }
+    )
+
+
+def _expected_published_directories(files: set[str], plan: ExecutionPlan) -> set[str]:
+    directories = {"."}
+    for relative in files:
+        parent = PurePosixPath(relative).parent
+        while parent.as_posix() != ".":
+            directories.add(parent.as_posix())
+            parent = parent.parent
+    for relative in plan.authorities.r3_project.directories:
+        destination = "project" if relative == "." else f"project/{relative}"
+        directories.add(destination)
+        parent = PurePosixPath(destination).parent
+        while parent.as_posix() != ".":
+            directories.add(parent.as_posix())
+            parent = parent.parent
+    return directories
+
+
+def validate_reconciled_final(
+    plan: ExecutionPlan, final: Path, tree: TreeSnapshot
+) -> dict[str, Any]:
+    """Validate the complete published namespace before durability fsync."""
+
+    expected_files = {
+        *(
+            f"project/{item.relative_path}"
+            for item in plan.authorities.r3_project.files
+        ),
+        *(f"project/{relative}" for relative in EXPECTED_PACKAGE_PATHS),
+        "evidence/makehuman-cc0-animation-runtime-receipt.json",
+        "evidence/makehuman-cc0-animation-runtime-result.json",
+        "control/host-plan.json",
+        "control/execution.json",
+        "control/host-execution.json",
+        "logs/unreal.log",
+        "host-receipt.json",
+    }
+    actual_files = {item.relative_path for item in tree.files}
+    _require(actual_files == expected_files, "published final file inventory differs")
+    _require(
+        set(tree.directories) == _expected_published_directories(expected_files, plan),
+        "published final directory inventory differs",
+    )
+    by_path = tree.by_relative()
+    _require(
+        all(
+            (
+                by_path[f"project/{record.relative_path}"].sha256,
+                by_path[f"project/{record.relative_path}"].size_bytes,
+            )
+            == (record.sha256, record.size_bytes)
+            for record in plan.authorities.r3_project.files
+        ),
+        "published final changed one sealed R3 project file",
+    )
+    for relative, raw in (
+        ("control/host-plan.json", canonical_json(plan.launch_document)),
+        ("control/execution.json", plan.commandlet_execution_raw),
+        ("control/host-execution.json", plan.host_execution_raw),
+    ):
+        _require(
+            (by_path[relative].sha256, by_path[relative].size_bytes)
+            == (hashlib.sha256(raw).hexdigest(), len(raw)),
+            f"published final control file differs: {relative}",
+        )
+    members = {
+        ARCHIVE_RECEIPT_PATH: (
+            _record_bytes(
+                by_path["evidence/makehuman-cc0-animation-runtime-receipt.json"],
+                "published commandlet receipt",
+            )
+        ),
+        ARCHIVE_RESULT_PATH: (
+            _record_bytes(
+                by_path["evidence/makehuman-cc0-animation-runtime-result.json"],
+                "published commandlet result",
+            )
+        ),
+        **{
+            f"project/{relative}": _record_bytes(
+                by_path[f"project/{relative}"], f"published package {relative}"
+            )
+            for relative in EXPECTED_PACKAGE_PATHS
+        },
+    }
+    receipt, result = validate_captured_members(plan, members)
+    project = snapshot_tree(
+        final / "project", "published reconciled project", immutable_authority=True
+    )
+    project_projection = {
+        "sha256": project.sha256,
+        "file_count": len(project.files),
+        "directory_count": len(project.directories),
+        "total_bytes": project.total_bytes,
+    }
+    host_receipt_raw = _record_bytes(
+        by_path["host-receipt.json"], "published host receipt"
+    )
+    host_receipt = strict_json(host_receipt_raw, "published host receipt")
+    expected_bindings = {
+        "root_policy_content_digest": plan.authorities.policy.policy_content_digest,
+        "launch_plan_content_digest": plan.launch_document["content_digest"],
+        "host_execution_content_digest": plan.host_execution["content_digest"],
+        "commandlet_execution_content_digest": plan.commandlet_execution[
+            "content_digest"
+        ],
+        "engine_manifest_content_digest": plan.authorities.engine_manifest_content_digest,
+        "engine_tree_digest": plan.authorities.engine_tree_digest,
+        "engine_build_id": plan.authorities.engine_build_id,
+        "host_runtime_tree_digest": plan.authorities.host_runtime.sha256,
+        "host_runtime_manifest_sha256": plan.authorities.host_runtime_manifest.sha256,
+        "host_runtime_receipt_sha256": plan.authorities.host_runtime_receipt.sha256,
+        "r3_project_tree_digest": plan.authorities.r3_project.sha256,
+        "r8_host_receipt_sha256": plan.authorities.r8_receipt.sha256,
+        "buildplugin_tree_digest": plan.authorities.plugin.sha256,
+        "buildplugin_manifest_sha256": plan.authorities.plugin_manifest.sha256,
+        "buildplugin_receipt_sha256": plan.authorities.plugin_receipt.sha256,
+        "sandbox_archive_sha256": hashlib.sha256(canonical_ustar(members)).hexdigest(),
+        "commandlet_receipt_content_digest": receipt["content_digest"],
+        "commandlet_result_receipt_sha256": result["receipt_sha256"],
+    }
+    _require(
+        set(host_receipt)
+        == {
+            "schema",
+            "status",
+            "accepted",
+            "attempt_name",
+            "bindings",
+            "project_projection",
+            "added_project_relative_paths",
+            "claims",
+            "content_digest",
+        }
+        and host_receipt.get("schema") == HOST_RECEIPT_SCHEMA
+        and host_receipt.get("status")
+        == "sealed_ue57_animation_import_pending_runtime_and_human_review"
+        and host_receipt.get("accepted") is False
+        and host_receipt.get("attempt_name") == APPROVED_ATTEMPT_NAME
+        and _type_strict_equal(host_receipt.get("bindings"), expected_bindings)
+        and _type_strict_equal(
+            host_receipt.get("project_projection"), project_projection
+        )
+        and _type_strict_equal(
+            host_receipt.get("added_project_relative_paths"),
+            list(EXPECTED_PACKAGE_PATHS),
+        )
+        and _type_strict_equal(
+            host_receipt.get("claims"),
+            {
+                "ue_animation_imported": True,
+                "typed_notifies_authored_in_ue": True,
+                "runtime_assets_authored": True,
+                **NEGATIVE_CLAIMS,
+            },
+        )
+        and host_receipt.get("content_digest") == content_digest(host_receipt),
+        "published host receipt closed bindings differ",
+    )
+    return project_projection
+
+
+def reconcile_durability(
+    plan: ExecutionPlan,
+    *,
+    require_root_lock: bool = True,
+    operation_lock_held: bool = False,
+) -> dict[str, Any]:
+    """Audit and fsync preserved final/ledger state without retry or deletion."""
+
+    if not operation_lock_held:
+        with operation_lock(plan.authorities.policy, require_root=require_root_lock):
+            return reconcile_durability(
+                plan,
+                require_root_lock=require_root_lock,
+                operation_lock_held=True,
+            )
+
+    policy = plan.authorities.policy
+    _validate_live_python_runtime(policy)
+    revalidate_authorities(plan.authorities)
+    _require_publication_parent(policy.published_parent, require_root=require_root_lock)
+    ledger_path = policy.invocation_ledger_path
+    final = policy.published_parent / APPROVED_ATTEMPT_NAME
+    ledger_observed = os.path.lexists(ledger_path)
+    final_observed = os.path.lexists(final)
+    _require(
+        ledger_observed or final_observed, "no durability state exists to reconcile"
+    )
+    _require(
+        not final_observed or ledger_observed,
+        "published final exists without its one-shot invocation ledger",
+    )
+    ledger_sha256: str | None = None
+    if ledger_observed:
+        _require_root_immutable_regular(ledger_path, "invocation ledger")
+        raw, record = _read_regular(ledger_path, ledger_path.name, "invocation ledger")
+        _require(
+            strict_json(raw, "invocation ledger") == _invocation_ledger_document(plan),
+            "invocation ledger contract differs",
+        )
+        _fsync_regular(ledger_path)
+        ledger_sha256 = record.sha256
+    final_projection: dict[str, Any] | None = None
+    if final_observed:
+        tree = snapshot_tree(final, "published R8 UE attempt", immutable_authority=True)
+        validate_reconciled_final(plan, final, tree)
+        for record in tree.files:
+            _fsync_regular(record.path)
+        for relative in sorted(
+            tree.directories,
+            key=lambda value: (len(PurePosixPath(value).parts), value),
+            reverse=True,
+        ):
+            _fsync_directory(
+                final if relative == "." else final / PurePosixPath(relative)
+            )
+        final_projection = {
+            "tree_digest": tree.sha256,
+            "file_count": len(tree.files),
+            "directory_count": len(tree.directories),
+            "total_bytes": tree.total_bytes,
+        }
+    _fsync_directory(policy.published_parent)
+    return seal_document(
+        {
+            "schema": "vista.r8-sealed-ue57-durability-reconciliation/v1",
+            "status": "preserved_state_audited_and_fsynced_without_retry",
+            "accepted": False,
+            "attempt_name": APPROVED_ATTEMPT_NAME,
+            "ledger_sha256": ledger_sha256,
+            "final_projection": final_projection,
+            "retry_performed": False,
+            "deletion_performed": False,
+            "claims": dict(NEGATIVE_CLAIMS),
+        }
+    )
 
 
 def execute_plan(
@@ -3056,9 +5540,29 @@ def execute_plan(
     timeout_seconds: float = 1800.0,
     child_runner: ChildRunner = capture_bounded_child,
     require_root_publication: bool = True,
+    operation_lock_held: bool = False,
 ) -> Mapping[str, Any]:
+    if not operation_lock_held:
+        with operation_lock(
+            plan.authorities.policy, require_root=require_root_publication
+        ):
+            return execute_plan(
+                plan,
+                timeout_seconds=timeout_seconds,
+                child_runner=child_runner,
+                require_root_publication=require_root_publication,
+                operation_lock_held=True,
+            )
     _require(plan.dry_plan.execute_requested, "execute plan is not authorized")
+    _validate_live_python_runtime(plan.authorities.policy)
     revalidate_authorities(plan.authorities)
+    _require(
+        not os.path.lexists(
+            plan.authorities.policy.published_parent / APPROVED_ATTEMPT_NAME
+        ),
+        "approved final output already exists",
+    )
+    _claim_invocation_ledger(plan, require_root=require_root_publication)
     with immutable_snapshot(plan) as snapshot:
         command = build_sandbox_command(plan, snapshot)
         _require(
@@ -3090,7 +5594,10 @@ def execute_plan(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--attempt-name", required=True)
-    parser.add_argument("--execute", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--execute", action="store_true")
+    mode.add_argument("--audit-authorities", action="store_true")
+    mode.add_argument("--reconcile-durability", action="store_true")
     parser.add_argument("--execution-acknowledgement")
     return parser
 
@@ -3103,20 +5610,38 @@ def main(argv: Sequence[str] | None = None) -> int:
                 arguments.execution_acknowledgement == EXECUTION_ACKNOWLEDGEMENT,
                 "execute requires the exact animation-only acknowledgement",
             )
-        policy = load_root_policy() if arguments.execute else PRODUCTION_POLICY
+        installed_mode = bool(
+            arguments.execute
+            or arguments.audit_authorities
+            or arguments.reconcile_durability
+        )
+        policy = load_root_policy() if installed_mode else PRODUCTION_POLICY
         plan = build_plan(
             arguments.attempt_name,
-            execute=arguments.execute,
-            execution_acknowledgement=arguments.execution_acknowledgement,
+            execute=installed_mode,
+            execution_acknowledgement=(
+                arguments.execution_acknowledgement
+                if arguments.execute
+                else EXECUTION_ACKNOWLEDGEMENT
+                if installed_mode
+                else None
+            ),
             policy=policy,
         )
-        if arguments.execute:
+        if installed_mode:
             if plan.report["blockers"]:
                 raise ExecutorError(
                     "SEALED_UE57_EXECUTION_AUTHORITY_REQUIRED: "
                     + ",".join(plan.report["blockers"])
                 )
-            result = execute_plan(prepare_execution(plan))
+            prepared = prepare_execution(plan)
+            if arguments.execute:
+                audit_installed_authorities(prepared)
+                result = execute_plan(prepared)
+            elif arguments.audit_authorities:
+                result = audit_installed_authorities(prepared)
+            else:
+                result = reconcile_durability(prepared)
         else:
             result = plan.report
         sys.stdout.buffer.write(canonical_json(result))

@@ -19,7 +19,7 @@ from tools.ue.vista_playable_home import (
 )
 
 
-ATTEMPT = "makehuman-cc0-animation-ue57-r1-unit"
+ATTEMPT = executor.APPROVED_ATTEMPT_NAME
 
 
 def _sealed(value: dict[str, object]) -> dict[str, object]:
@@ -41,7 +41,14 @@ def _pin_document(character: str, size_bytes: int = 1) -> dict[str, object]:
 def _trusted_root_lstat(path: os.PathLike[str] | str) -> SimpleNamespace:
     info = os.lstat(path)
     kind = stat.S_IFDIR if stat.S_ISDIR(info.st_mode) else stat.S_IFREG
-    mode = 0o555 if stat.S_ISDIR(info.st_mode) or info.st_mode & 0o111 else 0o444
+    observed_mode = stat.S_IMODE(info.st_mode)
+    mode = (
+        0o500
+        if stat.S_ISREG(info.st_mode) and observed_mode == 0o500
+        else 0o555
+        if stat.S_ISDIR(info.st_mode) or info.st_mode & 0o111
+        else 0o444
+    )
     return SimpleNamespace(
         st_mode=kind | mode,
         st_uid=0,
@@ -136,48 +143,382 @@ def _complete_fake_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[executor.ExecutionPlan, dict[str, Path]]:
     authority = tmp_path / "authority"
-    bundle = authority / "bundle"
-    root_policy = authority / "root-policy.json"
-    python = authority / "bin/python3.10"
-    bwrap = authority / "bin/bwrap"
-    runtime = authority / "host-runtime"
-    engine = authority / "engine"
-    engine_manifest_path = authority / "engine-manifest.json"
+    root_authority = authority / "root-executor"
+    bundle = root_authority / "bundle"
+    root_policy = root_authority / "policy.json"
+    operation_lock = authority / "executor-operation.lock"
+    runtime_authority = authority / "host-runtime-authority"
+    runtime = runtime_authority / "payload"
+    runtime_manifest = runtime_authority / "manifest.json"
+    runtime_receipt = runtime_authority / "receipt.json"
+    python = runtime / "usr/bin/python3.10"
+    bwrap = runtime / "usr/bin/bwrap"
+    loader = runtime / "lib64/ld-linux-x86-64.so.2"
+    engine_authority = authority / "engine-authority"
+    engine = engine_authority / "engine"
+    engine_manifest_path = engine_authority / "engine-full-tree-manifest.json"
+    engine_receipt_path = engine_authority / "receipt.json"
     r3_root = authority / "r3/project"
     r3_receipt = authority / "r3/receipt.json"
     r8_parent = authority / "r8"
     r8_name = "makehuman-cc0-animation-r8-fresh-root-r1"
     r8_root = r8_parent / r8_name
-    plugin = authority / "plugin"
+    plugin_authority = authority / "plugin-authority"
+    plugin = plugin_authority / "payload"
+    plugin_manifest = plugin_authority / "manifest.json"
+    plugin_receipt = plugin_authority / "receipt.json"
+    buildplugin_helper_root = authority / "buildplugin-helper"
+    buildplugin_publisher_helper = (
+        buildplugin_helper_root / "vista_r8_buildplugin_authority.py"
+    )
+    buildplugin_admin_root = authority / "buildplugin-admin"
+    buildplugin_admin_launcher = (
+        buildplugin_admin_root / "publish-reconcile-buildplugin"
+    )
+    buildplugin_admin_receipt = buildplugin_admin_root / "receipt.json"
     published = tmp_path / "published"
+    bootstrap_root = authority / "bootstrap"
+    bootstrap_helper = bootstrap_root / "vista_r8_ue57_authority_admin.py"
+    publisher_python = authority / "usr/bin/python3.10"
+    runtime_input_root = authority / "runtime-input"
+    runtime_input_pin = runtime_input_root / "input-pin.json"
+    runtime_plan_root = authority / "runtime-plan"
+    runtime_reviewed_plan_pin = runtime_plan_root / "reviewed-plan-pin.json"
+    runtime_admin_launcher = runtime_plan_root / "publish-reconcile-r8-ue57"
+    bundle_input_root = authority / "bundle-input"
+    bundle_input_pin = bundle_input_root / "input-pin.json"
+    bundle_reviewed_launcher = bundle_input_root / "launch-r8-ue57"
+    bundle_plan_root = authority / "bundle-plan"
+    bundle_reviewed_plan_pin = bundle_plan_root / "reviewed-plan-pin.json"
+    bundle_admin_launcher = bundle_plan_root / "publish-reconcile-r8-ue57"
 
     for name, value in {
         "ROOT_POLICY_PATH": root_policy,
+        "ROOT_AUTHORITY": root_authority,
         "ROOT_BUNDLE": bundle,
+        "BOOTSTRAP_AUTHORITY_ROOT": bootstrap_root,
+        "BOOTSTRAP_HELPER_PATH": bootstrap_helper,
+        "OPERATION_LOCK_PATH": operation_lock,
+        "PUBLISHER_PYTHON_PATH": publisher_python,
+        "RUNTIME_INPUT_AUTHORITY_ROOT": runtime_input_root,
+        "RUNTIME_INPUT_PIN_PATH": runtime_input_pin,
+        "RUNTIME_PLAN_AUTHORITY_ROOT": runtime_plan_root,
+        "RUNTIME_REVIEWED_PLAN_PIN_PATH": runtime_reviewed_plan_pin,
+        "RUNTIME_ADMIN_LAUNCHER_PATH": runtime_admin_launcher,
+        "BUNDLE_INPUT_AUTHORITY_ROOT": bundle_input_root,
+        "BUNDLE_INPUT_PIN_PATH": bundle_input_pin,
+        "BUNDLE_REVIEWED_LAUNCHER_PATH": bundle_reviewed_launcher,
+        "BUNDLE_PLAN_AUTHORITY_ROOT": bundle_plan_root,
+        "BUNDLE_REVIEWED_PLAN_PIN_PATH": bundle_reviewed_plan_pin,
+        "BUNDLE_ADMIN_LAUNCHER_PATH": bundle_admin_launcher,
         "WRAPPER_PYTHON": python,
         "BWRAP_PATH": bwrap,
+        "HOST_LOADER_PATH": loader,
+        "HOST_RUNTIME_AUTHORITY_ROOT": runtime_authority,
         "HOST_RUNTIME_ROOT": runtime,
+        "HOST_RUNTIME_MANIFEST": runtime_manifest,
+        "HOST_RUNTIME_RECEIPT": runtime_receipt,
         "IMMUTABLE_ENGINE_ROOT": engine,
         "IMMUTABLE_ENGINE_MANIFEST": engine_manifest_path,
+        "IMMUTABLE_ENGINE_RECEIPT": engine_receipt_path,
         "R3_PROJECT_ROOT": r3_root,
         "R3_RECEIPT_PATH": r3_receipt,
         "R8_PUBLISHED_PARENT": r8_parent,
+        "BUILDPLUGIN_AUTHORITY_ROOT": plugin_authority,
         "BUILDPLUGIN_ROOT": plugin,
+        "BUILDPLUGIN_MANIFEST": plugin_manifest,
+        "BUILDPLUGIN_RECEIPT": plugin_receipt,
+        "BUILDPLUGIN_PUBLISHER_HELPER_ROOT": buildplugin_helper_root,
+        "BUILDPLUGIN_PUBLISHER_HELPER": buildplugin_publisher_helper,
+        "BUILDPLUGIN_ADMIN_AUTHORITY_ROOT": buildplugin_admin_root,
+        "BUILDPLUGIN_ADMIN_LAUNCHER": buildplugin_admin_launcher,
+        "BUILDPLUGIN_ADMIN_RECEIPT": buildplugin_admin_receipt,
         "PUBLISHED_PARENT": published,
     }.items():
         monkeypatch.setattr(executor, name, value)
     monkeypatch.setattr(wrapper, "ROOT_POLICY_PATH", root_policy)
     monkeypatch.setattr(executor, "AUTHORITY_LSTAT", _trusted_root_lstat)
+    monkeypatch.setattr(executor, "_validate_live_python_runtime", lambda policy: None)
+    _write(operation_lock, b"")
+    operation_lock.chmod(0o600)
 
     _write(python, b"#!/bin/sh\n", executable=True)
+    _write(publisher_python, b"#!/bin/sh\n", executable=True)
+    publisher_python.chmod(0o755)
+    _write(bootstrap_helper, b"# reviewed helper\n", executable=True)
+    bootstrap_helper.chmod(0o500)
+    _write(
+        buildplugin_publisher_helper,
+        b"# reviewed BuildPlugin publisher\n",
+        executable=True,
+    )
+    buildplugin_publisher_helper.chmod(0o500)
+    _write(
+        buildplugin_admin_launcher,
+        b"#!/bin/sh\n# reviewed BuildPlugin admin\n",
+        executable=True,
+    )
+    buildplugin_admin_launcher.chmod(0o500)
+    buildplugin_bootstrap_provenance = {
+        "core_review_audit_pin": {"sha256": "0" * 64, "size_bytes": 101},
+        "content_digest": "1" * 64,
+    }
+    buildplugin_admin_receipt_document = executor.seal_document(
+        {
+            "schema": executor.BUILDPLUGIN_ADMIN_RECEIPT_SCHEMA,
+            "status": "root_installed_immutable_buildplugin_admin_authority",
+            "accepted": True,
+            "authority_root": str(buildplugin_admin_root),
+            "launcher": {
+                "path": str(buildplugin_admin_launcher),
+                "pin": {
+                    "sha256": _pin(buildplugin_admin_launcher).sha256,
+                    "size_bytes": _pin(buildplugin_admin_launcher).size_bytes,
+                },
+                "mode": "0500",
+            },
+            "helper": {
+                "path": str(buildplugin_publisher_helper),
+                "pin": {
+                    "sha256": _pin(buildplugin_publisher_helper).sha256,
+                    "size_bytes": _pin(buildplugin_publisher_helper).size_bytes,
+                },
+                "mode": "0500",
+            },
+            "interpreter": {
+                "path": str(publisher_python),
+                "pin": {
+                    "sha256": _pin(publisher_python).sha256,
+                    "size_bytes": _pin(publisher_python).size_bytes,
+                },
+                "mode": "0755",
+            },
+            "bootstrap_provenance": buildplugin_bootstrap_provenance,
+            "claims": {
+                "fresh_no_replace": True,
+                "final_and_parent_fsynced": True,
+                "admin_launcher_fd_required": True,
+                "launcher_receipt_live_bound": True,
+            },
+        }
+    )
+    _write(
+        buildplugin_admin_receipt,
+        executor.canonical_json(buildplugin_admin_receipt_document),
+    )
+    buildplugin_admin_receipt.chmod(0o444)
+    buildplugin_admin_root.chmod(0o555)
+    buildplugin_helper_root.chmod(0o555)
+    placeholder_pin = {"sha256": "1" * 64, "size_bytes": 1}
+    placeholder_projection = {
+        "tree_digest": "2" * 64,
+        "file_count": 1,
+        "directory_count": 1,
+        "total_bytes": 1,
+    }
+    placeholder_binding = {
+        "manifest_pin": placeholder_pin,
+        "manifest_content_digest": "3" * 64,
+        "receipt_pin": placeholder_pin,
+        "receipt_content_digest": "4" * 64,
+        "payload": placeholder_projection,
+    }
+    runtime_input_document = executor.seal_document(
+        {
+            "schema": executor.RUNTIME_INPUT_PIN_SCHEMA,
+            "fixed_paths": {
+                "engine_authority": str(engine.parent),
+                "engine_payload": str(engine),
+                "buildplugin_authority": str(plugin_authority),
+                "buildplugin_payload": str(plugin),
+                "runtime_authority": str(runtime_authority),
+                "runtime_payload": str(runtime),
+                "python_stdlib": str(tmp_path / "host-python-stdlib"),
+            },
+            "engine": placeholder_binding,
+            "buildplugin": placeholder_binding,
+            "tool_pins": {
+                name: {
+                    "source": str(tmp_path / "host-tools" / name),
+                    "destination": f"usr/bin/{name}",
+                    "pin": placeholder_pin,
+                }
+                for name in ("python", "bwrap", "readelf")
+            },
+            "inventory": [],
+            "symlink_resolutions": [],
+            "elf_seeds": [],
+            "elf_graph": [],
+            "generated_etc": {},
+            "data_allowlist": [],
+            "executable_destinations": [],
+            "final_projection": placeholder_projection,
+        }
+    )
+    _write(runtime_input_pin, executor.canonical_json(runtime_input_document))
+    runtime_input_pin.chmod(0o444)
+    runtime_admin_bytes = b"\x7fELF-runtime-admin"
+    runtime_plan_document = executor.seal_document(
+        {
+            "schema": executor.REVIEWED_PLAN_PIN_SCHEMA,
+            "plan_schema": "vista.r8-ue57-host-runtime-audit-plan/v1",
+            "plan_sha256": "a" * 64,
+            "plan_size_bytes": 101,
+            "plan_content_digest": "b" * 64,
+            "admin_launcher_pin": {
+                "sha256": hashlib.sha256(runtime_admin_bytes).hexdigest(),
+                "size_bytes": len(runtime_admin_bytes),
+            },
+        }
+    )
+    _write(runtime_reviewed_plan_pin, executor.canonical_json(runtime_plan_document))
+    runtime_reviewed_plan_pin.chmod(0o444)
+    _write(runtime_admin_launcher, runtime_admin_bytes, executable=True)
+    runtime_admin_launcher.chmod(0o555)
+    reviewed_launcher_bytes = b"#!/bin/sh\n"
+    reviewed_launcher_pin = {
+        "sha256": hashlib.sha256(reviewed_launcher_bytes).hexdigest(),
+        "size_bytes": len(reviewed_launcher_bytes),
+    }
+    bundle_input_document = executor.seal_document(
+        {
+            "schema": executor.BUNDLE_INPUT_PIN_SCHEMA,
+            "fixed_paths": {
+                "root_execution_authority": str(root_authority),
+                "root_bundle": str(bundle),
+                "root_policy": str(root_policy),
+                "engine_authority": str(engine.parent),
+                "runtime_authority": str(runtime_authority),
+                "buildplugin_authority": str(plugin_authority),
+                "r3_project": str(r3_root),
+                "r3_receipt": str(r3_receipt),
+                "r8_authority": str(r8_parent / "fixture-r8"),
+                "launcher_review_candidate": str(tmp_path / "launcher-review"),
+                "bundle_input_launcher": str(bundle_reviewed_launcher),
+            },
+            "git": {
+                "checkout_root": str(tmp_path),
+                "commit": "a" * 40,
+                "git_canonical": "/usr/bin/git",
+                "git_pin": placeholder_pin,
+                "tracked_paths": ["tools/fixture.py"],
+            },
+            "source_pins": {
+                "fixture.py": {
+                    "path": str(tmp_path / "tools/fixture.py"),
+                    "pin": placeholder_pin,
+                }
+            },
+            "launcher_build": {
+                "compiler_path": "/usr/bin/gcc-12",
+                "compiler_canonical": "/usr/bin/x86_64-linux-gnu-gcc-12",
+                "source_pin": {"sha256": "e" * 64, "size_bytes": 1},
+                "source_path": str(tmp_path / "tools/launcher.c"),
+                "compiler_driver_pin": {
+                    "sha256": "f" * 64,
+                    "size_bytes": 1,
+                },
+                "toolchain_artifact_ledger": [
+                    {
+                        "path": "/usr/lib/gcc/tool",
+                        "canonical": "/usr/lib/gcc/tool",
+                        "pin": {"sha256": "a" * 64, "size_bytes": 1},
+                    }
+                ],
+                "flags": ["-static"],
+                "defines": {},
+                "environment": {},
+            },
+            "launcher_binary_pin": reviewed_launcher_pin,
+            "engine": placeholder_binding,
+            "host_runtime": placeholder_binding,
+            "buildplugin": placeholder_binding,
+            "runtime_executables": {
+                "python": {"path": str(python), "pin": placeholder_pin},
+                "bwrap": {"path": str(bwrap), "pin": placeholder_pin},
+                "loader": {"path": str(loader), "pin": placeholder_pin},
+            },
+            "r3": {},
+            "r8": {},
+        }
+    )
+    _write(bundle_input_pin, executor.canonical_json(bundle_input_document))
+    bundle_input_pin.chmod(0o444)
+    _write(bundle_reviewed_launcher, reviewed_launcher_bytes, executable=True)
+    bundle_reviewed_launcher.chmod(0o555)
+    bundle_admin_bytes = b"\x7fELF-bundle-admin"
+    bundle_plan_document = executor.seal_document(
+        {
+            "schema": executor.REVIEWED_PLAN_PIN_SCHEMA,
+            "plan_schema": "vista.r8-ue57-executor-bundle-audit-plan/v1",
+            "plan_sha256": "c" * 64,
+            "plan_size_bytes": 103,
+            "plan_content_digest": "d" * 64,
+            "admin_launcher_pin": {
+                "sha256": hashlib.sha256(bundle_admin_bytes).hexdigest(),
+                "size_bytes": len(bundle_admin_bytes),
+            },
+        }
+    )
+    _write(bundle_reviewed_plan_pin, executor.canonical_json(bundle_plan_document))
+    bundle_reviewed_plan_pin.chmod(0o444)
+    _write(bundle_admin_launcher, bundle_admin_bytes, executable=True)
+    bundle_admin_launcher.chmod(0o555)
+    for stage_root in (
+        runtime_input_root,
+        runtime_plan_root,
+        bundle_input_root,
+        bundle_plan_root,
+    ):
+        stage_root.chmod(0o555)
     _write(bwrap, b"#!/bin/sh\n", executable=True)
+    _write(loader, b"\x7fELF-loader", executable=True)
+    python.chmod(0o555)
+    bwrap.chmod(0o555)
+    loader.chmod(0o555)
     for relative in executor.HOST_RUNTIME_REQUIRED_DIRECTORIES:
         (runtime / relative).mkdir(parents=True, exist_ok=True)
     _write(runtime / "lib/runtime.so", b"runtime closure")
+    (runtime / "lib/runtime.so").chmod(0o444)
     runtime_tree = executor.snapshot_tree(
         runtime, "fake runtime", immutable_authority=False
     )
-
+    runtime_manifest_document = executor.seal_document(
+        {
+            "schema": executor.HOST_RUNTIME_MANIFEST_SCHEMA,
+            "authority_root": str(runtime_authority),
+            "payload_root": str(runtime),
+            "entries": [
+                *(
+                    {
+                        "path": relative,
+                        "type": "directory",
+                        "mode": 0o555,
+                        "uid": 0,
+                        "gid": 0,
+                        "size_bytes": 0,
+                        "sha256": "",
+                    }
+                    for relative in runtime_tree.directories
+                    if relative != "."
+                ),
+                *(
+                    {
+                        "path": record.relative_path,
+                        "type": "file",
+                        "mode": record.mode,
+                        "uid": 0,
+                        "gid": 0,
+                        "size_bytes": record.size_bytes,
+                        "sha256": record.sha256,
+                    }
+                    for record in runtime_tree.files
+                ),
+            ],
+            "projection": _projection(runtime_tree),
+        }
+    )
+    _write(runtime_manifest, executor.canonical_json(runtime_manifest_document))
     engine_command = engine / "Engine/Binaries/Linux/UnrealEditor-Cmd"
     engine_modules = engine / "Engine/Binaries/Linux/UnrealEditor.modules"
     engine_version = engine / "Engine/Build/Build.version"
@@ -203,6 +544,73 @@ def _complete_fake_plan(
     )
     engine_manifest, engine_tree_digest = _engine_manifest(engine)
     _write(engine_manifest_path, executor.canonical_json(engine_manifest))
+    engine_tree = executor.snapshot_tree(
+        engine, "fake engine", immutable_authority=False
+    )
+    engine_critical = [
+        {
+            "relative_path": path.relative_to(engine).as_posix(),
+            "sha256": _pin(path, executable=path == engine_command).sha256,
+            "size_bytes": _pin(path).size_bytes,
+            "executable": path == engine_command,
+        }
+        for path in (engine_command, engine_modules, engine_version)
+    ]
+    engine_receipt_document = executor.seal_document(
+        {
+            "schema": executor.ENGINE_RECEIPT_SCHEMA,
+            "status": "root_published_immutable_ue57_engine_authority",
+            "accepted": True,
+            "authority_root": str(engine_authority),
+            "manifest": {
+                "pin": {
+                    "sha256": _pin(engine_manifest_path).sha256,
+                    "size_bytes": _pin(engine_manifest_path).size_bytes,
+                },
+                "content_digest": engine_manifest["content_digest"],
+            },
+            "reviewed_source_manifest": {
+                "sha256": "a" * 64,
+                "size_bytes": 1,
+                "content_digest": "b" * 64,
+                "tree_digest": "c" * 64,
+                "projection": _projection(engine_tree),
+            },
+            "source_projections": {
+                "pre": {
+                    "projection": _projection(engine_tree),
+                    "manifest_sha256": "a" * 64,
+                    "manifest_content_digest": "b" * 64,
+                },
+                "post": {
+                    "projection": _projection(engine_tree),
+                    "manifest_sha256": "a" * 64,
+                    "manifest_content_digest": "b" * 64,
+                },
+            },
+            "final_projection": _projection(engine_tree),
+            "critical_engine_files": engine_critical,
+            "publisher": {
+                "helper_pin": {"sha256": "d" * 64, "size_bytes": 1},
+                "interpreter_pin": {"sha256": "e" * 64, "size_bytes": 1},
+            },
+            "publication_policy": {
+                "copy_from_nofollow_descriptors": True,
+                "xattrs_acls_caps_inherited": False,
+                "source_pre_post_full_projection_equal": True,
+                "renameat2_noreplace": True,
+                "final_and_parent_fsynced": True,
+            },
+            "claims": {
+                "host_runtime_included": False,
+                "buildplugin_included": False,
+                "runtime_interaction_verified": False,
+                "human_motion_quality_accepted": False,
+                "gta_level_quality": False,
+            },
+        }
+    )
+    _write(engine_receipt_path, executor.canonical_json(engine_receipt_document))
 
     _write(r3_root / executor.PROJECT_FILE_NAME, b'{"FileVersion":3}\n')
     _write(r3_root / "Content/Base.uasset", b"base")
@@ -314,6 +722,194 @@ def _complete_fake_plan(
     plugin_tree = executor.snapshot_tree(
         plugin, "fake plugin", immutable_authority=False
     )
+    plugin_source = {
+        "path": str(authority / "plugin-source"),
+        "projection_sha256": plugin_tree.sha256,
+        "inventory_sha256": "a" * 64,
+        "file_count": len(plugin_tree.files),
+        "directory_count": len(plugin_tree.directories),
+        "total_bytes": plugin_tree.total_bytes,
+    }
+    plugin_manifest_document = {
+        "schema_version": executor.BUILDPLUGIN_MANIFEST_SCHEMA,
+        "source": plugin_source,
+        "authority": {
+            "root": str(plugin_authority),
+            "payload": str(plugin),
+            "directory_mode": "0555",
+            "file_mode": "0444",
+        },
+        "critical_files": {},
+        "entries": [
+            *(
+                {
+                    "kind": "directory",
+                    "path": relative,
+                    "source_mode": "0o755",
+                    "authority_mode": "0555",
+                }
+                for relative in plugin_tree.directories
+            ),
+            *(
+                {
+                    "kind": "file",
+                    "path": record.relative_path,
+                    "source_mode": "0o644",
+                    "size_bytes": record.size_bytes,
+                    "sha256": record.sha256,
+                    "authority_mode": "0444",
+                }
+                for record in plugin_tree.files
+            ),
+        ],
+    }
+    _write(plugin_manifest, executor.canonical_json(plugin_manifest_document))
+    plugin_receipt_document = executor.seal_document(
+        {
+            "schema_version": executor.BUILDPLUGIN_RECEIPT_SCHEMA,
+            "accepted": True,
+            "status": "root_published_immutable_buildplugin_authority",
+            "source": plugin_source,
+            "authority": {
+                "root": str(plugin_authority),
+                "payload": str(plugin),
+                "payload_projection_sha256": plugin_tree.sha256,
+                "manifest": {
+                    "path": plugin_manifest.name,
+                    "sha256": _pin(plugin_manifest).sha256,
+                    "size_bytes": _pin(plugin_manifest).size_bytes,
+                },
+                "root_owned_nonwritable": True,
+            },
+            "publisher": {
+                "helper": {
+                    "path": str(buildplugin_publisher_helper),
+                    "sha256": _pin(buildplugin_publisher_helper).sha256,
+                    "size_bytes": _pin(buildplugin_publisher_helper).size_bytes,
+                    "mode": "0500",
+                },
+                "interpreter": {
+                    "path": str(publisher_python),
+                    "sha256": _pin(publisher_python).sha256,
+                    "size_bytes": _pin(publisher_python).size_bytes,
+                    "mode": "0755",
+                },
+            },
+            "admin_publication": {
+                "authority_root": str(buildplugin_admin_root),
+                "authority_mode": "0555",
+                "launcher": {
+                    "name": buildplugin_admin_launcher.name,
+                    "path": str(buildplugin_admin_launcher),
+                    "sha256": _pin(buildplugin_admin_launcher).sha256,
+                    "size_bytes": _pin(buildplugin_admin_launcher).size_bytes,
+                    "mode": "0500",
+                },
+                "receipt": {
+                    "name": buildplugin_admin_receipt.name,
+                    "path": str(buildplugin_admin_receipt),
+                    "sha256": _pin(buildplugin_admin_receipt).sha256,
+                    "size_bytes": _pin(buildplugin_admin_receipt).size_bytes,
+                    "mode": "0444",
+                    "schema": executor.BUILDPLUGIN_ADMIN_RECEIPT_SCHEMA,
+                    "content_digest": buildplugin_admin_receipt_document[
+                        "content_digest"
+                    ],
+                },
+                "bootstrap_provenance": buildplugin_bootstrap_provenance,
+                "admin_launcher_fd_required": True,
+            },
+            "policy": {
+                "copy_from_held_source_descriptors_only": True,
+                "all_source_file_descriptors_held": True,
+                "source_namespace_revalidated_after_copy": True,
+                "fresh_staging_only": True,
+                "atomic_publish": "renameat2_noreplace",
+                "output_directory_mode": "0555",
+                "output_file_mode": "0444",
+            },
+            "claims": dict(executor._BUILDPLUGIN_NEGATIVE_CLAIMS),
+        }
+    )
+    _write(plugin_receipt, executor.canonical_json(plugin_receipt_document))
+    runtime_receipt_document = executor.seal_document(
+        {
+            "schema": executor.HOST_RUNTIME_RECEIPT_SCHEMA,
+            "status": "root_published_immutable_host_runtime_authority",
+            "accepted": True,
+            "authority_root": str(runtime_authority),
+            "manifest_pin": {
+                "sha256": _pin(runtime_manifest).sha256,
+                "size_bytes": _pin(runtime_manifest).size_bytes,
+            },
+            "manifest_content_digest": runtime_manifest_document["content_digest"],
+            "payload": _projection(runtime_tree),
+            "source_authorities": {
+                "engine_manifest_pin": {
+                    "sha256": _pin(engine_manifest_path).sha256,
+                    "size_bytes": _pin(engine_manifest_path).size_bytes,
+                },
+                "buildplugin_manifest_pin": {
+                    "sha256": _pin(plugin_manifest).sha256,
+                    "size_bytes": _pin(plugin_manifest).size_bytes,
+                },
+                "buildplugin_receipt_pin": {
+                    "sha256": _pin(plugin_receipt).sha256,
+                    "size_bytes": _pin(plugin_receipt).size_bytes,
+                },
+            },
+            "tool_pins": {
+                "python_pin": {
+                    "sha256": _pin(python).sha256,
+                    "size_bytes": _pin(python).size_bytes,
+                },
+                "readelf_pin": {"sha256": "f" * 64, "size_bytes": 1},
+            },
+            "reviewed_publication": {
+                "input_pin": {
+                    "pin": {
+                        "sha256": _pin(runtime_input_pin).sha256,
+                        "size_bytes": _pin(runtime_input_pin).size_bytes,
+                    },
+                    "content_digest": runtime_input_document["content_digest"],
+                },
+                "reviewed_plan_pin": {
+                    "pin": {
+                        "sha256": _pin(runtime_reviewed_plan_pin).sha256,
+                        "size_bytes": _pin(runtime_reviewed_plan_pin).size_bytes,
+                    },
+                    "content_digest": runtime_plan_document["content_digest"],
+                },
+                "audit_plan": {
+                    "sha256": runtime_plan_document["plan_sha256"],
+                    "size_bytes": runtime_plan_document["plan_size_bytes"],
+                    "content_digest": runtime_plan_document["plan_content_digest"],
+                },
+            },
+            "publisher": {
+                "helper_pin": {
+                    "sha256": _pin(bootstrap_helper).sha256,
+                    "size_bytes": _pin(bootstrap_helper).size_bytes,
+                },
+                "runtime_admin_launcher_pin": {
+                    "sha256": _pin(runtime_admin_launcher).sha256,
+                    "size_bytes": _pin(runtime_admin_launcher).size_bytes,
+                },
+                "interpreter_pin": {
+                    "sha256": _pin(publisher_python).sha256,
+                    "size_bytes": _pin(publisher_python).size_bytes,
+                },
+            },
+            "claims": {
+                "allowlisted_runtime_closure_only": True,
+                "ldd_executed": False,
+                "final_contains_symlinks": False,
+                "secrets_copied": False,
+                "gpu_runtime_included": False,
+            },
+        }
+    )
+    _write(runtime_receipt, executor.canonical_json(runtime_receipt_document))
 
     executor_source = Path(executor.__file__)
     wrapper_source = Path(wrapper.__file__)
@@ -323,13 +919,16 @@ def _complete_fake_plan(
     executor_copy = bundle / executor_source.name
     wrapper_copy = bundle / wrapper_source.name
     commandlet_copy = bundle / commandlet_source.name
+    launcher_copy = bundle / executor.LAUNCHER_NAME
     _write(executor_copy, executor_source.read_bytes(), executable=True)
     _write(wrapper_copy, wrapper_source.read_bytes())
     _write(commandlet_copy, commandlet_source.read_bytes())
+    _write(launcher_copy, b"#!/bin/sh\n", executable=True)
     bundle_pins = {
         executor_copy.name: _pin(executor_copy, executable=True),
         wrapper_copy.name: _pin(wrapper_copy),
         commandlet_copy.name: _pin(commandlet_copy),
+        launcher_copy.name: _pin(launcher_copy, executable=True),
     }
     bundle_manifest = executor.seal_document(
         {
@@ -351,6 +950,11 @@ def _complete_fake_plan(
     policy_document = executor.seal_document(
         {
             "schema": executor.ROOT_POLICY_SCHEMA,
+            "approved_attempt_name": executor.APPROVED_ATTEMPT_NAME,
+            "invocation_ledger_path": str(
+                published / f".{executor.APPROVED_ATTEMPT_NAME}.invocation.json"
+            ),
+            "operation_lock_path": str(operation_lock),
             "bundle_manifest_pin": dataclasses.asdict(_pin(bundle_manifest_path)) | {},
             "bundle_manifest_content_digest": bundle_manifest["content_digest"],
             "executor_pin": {
@@ -365,27 +969,40 @@ def _complete_fake_plan(
                 "sha256": bundle_pins[commandlet_copy.name].sha256,
                 "size_bytes": bundle_pins[commandlet_copy.name].size_bytes,
             },
-            "wrapper_python_pin": {
+            "launcher_pin": {
+                "sha256": bundle_pins[launcher_copy.name].sha256,
+                "size_bytes": bundle_pins[launcher_copy.name].size_bytes,
+            },
+            "live_python_pin": {
                 "sha256": _pin(python, executable=True).sha256,
                 "size_bytes": _pin(python, executable=True).size_bytes,
             },
-            "host_runtime": _projection(runtime_tree),
+            "host_runtime": {
+                "manifest_pin": {
+                    "sha256": _pin(runtime_manifest).sha256,
+                    "size_bytes": _pin(runtime_manifest).size_bytes,
+                },
+                "manifest_content_digest": runtime_manifest_document["content_digest"],
+                "receipt_pin": {
+                    "sha256": _pin(runtime_receipt).sha256,
+                    "size_bytes": _pin(runtime_receipt).size_bytes,
+                },
+                "receipt_content_digest": runtime_receipt_document["content_digest"],
+                "payload": _projection(runtime_tree),
+            },
             "engine": {
                 "manifest_pin": {
                     "sha256": _pin(engine_manifest_path).sha256,
                     "size_bytes": _pin(engine_manifest_path).size_bytes,
                 },
                 "manifest_content_digest": engine_manifest["content_digest"],
+                "receipt_pin": {
+                    "sha256": _pin(engine_receipt_path).sha256,
+                    "size_bytes": _pin(engine_receipt_path).size_bytes,
+                },
+                "receipt_content_digest": engine_receipt_document["content_digest"],
                 "tree_digest": engine_tree_digest,
-                "critical_files": [
-                    {
-                        "relative_path": path.relative_to(engine).as_posix(),
-                        "sha256": _pin(path, executable=path == engine_command).sha256,
-                        "size_bytes": _pin(path).size_bytes,
-                        "executable": path == engine_command,
-                    }
-                    for path in (engine_command, engine_modules, engine_version)
-                ],
+                "critical_files": engine_critical,
             },
             "r3": {
                 "receipt_pin": {
@@ -403,7 +1020,74 @@ def _complete_fake_plan(
                 },
                 "receipt_content_digest": r8_receipt_document["content_digest"],
             },
-            "plugin": _projection(plugin_tree),
+            "buildplugin": {
+                "manifest_pin": {
+                    "sha256": _pin(plugin_manifest).sha256,
+                    "size_bytes": _pin(plugin_manifest).size_bytes,
+                },
+                "manifest_content_digest": executor.content_digest(
+                    plugin_manifest_document
+                ),
+                "receipt_pin": {
+                    "sha256": _pin(plugin_receipt).sha256,
+                    "size_bytes": _pin(plugin_receipt).size_bytes,
+                },
+                "receipt_content_digest": plugin_receipt_document["content_digest"],
+                "payload": _projection(plugin_tree),
+            },
+            "publication_provenance": {
+                "bundle_input_pin": {
+                    "pin": {
+                        "sha256": _pin(bundle_input_pin).sha256,
+                        "size_bytes": _pin(bundle_input_pin).size_bytes,
+                    },
+                    "content_digest": bundle_input_document["content_digest"],
+                },
+                "reviewed_plan_pin": {
+                    "pin": {
+                        "sha256": _pin(bundle_reviewed_plan_pin).sha256,
+                        "size_bytes": _pin(bundle_reviewed_plan_pin).size_bytes,
+                    },
+                    "content_digest": bundle_plan_document["content_digest"],
+                },
+                "audit_plan": {
+                    "sha256": bundle_plan_document["plan_sha256"],
+                    "size_bytes": bundle_plan_document["plan_size_bytes"],
+                    "content_digest": bundle_plan_document["plan_content_digest"],
+                },
+                "publisher": {
+                    "helper_pin": {
+                        "sha256": _pin(bootstrap_helper).sha256,
+                        "size_bytes": _pin(bootstrap_helper).size_bytes,
+                    },
+                    "bundle_admin_launcher_pin": {
+                        "sha256": _pin(bundle_admin_launcher).sha256,
+                        "size_bytes": _pin(bundle_admin_launcher).size_bytes,
+                    },
+                    "interpreter_pin": {
+                        "sha256": _pin(publisher_python).sha256,
+                        "size_bytes": _pin(publisher_python).size_bytes,
+                    },
+                },
+                "launcher_build": {
+                    "source_pin": {"sha256": "e" * 64, "size_bytes": 1},
+                    "compiler_driver_pin": {
+                        "sha256": "f" * 64,
+                        "size_bytes": 1,
+                    },
+                    "toolchain_artifact_ledger_digest": hashlib.sha256(
+                        executor.canonical_json(
+                            bundle_input_document["launcher_build"][
+                                "toolchain_artifact_ledger"
+                            ]
+                        )
+                    ).hexdigest(),
+                    "output_pin": {
+                        "sha256": bundle_pins[launcher_copy.name].sha256,
+                        "size_bytes": bundle_pins[launcher_copy.name].size_bytes,
+                    },
+                },
+            },
             "bwrap_pin": {
                 "sha256": _pin(bwrap, executable=True).sha256,
                 "size_bytes": _pin(bwrap, executable=True).size_bytes,
@@ -430,6 +1114,22 @@ def _complete_fake_plan(
     return plan, {
         "r3_base": r3_root / "Content/Base.uasset",
         "r3_empty": r3_root / "Content/EmptyDirectory",
+        "root_authority": root_authority,
+        "runtime_manifest": runtime_manifest,
+        "operation_lock": operation_lock,
+        "engine_receipt": engine_receipt_path,
+        "runtime_input_root": runtime_input_root,
+        "runtime_input_pin": runtime_input_pin,
+        "bundle_plan_root": bundle_plan_root,
+        "publisher_python": publisher_python,
+        "bundle_input_pin": bundle_input_pin,
+        "root_policy": root_policy,
+        "plugin_receipt": plugin_receipt,
+        "buildplugin_helper_root": buildplugin_helper_root,
+        "buildplugin_publisher_helper": buildplugin_publisher_helper,
+        "buildplugin_admin_root": buildplugin_admin_root,
+        "buildplugin_admin_launcher": buildplugin_admin_launcher,
+        "buildplugin_admin_receipt": buildplugin_admin_receipt,
     }
 
 
@@ -540,6 +1240,27 @@ def _terminal_members(plan: executor.ExecutionPlan) -> dict[str, bytes]:
     members[executor.ARCHIVE_RECEIPT_PATH] = receipt_raw
     members[executor.ARCHIVE_RESULT_PATH] = executor.canonical_json(result)
     return members
+
+
+def _publish_terminal_final(
+    plan: executor.ExecutionPlan, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    executor._claim_invocation_ledger(plan, require_root=False)
+    members = _terminal_members(plan)
+    receipt, result = executor.validate_captured_members(plan, members)
+    monkeypatch.setattr(executor, "RENAME_NOREPLACE", os.rename)
+    with executor.immutable_snapshot(plan) as snapshot:
+        executor.publish_validated(
+            plan,
+            snapshot,
+            members,
+            executor.canonical_ustar(members),
+            b"terminal diagnostics",
+            receipt,
+            result,
+            require_root=False,
+        )
+    return plan.authorities.policy.published_parent / executor.APPROVED_ATTEMPT_NAME
 
 
 def _mutate_terminal_receipt(
@@ -675,6 +1396,143 @@ def test_partial_authority_pins_never_unblock_execution() -> None:
     assert "reviewed_root_buildplugin_authority_pins" in blockers
 
 
+def _rewrite_buildplugin_receipt_policy(
+    plan: executor.ExecutionPlan,
+    receipt_path: Path,
+    receipt: dict[str, object],
+) -> executor.AuthorityPolicy:
+    receipt["content_digest"] = executor.content_digest(receipt)
+    receipt_path.chmod(0o644)
+    receipt_path.write_bytes(executor.canonical_json(receipt))
+    receipt_path.chmod(0o444)
+    pin = _pin(receipt_path)
+    return dataclasses.replace(
+        plan.authorities.policy,
+        plugin_receipt_pin=pin,
+        plugin_receipt_content_digest=receipt["content_digest"],
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "v1",
+        "missing-admin",
+        "extra-top",
+        "extra-admin",
+        "rebound-root",
+        "fd-false",
+        "fd-integer",
+        "launcher-pin",
+        "receipt-schema",
+        "receipt-pin",
+        "bootstrap-pin",
+        "publisher",
+        "policy",
+        "claims-extra",
+        "claims-true",
+    ),
+)
+def test_executor_rejects_downgraded_tampered_or_rebound_buildplugin_v2_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    receipt_path = paths["plugin_receipt"]
+    receipt = json.loads(receipt_path.read_text())
+    if mutation == "v1":
+        receipt["schema_version"] = "vista.r8-buildplugin-authority-receipt/v1"
+    elif mutation == "missing-admin":
+        receipt.pop("admin_publication")
+    elif mutation == "extra-top":
+        receipt["unexpected"] = True
+    elif mutation == "extra-admin":
+        receipt["admin_publication"]["unexpected"] = True
+    elif mutation == "rebound-root":
+        receipt["admin_publication"]["authority_root"] = "/root/rebound-admin"
+    elif mutation == "fd-false":
+        receipt["admin_publication"]["admin_launcher_fd_required"] = False
+    elif mutation == "fd-integer":
+        receipt["admin_publication"]["admin_launcher_fd_required"] = 1
+    elif mutation == "launcher-pin":
+        receipt["admin_publication"]["launcher"]["sha256"] = "f" * 64
+    elif mutation == "receipt-schema":
+        receipt["admin_publication"]["receipt"]["schema"] = "rebound/v1"
+    elif mutation == "receipt-pin":
+        receipt["admin_publication"]["receipt"]["sha256"] = "f" * 64
+    elif mutation == "bootstrap-pin":
+        receipt["admin_publication"]["bootstrap_provenance"]["core_review_audit_pin"][
+            "size_bytes"
+        ] += 1
+    elif mutation == "publisher":
+        receipt["publisher"] = {}
+    elif mutation == "policy":
+        receipt["policy"] = {}
+    elif mutation == "claims-extra":
+        receipt["claims"]["unexpected"] = False
+    else:
+        receipt["claims"]["gta_level_quality"] = True
+    policy = _rewrite_buildplugin_receipt_policy(plan, receipt_path, receipt)
+    with pytest.raises(executor.ExecutorError, match="BuildPlugin"):
+        executor._validate_buildplugin_publication(policy, plan.authorities.plugin)
+
+
+def test_executor_rehashes_live_buildplugin_admin_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    admin_receipt = paths["buildplugin_admin_receipt"]
+    admin_receipt.chmod(0o644)
+    document = json.loads(admin_receipt.read_text())
+    document["bootstrap_provenance"]["content_digest"] = "f" * 64
+    document["content_digest"] = executor.content_digest(document)
+    admin_receipt.write_bytes(executor.canonical_json(document))
+    admin_receipt.chmod(0o444)
+
+    with pytest.raises(executor.ExecutorError, match="admin publication live pins"):
+        executor._validate_buildplugin_publication(
+            plan.authorities.policy, plan.authorities.plugin
+        )
+
+
+@pytest.mark.parametrize("hazard", ("missing", "extra", "mode", "hash"))
+def test_executor_rehashes_exact_buildplugin_publisher_helper_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, hazard: str
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    root = paths["buildplugin_helper_root"]
+    helper = paths["buildplugin_publisher_helper"]
+    root.chmod(0o755)
+    if hazard == "missing":
+        helper.unlink()
+    elif hazard == "extra":
+        _write(root / "unexpected", b"extra")
+        (root / "unexpected").chmod(0o444)
+    elif hazard == "mode":
+        helper.chmod(0o400)
+    else:
+        helper.chmod(0o600)
+        helper.write_bytes(b"tampered publisher helper\n")
+        helper.chmod(0o500)
+    root.chmod(0o555)
+
+    with pytest.raises(executor.ExecutorError, match="BuildPlugin publisher helper"):
+        executor._validate_buildplugin_publication(
+            plan.authorities.policy, plan.authorities.plugin
+        )
+
+
+def test_buildplugin_publisher_interpreter_cross_binds_policy_python(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, _paths = _complete_fake_plan(tmp_path, monkeypatch)
+    policy = dataclasses.replace(
+        plan.authorities.policy,
+        live_python_pin=executor.FilePin("f" * 64, 999, executable=True),
+    )
+    with pytest.raises(executor.ExecutorError, match="interpreter differs from policy"):
+        executor._validate_buildplugin_publication(policy, plan.authorities.plugin)
+
+
 def test_external_root_policy_is_fixed_root_owned_bootstrap_not_self_pin(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -682,21 +1540,36 @@ def test_external_root_policy_is_fixed_root_owned_bootstrap_not_self_pin(
     document = executor.seal_document(
         {
             "schema": executor.ROOT_POLICY_SCHEMA,
+            "approved_attempt_name": executor.APPROVED_ATTEMPT_NAME,
+            "invocation_ledger_path": str(
+                executor.PUBLISHED_PARENT
+                / f".{executor.APPROVED_ATTEMPT_NAME}.invocation.json"
+            ),
+            "operation_lock_path": str(executor.OPERATION_LOCK_PATH),
             "bundle_manifest_pin": _pin_document("1"),
             "bundle_manifest_content_digest": "2" * 64,
             "executor_pin": _pin_document("3"),
             "wrapper_pin": _pin_document("4"),
             "commandlet_pin": _pin_document("5"),
-            "wrapper_python_pin": _pin_document("6"),
+            "launcher_pin": _pin_document("5"),
+            "live_python_pin": _pin_document("6"),
             "host_runtime": {
-                "tree_digest": "7" * 64,
-                "file_count": 1,
-                "directory_count": 6,
-                "total_bytes": 1,
+                "manifest_pin": _pin_document("7"),
+                "manifest_content_digest": "8" * 64,
+                "receipt_pin": _pin_document("9"),
+                "receipt_content_digest": "a" * 64,
+                "payload": {
+                    "tree_digest": "7" * 64,
+                    "file_count": 1,
+                    "directory_count": 6,
+                    "total_bytes": 1,
+                },
             },
             "engine": {
                 "manifest_pin": _pin_document("8"),
                 "manifest_content_digest": "9" * 64,
+                "receipt_pin": _pin_document("8"),
+                "receipt_content_digest": "9" * 64,
                 "tree_digest": "a" * 64,
                 "critical_files": [
                     {
@@ -722,11 +1595,43 @@ def test_external_root_policy_is_fixed_root_owned_bootstrap_not_self_pin(
                 "receipt_pin": _pin_document("c"),
                 "receipt_content_digest": "d" * 64,
             },
-            "plugin": {
-                "tree_digest": "e" * 64,
-                "file_count": 1,
-                "directory_count": 1,
-                "total_bytes": 1,
+            "buildplugin": {
+                "manifest_pin": _pin_document("b"),
+                "manifest_content_digest": "c" * 64,
+                "receipt_pin": _pin_document("d"),
+                "receipt_content_digest": "e" * 64,
+                "payload": {
+                    "tree_digest": "e" * 64,
+                    "file_count": 1,
+                    "directory_count": 1,
+                    "total_bytes": 1,
+                },
+            },
+            "publication_provenance": {
+                "bundle_input_pin": {
+                    "pin": _pin_document("1"),
+                    "content_digest": "2" * 64,
+                },
+                "reviewed_plan_pin": {
+                    "pin": _pin_document("3"),
+                    "content_digest": "4" * 64,
+                },
+                "audit_plan": {
+                    "sha256": "5" * 64,
+                    "size_bytes": 1,
+                    "content_digest": "6" * 64,
+                },
+                "publisher": {
+                    "helper_pin": _pin_document("7"),
+                    "bundle_admin_launcher_pin": _pin_document("9"),
+                    "interpreter_pin": _pin_document("6"),
+                },
+                "launcher_build": {
+                    "source_pin": _pin_document("a"),
+                    "compiler_driver_pin": _pin_document("b"),
+                    "toolchain_artifact_ledger_digest": "c" * 64,
+                    "output_pin": _pin_document("5"),
+                },
             },
             "bwrap_pin": _pin_document("f"),
         }
@@ -740,7 +1645,8 @@ def test_external_root_policy_is_fixed_root_owned_bootstrap_not_self_pin(
     assert policy.policy_path == policy_path
     assert policy.policy_content_digest == document["content_digest"]
     assert policy.executor_pin == executor.FilePin("3" * 64, 1, True)
-    assert policy.wrapper_python == Path("/usr/bin/python3.10")
+    assert policy.launcher_pin == executor.FilePin("5" * 64, 1, True)
+    assert policy.wrapper_python == executor.HOST_RUNTIME_ROOT / "usr/bin/python3.10"
     assert "policy_pin" not in document
 
 
@@ -820,6 +1726,7 @@ def test_memfd_is_read_only_and_has_all_linux_seals() -> None:
 
 def test_bwrap_command_has_closed_mount_and_environment_surface() -> None:
     fds = {
+        "loader": 9,
         "bwrap": 10,
         "engine": 11,
         "plugin": 12,
@@ -845,14 +1752,16 @@ def test_bwrap_command_has_closed_mount_and_environment_surface() -> None:
     command = executor.build_sandbox_command(plan, snapshot)  # type: ignore[arg-type]
     joined = " ".join(command)
 
-    assert command[0] == "/proc/self/fd/10"
+    assert command[0] == "/proc/self/fd/9"
+    assert command[1] == "--library-path"
+    assert command[3] == "/proc/self/fd/10"
     assert "--unshare-all" in command
     assert "--share-net" not in command
     assert "--clearenv" in command
     assert "--ro-bind-data" in command
     assert "--ro-bind-fd" in command
     assert str(executor.SANDBOX_RUNTIME_ROOT) in command
-    assert str(executor.SANDBOX_PYTHON_PATH) == "/usr/bin/python3.10"
+    assert str(executor.SANDBOX_PYTHON_PATH) == "/vista/runtime/usr/bin/python3.10"
     assert not any(
         command[index] == "--ro-bind" and command[index + 1] in {"/usr", "/etc"}
         for index in range(len(command) - 1)
@@ -1192,8 +2101,18 @@ def test_pretty_byte_pinned_ue_module_json_is_accepted(
         "snapshot_tree",
         lambda *args, **kwargs: tree,
     )
+    metadata_record = tree.files[0]
+    monkeypatch.setattr(
+        executor,
+        "_validate_buildplugin_publication",
+        lambda *args, **kwargs: (metadata_record, metadata_record),
+    )
 
-    assert executor._validate_plugin(policy, "123456") == tree
+    assert executor._validate_plugin(policy, "123456") == (
+        tree,
+        metadata_record,
+        metadata_record,
+    )
 
 
 def test_archive_limit_is_checked_cumulatively_before_allocation(
@@ -1429,7 +2348,7 @@ def test_fake_publication_preserves_empty_dirs_and_fsyncs_after_final_modes(
     assert 0o555 in directory_sync_modes
 
 
-def test_post_rename_parent_fsync_failure_removes_final_candidate(
+def test_post_rename_parent_fsync_failure_preserves_final_for_reconciliation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     plan, _ = _complete_fake_plan(tmp_path, monkeypatch)
@@ -1451,7 +2370,7 @@ def test_post_rename_parent_fsync_failure_removes_final_candidate(
     monkeypatch.setattr(executor, "RENAME_NOREPLACE", os.rename)
 
     with executor.immutable_snapshot(plan) as snapshot:
-        with pytest.raises(OSError, match="post-rename"):
+        with pytest.raises(executor.ExecutorError, match="DURABILITY_UNKNOWN"):
             executor.publish_validated(
                 plan,
                 snapshot,
@@ -1463,8 +2382,534 @@ def test_post_rename_parent_fsync_failure_removes_final_candidate(
                 require_root=False,
             )
 
-    assert parent_fsync_calls >= 3
-    assert not os.path.lexists(final)
+    assert parent_fsync_calls == 2
+    assert final.is_dir()
     assert not any(
         path.name.startswith(f".{ATTEMPT}.staging-") for path in parent.iterdir()
     )
+
+
+def test_post_rename_final_fsync_failure_preserves_final_for_reconciliation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, _ = _complete_fake_plan(tmp_path, monkeypatch)
+    members = _archive_members()
+    final = plan.dry_plan.policy.published_parent / ATTEMPT
+    real_directory_fsync = executor._fsync_directory
+
+    def fail_final_fsync(path: Path) -> None:
+        if path == final:
+            raise OSError("final fsync failed")
+        real_directory_fsync(path)
+
+    monkeypatch.setattr(executor, "_fsync_directory", fail_final_fsync)
+    monkeypatch.setattr(executor, "RENAME_NOREPLACE", os.rename)
+
+    with executor.immutable_snapshot(plan) as snapshot:
+        with pytest.raises(executor.ExecutorError, match="DURABILITY_UNKNOWN"):
+            executor.publish_validated(
+                plan,
+                snapshot,
+                members,
+                executor.canonical_ustar(members),
+                b"diagnostics",
+                {"content_digest": "a" * 64},
+                {"receipt_sha256": "b" * 64},
+                require_root=False,
+            )
+
+    assert final.is_dir()
+
+
+def test_production_publication_parent_requires_exact_root_0555(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = tmp_path / "published"
+    parent.mkdir()
+    monkeypatch.setattr(executor, "PUBLISHED_PARENT", parent)
+
+    def trusted(path: os.PathLike[str] | str) -> SimpleNamespace:
+        info = os.lstat(path)
+        mode = 0o755 if Path(path) == parent else 0o555
+        return SimpleNamespace(
+            st_mode=(stat.S_IFDIR if stat.S_ISDIR(info.st_mode) else stat.S_IFREG)
+            | mode,
+            st_uid=0,
+            st_gid=0,
+            st_size=info.st_size,
+        )
+
+    monkeypatch.setattr(executor, "AUTHORITY_LSTAT", trusted)
+
+    with pytest.raises(executor.ExecutorError, match="exact root:root 0555"):
+        executor._require_publication_parent(parent, require_root=True)
+
+
+def test_r2_atomic_root_paths_and_wrapper_policy_are_identical() -> None:
+    assert executor.ROOT_BUNDLE == executor.ROOT_AUTHORITY / "bundle"
+    assert executor.ROOT_POLICY_PATH == executor.ROOT_AUTHORITY / "policy.json"
+    assert wrapper.ROOT_POLICY_PATH == executor.ROOT_POLICY_PATH
+    assert executor.BUNDLE_MANIFEST_SCHEMA.endswith("/v2")
+    assert executor.ROOT_POLICY_SCHEMA.endswith("/v3")
+    assert executor.HOST_RUNTIME_RECEIPT_SCHEMA.endswith("/v2")
+
+
+def test_stage_input_documents_are_closed_and_require_toolchain_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _plan, _paths = _complete_fake_plan(tmp_path, monkeypatch)
+
+    runtime_document = json.loads(executor.RUNTIME_INPUT_PIN_PATH.read_bytes())
+    runtime_document["unexpected"] = True
+    runtime_document.pop("content_digest")
+    runtime_document = executor.seal_document(runtime_document)
+    with pytest.raises(executor.ExecutorError, match="runtime input pin closed fields"):
+        executor._validate_stage_document(
+            executor.canonical_json(runtime_document),
+            expected_schema=executor.RUNTIME_INPUT_PIN_SCHEMA,
+            label="runtime input pin",
+        )
+
+    bundle_document = json.loads(executor.BUNDLE_INPUT_PIN_PATH.read_bytes())
+    bundle_document["launcher_build"].pop("toolchain_artifact_ledger")
+    bundle_document.pop("content_digest")
+    bundle_document = executor.seal_document(bundle_document)
+    with pytest.raises(executor.ExecutorError, match="launcher build fields differ"):
+        executor._validate_stage_document(
+            executor.canonical_json(bundle_document),
+            expected_schema=executor.BUNDLE_INPUT_PIN_SCHEMA,
+            label="bundle input pin",
+        )
+
+
+def test_live_python_contract_binds_inode_flags_environment_and_import_origins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runtime = tmp_path / "runtime"
+    python = runtime / "usr/bin/python3.10"
+    bundle = tmp_path / "root/bundle"
+    _write(python, b"immutable-python", executable=True)
+    _write(bundle / "executor.py", b"pass\n")
+    monkeypatch.setattr(executor, "HOST_RUNTIME_ROOT", runtime)
+    monkeypatch.setattr(executor, "WRAPPER_PYTHON", python)
+    monkeypatch.setattr(executor, "ROOT_BUNDLE", bundle)
+    expected_environment = {
+        "PATH": "/usr/bin:/bin",
+        "HOME": "/nonexistent",
+        "LANG": "C.UTF-8",
+        "PYTHONNOUSERSITE": "1",
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    monkeypatch.setattr(executor, "PRODUCTION_ENVIRONMENT", expected_environment)
+    monkeypatch.setattr(executor, "AUTHORITY_LSTAT", _trusted_root_lstat)
+    _, pinned = executor._read_regular(python, python.name, "fake live Python")
+    live = dataclasses.replace(
+        pinned,
+        relative_path="/proc/self/exe",
+        path=executor.LIVE_EXECUTABLE_PATH,
+    )
+    monkeypatch.setattr(executor, "_read_live_executable", lambda: live)
+    policy = dataclasses.replace(
+        executor.PRODUCTION_POLICY,
+        wrapper_python=python,
+        live_python_pin=_pin(python, executable=True),
+    )
+    flags = SimpleNamespace(isolated=1, dont_write_bytecode=1, no_user_site=1)
+    module = SimpleNamespace(
+        __file__=str(bundle / "executor.py"),
+        __spec__=SimpleNamespace(origin=str(bundle / "executor.py")),
+    )
+
+    assert (
+        executor._validate_live_python_runtime(
+            policy,
+            runtime_flags=flags,
+            effective_uid=0,
+            environment=expected_environment,
+            executable=str(python),
+            prefix=str(runtime / "usr"),
+            base_prefix=str(runtime / "usr"),
+            path_entries=(str(bundle), str(runtime / "usr/lib/python3.10")),
+            modules=(module,),
+        )
+        == live
+    )
+
+    escaped_lexical = str(bundle / ".." / ".." / "tmp" / "evil.py")
+    with pytest.raises(executor.ExecutorError, match="sys.path escaped"):
+        executor._validate_live_python_runtime(
+            policy,
+            runtime_flags=flags,
+            effective_uid=0,
+            environment=expected_environment,
+            executable=str(python),
+            prefix=str(runtime / "usr"),
+            base_prefix=str(runtime / "usr"),
+            path_entries=(escaped_lexical,),
+            modules=(module,),
+        )
+
+    outside = tmp_path / "outside"
+    _write(outside / "evil.py", b"pass\n")
+    (bundle / "escape").symlink_to(outside, target_is_directory=True)
+    escaped_symlink = str(bundle / "escape" / "evil.py")
+    with pytest.raises(executor.ExecutorError, match="import file escaped"):
+        executor._validate_live_python_runtime(
+            policy,
+            runtime_flags=flags,
+            effective_uid=0,
+            environment=expected_environment,
+            executable=str(python),
+            prefix=str(runtime / "usr"),
+            base_prefix=str(runtime / "usr"),
+            path_entries=(str(bundle),),
+            modules=(
+                SimpleNamespace(
+                    __file__=escaped_symlink,
+                    __spec__=SimpleNamespace(origin=escaped_symlink),
+                ),
+            ),
+        )
+    with pytest.raises(executor.ExecutorError, match="namespace location escaped"):
+        executor._validate_live_python_runtime(
+            policy,
+            runtime_flags=flags,
+            effective_uid=0,
+            environment=expected_environment,
+            executable=str(python),
+            prefix=str(runtime / "usr"),
+            base_prefix=str(runtime / "usr"),
+            path_entries=(str(bundle),),
+            modules=(
+                SimpleNamespace(
+                    __file__=None,
+                    __spec__=SimpleNamespace(
+                        origin=None,
+                        submodule_search_locations=(escaped_symlink,),
+                    ),
+                ),
+            ),
+        )
+
+    with pytest.raises(executor.ExecutorError, match="isolated mode"):
+        executor._validate_live_python_runtime(
+            policy,
+            runtime_flags=SimpleNamespace(
+                isolated=0, dont_write_bytecode=1, no_user_site=1
+            ),
+            effective_uid=0,
+        )
+    with pytest.raises(executor.ExecutorError, match="environment differs"):
+        executor._validate_live_python_runtime(
+            policy,
+            runtime_flags=flags,
+            effective_uid=0,
+            environment={**expected_environment, "UNSAFE": "1"},
+        )
+    with pytest.raises(executor.ExecutorError, match="sys.executable differs"):
+        executor._validate_live_python_runtime(
+            policy,
+            runtime_flags=flags,
+            effective_uid=0,
+            environment=expected_environment,
+            executable="/proc/self/fd/9",
+            prefix=str(runtime / "usr"),
+            base_prefix=str(runtime / "usr"),
+        )
+
+
+def test_host_runtime_manifest_cannot_rebind_one_payload_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    manifest_path = paths["runtime_manifest"]
+    document = json.loads(manifest_path.read_bytes())
+    file_entry = next(item for item in document["entries"] if item["type"] == "file")
+    file_entry["sha256"] = "0" * 64
+    document.pop("content_digest")
+    changed = executor.seal_document(document)
+    _write(manifest_path, executor.canonical_json(changed))
+    policy = dataclasses.replace(
+        plan.authorities.policy,
+        host_runtime_manifest_pin=_pin(manifest_path),
+        host_runtime_manifest_content_digest=changed["content_digest"],
+    )
+
+    with pytest.raises(executor.ExecutorError, match="manifest file differs"):
+        executor._validate_host_runtime(policy)
+
+
+def test_engine_receipt_rejects_pre_post_source_manifest_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    receipt_path = paths["engine_receipt"]
+    document = json.loads(receipt_path.read_bytes())
+    document.pop("content_digest")
+    document["source_projections"]["post"]["manifest_sha256"] = "f" * 64
+    changed = executor.seal_document(document)
+    _write(receipt_path, executor.canonical_json(changed))
+    policy = dataclasses.replace(
+        plan.authorities.policy,
+        engine_receipt_pin=_pin(receipt_path),
+        engine_receipt_content_digest=changed["content_digest"],
+    )
+
+    with pytest.raises(executor.ExecutorError, match="engine receipt"):
+        executor._validate_engine(policy)
+
+
+def test_atomic_root_authority_rejects_one_extra_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    _write(paths["root_authority"] / "unexpected", b"forbidden")
+
+    with pytest.raises(executor.ExecutorError, match="inventory differs"):
+        executor._validate_bundle(
+            plan.authorities.policy, plan.dry_plan.running_executor_path
+        )
+
+
+def test_installed_audit_is_zero_write_and_ledger_is_one_shot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, _ = _complete_fake_plan(tmp_path, monkeypatch)
+    parent = plan.authorities.policy.published_parent
+    before = set(parent.iterdir())
+
+    report = executor.audit_installed_authorities(plan, require_root_lock=False)
+
+    assert report["zero_output_writes"] is True
+    assert set(parent.iterdir()) == before
+    record = executor._claim_invocation_ledger(plan, require_root=False)
+    assert record.path == plan.authorities.policy.invocation_ledger_path
+    assert stat.S_IMODE(record.path.stat().st_mode) == 0o444
+    with pytest.raises(executor.ExecutorError, match="already consumed"):
+        executor._claim_invocation_ledger(plan, require_root=False)
+
+
+def test_invocation_ledger_parent_fsync_failure_preserves_ledger_and_blocks_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, _ = _complete_fake_plan(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        executor,
+        "_fsync_directory",
+        lambda path: (_ for _ in ()).throw(OSError("fsync failed")),
+    )
+
+    with pytest.raises(executor.ExecutorError, match="LEDGER_DURABILITY_UNKNOWN"):
+        executor._claim_invocation_ledger(plan, require_root=False)
+
+    assert plan.authorities.policy.invocation_ledger_path.is_file()
+
+
+def test_executor_operation_flock_rejects_concurrent_second_owner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, _ = _complete_fake_plan(tmp_path, monkeypatch)
+
+    with executor.operation_lock(plan.authorities.policy, require_root=False):
+        with pytest.raises(executor.ExecutorError, match="already active"):
+            with executor.operation_lock(plan.authorities.policy, require_root=False):
+                pytest.fail("second operation must not acquire the fixed flock")
+
+
+def test_installed_audit_fails_when_fixed_operation_lock_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    paths["operation_lock"].unlink()
+
+    with pytest.raises(executor.ExecutorError, match="lock is unavailable"):
+        executor.audit_installed_authorities(plan, require_root_lock=False)
+
+
+def test_installed_audit_rejects_extra_runtime_stage_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    root = paths["runtime_input_root"]
+    root.chmod(0o755)
+    _write(root / "unexpected", b"forbidden")
+    (root / "unexpected").chmod(0o444)
+    root.chmod(0o555)
+
+    with pytest.raises(executor.ExecutorError, match="root inventory"):
+        executor.audit_installed_authorities(plan, require_root_lock=False)
+
+
+def test_installed_audit_rejects_runtime_input_pin_byte_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    pin = paths["runtime_input_pin"]
+    pin.chmod(0o644)
+    pin.write_bytes(pin.read_bytes() + b"\n")
+    pin.chmod(0o444)
+
+    with pytest.raises(executor.ExecutorError):
+        executor.audit_installed_authorities(plan, require_root_lock=False)
+
+
+@pytest.mark.parametrize("mutation", ("missing", "symlink", "hardlink", "mode"))
+def test_installed_audit_rejects_runtime_stage_file_metadata_attacks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    pin = paths["runtime_input_pin"]
+    root = pin.parent
+    if mutation != "mode":
+        root.chmod(0o755)
+    if mutation == "missing":
+        pin.unlink()
+    elif mutation == "symlink":
+        replacement = tmp_path / "replacement-input-pin.json"
+        replacement.write_bytes(pin.read_bytes())
+        pin.unlink()
+        pin.symlink_to(replacement)
+    elif mutation == "hardlink":
+        replacement = tmp_path / "replacement-input-pin.json"
+        replacement.write_bytes(pin.read_bytes())
+        pin.unlink()
+        os.link(replacement, pin)
+    else:
+        pin.chmod(0o600)
+    root.chmod(0o555)
+
+    with pytest.raises(executor.ExecutorError):
+        executor.audit_installed_authorities(plan, require_root_lock=False)
+
+
+def test_installed_audit_rejects_extra_bundle_stage_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    root = paths["bundle_plan_root"]
+    root.chmod(0o755)
+    _write(root / "unexpected", b"forbidden")
+    (root / "unexpected").chmod(0o444)
+    root.chmod(0o555)
+
+    with pytest.raises(executor.ExecutorError, match="root inventory"):
+        executor.audit_installed_authorities(plan, require_root_lock=False)
+
+
+def test_installed_audit_rejects_publisher_python_byte_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    publisher_python = paths["publisher_python"]
+    publisher_python.write_bytes(b"#!/bin/sh\n# replaced\n")
+
+    with pytest.raises(executor.ExecutorError, match="publisher interpreter"):
+        executor.audit_installed_authorities(plan, require_root_lock=False)
+
+
+@pytest.mark.parametrize("mutation", ("source_pin", "launcher_binary_pin"))
+def test_bundle_input_launcher_lineage_cannot_be_rebound_with_updated_file_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    _plan, paths = _complete_fake_plan(tmp_path, monkeypatch)
+    input_path = paths["bundle_input_pin"]
+    input_document = json.loads(input_path.read_bytes())
+    input_document.pop("content_digest")
+    if mutation == "source_pin":
+        input_document["launcher_build"]["source_pin"] = {
+            "sha256": "0" * 64,
+            "size_bytes": 2,
+        }
+    else:
+        input_document["launcher_binary_pin"] = {
+            "sha256": "0" * 64,
+            "size_bytes": 2,
+        }
+    input_document = executor.seal_document(input_document)
+    input_path.chmod(0o644)
+    input_path.write_bytes(executor.canonical_json(input_document))
+    input_path.chmod(0o444)
+
+    policy_path = paths["root_policy"]
+    policy_document = json.loads(policy_path.read_bytes())
+    policy_document.pop("content_digest")
+    input_bytes = input_path.read_bytes()
+    policy_document["publication_provenance"]["bundle_input_pin"] = {
+        "pin": {
+            "sha256": hashlib.sha256(input_bytes).hexdigest(),
+            "size_bytes": len(input_bytes),
+        },
+        "content_digest": input_document["content_digest"],
+    }
+    policy_document = executor.seal_document(policy_document)
+    policy_path.write_bytes(executor.canonical_json(policy_document))
+    rebound_policy = executor.load_root_policy()
+
+    with pytest.raises(executor.ExecutorError, match="launcher provenance"):
+        executor._validate_bundle_publication_provenance(rebound_policy)
+
+
+def test_reconcile_validates_complete_final_before_fsync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, _ = _complete_fake_plan(tmp_path, monkeypatch)
+    final = _publish_terminal_final(plan, monkeypatch)
+
+    result = executor.reconcile_durability(plan, require_root_lock=False)
+
+    assert result["status"] == "preserved_state_audited_and_fsynced_without_retry"
+    assert result["final_projection"] is not None
+    assert final.is_dir()
+
+
+def test_reconcile_rejects_published_final_without_invocation_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, _ = _complete_fake_plan(tmp_path, monkeypatch)
+    final = _publish_terminal_final(plan, monkeypatch)
+    plan.authorities.policy.invocation_ledger_path.unlink()
+
+    with pytest.raises(
+        executor.ExecutorError,
+        match="published final exists without its one-shot invocation ledger",
+    ):
+        executor.reconcile_durability(plan, require_root_lock=False)
+
+    assert final.is_dir()
+
+
+def test_reconcile_rejects_one_extra_final_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, _ = _complete_fake_plan(tmp_path, monkeypatch)
+    final = _publish_terminal_final(plan, monkeypatch)
+    final.chmod(0o755)
+    _write(final / "unexpected", b"forbidden")
+    final.chmod(0o555)
+    tree = executor.snapshot_tree(
+        final, "tampered published final", immutable_authority=True
+    )
+
+    with pytest.raises(executor.ExecutorError, match="file inventory differs"):
+        executor.validate_reconciled_final(plan, final, tree)
+
+
+def test_reconcile_rejects_self_sealed_forged_host_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plan, _ = _complete_fake_plan(tmp_path, monkeypatch)
+    final = _publish_terminal_final(plan, monkeypatch)
+    receipt_path = final / "host-receipt.json"
+    document = json.loads(receipt_path.read_bytes())
+    document.pop("content_digest")
+    document["bindings"]["engine_build_id"] = "forged"
+    forged = executor.seal_document(document)
+    receipt_path.chmod(0o644)
+    receipt_path.write_bytes(executor.canonical_json(forged))
+    receipt_path.chmod(0o444)
+    tree = executor.snapshot_tree(
+        final, "tampered published final", immutable_authority=True
+    )
+
+    with pytest.raises(executor.ExecutorError, match="closed bindings differ"):
+        executor.validate_reconciled_final(plan, final, tree)

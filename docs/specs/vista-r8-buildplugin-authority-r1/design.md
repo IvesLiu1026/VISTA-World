@@ -8,10 +8,11 @@ Depends on: requirements.md
 
 One standalone standard-library Python helper has two modes. Checkout
 `--audit-source` opens and validates the fixed attempt C tree without writing.
-Installed-root `--publish` repeats the same validation, retains every source
-descriptor, copies only from those descriptors into fresh staging, seals a
-canonical manifest and receipt, revalidates both source and destination, fsyncs,
-and publishes with Linux no-replace rename.
+Installed-root `--publish` repeats the same validation only after the fixed
+root-owned admin launcher has opened and passed its held launcher FD. The helper
+then retains every source descriptor, copies only from those descriptors into
+fresh staging, seals a canonical manifest and receipt, revalidates both source
+and destination, fsyncs, and publishes with Linux no-replace rename.
 
 ## Architecture and Flow
 
@@ -58,20 +59,23 @@ CLI:
 /usr/bin/python3.10 -I -B tools/admin/vista_r8_buildplugin_authority.py \
   --audit-source
 
-/usr/bin/python3.10 -I -B \
-  /root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py \
-  --publish \
-  --acknowledgement "I acknowledge one fresh publication of the reviewed VISTA R8 UE 5.7 BuildPlugin authority."
+sudo /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/bash \
+  /root/vista-r8-buildplugin-admin-r1/publish-reconcile-buildplugin \
+  publish-buildplugin \
+  'I acknowledge one fresh publication of the reviewed VISTA R8 UE 5.7 BuildPlugin authority.'
 
 # Only after BUILDPLUGIN_AUTHORITY_PUBLISHED_DURABILITY_UNKNOWN:
-/usr/bin/python3.10 -I -B \
-  /root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py \
-  --reconcile-published \
-  --acknowledgement "I acknowledge reconciliation of the existing VISTA R8 UE 5.7 BuildPlugin authority without republishing it."
+sudo /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/bash \
+  /root/vista-r8-buildplugin-admin-r1/publish-reconcile-buildplugin \
+  reconcile-buildplugin \
+  'I acknowledge reconciliation of the existing VISTA R8 UE 5.7 BuildPlugin authority without republishing it.'
 ```
 
-Production CLI paths are not caller-selectable. Tests use internal `Contract`
-objects and temporary roots; this cannot bypass the root gate in `main()` or
+The direct Python form is audit-only. Privileged production operations require
+the fixed admin root, its closed receipt, and a trusted root process that opens
+and passes the exact admin-launcher FD. Production CLI paths are not
+caller-selectable. Tests use internal `Contract` objects and temporary roots;
+this cannot bypass the root and admin-FD gates in `main()` or
 `publish_fixed_authority()`.
 
 Fixed authority layout:
@@ -102,7 +106,11 @@ records. Directory records bind `source_mode`; file records bind
 - `HeldFile`: relative path, FD, stat identity, source mode, size, and SHA-256.
 - `HeldTree`: owns all descriptors; context-manager close is mandatory.
 - Manifest schema: `vista.r8-buildplugin-authority-manifest/v1`.
-- Receipt schema: `vista.r8-buildplugin-authority-receipt/v1`.
+- Receipt schema: `vista.r8-buildplugin-authority-receipt/v2`. The closed
+  `admin_publication` object binds the fixed admin root/mode, launcher
+  name/path/SHA/size/mode, sibling receipt name/path/SHA/size/mode/schema/content
+  digest, bootstrap provenance, and `admin_launcher_fd_required:true`. v1 is
+  rejected rather than migrated in place.
 
 There is no migration or in-place update. Rollback is to decline publication
 or leave the new authority unused. Removal of a published authority is outside

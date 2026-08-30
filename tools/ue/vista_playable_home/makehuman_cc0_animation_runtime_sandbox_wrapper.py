@@ -27,7 +27,7 @@ COMMANDLET_EXECUTION_SCHEMA = "vista.makehuman-cc0-ue57-animation-runtime-execut
 COMMANDLET_RECEIPT_SCHEMA = "vista.makehuman-cc0-ue57-animation-runtime-receipt/v1"
 COMMANDLET_RESULT_SCHEMA = "vista.makehuman-cc0-ue57-animation-runtime-result/v1"
 SUCCESS_STATUS = "cc0_animation_runtime_assets_saved_reloaded_pending_runtime"
-ROOT_POLICY_PATH = Path("/root/vista-r8-ue57-executor-r1-policy.json")
+ROOT_POLICY_PATH = Path("/root/vista-r8-ue57-executor-r2/policy.json")
 EXECUTION_ACKNOWLEDGEMENT = (
     "I acknowledge this isolated CC0 R8 animation-only UE 5.7 import remains "
     "unaccepted until runtime, two-client, and human-motion review gates pass"

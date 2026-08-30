@@ -20,6 +20,7 @@ import errno
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import sys
@@ -42,6 +43,9 @@ MANIFEST_NAME = "manifest.json"
 RECEIPT_NAME = "receipt.json"
 INSTALLED_ROOT = Path("/root/vista-r8-buildplugin-authority-r1")
 INSTALLED_HELPER = INSTALLED_ROOT / "vista_r8_buildplugin_authority.py"
+ADMIN_ROOT = Path("/root/vista-r8-buildplugin-admin-r1")
+ADMIN_LAUNCHER = ADMIN_ROOT / "publish-reconcile-buildplugin"
+ADMIN_RECEIPT = ADMIN_ROOT / "receipt.json"
 PINNED_PYTHON = Path("/usr/bin/python3.10")
 PINNED_PYTHON_SHA256 = (
     "7d51cd6b48b521277f5caa4610a82126e315fa2be4df069823a8b1eeb5bd4a86"
@@ -58,8 +62,9 @@ RECONCILIATION_ACKNOWLEDGEMENT = (
 
 AUDIT_SCHEMA = "vista.r8-buildplugin-authority-audit/v1"
 MANIFEST_SCHEMA = "vista.r8-buildplugin-authority-manifest/v1"
-RECEIPT_SCHEMA = "vista.r8-buildplugin-authority-receipt/v1"
+RECEIPT_SCHEMA = "vista.r8-buildplugin-authority-receipt/v2"
 RECONCILIATION_SCHEMA = "vista.r8-buildplugin-authority-reconciliation/v1"
+ADMIN_RECEIPT_SCHEMA = "vista.r8-buildplugin-admin-install-receipt/v1"
 SOURCE_PROJECTION_SHA256 = (
     "69153cd676ac35579115d1be9c8ced7d86c70beab7f8adb681ad7b8d373ae48e"
 )
@@ -77,7 +82,7 @@ CHUNK_BYTES = 1024 * 1024
 SOURCE_FILE_MODE = 0o444
 SOURCE_DIRECTORY_MODE = 0o555
 PRIVATE_STAGING_MODE = 0o700
-INSTALLED_ROOT_MODE = 0o700
+INSTALLED_ROOT_MODE = 0o555
 INSTALLED_HELPER_MODE = 0o500
 AUTHORITY_PARENT_MODE = 0o555
 _AT_FDCWD = -100
@@ -947,7 +952,9 @@ def _receipt_document(
     manifest_raw: bytes,
     helper_pin: FilePin,
     interpreter_pin: FilePin,
+    admin_publication: Mapping[str, Any],
 ) -> dict[str, Any]:
+    validated_admin_publication = _validate_admin_publication(admin_publication)
     return _seal_document(
         {
             "schema_version": RECEIPT_SCHEMA,
@@ -982,6 +989,7 @@ def _receipt_document(
                     **interpreter_pin.public(),
                 },
             },
+            "admin_publication": validated_admin_publication,
             "policy": {
                 "copy_from_held_source_descriptors_only": True,
                 "all_source_file_descriptors_held": True,
@@ -994,6 +1002,96 @@ def _receipt_document(
             "claims": dict(NEGATIVE_CLAIMS),
         }
     )
+
+
+def _valid_public_pin(value: Any) -> bool:
+    return (
+        type(value) is dict
+        and set(value) == {"sha256", "size_bytes"}
+        and type(value.get("sha256")) is str
+        and re.fullmatch(r"[0-9a-f]{64}", value["sha256"]) is not None
+        and type(value.get("size_bytes")) is int
+        and value["size_bytes"] > 0
+    )
+
+
+def _validate_admin_publication(value: Any) -> dict[str, Any]:
+    """Validate the closed admin-authority lineage embedded in receipt v2."""
+
+    if type(value) is not dict or set(value) != {
+        "authority_root",
+        "authority_mode",
+        "launcher",
+        "receipt",
+        "bootstrap_provenance",
+        "admin_launcher_fd_required",
+    }:
+        _fail(
+            "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+            "administrator publication fields differ",
+        )
+    launcher = value.get("launcher")
+    receipt = value.get("receipt")
+    bootstrap = value.get("bootstrap_provenance")
+    if (
+        value.get("authority_root") != str(ADMIN_ROOT)
+        or value.get("authority_mode") != "0555"
+        or value.get("admin_launcher_fd_required") is not True
+        or type(launcher) is not dict
+        or set(launcher) != {"name", "path", "sha256", "size_bytes", "mode"}
+        or launcher.get("name") != ADMIN_LAUNCHER.name
+        or launcher.get("path") != str(ADMIN_LAUNCHER)
+        or launcher.get("mode") != "0500"
+        or not _valid_public_pin(
+            {
+                "sha256": launcher.get("sha256"),
+                "size_bytes": launcher.get("size_bytes"),
+            }
+        )
+        or type(receipt) is not dict
+        or set(receipt)
+        != {
+            "name",
+            "path",
+            "sha256",
+            "size_bytes",
+            "mode",
+            "schema",
+            "content_digest",
+        }
+        or receipt.get("name") != ADMIN_RECEIPT.name
+        or receipt.get("path") != str(ADMIN_RECEIPT)
+        or receipt.get("mode") != "0444"
+        or receipt.get("schema") != ADMIN_RECEIPT_SCHEMA
+        or not _valid_public_pin(
+            {
+                "sha256": receipt.get("sha256"),
+                "size_bytes": receipt.get("size_bytes"),
+            }
+        )
+        or type(receipt.get("content_digest")) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", receipt["content_digest"]) is None
+        or type(bootstrap) is not dict
+        or set(bootstrap) != {"core_review_audit_pin", "content_digest"}
+        or not _valid_public_pin(bootstrap.get("core_review_audit_pin"))
+        or type(bootstrap.get("content_digest")) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", bootstrap["content_digest"]) is None
+    ):
+        _fail(
+            "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+            "administrator publication binding differs",
+        )
+    return {
+        "authority_root": value["authority_root"],
+        "authority_mode": value["authority_mode"],
+        "launcher": dict(launcher),
+        "receipt": dict(receipt),
+        "bootstrap_provenance": {
+            "core_review_audit_pin": dict(bootstrap["core_review_audit_pin"]),
+            "content_digest": bootstrap["content_digest"],
+        },
+        "admin_launcher_fd_required": True,
+    }
 
 
 def _read_regular_path(path: Path, expected_mode: int, label: str) -> FilePin:
@@ -1023,6 +1121,43 @@ def _read_regular_path(path: Path, expected_mode: int, label: str) -> FilePin:
         os.close(descriptor)
 
 
+def _read_regular_bytes_path(
+    path: Path, expected_mode: int, label: str, maximum_bytes: int
+) -> tuple[bytes, FilePin]:
+    try:
+        before = os.lstat(path)
+        descriptor = os.open(path, _file_flags())
+    except OSError as exc:
+        raise BuildPluginAuthorityError(
+            "BUILDPLUGIN_AUTHORITY_ROOT_REQUIRED", label
+        ) from exc
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_nlink != 1
+            or opened.st_uid != ROOT_UID
+            or opened.st_gid != ROOT_GID
+            or stat.S_IMODE(opened.st_mode) != expected_mode
+            or opened.st_size > maximum_bytes
+            or _identity(opened) != _identity(before)
+        ):
+            _fail("BUILDPLUGIN_AUTHORITY_ROOT_REQUIRED", label)
+        raw = bytearray()
+        while chunk := os.read(descriptor, min(CHUNK_BYTES, maximum_bytes + 1)):
+            raw.extend(chunk)
+            if len(raw) > maximum_bytes:
+                _fail("BUILDPLUGIN_AUTHORITY_ROOT_REQUIRED", label)
+        if _identity(os.fstat(descriptor)) != _identity(opened):
+            _fail("BUILDPLUGIN_AUTHORITY_ROOT_REQUIRED", f"{label} changed")
+        value = bytes(raw)
+        return value, FilePin(
+            hashlib.sha256(value).hexdigest(), len(value), expected_mode
+        )
+    finally:
+        os.close(descriptor)
+
+
 def _audit_secure_root_directory(path: Path, exact_mode: int | None = None) -> None:
     try:
         metadata = os.lstat(path)
@@ -1040,6 +1175,205 @@ def _audit_secure_root_directory(path: Path, exact_mode: int | None = None) -> N
         or (exact_mode is not None and mode != exact_mode)
     ):
         _fail("BUILDPLUGIN_AUTHORITY_ROOT_REQUIRED", f"unsafe directory: {path}")
+
+
+def _require_exact_installed_helper_root() -> FilePin:
+    """Bind the immutable one-file helper authority installed by bootstrap."""
+
+    try:
+        before = os.lstat(INSTALLED_ROOT)
+        descriptor = os.open(INSTALLED_ROOT, _directory_flags())
+    except OSError as exc:
+        raise BuildPluginAuthorityError(
+            "BUILDPLUGIN_AUTHORITY_ROOT_REQUIRED", str(INSTALLED_ROOT)
+        ) from exc
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or _identity(opened) != _identity(before)
+            or opened.st_uid != ROOT_UID
+            or opened.st_gid != ROOT_GID
+            or stat.S_IMODE(opened.st_mode) != INSTALLED_ROOT_MODE
+            or set(os.listdir(descriptor)) != {INSTALLED_HELPER.name}
+        ):
+            _fail(
+                "BUILDPLUGIN_AUTHORITY_ROOT_REQUIRED",
+                "installed helper root inventory differs",
+            )
+    finally:
+        os.close(descriptor)
+    return _read_regular_path(
+        INSTALLED_HELPER, INSTALLED_HELPER_MODE, "installed helper"
+    )
+
+
+def _require_admin_launcher_invocation(
+    descriptor: int, helper_pin: FilePin, interpreter_pin: FilePin
+) -> dict[str, Any]:
+    if type(descriptor) is not int or descriptor < 3:
+        _fail(
+            "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+            "inherited administrator launcher descriptor is required",
+        )
+    try:
+        for ancestor in _ancestor_chain(ADMIN_ROOT):
+            _audit_secure_root_directory(ancestor)
+    except BuildPluginAuthorityError as exc:
+        raise BuildPluginAuthorityError(
+            "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED", str(ADMIN_ROOT)
+        ) from exc
+    try:
+        root_before = os.lstat(ADMIN_ROOT)
+        root_fd = os.open(ADMIN_ROOT, _directory_flags())
+        installed_fd = os.open(ADMIN_LAUNCHER, _file_flags())
+        passed_fd = os.dup(descriptor)
+        os.set_inheritable(passed_fd, False)
+    except OSError as exc:
+        raise BuildPluginAuthorityError(
+            "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED", str(ADMIN_ROOT)
+        ) from exc
+    try:
+        root_opened = os.fstat(root_fd)
+        installed_info = os.fstat(installed_fd)
+        passed_info = os.fstat(passed_fd)
+        if (
+            not stat.S_ISDIR(root_opened.st_mode)
+            or _identity(root_opened) != _identity(root_before)
+            or root_opened.st_uid != ROOT_UID
+            or root_opened.st_gid != ROOT_GID
+            or stat.S_IMODE(root_opened.st_mode) != 0o555
+            or set(os.listdir(root_fd)) != {ADMIN_LAUNCHER.name, ADMIN_RECEIPT.name}
+            or not stat.S_ISREG(installed_info.st_mode)
+            or installed_info.st_nlink != 1
+            or installed_info.st_uid != ROOT_UID
+            or installed_info.st_gid != ROOT_GID
+            or stat.S_IMODE(installed_info.st_mode) != 0o500
+            or installed_info.st_size > MAX_JSON_BYTES
+            or (
+                installed_info.st_dev,
+                installed_info.st_ino,
+                installed_info.st_size,
+            )
+            != (
+                passed_info.st_dev,
+                passed_info.st_ino,
+                passed_info.st_size,
+            )
+        ):
+            _fail(
+                "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+                "administrator authority or held launcher differs",
+            )
+        installed_sha, installed_bytes = _hash_fd(installed_fd, MAX_JSON_BYTES)
+        passed_sha, passed_bytes = _hash_fd(passed_fd, MAX_JSON_BYTES)
+        if (installed_sha, installed_bytes) != (passed_sha, passed_bytes):
+            _fail(
+                "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+                "administrator launcher bytes differ",
+            )
+    finally:
+        os.close(passed_fd)
+        os.close(installed_fd)
+        os.close(root_fd)
+
+    try:
+        receipt_raw, receipt_pin = _read_regular_bytes_path(
+            ADMIN_RECEIPT, 0o444, "administrator receipt", MAX_JSON_BYTES
+        )
+    except BuildPluginAuthorityError as exc:
+        raise BuildPluginAuthorityError(
+            "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED", "administrator receipt"
+        ) from exc
+    receipt = _strict_json(receipt_raw, "administrator receipt")
+    bootstrap = receipt.get("bootstrap_provenance")
+    claims = receipt.get("claims")
+    expected_keys = {
+        "schema",
+        "status",
+        "accepted",
+        "authority_root",
+        "launcher",
+        "helper",
+        "interpreter",
+        "bootstrap_provenance",
+        "claims",
+        "content_digest",
+    }
+    if (
+        set(receipt) != expected_keys
+        or receipt.get("schema") != ADMIN_RECEIPT_SCHEMA
+        or receipt.get("status")
+        != "root_installed_immutable_buildplugin_admin_authority"
+        or receipt.get("accepted") is not True
+        or receipt.get("authority_root") != str(ADMIN_ROOT)
+        or receipt.get("content_digest") != _content_digest(receipt)
+        or canonical_json(receipt) != receipt_raw
+        or receipt.get("launcher")
+        != {
+            "path": str(ADMIN_LAUNCHER),
+            "pin": {"sha256": installed_sha, "size_bytes": installed_bytes},
+            "mode": "0500",
+        }
+        or receipt.get("helper")
+        != {
+            "path": str(INSTALLED_HELPER),
+            "pin": {
+                "sha256": helper_pin.sha256,
+                "size_bytes": helper_pin.size_bytes,
+            },
+            "mode": "0500",
+        }
+        or receipt.get("interpreter")
+        != {
+            "path": str(PINNED_PYTHON),
+            "pin": {
+                "sha256": interpreter_pin.sha256,
+                "size_bytes": interpreter_pin.size_bytes,
+            },
+            "mode": "0755",
+        }
+        or type(bootstrap) is not dict
+        or set(bootstrap) != {"core_review_audit_pin", "content_digest"}
+        or not _valid_public_pin(bootstrap.get("core_review_audit_pin"))
+        or type(bootstrap.get("content_digest")) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", bootstrap["content_digest"]) is None
+        or claims
+        != {
+            "fresh_no_replace": True,
+            "final_and_parent_fsynced": True,
+            "admin_launcher_fd_required": True,
+            "launcher_receipt_live_bound": True,
+        }
+    ):
+        _fail(
+            "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+            "administrator receipt binding differs",
+        )
+    return _validate_admin_publication(
+        {
+            "authority_root": str(ADMIN_ROOT),
+            "authority_mode": "0555",
+            "launcher": {
+                "name": ADMIN_LAUNCHER.name,
+                "path": str(ADMIN_LAUNCHER),
+                "sha256": installed_sha,
+                "size_bytes": installed_bytes,
+                "mode": "0500",
+            },
+            "receipt": {
+                "name": ADMIN_RECEIPT.name,
+                "path": str(ADMIN_RECEIPT),
+                "sha256": receipt_pin.sha256,
+                "size_bytes": receipt_pin.size_bytes,
+                "mode": "0444",
+                "schema": ADMIN_RECEIPT_SCHEMA,
+                "content_digest": receipt["content_digest"],
+            },
+            "bootstrap_provenance": receipt["bootstrap_provenance"],
+            "admin_launcher_fd_required": True,
+        }
+    )
 
 
 def _ancestor_chain(path: Path) -> tuple[Path, ...]:
@@ -1129,10 +1463,7 @@ def _require_installed_root_helper() -> tuple[FilePin, FilePin]:
         )
     for ancestor in _ancestor_chain(INSTALLED_ROOT):
         _audit_secure_root_directory(ancestor)
-    _audit_secure_root_directory(INSTALLED_ROOT, INSTALLED_ROOT_MODE)
-    helper_pin = _read_regular_path(
-        INSTALLED_HELPER, INSTALLED_HELPER_MODE, "installed helper"
-    )
+    helper_pin = _require_exact_installed_helper_root()
     try:
         interpreter = Path(sys.executable).resolve(strict=True)
     except OSError as exc:
@@ -1477,6 +1808,7 @@ def _publish_held_tree(
     contract: Contract,
     helper_pin: FilePin,
     interpreter_pin: FilePin,
+    admin_publication: Mapping[str, Any],
     *,
     owner: tuple[int, int],
     rename_function: RenameFunction,
@@ -1490,7 +1822,12 @@ def _publish_held_tree(
     revalidate_held_tree(tree)
     manifest_raw = canonical_json(_manifest_document(tree, contract))
     receipt = _receipt_document(
-        tree, contract, manifest_raw, helper_pin, interpreter_pin
+        tree,
+        contract,
+        manifest_raw,
+        helper_pin,
+        interpreter_pin,
+        admin_publication,
     )
     receipt_raw = canonical_json(receipt)
     staging = Path(
@@ -1550,10 +1887,17 @@ def _publish_held_tree(
             _remove_staging(staging, staging_identity, owner)
 
 
-def publish_fixed_authority(acknowledgement: str | None) -> dict[str, Any]:
+def publish_fixed_authority(
+    acknowledgement: str | None, admin_launcher_fd: int | None = None
+) -> dict[str, Any]:
     helper_pin, interpreter_pin = _require_installed_root_helper()
     if acknowledgement != ACKNOWLEDGEMENT:
         _fail("BUILDPLUGIN_AUTHORITY_ACK_REQUIRED", "exact acknowledgement required")
+    admin_publication = _require_admin_launcher_invocation(
+        admin_launcher_fd if admin_launcher_fd is not None else -1,
+        helper_pin,
+        interpreter_pin,
+    )
     _require_authority_parent(PRODUCTION_CONTRACT, final_must_exist=False)
     with hold_source_tree(PRODUCTION_CONTRACT) as tree:
         return _publish_held_tree(
@@ -1561,6 +1905,7 @@ def publish_fixed_authority(acknowledgement: str | None) -> dict[str, Any]:
             PRODUCTION_CONTRACT,
             helper_pin,
             interpreter_pin,
+            admin_publication,
             owner=(ROOT_UID, ROOT_GID),
             rename_function=_rename_noreplace,
         )
@@ -1571,6 +1916,7 @@ def _reconcile_held_tree(
     contract: Contract,
     helper_pin: FilePin,
     interpreter_pin: FilePin,
+    admin_publication: Mapping[str, Any],
     *,
     owner: tuple[int, int],
 ) -> dict[str, Any]:
@@ -1585,7 +1931,12 @@ def _reconcile_held_tree(
     revalidate_held_tree(tree)
     manifest_raw = canonical_json(_manifest_document(tree, contract))
     receipt = _receipt_document(
-        tree, contract, manifest_raw, helper_pin, interpreter_pin
+        tree,
+        contract,
+        manifest_raw,
+        helper_pin,
+        interpreter_pin,
+        admin_publication,
     )
     receipt_raw = canonical_json(receipt)
     _audit_staging(final, tree, manifest_raw, receipt_raw, owner)
@@ -1616,13 +1967,20 @@ def _reconcile_held_tree(
     )
 
 
-def reconcile_fixed_authority(acknowledgement: str | None) -> dict[str, Any]:
+def reconcile_fixed_authority(
+    acknowledgement: str | None, admin_launcher_fd: int | None = None
+) -> dict[str, Any]:
     helper_pin, interpreter_pin = _require_installed_root_helper()
     if acknowledgement != RECONCILIATION_ACKNOWLEDGEMENT:
         _fail(
             "BUILDPLUGIN_AUTHORITY_ACK_REQUIRED",
             "exact reconciliation acknowledgement required",
         )
+    admin_publication = _require_admin_launcher_invocation(
+        admin_launcher_fd if admin_launcher_fd is not None else -1,
+        helper_pin,
+        interpreter_pin,
+    )
     _require_authority_parent(PRODUCTION_CONTRACT, final_must_exist=True)
     with hold_source_tree(PRODUCTION_CONTRACT) as tree:
         return _reconcile_held_tree(
@@ -1630,6 +1988,7 @@ def reconcile_fixed_authority(acknowledgement: str | None) -> dict[str, Any]:
             PRODUCTION_CONTRACT,
             helper_pin,
             interpreter_pin,
+            admin_publication,
             owner=(ROOT_UID, ROOT_GID),
         )
 
@@ -1655,6 +2014,7 @@ def _parser() -> argparse.ArgumentParser:
         help="root-only re-audit/fsync after published-durability-unknown",
     )
     parser.add_argument("--acknowledgement")
+    parser.add_argument("--admin-launcher-fd", type=int)
     return parser
 
 
@@ -1662,16 +2022,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = _parser().parse_args(argv)
     try:
         if arguments.audit_source:
-            if arguments.acknowledgement is not None:
+            if (
+                arguments.acknowledgement is not None
+                or arguments.admin_launcher_fd is not None
+            ):
                 _fail(
                     "BUILDPLUGIN_AUTHORITY_ARGUMENT_INVALID",
                     "audit does not accept an acknowledgement",
                 )
             result = audit_fixed_source()
         elif arguments.publish:
-            result = publish_fixed_authority(arguments.acknowledgement)
+            result = publish_fixed_authority(
+                arguments.acknowledgement, arguments.admin_launcher_fd
+            )
         else:
-            result = reconcile_fixed_authority(arguments.acknowledgement)
+            result = reconcile_fixed_authority(
+                arguments.acknowledgement, arguments.admin_launcher_fd
+            )
         sys.stdout.buffer.write(canonical_json(result))
         return 0
     except BuildPluginAuthorityError as exc:
