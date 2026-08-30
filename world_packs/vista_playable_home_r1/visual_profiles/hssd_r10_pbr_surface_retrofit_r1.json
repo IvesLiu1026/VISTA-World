@@ -1,0 +1,727 @@
+{
+  "schema_version": "simworld.vista.hssd-r10-pbr-surface-profile/v1",
+  "profile_id": "hssd_r10_pbr_surface_retrofit_r1",
+  "source_parent": {
+    "run_parent": "/data/sysx/vista-world/runs/vista-action-world-r1",
+    "attempt_name": "hssd-r2-citysample-live-r5-20260830h",
+    "attempt_root": "/data/sysx/vista-world/runs/vista-action-world-r1/hssd-r2-citysample-live-r5-20260830h",
+    "complete_receipt": {
+      "relative_path": "hssd-r2-citysample-live-host-complete.json",
+      "sha256": "52ec26972109b0b2ca195607f8536b845c56b2c413e50d5a207609452e46211a",
+      "size_bytes": 15176,
+      "mode": "0600",
+      "schema_version": "simworld.vista.hssd-r2-citysample-live-complete/v1",
+      "status": "hssd_r2_citysample_live_publication_complete",
+      "content_digest": "a362225955381a10f5e53c0e8b1f21e2bd45360d46b9072dd8fd76c4eacd84b6"
+    },
+    "combined_receipt": {
+      "relative_path": "human-visual-demo-combined-receipt.json",
+      "sha256": "869c8247e975cd79af9be5a7cca4dc169b2de8b7b3badf673ec3f93f425bdc48",
+      "size_bytes": 28155,
+      "mode": "0600",
+      "schema_version": "simworld.vista.human-visual-demo-combined-receipt/v5",
+      "status": "sealed_human_visual_demo_candidate",
+      "content_digest": "97cb210767b35c9c7dc7a12be3cfba4729901522692e9319ee6768bfef25467e"
+    },
+    "host_receipt": {
+      "relative_path": "hssd-r2-citysample-live-host-receipt.json",
+      "sha256": "ec35ebc8aa6989fa3486207866779d5ff1898ecb2116bf7a4a0f9bf652a73848",
+      "size_bytes": 28565,
+      "mode": "0600",
+      "schema_version": "simworld.vista.hssd-r2-citysample-live-host-receipt/v1",
+      "status": "hssd_r2_citysample_live_saved_cold_reloaded",
+      "content_digest": "277a58f04fc02c421ec47cd92bc681f6410cb0ac724576155dc1b224f21fb384"
+    },
+    "scene_receipt": {
+      "relative_path": "hssd-r2-citysample-live-scene-receipt.json",
+      "sha256": "67cbea713749283bec2cbcb15cd4d47d79b9d7a857602cfc313d3db33ba0ef57",
+      "size_bytes": 917649,
+      "mode": "0600",
+      "schema_version": "simworld.vista.hssd-r2-citysample-live-scene-receipt/v1",
+      "status": "hssd_r2_citysample_live_saved_cold_reloaded",
+      "content_digest": "d86bd0168762b00979797943892478a0ff39695f6ed68c46b56018d4f6bbef4e"
+    },
+    "finish_profile": {
+      "relative_path": "hssd-r2-citysample-live-finish-profile.json",
+      "sha256": "065782f443fd659a20d9a2ed5419403b2cf0faf04e336f05b11fc38528e999cb",
+      "size_bytes": 71082,
+      "mode": "0600",
+      "schema_version": "simworld.vista.playable-home-hssd-r2-citysample-live-profile/v1",
+      "profile_id": "hssd_r2_citysample_live_r1",
+      "content_digest": "105fc5270594b0667b8616f2fa5a583757f45c25017db49a263be2d7e68967f2"
+    },
+    "project_descriptor": {
+      "relative_path": "project/VistaPlayableHome.uproject",
+      "sha256": "fe11c7e48eb895eec74e48868fc458a24a2290e826f8cbe75edea0e8ba8b674a",
+      "size_bytes": 522,
+      "mode": "0600"
+    },
+    "map_package": {
+      "relative_path": "project/Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap",
+      "project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap",
+      "sha256": "1fda153459fea9845cab969b9802ce418bdde51bdbf6884ccd17c77b796dd588",
+      "size_bytes": 682737,
+      "mode": "0600"
+    },
+    "project_static_tree": {
+      "algorithm": "sha256-path-nul-mode-size-content-v1",
+      "file_count": 2453,
+      "total_bytes": 9153718809,
+      "tree_sha256": "74846d5a0afeb7f72ee3b21bbe965afd46968a4b16e60ca9dff08d665c380376"
+    },
+    "map_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome",
+    "world_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome",
+    "world_settings_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.WorldSettings",
+    "default_game_mode": "/Script/VistaPlayableHome.VistaPlayableHomeGameMode",
+    "provider_id": "citysample_crowd_visual_demo_v1",
+    "legal_scope": {
+      "epic_ue_only_content_entitlement_confirmed": true,
+      "excluded_from_ai_vlm_training_testing_evaluation_or_review": true,
+      "excluded_from_vista_dataset_or_database": true,
+      "external_assets_outside_git": true,
+      "metahuman_human_operated_visual_demo_only": true,
+      "no_source_uasset_redistribution": true,
+      "private_noncommercial_research_only": true
+    },
+    "claims": {
+      "gta_level_quality": false,
+      "interaction_accepted": false,
+      "photoreal_character_accepted": false,
+      "runtime_visual_acceptance": false
+    }
+  },
+  "presentation_provenance": {
+    "source_attempt_name": "hybrid-r3-production-r3-20260828",
+    "source_root": "/data/sysx/vista-world/runs/vista-action-world-r1/hybrid-r3-production-r3-20260828/production-evidence",
+    "presentation_manifest": {
+      "relative_path": "presentation-manifest.json",
+      "sha256": "b5c6b0dd2d172255cb5f7bb494657b8c1ed7f2f7a214557b08d7642590e0a71e",
+      "size_bytes": 413686,
+      "mode": "0600"
+    },
+    "presentation_artifact_receipt": {
+      "relative_path": "presentation-artifact-receipt.json",
+      "sha256": "f4c55a1ef674ad3ba3cfa980e4321255663437fc0811723768ce32ce604488c5",
+      "size_bytes": 102998,
+      "mode": "0600"
+    },
+    "presentation_import_receipt": {
+      "relative_path": "presentation-import-receipt.json",
+      "sha256": "7e46e1fb338b586ca0a64a1a917f07b8ca61a6c16df0b6bf662159ebd86c83b4",
+      "size_bytes": 222139,
+      "mode": "0600"
+    },
+    "cc0_acquisition": {
+      "provider": "poly_haven",
+      "license": "CC0-1.0",
+      "receipt_schema_version": "simworld.vista.playable-home-poly-haven-receipt/v1",
+      "receipt_file_sha256": "6b894d75f61115a2d2d63769c091ae4da511e9ce9697cd0809fff1b3d1f910a3",
+      "receipt_content_digest": "a8a6b03c8fae71b299a2fcb36764e2dc1ec32c1e4dcd0b30ff0d3db3223fef70",
+      "acquisition_manifest_sha256": "317ca0f30409d04365ae8d7b5aa096e8454d8bc8fbe13a8b386935b19e719774"
+    },
+    "external_material_links": [
+      {
+        "package_material_id": "r2_external_t_8e98f99344e39",
+        "manifest_material_id": "r2.external.texture.visual_material_poly_woo.79c8e98f99344e39",
+        "material_identity_sha256": "79c8e98f99344e394098d3dad1a110be7b55251198b8afacdcc08529bea3e7b8",
+        "source_logical_asset_id": "visual.material.poly_wool_herringbone",
+        "source_asset_id": "poly_wool_herringbone",
+        "source_tree_sha256": "468f726d965639fc8ee66ae459353061ea1050aef9eae50324195fb0f3d93fde",
+        "provider_files_hash": "4ef2868d578f407e6aa9c761d7743b5d0a9c3918",
+        "resolution": "4k",
+        "active_texture_semantics": [
+          "base_color",
+          "normal",
+          "roughness"
+        ],
+        "source_files": [
+          {
+            "relative_path": "poly_wool_herringbone_diff_4k.jpg",
+            "sha256": "a72582be1337c11e2e59a03e01ef0270f2c0f455a410c5cc667df9682e2c76ce",
+            "size_bytes": 13605843,
+            "dimensions_px": [
+              4096,
+              4181
+            ],
+            "texture_semantic": "base_color"
+          },
+          {
+            "relative_path": "poly_wool_herringbone_nor_gl_4k.jpg",
+            "sha256": "d58370b656d08316b9aca02c3f627e0ffcf2dd22873c4cbeb343321ccd044620",
+            "size_bytes": 14307275,
+            "dimensions_px": [
+              4096,
+              4181
+            ],
+            "texture_semantic": "normal"
+          },
+          {
+            "relative_path": "poly_wool_herringbone_rough_4k.jpg",
+            "sha256": "04ba7ce77111a715fd689aa420a6e880b3d166a11e2e9068ae52c0235f2c3329",
+            "size_bytes": 15049055,
+            "dimensions_px": [
+              4096,
+              4181
+            ],
+            "texture_semantic": "roughness"
+          }
+        ],
+        "original_pixels_read_by_r10": false,
+        "original_pixels_copied_by_r10": false
+      },
+      {
+        "package_material_id": "r2_external_t_72b7127467c9a",
+        "manifest_material_id": "r2.external.texture.visual_material_white_oa.28b72b7127467c9a",
+        "material_identity_sha256": "28b72b7127467c9aab2323517aa3592d2c7cf44507bd83f85a07ed042437bdd5",
+        "source_logical_asset_id": "visual.material.white_oak_veneer",
+        "source_asset_id": "white_oak_veneer",
+        "source_tree_sha256": "16b8c64f8fdb4301724373913909978a2c31fce1941a55677f4437b5b5976661",
+        "provider_files_hash": "26c153c913feebf19d0ce09ce70dcd3b2b7443b5",
+        "resolution": "4k",
+        "active_texture_semantics": [
+          "base_color",
+          "normal",
+          "roughness"
+        ],
+        "source_files": [
+          {
+            "relative_path": "white_oak_veneer_diff_4k.jpg",
+            "sha256": "3d37444db4293941ef1a9794d6a52457e26d7729ccab6434e5136c093168ed8e",
+            "size_bytes": 9759576,
+            "dimensions_px": [
+              4096,
+              4096
+            ],
+            "texture_semantic": "base_color"
+          },
+          {
+            "relative_path": "white_oak_veneer_nor_gl_4k.jpg",
+            "sha256": "6fa75cd8f2aff2a13ee67fa5257d1c6b535aeccc13de92f0c59903f530af77aa",
+            "size_bytes": 11725297,
+            "dimensions_px": [
+              4096,
+              4096
+            ],
+            "texture_semantic": "normal"
+          },
+          {
+            "relative_path": "white_oak_veneer_rough_4k.jpg",
+            "sha256": "3330235fbdbd061073040f25f27cc76b74ccd8489d8ec5aeb06a4fe2f20b83d3",
+            "size_bytes": 8834547,
+            "dimensions_px": [
+              4096,
+              4096
+            ],
+            "texture_semantic": "roughness"
+          }
+        ],
+        "original_pixels_read_by_r10": false,
+        "original_pixels_copied_by_r10": false
+      }
+    ]
+  },
+  "replacement_packages": [
+    {
+      "material_id": "VISTA_M_r2_slate_honed",
+      "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_slate_honed.VISTA_M_r2_slate_honed",
+      "class_path": "/Script/Engine.MaterialInstanceConstant",
+      "project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_slate_honed.uasset",
+      "sha256": "735e5493137d44ef2d371172a6dcb65d185f0ad8bdb2ec9ae01c0033ed4d0cca",
+      "size_bytes": 67375,
+      "mode": "0600",
+      "source_kind": "sealed_r2_pbr_presentation_material",
+      "active_texture_semantics": [
+        "base_color",
+        "normal",
+        "roughness"
+      ]
+    },
+    {
+      "material_id": "VISTA_M_r2_plaster_warm",
+      "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_plaster_warm.VISTA_M_r2_plaster_warm",
+      "class_path": "/Script/Engine.MaterialInstanceConstant",
+      "project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_plaster_warm.uasset",
+      "sha256": "9ac8086d804df268eac42e0533d379a6fcdac8594ff6f1ad97064ada4527affc",
+      "size_bytes": 67419,
+      "mode": "0600",
+      "source_kind": "sealed_r2_pbr_presentation_material",
+      "active_texture_semantics": [
+        "base_color",
+        "normal",
+        "roughness"
+      ]
+    },
+    {
+      "material_id": "VISTA_M_r2_ceiling_matte",
+      "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_ceiling_matte.VISTA_M_r2_ceiling_matte",
+      "class_path": "/Script/Engine.MaterialInstanceConstant",
+      "project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_ceiling_matte.uasset",
+      "sha256": "d5c534429d2fa928f7323329a27d606579e0a6577cb6a868ca0e26b274b0ce7d",
+      "size_bytes": 67427,
+      "mode": "0600",
+      "source_kind": "sealed_r2_pbr_presentation_material",
+      "active_texture_semantics": [
+        "base_color",
+        "normal",
+        "roughness"
+      ]
+    },
+    {
+      "material_id": "r2_external_t_8e98f99344e39",
+      "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/r2_external_t_8e98f99344e39.r2_external_t_8e98f99344e39",
+      "class_path": "/Script/Engine.MaterialInstanceConstant",
+      "project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/r2_external_t_8e98f99344e39.uasset",
+      "sha256": "1b58b820e3e3e4d646357127c90b8b86606bb1fb4c9e6f041bbc065c94d35899",
+      "size_bytes": 68184,
+      "mode": "0600",
+      "source_kind": "sealed_poly_haven_cc0_4k_pbr_material",
+      "active_texture_semantics": [
+        "base_color",
+        "normal",
+        "roughness"
+      ]
+    },
+    {
+      "material_id": "r2_external_t_72b7127467c9a",
+      "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/r2_external_t_72b7127467c9a.r2_external_t_72b7127467c9a",
+      "class_path": "/Script/Engine.MaterialInstanceConstant",
+      "project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/r2_external_t_72b7127467c9a.uasset",
+      "sha256": "e6a290bb97bbdab95863cdf45b30393d711468382394e2add864774d1dd30af5",
+      "size_bytes": 68070,
+      "mode": "0600",
+      "source_kind": "sealed_poly_haven_cc0_4k_pbr_material",
+      "active_texture_semantics": [
+        "base_color",
+        "normal",
+        "roughness"
+      ]
+    }
+  ],
+  "actor_invariants": [
+    {
+      "room_id": "home.r1/room.bathroom_laundry",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_0",
+      "actor_class_path": "/Script/Engine.StaticMeshActor",
+      "actor_label": "VISTA_home_r1_room_bathroom_laundry",
+      "actor_transform": {
+        "location_cm": [
+          0,
+          600,
+          0
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actor_hidden_in_game": false,
+      "actor_collision_enabled": true,
+      "tags": [
+        "VistaRole=room",
+        "VistaSemanticId=home.r1/room.bathroom_laundry"
+      ],
+      "component_name": "StaticMeshComponent0",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_0.StaticMeshComponent0",
+      "mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bathroom_laundry/asset_bundle_bathroom_laundry.asset_bundle_bathroom_laundry",
+      "relative_transform": {
+        "location_cm": [
+          0,
+          600,
+          0
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "mobility": "<ComponentMobility.STATIC: 0>",
+      "visible": true,
+      "cast_shadow": true,
+      "cast_hidden_shadow": false,
+      "attach_parent_component_path": null,
+      "collision_mode": "QueryAndPhysics",
+      "collision_profile_name": "BlockAll",
+      "collision_responses": {
+        "Pawn": "Block",
+        "Visibility": "Block"
+      },
+      "simulate_physics": false,
+      "generate_overlap_events": false,
+      "can_ever_affect_navigation": true
+    },
+    {
+      "room_id": "home.r1/room.bedroom",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_1",
+      "actor_class_path": "/Script/Engine.StaticMeshActor",
+      "actor_label": "VISTA_home_r1_room_bedroom",
+      "actor_transform": {
+        "location_cm": [
+          -400,
+          200,
+          0
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actor_hidden_in_game": false,
+      "actor_collision_enabled": true,
+      "tags": [
+        "VistaRole=room",
+        "VistaSemanticId=home.r1/room.bedroom"
+      ],
+      "component_name": "StaticMeshComponent0",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_1.StaticMeshComponent0",
+      "mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bedroom/asset_bundle_bedroom.asset_bundle_bedroom",
+      "relative_transform": {
+        "location_cm": [
+          -400,
+          200,
+          0
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "mobility": "<ComponentMobility.STATIC: 0>",
+      "visible": true,
+      "cast_shadow": true,
+      "cast_hidden_shadow": false,
+      "attach_parent_component_path": null,
+      "collision_mode": "QueryAndPhysics",
+      "collision_profile_name": "BlockAll",
+      "collision_responses": {
+        "Pawn": "Block",
+        "Visibility": "Block"
+      },
+      "simulate_physics": false,
+      "generate_overlap_events": false,
+      "can_ever_affect_navigation": true
+    },
+    {
+      "room_id": "home.r1/room.office",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_5",
+      "actor_class_path": "/Script/Engine.StaticMeshActor",
+      "actor_label": "VISTA_home_r1_room_office",
+      "actor_transform": {
+        "location_cm": [
+          400,
+          200,
+          0
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "actor_hidden_in_game": false,
+      "actor_collision_enabled": true,
+      "tags": [
+        "VistaRole=room",
+        "VistaSemanticId=home.r1/room.office"
+      ],
+      "component_name": "StaticMeshComponent0",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_5.StaticMeshComponent0",
+      "mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_office/asset_bundle_office.asset_bundle_office",
+      "relative_transform": {
+        "location_cm": [
+          400,
+          200,
+          0
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "mobility": "<ComponentMobility.STATIC: 0>",
+      "visible": true,
+      "cast_shadow": true,
+      "cast_hidden_shadow": false,
+      "attach_parent_component_path": null,
+      "collision_mode": "QueryAndPhysics",
+      "collision_profile_name": "BlockAll",
+      "collision_responses": {
+        "Pawn": "Block",
+        "Visibility": "Block"
+      },
+      "simulate_physics": false,
+      "generate_overlap_events": false,
+      "can_ever_affect_navigation": true
+    }
+  ],
+  "bindings": [
+    {
+      "room_id": "home.r1/room.bathroom_laundry",
+      "surface_role": "floor",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_0",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_0.StaticMeshComponent0",
+      "slot_index": 0,
+      "before": {
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bathroom_laundry/asset_bundle_bathroom_laundry/Materials/VISTA_M_floor_bathroom_tile.VISTA_M_floor_bathroom_tile",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+      },
+      "after": {
+        "material_id": "VISTA_M_r2_slate_honed",
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_slate_honed.VISTA_M_r2_slate_honed",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "package_project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_slate_honed.uasset",
+        "package_sha256": "735e5493137d44ef2d371172a6dcb65d185f0ad8bdb2ec9ae01c0033ed4d0cca",
+        "package_size_bytes": 67375
+      }
+    },
+    {
+      "room_id": "home.r1/room.bathroom_laundry",
+      "surface_role": "wall",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_0",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_0.StaticMeshComponent0",
+      "slot_index": 1,
+      "before": {
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bathroom_laundry/asset_bundle_bathroom_laundry/Materials/VISTA_M_wall_warm_white.VISTA_M_wall_warm_white",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+      },
+      "after": {
+        "material_id": "VISTA_M_r2_plaster_warm",
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_plaster_warm.VISTA_M_r2_plaster_warm",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "package_project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_plaster_warm.uasset",
+        "package_sha256": "9ac8086d804df268eac42e0533d379a6fcdac8594ff6f1ad97064ada4527affc",
+        "package_size_bytes": 67419
+      }
+    },
+    {
+      "room_id": "home.r1/room.bathroom_laundry",
+      "surface_role": "ceiling",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_0",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_0.StaticMeshComponent0",
+      "slot_index": 2,
+      "before": {
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bathroom_laundry/asset_bundle_bathroom_laundry/Materials/VISTA_M_ceiling_white.VISTA_M_ceiling_white",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+      },
+      "after": {
+        "material_id": "VISTA_M_r2_ceiling_matte",
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_ceiling_matte.VISTA_M_r2_ceiling_matte",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "package_project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_ceiling_matte.uasset",
+        "package_sha256": "d5c534429d2fa928f7323329a27d606579e0a6577cb6a868ca0e26b274b0ce7d",
+        "package_size_bytes": 67427
+      }
+    },
+    {
+      "room_id": "home.r1/room.bedroom",
+      "surface_role": "floor",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_1",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_1.StaticMeshComponent0",
+      "slot_index": 0,
+      "before": {
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bedroom/asset_bundle_bedroom/Materials/VISTA_M_floor_bedroom_carpet.VISTA_M_floor_bedroom_carpet",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+      },
+      "after": {
+        "material_id": "r2_external_t_8e98f99344e39",
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/r2_external_t_8e98f99344e39.r2_external_t_8e98f99344e39",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "package_project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/r2_external_t_8e98f99344e39.uasset",
+        "package_sha256": "1b58b820e3e3e4d646357127c90b8b86606bb1fb4c9e6f041bbc065c94d35899",
+        "package_size_bytes": 68184
+      }
+    },
+    {
+      "room_id": "home.r1/room.bedroom",
+      "surface_role": "wall",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_1",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_1.StaticMeshComponent0",
+      "slot_index": 1,
+      "before": {
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bedroom/asset_bundle_bedroom/Materials/VISTA_M_wall_warm_white.VISTA_M_wall_warm_white",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+      },
+      "after": {
+        "material_id": "VISTA_M_r2_plaster_warm",
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_plaster_warm.VISTA_M_r2_plaster_warm",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "package_project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_plaster_warm.uasset",
+        "package_sha256": "9ac8086d804df268eac42e0533d379a6fcdac8594ff6f1ad97064ada4527affc",
+        "package_size_bytes": 67419
+      }
+    },
+    {
+      "room_id": "home.r1/room.bedroom",
+      "surface_role": "ceiling",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_1",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_1.StaticMeshComponent0",
+      "slot_index": 2,
+      "before": {
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_bedroom/asset_bundle_bedroom/Materials/VISTA_M_ceiling_white.VISTA_M_ceiling_white",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+      },
+      "after": {
+        "material_id": "VISTA_M_r2_ceiling_matte",
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_ceiling_matte.VISTA_M_r2_ceiling_matte",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "package_project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_ceiling_matte.uasset",
+        "package_sha256": "d5c534429d2fa928f7323329a27d606579e0a6577cb6a868ca0e26b274b0ce7d",
+        "package_size_bytes": 67427
+      }
+    },
+    {
+      "room_id": "home.r1/room.office",
+      "surface_role": "floor",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_5",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_5.StaticMeshComponent0",
+      "slot_index": 0,
+      "before": {
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_office/asset_bundle_office/Materials/VISTA_M_floor_office_cork.VISTA_M_floor_office_cork",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+      },
+      "after": {
+        "material_id": "r2_external_t_72b7127467c9a",
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/r2_external_t_72b7127467c9a.r2_external_t_72b7127467c9a",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "package_project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/r2_external_t_72b7127467c9a.uasset",
+        "package_sha256": "e6a290bb97bbdab95863cdf45b30393d711468382394e2add864774d1dd30af5",
+        "package_size_bytes": 68070
+      }
+    },
+    {
+      "room_id": "home.r1/room.office",
+      "surface_role": "wall",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_5",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_5.StaticMeshComponent0",
+      "slot_index": 1,
+      "before": {
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_office/asset_bundle_office/Materials/VISTA_M_wall_warm_white.VISTA_M_wall_warm_white",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+      },
+      "after": {
+        "material_id": "VISTA_M_r2_plaster_warm",
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_plaster_warm.VISTA_M_r2_plaster_warm",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "package_project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_plaster_warm.uasset",
+        "package_sha256": "9ac8086d804df268eac42e0533d379a6fcdac8594ff6f1ad97064ada4527affc",
+        "package_size_bytes": 67419
+      }
+    },
+    {
+      "room_id": "home.r1/room.office",
+      "surface_role": "ceiling",
+      "actor_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_5",
+      "component_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.VistaPlayableHome:PersistentLevel.StaticMeshActor_5.StaticMeshComponent0",
+      "slot_index": 2,
+      "before": {
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_bundle_office/asset_bundle_office/Materials/VISTA_M_ceiling_white.VISTA_M_ceiling_white",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "quality_disposition": "existing_generic_interchange_fallback_not_photoreal"
+      },
+      "after": {
+        "material_id": "VISTA_M_r2_ceiling_matte",
+        "object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_ceiling_matte.VISTA_M_r2_ceiling_matte",
+        "class_path": "/Script/Engine.MaterialInstanceConstant",
+        "package_project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Presentation/Imports/asset_bundle_entry_hall/entry_hall_presentation_bundle/Materials/VISTA_M_r2_ceiling_matte.uasset",
+        "package_sha256": "d5c534429d2fa928f7323329a27d606579e0a6577cb6a868ca0e26b274b0ce7d",
+        "package_size_bytes": 67427
+      }
+    }
+  ],
+  "mutation_policy": {
+    "binding_count": 9,
+    "unique_replacement_package_count": 5,
+    "target_actor_count": 3,
+    "target_component_count": 3,
+    "only_changed_project_relative_path": "Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap",
+    "save_and_cold_reload_required": true,
+    "material_packages_must_remain_parent_byte_identical": true,
+    "project_descriptor_must_remain_parent_byte_identical": true,
+    "plugin_tree_must_remain_parent_byte_identical": true,
+    "r3_character_namespace_must_remain_absent": true,
+    "r8_animation_namespace_must_remain_absent": true,
+    "provider_must_remain": "citysample_crowd_visual_demo_v1",
+    "preserved_actor_count": 108,
+    "hssd_visual_slot_count": 60,
+    "fixture_actor_count": 6,
+    "semantic_proxy_count": 19,
+    "secondary_proxy_count": 20,
+    "detail_no_collision_count": 21,
+    "protected_portal_count": 5,
+    "downloads_allowed": false,
+    "asset_import_allowed": false,
+    "actor_spawn_allowed": false,
+    "actor_delete_allowed": false,
+    "transform_mutation_allowed": false,
+    "collision_mutation_allowed": false,
+    "tag_mutation_allowed": false,
+    "mesh_mutation_allowed": false,
+    "game_mode_mutation_allowed": false,
+    "lighting_mutation_allowed": false,
+    "plugin_mutation_allowed": false,
+    "provider_mutation_allowed": false,
+    "blender_allowed": false,
+    "gpu_allowed": false,
+    "display_credentials_allowed": false,
+    "ai_vlm_review_allowed": false,
+    "binary_payload_in_git": false
+  },
+  "claims": {
+    "profile_validated": false,
+    "structural_pbr_binding_verified": false,
+    "map_only_delta_verified": false,
+    "runtime_play_verified": false,
+    "runtime_visual_acceptance": false,
+    "interaction_accepted": false,
+    "playable_collision_accepted": false,
+    "human_visual_review_accepted": false,
+    "photoreal_character_accepted": false,
+    "gta_level_quality": false,
+    "r3_character_copied": false,
+    "r8_animation_copied": false,
+    "animation_enabled_buildplugin_copied": false
+  },
+  "content_digest": "6a50f59ab596d15e6301b73e8cde30c99df723b2924ddf15669a8147e957d346"
+}

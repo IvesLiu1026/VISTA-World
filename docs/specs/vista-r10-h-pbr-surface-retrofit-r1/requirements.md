@@ -1,6 +1,6 @@
 # Requirements: VISTA R10 h PBR Surface Retrofit R1
 
-Status: Draft for user approval
+Status: Approved for source implementation; T7 execution remains separately gated
 Updated: 2026-08-30
 
 ## Problem
@@ -48,6 +48,9 @@ assets or changing gameplay.
   `1fda153459fea9845cab969b9802ce418bdde51bdbf6884ccd17c77b796dd588`,
   and the 2,453-file / 9,153,718,809-byte project tree is
   `74846d5a0afeb7f72ee3b21bbe965afd46968a4b16e60ca9dff08d665c380376`.
+- The parent project descriptor is 522 bytes with SHA-256
+  `fe11c7e48eb895eec74e48868fc458a24a2290e826f8cbe75edea0e8ba8b674a`;
+  the sealed scene receipt is 917,649 bytes.
 - The current finish profile is 71,082 bytes with SHA-256
   `065782f443fd659a20d9a2ed5419403b2cf0faf04e336f05b11fc38528e999cb`.
 - The sealed scene receipt proves the three target components currently expose
@@ -125,7 +128,8 @@ Acceptance notes:
 - All 108 preserved actors, 60 visual slots, six fixture actors, 19 semantic
   proxies, 20 secondary proxies, 21 detail-no-collision rows, five portals,
   game mode, world path, WorldSettings, lights, tags, pickup state, and provider
-  remain exact.
+  remain exact except for the nine approved material-list cells on the three
+  target components.
 - Project descriptor, plugin, materials, textures, R3/R8 namespaces, and all
   non-map packages remain byte-identical.
 
@@ -207,5 +211,5 @@ contracts, hashes, non-pixel receipts, attribution, and tests.
 ## Approval
 
 - Requested by: Ives / VISTA World owner
-- Approved by: pending explicit approval of this R10 spec
+- Approved by: Ives, explicit approval in Codex on 2026-08-30
 - Date: 2026-08-30

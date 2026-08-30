@@ -1,6 +1,6 @@
 # Design: VISTA R10 h PBR Surface Retrofit R1
 
-Status: Draft; implementation gated on requirements approval
+Status: Approved for source implementation
 Updated: 2026-08-30
 Depends on: requirements.md
 
@@ -77,16 +77,27 @@ uv run python tools/ue/vista_playable_home/materialize_hssd_r10_pbr_surface_retr
 ```
 
 This default is zero-write. A future reviewed apply surface must use one exact
-acknowledgement and expose no path, map, material, provider, GPU, or service
-override. The Unreal execution document carries only fixed snapshots and the
-fresh attempt path.
+acknowledgement:
+
+```text
+I authorize one fresh append-only NullRHI R10 child of sealed candidate h that
+changes only the nine approved material bindings in VistaPlayableHome.umap;
+this does not authorize live launch or visual acceptance.
+```
+
+It exposes no path, map, material, provider, GPU, or service override. The
+Unreal execution document carries only fixed snapshots and the fresh attempt
+path. The fixed attempt name regex is
+`^hssd-r10-pbr-surface-retrofit-r1-[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`.
 
 Proposed schemas:
 
 - `simworld.vista.hssd-r10-pbr-surface-plan/v1`
 - `simworld.vista.hssd-r10-pbr-surface-execution/v1`
+- `simworld.vista.hssd-r10-pbr-surface-result/v1`
 - `simworld.vista.hssd-r10-pbr-surface-scene-receipt/v1`
 - `simworld.vista.hssd-r10-pbr-surface-host-receipt/v1`
+- `simworld.vista.hssd-r10-pbr-surface-combined-receipt/v1`
 - `simworld.vista.hssd-r10-pbr-surface-complete/v1`
 
 All JSON uses duplicate-key rejection, finite values, strict key sets, canonical
@@ -109,6 +120,13 @@ The trusted host re-seals the copied project and admits exactly one changed
 relative path:
 `Content/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome.umap`.
 Every replacement material package must be byte-identical to its parent copy.
+
+The R10 commandlet copies and exact-pins the sealed `h` commandlet as a local
+read-only observation support module. It may call only its JSON, manifest,
+actor/world observation, protected dynamic/semantic projection, and exclusive
+publication helpers; it never calls the prior mutation pipeline. R10 itself
+duplicates and closes the literal nine-row matrix on both the host and UE sides
+so a coherently resealed profile cannot silently expand the mutation surface.
 
 ## Data Model and Migration
 
@@ -198,5 +216,5 @@ an AI/VLM provider.
 ## Approval
 
 - Requested by: Ives / VISTA World owner
-- Approved by: pending explicit approval of requirements and design
+- Approved by: Ives, explicit approval in Codex on 2026-08-30
 - Date: 2026-08-30
