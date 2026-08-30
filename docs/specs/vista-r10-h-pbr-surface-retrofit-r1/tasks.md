@@ -59,14 +59,18 @@ Depends on: requirements.md, design.md
     `git diff --check`, secret/binary scan, and read-only review PASS
   - Result: 65 focused and 669 related tests passed; Ruff, formatting,
     py_compile, JSON, diff, secret, and binary gates passed; independent host
-    and commandlet reviewers returned PASS
+    and commandlet reviewers returned PASS; final production exact-HEAD dry-run
+    returned `ready_for_separate_nullrhi_execution` with no attempt directory
 
-- [ ] T6. Commit, push, and integrate source
+- [x] T6. Commit, push, and integrate source
   - Files: all owned files
   - Depends on: T5
   - Requirements: R8
   - Validation: named-file commit, feature branch push, clean integration
     cherry-pick, repeated tests, both worktrees clean
+  - Result: feature commits `d16bea1e`, `a5d298d9`, and `b35c33f6` pushed;
+    integrated as `f4964ba7`, `d75ae21e`, and `846c82de`; focused and related
+    tests repeated before the integration branch push
 
 - [ ] T7. Execute one fresh append-only NullRHI candidate
   - Files: Git-external run evidence only
