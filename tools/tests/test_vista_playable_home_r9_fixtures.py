@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import inspect
 import json
 import pathlib
 import struct
 import zlib
 from collections.abc import Callable
+from types import SimpleNamespace
 
 import pytest
 
@@ -66,6 +68,139 @@ def _fake_toolchain(**_: object) -> dict:
             "device_policy": "private_dev_without_gpu_nodes",
         },
     }
+
+
+def _sandbox_authority_fixture(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[dict, pathlib.Path, pathlib.Path]:
+    authority_root = tmp_path / "authority"
+    distribution = authority_root / "distribution"
+    blender = distribution / "blender"
+    wrapper = distribution / forge.blender_authority.WRAPPER_PYTHON_RELATIVE_PATH
+    member = distribution / "lib" / "noncritical-runtime-member.bin"
+    manifest_path = authority_root / "distribution-manifest.json"
+    wrapper.parent.mkdir(parents=True)
+    member.parent.mkdir(parents=True)
+    blender.write_bytes(b"sandbox-projected Blender bytes")
+    wrapper.write_bytes(b"sandbox-projected Python bytes")
+    member.write_bytes(b"sandbox-projected noncritical runtime bytes")
+    blender.chmod(0o555)
+    wrapper.chmod(0o555)
+    member.chmod(0o444)
+    distribution.chmod(0o555)
+    blender_sha = hashlib.sha256(blender.read_bytes()).hexdigest()
+    wrapper_sha = hashlib.sha256(wrapper.read_bytes()).hexdigest()
+    content_entries = forge.blender_authority._scan_content_entries(distribution)
+    security_entries = [
+        forge.blender_authority._security_entry(distribution, row)
+        for row in content_entries
+    ]
+    content_tree_sha = forge.blender_authority._content_digest(content_entries)
+    tree_sha = forge.blender_authority._tree_digest(security_entries)
+    entry_count = len(content_entries)
+    manifest = {
+        "schema_version": forge.blender_authority.MANIFEST_SCHEMA_VERSION,
+        "authority_id": "blender-4.5.8-r1",
+        "source_archive": {
+            "official_url": forge.blender_authority.OFFICIAL_ARCHIVE_URL,
+            "sha256": forge.blender_authority.OFFICIAL_ARCHIVE_SHA256,
+            "size_bytes": forge.blender_authority.OFFICIAL_ARCHIVE_BYTES,
+        },
+        "root_install": {},
+        "content_tree_sha256": content_tree_sha,
+        "entry_count": entry_count,
+        "entries": security_entries,
+        "tree_sha256": tree_sha,
+        "critical_files": {
+            "blender": {
+                "path": str(forge.blender_authority.BLENDER_RELATIVE_PATH),
+                "kind": "file",
+                "uid": 0,
+                "gid": 0,
+                "mode": "0555",
+                "sha256": blender_sha,
+                "size_bytes": blender.stat().st_size,
+            },
+            "wrapper_python": {
+                "path": str(forge.blender_authority.WRAPPER_PYTHON_RELATIVE_PATH),
+                "kind": "file",
+                "uid": 0,
+                "gid": 0,
+                "mode": "0555",
+                "sha256": wrapper_sha,
+                "size_bytes": wrapper.stat().st_size,
+            },
+        },
+        "policy": {
+            "all_ancestors_root_owned": True,
+            "all_entries_root_owned": True,
+            "group_world_writable_prohibited": True,
+            "relative_non_escaping_symlinks_only": True,
+            "special_files_prohibited": True,
+        },
+    }
+    manifest_raw = forge.canonical_json_bytes(manifest)
+    manifest_path.write_bytes(manifest_raw)
+    manifest_path.chmod(0o440)
+    authority_root.chmod(0o555)
+    expected = {
+        "schema_version": forge.blender_authority.MANIFEST_SCHEMA_VERSION,
+        "source_archive": copy.deepcopy(manifest["source_archive"]),
+        "authority_root": str(authority_root),
+        "distribution_root": str(distribution),
+        "manifest": {
+            "path": str(manifest_path),
+            "sha256": hashlib.sha256(manifest_raw).hexdigest(),
+            "size_bytes": len(manifest_raw),
+            "content_tree_sha256": content_tree_sha,
+            "tree_sha256": tree_sha,
+            "entry_count": entry_count,
+        },
+        "blender": {
+            "path": str(blender),
+            "sha256": blender_sha,
+            "size_bytes": blender.stat().st_size,
+        },
+        "wrapper_python": {
+            "path": str(wrapper),
+            "sha256": wrapper_sha,
+            "size_bytes": wrapper.stat().st_size,
+        },
+    }
+    monkeypatch.setattr(forge, "DEFAULT_BLENDER_AUTHORITY_ROOT", authority_root)
+    monkeypatch.setattr(forge, "DEFAULT_BLENDER_DISTRIBUTION_ROOT", distribution)
+    monkeypatch.setattr(forge, "DEFAULT_BLENDER", blender)
+    monkeypatch.setattr(forge.blender_authority, "MANIFEST_PATH", manifest_path)
+    monkeypatch.setattr(forge, "PINNED_BLENDER_SHA256", blender_sha)
+    monkeypatch.setattr(forge, "PINNED_BLENDER_BYTES", blender.stat().st_size)
+    real_lstat = forge.os.lstat
+    projected_paths = {authority_root, distribution, manifest_path, blender, wrapper}
+
+    class ProjectedRootStat:
+        def __init__(self, observed: object) -> None:
+            self._observed = observed
+            self.st_uid = 0
+            self.st_gid = 0
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._observed, name)
+
+    def projected_lstat(path: object) -> object:
+        observed = real_lstat(path)
+        return (
+            ProjectedRootStat(observed)
+            if pathlib.Path(path) in projected_paths
+            else observed
+        )
+
+    monkeypatch.setattr(forge.os, "lstat", projected_lstat)
+    monkeypatch.setattr(
+        forge.os,
+        "statvfs",
+        lambda _path: SimpleNamespace(f_flag=forge.os.ST_RDONLY),
+    )
+    return expected, blender, member
 
 
 def _glb_bytes(
@@ -675,6 +810,140 @@ def test_root_owned_authority_is_required_and_runtime_tree_drift_fails(
             forge._assert_blender_authority_current(
                 expected, phase=f"after {relative_name} pin"
             )
+
+
+def test_worker_revalidates_fd_bound_authority_as_read_only_projection(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    expected, blender, member = _sandbox_authority_fixture(tmp_path, monkeypatch)
+
+    assert forge._sandbox_authority_projection(expected) == expected
+
+    blender.chmod(0o755)
+    blender.write_bytes(b"mutated sandbox Blender")
+    blender.chmod(0o555)
+    with pytest.raises(
+        forge.FixtureForgeError,
+        match="FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+    ):
+        forge._sandbox_authority_projection(expected)
+
+    blender.chmod(0o755)
+    blender.write_bytes(b"sandbox-projected Blender bytes")
+    blender.chmod(0o555)
+    member.chmod(0o644)
+    member.write_bytes(b"mutated noncritical runtime member")
+    member.chmod(0o444)
+    with pytest.raises(
+        forge.FixtureForgeError,
+        match="FIXTURE_BLENDER_SANDBOX_AUTHORITY_INVALID",
+    ):
+        forge._sandbox_authority_projection(expected)
+
+
+def test_sandbox_validation_context_is_worker_only_and_not_a_cli_override(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert tuple(inspect.signature(forge._verify_toolchain).parameters) == (
+        "execute_version_probe",
+    )
+    assert tuple(inspect.signature(forge._validate_plan_contract).parameters) == (
+        "plan",
+        "expected_mode",
+    )
+    assert tuple(
+        inspect.signature(forge._validate_worker_request_contract).parameters
+    ) == ("value", "expected_plan")
+    assert tuple(
+        inspect.signature(forge._validate_worker_result_contract).parameters
+    ) == ("value", "expected_plan")
+    monkeypatch.setattr(forge, "DEFAULT_RUN_PARENT", tmp_path)
+    monkeypatch.setattr(forge, "_verify_toolchain", _fake_toolchain)
+    plan = forge.build_plan(
+        forge.ForgeConfig(attempt_name="sandbox-context-test", apply=True)
+    )
+    request = forge._worker_request(plan)
+    result = forge.seal_document(
+        {
+            "schema_version": forge.WORKER_RESULT_SCHEMA,
+            "plan_content_digest": plan["content_digest"],
+            "profile": copy.deepcopy(plan["profile"]),
+            "recipe": copy.deepcopy(plan["recipe"]),
+            "builder_sources": copy.deepcopy(plan["builder_sources"]),
+            "source_snapshot_content_digest": request["source_snapshot_content_digest"],
+            "output_root": plan["output_root"],
+            "toolchain": copy.deepcopy(plan["toolchain"]),
+            "archetypes": copy.deepcopy(plan["archetypes"]),
+            "ue_package_inventory": copy.deepcopy(plan["ue_package_inventory"]),
+            "execution_policy": copy.deepcopy(plan["execution_policy"]),
+            "artifact_count": 3,
+            "artifacts": [
+                {
+                    "archetype_id": archetype_id,
+                    "glb_sha256": "a" * 64,
+                    "preview_sha256": "b" * 64,
+                    "receipt_content_digest": "c" * 64,
+                }
+                for archetype_id in forge.EXPECTED_ARCHETYPE_IDS
+            ],
+            "execution": {
+                "blender_version": forge.PINNED_BLENDER_VERSION,
+                "render_engine": "CYCLES",
+                "render_device": "CPU",
+                "network_namespace": "unshared_by_host",
+                "gpu_devices_visible": False,
+                "source_snapshot_root": forge.SOURCE_SNAPSHOT_ROOT.as_posix(),
+                "source_tree_read_only_bind": True,
+            },
+            "claims": {
+                "ue_imported": False,
+                "visual_acceptance": False,
+                "gta_quality_accepted": False,
+            },
+            "status": "three_fixture_artifacts_sealed_not_ue_imported",
+        }
+    )
+    observed_authorities: list[dict] = []
+
+    def context_toolchain(expected_authority: dict) -> dict:
+        observed_authorities.append(copy.deepcopy(expected_authority))
+        return _fake_toolchain()
+
+    monkeypatch.setattr(forge, "_verify_bound_worker_toolchain", context_toolchain)
+    forge._validate_bound_worker_plan(plan, expected_mode="apply")
+    forge._validate_bound_worker_request(
+        request,
+        expected_plan=plan,
+    )
+    forge._validate_bound_worker_result(result, expected_plan=plan)
+    assert observed_authorities == [
+        plan["toolchain"]["blender"]["authority"],
+        plan["toolchain"]["blender"]["authority"],
+        plan["toolchain"]["blender"]["authority"],
+    ]
+    worker_source = forge.WORKER_PATH.read_text(encoding="utf-8")
+    assert worker_source.count("_validate_bound_worker_plan(") == 1
+    assert worker_source.count("_validate_bound_worker_request(") == 1
+    assert worker_source.count("_validate_bound_worker_result(") == 1
+    assert "_sandbox_worker" not in worker_source
+    assert "--sandbox-worker" not in forge._parser().format_help()
+
+    def host_audit_fails(
+        *,
+        execute_version_probe: bool = True,
+    ) -> dict:
+        assert execute_version_probe is False
+        raise forge.FixtureForgeError(
+            "FIXTURE_BLENDER_AUTHORITY_SECURITY_INVALID",
+            "host ownership audit remains mandatory",
+        )
+
+    monkeypatch.setattr(forge, "_verify_toolchain", host_audit_fails)
+    with pytest.raises(
+        forge.FixtureForgeError,
+        match="FIXTURE_BLENDER_AUTHORITY_SECURITY_INVALID",
+    ):
+        forge.validate_plan(plan, expected_mode="apply")
 
 
 def test_glb_inspection_closes_structure_materials_and_bounds(
