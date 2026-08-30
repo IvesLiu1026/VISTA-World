@@ -31,15 +31,15 @@ from typing import Any
 from tools.runtime.vista_playable_home import human_visual_demo_launch as r6_launcher
 from tools.ue.vista_playable_home import materialize_combined_realism_r4 as r4
 
-PLAN_SCHEMA = "simworld.vista.hssd-r2-citysample-live-plan/v1"
-EXECUTION_SCHEMA = "simworld.vista.hssd-r2-citysample-live-execution/v1"
+PLAN_SCHEMA = "simworld.vista.hssd-r2-citysample-live-plan/v2"
+EXECUTION_SCHEMA = "simworld.vista.hssd-r2-citysample-live-execution/v2"
 RESULT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-result/v1"
 SCENE_RECEIPT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-scene-receipt/v1"
 HOST_RECEIPT_SCHEMA = "simworld.vista.hssd-r2-citysample-live-host-receipt/v1"
 FIXTURE_EVIDENCE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-fixture-evidence/v1"
 COMPLETE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-complete/v1"
 COMBINED_RECEIPT_SCHEMA_V5 = "simworld.vista.human-visual-demo-combined-receipt/v5"
-UPGRADE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-upgrade/v1"
+UPGRADE_SCHEMA = "simworld.vista.hssd-r2-citysample-live-upgrade/v2"
 UPGRADE_STATUS = "hssd_r2_citysample_live_saved_cold_reloaded"
 DRY_RUN_STATUS = "validated_zero_write_hssd_r2_citysample_live_plan"
 APPLY_PLAN_STATUS = "validated_hssd_r2_citysample_live_apply_plan_no_write"
@@ -87,6 +87,9 @@ HSSD_R2_BUILD_PLAN_SHA256 = (
     "4b2ded463a0be4caf26cd326a06944ab171d93c917d5de530fd36ca9b3ae9de2"
 )
 HSSD_R2_BUILD_PLAN_BYTES = 206_549
+HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST = (
+    "6ba35488c0dee391faaa6884144f7f37955d37dcfd2f0110622c63d350ab52a9"
+)
 HSSD_R2_MAP = HSSD_R2_ROOT / "project" / pathlib.Path(MAP_RELATIVE_PATH)
 HSSD_R2_MAP_SHA256 = "60c4f7195d3715e6f6d6691594ca17c481fdad21e838121fcae9ed3ffca4f4d1"
 HSSD_R2_MAP_BYTES = 437_720
@@ -1203,6 +1206,220 @@ def _hssd_module():
     return importlib.import_module("run_hssd_private_research_composition")
 
 
+def _semantic_proxy_binding_from_observation(
+    observation: Any, semantic_id: str, label: str
+) -> dict[str, Any]:
+    observation_keys = {
+        "actor_class_path",
+        "actor_collision_enabled",
+        "actor_hidden_in_game",
+        "actor_label",
+        "actor_path",
+        "components",
+        "semantic_state",
+        "semantic_target_id",
+        "tags",
+        "world_transform_cm",
+    }
+    component_keys = {
+        "can_ever_affect_navigation",
+        "collision_enabled",
+        "collision_mode",
+        "collision_profile",
+        "collision_responses",
+        "component_path",
+        "generate_overlap_events",
+        "mesh_path",
+        "mobility",
+        "simulate_physics",
+        "visible",
+    }
+    _require(
+        type(observation) is dict and set(observation) == observation_keys,
+        label + " observation fields differ",
+    )
+    components = observation["components"]
+    semantic_state = observation["semantic_state"]
+    _require(
+        observation["semantic_target_id"] == semantic_id
+        and type(semantic_state) is dict
+        and semantic_state.get("semantic_id") == semantic_id
+        and type(observation["actor_path"]) is str
+        and observation["actor_path"]
+        and observation["actor_hidden_in_game"] is True
+        and observation["actor_collision_enabled"] is True
+        and type(observation["tags"]) is list
+        and "VistaSemanticId=" + semantic_id in observation["tags"]
+        and type(components) is list
+        and len(components) == 1,
+        label + " actor authority differs",
+    )
+    component = components[0]
+    _require(
+        type(component) is dict
+        and set(component) == component_keys
+        and type(component["component_path"]) is str
+        and component["component_path"]
+        and component["collision_enabled"] is True
+        and component["collision_mode"] == "QueryOnly"
+        and component["collision_profile"] == "Custom"
+        and component["collision_responses"] == {"Pawn": "Block", "Visibility": "Block"}
+        and component["simulate_physics"] is False
+        and type(component["generate_overlap_events"]) is bool
+        and type(component["can_ever_affect_navigation"]) is bool
+        and component["visible"] is False,
+        label + " component authority differs",
+    )
+    return {
+        "semantic_id": semantic_id,
+        "actor_path": observation["actor_path"],
+        "component_path": component["component_path"],
+        "generate_overlap_events": component["generate_overlap_events"],
+        "can_ever_affect_navigation": component["can_ever_affect_navigation"],
+    }
+
+
+def _placement_authority_content_digest(
+    placements: Sequence[Mapping[str, Any]],
+) -> str:
+    _require(
+        len(placements) == 60 and all(type(row) is dict for row in placements),
+        "HSSD placement authority rows differ",
+    )
+    rows = sorted(
+        (copy.deepcopy(row) for row in placements),
+        key=lambda row: row.get("instance_id", ""),
+    )
+    _require(
+        all(type(row.get("instance_id")) is str and row["instance_id"] for row in rows)
+        and len({row["instance_id"] for row in rows}) == 60,
+        "HSSD placement authority identities differ",
+    )
+    return hashlib.sha256(_canonical_json(rows).removesuffix(b"\n")).hexdigest()
+
+
+def _semantic_proxy_bindings(
+    scene: Mapping[str, Any],
+    placements: Sequence[Mapping[str, Any]],
+    r6_result: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    _require(
+        type(scene) is dict
+        and type(r6_result) is dict
+        and all(type(row) is dict for row in placements),
+        "HSSD semantic projection inputs differ",
+    )
+    semantic_to_instance = {
+        row.get("semantic_target_id"): row.get("instance_id")
+        for row in placements
+        if row.get("semantic_target_id") is not None
+    }
+    _require(
+        len(semantic_to_instance) == 19
+        and all(
+            type(semantic_id) is str
+            and semantic_id
+            and type(instance_id) is str
+            and instance_id
+            for semantic_id, instance_id in semantic_to_instance.items()
+        ),
+        "HSSD semantic placement binding differs",
+    )
+    proxies = scene.get("semantic_proxies")
+    _require(type(proxies) is list and len(proxies) == 19, "HSSD proxy count differs")
+    rows: list[dict[str, Any]] = []
+    for index, proxy in enumerate(proxies):
+        label = "HSSD semantic proxy " + str(index)
+        _require(
+            type(proxy) is dict
+            and set(proxy)
+            == {
+                "after_authority_repair_and_hide",
+                "authority",
+                "authority_evidence",
+                "baseline",
+                "reloaded",
+                "semantic_target_id",
+            }
+            and proxy["authority"] == "hidden_r1_proxy_query_authority_repaired"
+            and proxy["after_authority_repair_and_hide"] == proxy["reloaded"],
+            label + " sealed lifecycle differs",
+        )
+        semantic_id = proxy["semantic_target_id"]
+        _require(
+            type(semantic_id) is str and semantic_id in semantic_to_instance,
+            label + " semantic ID differs",
+        )
+        projected = _semantic_proxy_binding_from_observation(
+            proxy["reloaded"], semantic_id, label
+        )
+        rows.append({"instance_id": semantic_to_instance[semantic_id], **projected})
+    rows.sort(key=lambda row: row["instance_id"])
+    _require(
+        len({row["instance_id"] for row in rows}) == 19
+        and len({row["semantic_id"] for row in rows}) == 19
+        and {row["semantic_id"] for row in rows} == set(semantic_to_instance),
+        "HSSD semantic proxy projection identities differ",
+    )
+    distribution = {
+        state: sum(
+            (
+                row["generate_overlap_events"],
+                row["can_ever_affect_navigation"],
+            )
+            == state
+            for row in rows
+        )
+        for state in ((False, True), (False, False), (True, False), (True, True))
+    }
+    _require(
+        distribution
+        == {
+            (False, True): 15,
+            (False, False): 1,
+            (True, False): 3,
+            (True, True): 0,
+        },
+        "HSSD semantic proxy boolean distribution differs",
+    )
+    binding_by_semantic = {row["semantic_id"]: row for row in rows}
+    _require(
+        set(DYNAMIC_SLOT_BINDINGS.values()).issubset(binding_by_semantic),
+        "HSSD dynamic semantic proxy identities differ",
+    )
+    dynamic_rows = r6_result.get("target_observations_reloaded")
+    pot = r6_result.get("pot_observation_reloaded")
+    _require(
+        type(dynamic_rows) is list and len(dynamic_rows) == 2 and type(pot) is dict,
+        "R6 dynamic observations differ",
+    )
+    _require(
+        all(type(row) is dict for row in [*dynamic_rows, pot]),
+        "R6 dynamic observation rows differ",
+    )
+    r6_dynamic = {row.get("semantic_id"): row for row in [*dynamic_rows, pot]}
+    _require(
+        set(r6_dynamic) == set(DYNAMIC_SLOT_BINDINGS.values()),
+        "R6 dynamic semantic identities differ",
+    )
+    for instance_id, semantic_id in DYNAMIC_SLOT_BINDINGS.items():
+        binding = binding_by_semantic[semantic_id]
+        observed = r6_dynamic[semantic_id]
+        proxy = observed.get("proxy")
+        _require(
+            binding["instance_id"] == instance_id
+            and observed.get("actor_path") == binding["actor_path"]
+            and type(proxy) is dict
+            and proxy.get("component_path") == binding["component_path"]
+            and proxy.get("generate_overlap_events")
+            is binding["generate_overlap_events"]
+            and proxy.get("can_ever_affect_navigation")
+            is binding["can_ever_affect_navigation"],
+            "R6 dynamic proxy/HSSD authority differs: " + instance_id,
+        )
+    return rows
+
+
 def _source_state(config: Config) -> SourceState:
     receipt_artifact, _ = _read_artifact(
         config.r6_receipt,
@@ -1258,7 +1475,7 @@ def _source_state(config: Config) -> SourceState:
         expected_sha256=HSSD_R2_HOST_SHA256,
         expected_bytes=HSSD_R2_HOST_BYTES,
     )
-    scene_artifact, _scene = _canonical_document(
+    scene_artifact, scene = _canonical_document(
         config.hssd_r2_root / HSSD_R2_SCENE_RECEIPT.name,
         "HSSD R2 scene receipt",
         expected_sha256=HSSD_R2_SCENE_SHA256,
@@ -1289,6 +1506,12 @@ def _source_state(config: Config) -> SourceState:
         and len(collision) == 60,
         "HSSD R2 retained authority differs",
     )
+    placement_authority_content_digest = _placement_authority_content_digest(placements)
+    _require(
+        placement_authority_content_digest == HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST,
+        "HSSD placement authority content digest differs",
+    )
+    semantic_proxy_bindings = _semantic_proxy_bindings(scene, placements, r6_result)
     r6_namespace = _namespace_manifest(inputs.project.path.parent)
     source_namespace = _manifest_subset(source_manifest, HSSD_NAMESPACE_RELATIVE)
     r2_namespace = _namespace_manifest(config.hssd_r2_root / "project")
@@ -1305,7 +1528,9 @@ def _source_state(config: Config) -> SourceState:
         "build_plan": _artifact(plan_artifact),
         "map_package": _artifact(map_artifact),
         "placement_count": 60,
+        "placement_authority_content_digest": placement_authority_content_digest,
         "semantic_proxy_count": 19,
+        "semantic_proxy_bindings": semantic_proxy_bindings,
         "transform_override_count": 17,
     }
     return SourceState(
@@ -2854,7 +3079,102 @@ def _validate_fixture_import(value: Any, label: str) -> None:
     )
 
 
-def _validate_semantic_proxy(value: Any, label: str) -> None:
+def _validate_semantic_proxy_binding(value: Any, label: str) -> dict[str, Any]:
+    row = _exact_object(
+        value,
+        {
+            "instance_id",
+            "semantic_id",
+            "actor_path",
+            "component_path",
+            "generate_overlap_events",
+            "can_ever_affect_navigation",
+        },
+        label,
+    )
+    _require(
+        type(row["instance_id"]) is str
+        and row["instance_id"]
+        and type(row["semantic_id"]) is str
+        and row["semantic_id"]
+        and type(row["actor_path"]) is str
+        and row["actor_path"]
+        and type(row["component_path"]) is str
+        and row["component_path"]
+        and type(row["generate_overlap_events"]) is bool
+        and type(row["can_ever_affect_navigation"]) is bool,
+        label + " values differ",
+    )
+    return row
+
+
+def _validate_semantic_proxy_bindings(
+    value: Any, label: str
+) -> dict[str, dict[str, Any]]:
+    _require(type(value) is list and len(value) == 19, label + " count differs")
+    rows = [
+        _validate_semantic_proxy_binding(row, label + " row " + str(index))
+        for index, row in enumerate(value)
+    ]
+    _require(
+        rows == sorted(rows, key=lambda row: row["instance_id"])
+        and len({row["instance_id"] for row in rows}) == 19
+        and len({row["semantic_id"] for row in rows}) == 19
+        and len({row["actor_path"] for row in rows}) == 19
+        and len({row["component_path"] for row in rows}) == 19,
+        label + " identities differ",
+    )
+    distribution = {
+        state: sum(
+            (
+                row["generate_overlap_events"],
+                row["can_ever_affect_navigation"],
+            )
+            == state
+            for row in rows
+        )
+        for state in ((False, True), (False, False), (True, False), (True, True))
+    }
+    _require(
+        distribution
+        == {
+            (False, True): 15,
+            (False, False): 1,
+            (True, False): 3,
+            (True, True): 0,
+        },
+        label + " boolean distribution differs",
+    )
+    return {row["instance_id"]: row for row in rows}
+
+
+def _validate_dynamic_semantic_binding(
+    binding: Mapping[str, Any], dynamic: Mapping[str, Any], label: str
+) -> None:
+    binding = _validate_semantic_proxy_binding(binding, label + " binding")
+    observation = dynamic["preserved_r6_observation"]
+    _require(type(observation) is dict, label + " R6 observation differs")
+    proxy = observation.get("proxy")
+    _require(
+        dynamic["instance_id"] == binding["instance_id"]
+        and dynamic["semantic_id"] == binding["semantic_id"]
+        and observation.get("semantic_id") == binding["semantic_id"]
+        and observation.get("actor_path") == binding["actor_path"]
+        and type(proxy) is dict
+        and proxy.get("component_path") == binding["component_path"]
+        and proxy.get("generate_overlap_events") is binding["generate_overlap_events"]
+        and proxy.get("can_ever_affect_navigation")
+        is binding["can_ever_affect_navigation"],
+        label + " differs from preserved R6 authority",
+    )
+
+
+def _validate_semantic_proxy(
+    value: Any, label: str, expected_binding: Mapping[str, Any]
+) -> None:
+    expected_binding = _validate_semantic_proxy_binding(
+        expected_binding, label + " expected binding"
+    )
     row = _exact_object(
         value, {"instance_id", "semantic_id", *ACTOR_OBSERVATION_KEYS}, label
     )
@@ -2865,6 +3185,9 @@ def _validate_semantic_proxy(value: Any, label: str) -> None:
         and row["instance_id"]
         and type(row["semantic_id"]) is str
         and row["semantic_id"]
+        and row["instance_id"] == expected_binding["instance_id"]
+        and row["semantic_id"] == expected_binding["semantic_id"]
+        and row["actor_path"] == expected_binding["actor_path"]
         and "VistaSemanticId=" + row["semantic_id"] in row["tags"]
         and row["actor_hidden_in_game"] is True
         and row["actor_collision_enabled"] is True
@@ -2874,13 +3197,16 @@ def _validate_semantic_proxy(value: Any, label: str) -> None:
     )
     component = row["static_mesh_components"][0]
     _require(
-        component["mesh_object_path"] is not None
+        component["component_path"] == expected_binding["component_path"]
+        and component["mesh_object_path"] is not None
         and component["collision_mode"] == "QueryOnly"
         and component["collision_profile_name"] == "Custom"
         and component["collision_responses"] == {"Pawn": "Block", "Visibility": "Block"}
         and component["simulate_physics"] is False
-        and component["generate_overlap_events"] is False
-        and component["can_ever_affect_navigation"] is False
+        and component["generate_overlap_events"]
+        is expected_binding["generate_overlap_events"]
+        and component["can_ever_affect_navigation"]
+        is expected_binding["can_ever_affect_navigation"]
         and component["visible"] is False,
         label + " query authority differs",
     )
@@ -2963,6 +3289,7 @@ def _validate_t4_contract(
         and execution["acceptance"] == ACCEPTANCE
         and execution["fixture_evidence_manifest"]
         == _fixture_evidence_manifest(prepared)
+        and execution["hssd_r2_authority"] == prepared.source.hssd_authority
         and composition
         == {
             "migration": prepared.migration,
@@ -3202,6 +3529,10 @@ def _validate_t4_contract(
     collision = _exact_object(
         observations["collision"], COLLISION_OBSERVATION_KEYS, "collision"
     )
+    semantic_bindings = _validate_semantic_proxy_bindings(
+        execution["hssd_r2_authority"].get("semantic_proxy_bindings"),
+        "T4 semantic bindings",
+    )
     _require(
         collision["policy_counts"]
         == {
@@ -3223,6 +3554,16 @@ def _validate_t4_contract(
         for key, policy in policy_by_id.items()
         if policy == "retained_r1_semantic_proxy_authority_unchanged"
     }
+    _require(
+        set(semantic_bindings) == semantic_ids,
+        "T4 semantic binding inventory differs",
+    )
+    for dynamic in migration["dynamic_slots"]:
+        _validate_dynamic_semantic_binding(
+            semantic_bindings[dynamic["instance_id"]],
+            dynamic,
+            "T4 dynamic semantic binding",
+        )
     secondary_ids = {
         key
         for key, policy in policy_by_id.items()
@@ -3245,7 +3586,9 @@ def _validate_t4_contract(
             "T4 semantic identities differ",
         )
         for row in rows:
-            _validate_semantic_proxy(row, "semantic proxy")
+            _validate_semantic_proxy(
+                row, "semantic proxy", semantic_bindings[row["instance_id"]]
+            )
             _require(
                 row["semantic_id"]
                 == placements[row["instance_id"]]["semantic_target_id"],
