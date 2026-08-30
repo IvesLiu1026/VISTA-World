@@ -205,6 +205,9 @@ Acceptance notes:
 - Parent evidence, R2 contracts, scripts and finish profile are copied exactly
   and revalidated before/after UE.
 - Process-group and log closure precede host publication.
+- The commandlet emits exactly one result marker and one scene-receipt marker
+  through the Unreal log channel. Missing, conflicting or duplicate markers
+  fail closed; the host never deduplicates them.
 - Save/reload receipts close actor, material, collision, pickup and negative
   claim schemas.
 - World observations use the unchanged receipt shape but enforce the exact R6

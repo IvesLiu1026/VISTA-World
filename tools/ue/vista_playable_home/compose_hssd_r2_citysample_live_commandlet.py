@@ -4218,9 +4218,11 @@ def publish_document(
     write_exclusive(path, raw)
     write_exclusive(sidecar_path, f"{digest}  {path.name}\n".encode("ascii"))
     payload = {"path": str(path), "sha256": digest}
+    message = marker + json.dumps(payload, sort_keys=True)
     if unreal is not None:
-        unreal.log(marker + json.dumps(payload, sort_keys=True))
-    print(marker + json.dumps(payload, sort_keys=True), flush=True)
+        unreal.log(message)
+    else:
+        print(message, flush=True)
     return {**payload, "size_bytes": len(raw)}
 
 

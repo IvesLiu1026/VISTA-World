@@ -44,8 +44,8 @@ Depends on: requirements.md, design.md
   - Requirements: R1, R6
   - Depends on: T4
   - Validation: bwrap/NullRHI/no TraceServer/GPU, process/log closure, exact
-    map-plus-fixture-package delta, scene/host/combined receipts and negative
-    claims
+    one-result/one-scene marker cardinality, map-plus-fixture-package delta,
+    scene/host/combined receipts and negative claims
 
 - [ ] T6. Add dedicated human-only live launcher
   - Requirements: R7-R9

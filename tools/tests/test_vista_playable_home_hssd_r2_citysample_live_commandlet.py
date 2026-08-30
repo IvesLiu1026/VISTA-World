@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import pathlib
 from types import SimpleNamespace
 from typing import ClassVar
@@ -1600,6 +1601,32 @@ def test_publication_is_exclusive_and_sidecar_is_canonical(
     assert commandlet.RESULT_MARKER in capsys.readouterr().out
     with pytest.raises(FileExistsError):
         commandlet.publish_document(path, sidecar, value, commandlet.RESULT_MARKER)
+
+
+def test_publication_uses_exactly_one_marker_channel_in_unreal(
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / commandlet.RESULT_NAME
+    sidecar = tmp_path / (commandlet.RESULT_NAME + ".sha256")
+    messages: list[str] = []
+    monkeypatch.setattr(commandlet, "unreal", SimpleNamespace(log=messages.append))
+
+    published = commandlet.publish_document(
+        path,
+        sidecar,
+        commandlet.seal({"fixture": True}),
+        commandlet.RESULT_MARKER,
+    )
+
+    assert capsys.readouterr().out == ""
+    assert len(messages) == 1
+    assert messages[0].startswith(commandlet.RESULT_MARKER)
+    assert json.loads(messages[0].removeprefix(commandlet.RESULT_MARKER)) == {
+        "path": str(path),
+        "sha256": published["sha256"],
+    }
 
 
 def test_source_has_one_terminal_entrypoint_and_no_runtime_or_review_surface() -> None:
