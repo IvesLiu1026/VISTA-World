@@ -125,6 +125,51 @@ DYNAMIC_SLOT_BINDINGS = {
     ),
     "hssd.r1/kitchen_dining.pot.01": ("home.r1/room.kitchen_dining/entity.pot.01"),
 }
+
+# The source HSSD R2 receipt describes normalized QueryOnly/Custom proxies.
+# Runtime validation instead preserves the exact static proxy collision state
+# already present in the pinned R6 gameplay map.  Its read-only NullRHI
+# diagnostic is pinned by sha256
+# c6c5c534944d7d544b882c6aae15d52431df109434505837c228eed3793579de.
+STATIC_SEMANTIC_COLLISION_AUTHORITY: dict[str, tuple[str, str]] = {
+    "hssd.r1/bathroom_laundry.bathtub.01": ("QueryOnly", "Custom"),
+    "hssd.r1/bathroom_laundry.faucet.01": ("QueryOnly", "Custom"),
+    "hssd.r1/bathroom_laundry.laundry_basket.01": ("QueryOnly", "Custom"),
+    "hssd.r1/bathroom_laundry.washer.01": ("QueryOnly", "Custom"),
+    "hssd.r1/bedroom.bed.01": ("QueryOnly", "Custom"),
+    "hssd.r1/bedroom.nightstand.01": ("QueryOnly", "Custom"),
+    "hssd.r1/entry_hall.shoe_bench.01": ("QueryAndPhysics", "BlockAll"),
+    "hssd.r1/kitchen_dining.dining_table.01": ("QueryAndPhysics", "BlockAll"),
+    "hssd.r1/kitchen_dining.fridge.01": ("QueryOnly", "Custom"),
+    "hssd.r1/kitchen_dining.stove.01": ("QueryAndPhysics", "BlockAll"),
+    "hssd.r1/living_room.coffee_table.01": ("QueryAndPhysics", "BlockAll"),
+    "hssd.r1/living_room.sofa.01": ("QueryAndPhysics", "BlockAll"),
+    "hssd.r1/office.cabinet.01": ("QueryOnly", "Custom"),
+    "hssd.r1/office.desk.01": ("QueryOnly", "Custom"),
+    "hssd.r1/office.ladder.01": ("QueryOnly", "Custom"),
+    "hssd.r1/office.rolling_chair.01": ("QueryOnly", "Custom"),
+}
+
+
+def _static_semantic_collision_authority_content_digest() -> str:
+    rows = [
+        {
+            "collision_mode": values[0],
+            "collision_profile_name": values[1],
+            "instance_id": instance_id,
+        }
+        for instance_id, values in sorted(STATIC_SEMANTIC_COLLISION_AUTHORITY.items())
+    ]
+    return hashlib.sha256(
+        json.dumps(
+            rows, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST = (
+    _static_semantic_collision_authority_content_digest()
+)
 EXPECTED_ROOMS = frozenset(
     {
         "home.r1/room.bathroom_laundry",
@@ -3117,6 +3162,11 @@ def semantic_proxy_observation(
         "semantic proxy identity/components differ",
     )
     component = observed["static_mesh_components"][0]
+    expected_collision = STATIC_SEMANTIC_COLLISION_AUTHORITY.get(instance_id)
+    require(
+        expected_collision is not None,
+        "semantic proxy static collision authority is not pinned: " + instance_id,
+    )
     require(
         expected_binding["instance_id"] == instance_id
         and expected_binding["semantic_id"] == semantic_id
@@ -3125,8 +3175,8 @@ def semantic_proxy_observation(
         and observed["actor_hidden_in_game"] is True
         and observed["actor_collision_enabled"] is True
         and component["mesh_object_path"] is not None
-        and component["collision_mode"] == "QueryOnly"
-        and component["collision_profile_name"] == "Custom"
+        and component["collision_mode"] == expected_collision[0]
+        and component["collision_profile_name"] == expected_collision[1]
         and component["collision_responses"] == {"Pawn": "Block", "Visibility": "Block"}
         and component["simulate_physics"] is False
         and component["generate_overlap_events"]
@@ -3134,7 +3184,7 @@ def semantic_proxy_observation(
         and component["can_ever_affect_navigation"]
         is expected_binding["can_ever_affect_navigation"]
         and component["visible"] is False,
-        "semantic proxy query authority differs: " + instance_id,
+        "semantic proxy runtime collision authority differs: " + instance_id,
     )
     return {"instance_id": instance_id, "semantic_id": semantic_id, **observed}
 
@@ -3158,8 +3208,13 @@ def observe_static_semantic_proxies(
         set(semantic_bindings) == set(instance_ids),
         "semantic binding inventory differs",
     )
+    static_instance_ids = set(instance_ids) - dynamic_ids
+    require(
+        static_instance_ids == set(STATIC_SEMANTIC_COLLISION_AUTHORITY),
+        "static semantic collision authority inventory differs",
+    )
     result = []
-    for instance_id in sorted(set(instance_ids) - dynamic_ids):
+    for instance_id in sorted(static_instance_ids):
         semantic_id = placement_by_id[instance_id]["semantic_target_id"]
         require(
             type(semantic_id) is str and semantic_id, "static semantic binding absent"
@@ -3594,12 +3649,17 @@ def _validate_semantic_proxy_document(
         and len(value["light_components"]) == 0,
         label + " identity differs",
     )
+    expected_collision = STATIC_SEMANTIC_COLLISION_AUTHORITY.get(value["instance_id"])
+    require(
+        expected_collision is not None,
+        label + " static collision authority is not pinned",
+    )
     component = value["static_mesh_components"][0]
     require(
         component["component_path"] == expected_binding["component_path"]
         and component["mesh_object_path"] is not None
-        and component["collision_mode"] == "QueryOnly"
-        and component["collision_profile_name"] == "Custom"
+        and component["collision_mode"] == expected_collision[0]
+        and component["collision_profile_name"] == expected_collision[1]
         and component["collision_responses"] == {"Pawn": "Block", "Visibility": "Block"}
         and component["simulate_physics"] is False
         and component["generate_overlap_events"]
@@ -3607,7 +3667,7 @@ def _validate_semantic_proxy_document(
         and component["can_ever_affect_navigation"]
         is expected_binding["can_ever_affect_navigation"]
         and component["visible"] is False,
-        label + " query authority differs",
+        label + " runtime collision authority differs",
     )
 
 
@@ -4025,6 +4085,10 @@ def validate_result_document(
         if policy == "explicit_detail_no_collision"
     }
     static_semantic_ids = semantic_ids - set(DYNAMIC_SLOT_BINDINGS)
+    require(
+        static_semantic_ids == set(STATIC_SEMANTIC_COLLISION_AUTHORITY),
+        "static semantic collision authority inventory differs",
+    )
     for key in (
         "semantic_static_before",
         "semantic_static_after_save",

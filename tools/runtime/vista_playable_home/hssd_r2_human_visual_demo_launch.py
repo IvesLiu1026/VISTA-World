@@ -66,6 +66,9 @@ HSSD_NAMESPACE_TREE = {
 HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST = (
     "6ba35488c0dee391faaa6884144f7f37955d37dcfd2f0110622c63d350ab52a9"
 )
+STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST = (
+    "0ed6768227333ca708b133a184b101a9745215f2f6361d063c3b8da768082ed9"
+)
 MAP_OBJECT_PATH = (
     "/Game/VISTA/PlayableHome/vista_playable_home_r1/Maps/VistaPlayableHome"
 )
@@ -2694,9 +2697,23 @@ def _validate_semantic_proxy_lineage(
         == HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST
         and getattr(commandlet, "HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST", None)
         == HSSD_PLACEMENT_AUTHORITY_CONTENT_DIGEST
+        and getattr(
+            materializer,
+            "STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST",
+            None,
+        )
+        == STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST
+        and getattr(
+            commandlet,
+            "STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST",
+            None,
+        )
+        == STATIC_SEMANTIC_COLLISION_AUTHORITY_CONTENT_DIGEST
+        and getattr(materializer, "STATIC_SEMANTIC_COLLISION_AUTHORITY", None)
+        == getattr(commandlet, "STATIC_SEMANTIC_COLLISION_AUTHORITY", None)
     ):
         raise base.HumanVisualDemoError(
-            "R9 placement authority consumer constants differ"
+            "R9 placement or static collision authority consumer constants differ"
         )
 
     observed_placement_digest = _placement_authority_content_digest(migration)
