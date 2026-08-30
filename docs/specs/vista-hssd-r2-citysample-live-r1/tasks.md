@@ -1,6 +1,6 @@
 # Tasks: VISTA HSSD R2 + City Sample Live R1
 
-Status: Specification ready; implementation not started
+Status: T2-T8 complete; T9 coordinated live review pending
 Updated: 2026-08-30
 Depends on: requirements.md, design.md
 
@@ -19,20 +19,20 @@ Depends on: requirements.md, design.md
   - Validation: exact pins, 42→57+3 model, legal boundary, rollback and human
     acceptance ownership recorded
 
-- [ ] T2. Add the closed finish profile and deterministic fixture forge
+- [x] T2. Add the closed finish profile and deterministic fixture forge
   - Requirements: R2, R4, R5, R9
   - Validation: six rooms/materials/trims/wet zone, three headless Blender
     fixture GLBs plus CPU previews/inspection, 60 slots and collision ledgers;
     no caller overrides and no Git-tracked binary payloads
 
-- [ ] T3. Implement exact R6/HSSD preflight and zero-write planning
+- [x] T3. Implement exact R6/HSSD preflight and zero-write planning
   - Requirements: R1-R3, R6, R9
   - Depends on: T2
   - Validation: exact R6 receipt/tree/map/legal scope, HSSD v4/namespace,
     separate HSSD-source and R6-runtime semantic authorities, scripts and
     deterministic no-write plan
 
-- [ ] T4. Implement the UE composition commandlet
+- [x] T4. Implement the UE composition commandlet
   - Requirements: R2-R5
   - Depends on: T2, T3
   - Validation: exact 41 shell reuse/reposition, one legacy phone-shell delete,
@@ -40,28 +40,28 @@ Depends on: requirements.md, design.md
     19/20/21 collision, exact static 5+11 runtime projection and cold-reload
     receipt; exact package/world/WorldSettings/game-mode/lighting authority
 
-- [ ] T5. Close containment, map-plus-fixture publication and current-byte receipts
+- [x] T5. Close containment, map-plus-fixture publication and current-byte receipts
   - Requirements: R1, R6
   - Depends on: T4
   - Validation: bwrap/NullRHI/no TraceServer/GPU, process/log closure, exact
     one-result/one-scene marker cardinality, map-plus-fixture-package delta,
     scene/host/combined receipts and negative claims
 
-- [ ] T6. Add dedicated human-only live launcher
+- [x] T6. Add dedicated human-only live launcher
   - Requirements: R7-R9
   - Depends on: T5
   - Validation: receipt-bound City Sample command, agent/VLM rejection, startup
     grace, exact transient-unit reconstruction command and executable R6
     rollback preflight
 
-- [ ] T7. Run focused and related CPU review gates
+- [x] T7. Run focused and related CPU review gates
   - Requirements: R1-R9
   - Depends on: T2-T6
   - Validation: focused plus R4/R6/HSSD/launcher regressions, bidirectional
     coherent collision drift rejection, coherent world-authority drift
     rejection, Ruff, format, diff-check and independent review with no P0/P1
 
-- [ ] T8. Execute one fresh append-only NullRHI candidate
+- [x] T8. Execute one fresh append-only NullRHI candidate
   - Requirements: R1-R6, R9
   - Depends on: T7
   - Validation: UE zero, cold reload, 60 slots, 108 preserved, 6/6 finish,
@@ -79,9 +79,27 @@ Depends on: requirements.md, design.md
     `codex/vista-action-world-r1`, GitHub push, evidence/service pointers and
     remaining blockers documented
 
-## Initial blockers
+## T8 completion evidence
 
-- HSSD R2 proves 60/19/17 but not this R9 merge.
+- Successful append-only attempt:
+  `/data/sysx/vista-world/runs/vista-action-world-r1/hssd-r2-citysample-live-r5-20260830h`.
+- Complete receipt SHA-256:
+  `52ec26972109b0b2ca195607f8536b845c56b2c413e50d5a207609452e46211a`;
+  status `hssd_r2_citysample_live_publication_complete`; failure absent.
+- Combined and host receipt SHA-256 values:
+  `869c8247e975cd79af9be5a7cca4dc169b2de8b7b3badf673ec3f93f425bdc48`
+  and `ec35ebc8aa6989fa3486207866779d5ff1898ecb2116bf7a4a0f9bf652a73848`.
+- Final map SHA-256:
+  `1fda153459fea9845cab969b9802ce418bdde51bdbf6884ccd17c77b796dd588`.
+  Final project tree is 2,453 files, 9,153,718,809 bytes and digest
+  `74846d5a0afeb7f72ee3b21bbe965afd46968a4b16e60ca9dff08d665c380376`.
+- Static delta is exactly one map plus nine fixture packages. Stdout contains
+  exactly one result marker and one scene marker. All nine host gates are true;
+  human visual, interaction, playable-collision, runtime and GTA acceptance
+  remain pending/false.
+
+## Remaining blockers
+
 - Twenty secondary proxies need live tuning; 18 wall fixtures, faucet support,
   ladder and five contacts remain review items.
 - Human review owns City Sample appearance, player-eye quality, pickups,

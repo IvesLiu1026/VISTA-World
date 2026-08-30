@@ -90,6 +90,14 @@ quality.
   factual parent evidence for exact preservation only.
 - Sunshine, Xvfb `:118` and the input relay stay running. R6 is the rollback
   baseline.
+- T8 is closed by append-only attempt
+  `hssd-r2-citysample-live-r5-20260830h`: its complete receipt SHA-256 is
+  `52ec26972109b0b2ca195607f8536b845c56b2c413e50d5a207609452e46211a`,
+  combined receipt SHA-256 is
+  `869c8247e975cd79af9be5a7cca4dc169b2de8b7b3badf673ec3f93f425bdc48`,
+  and final tree digest is
+  `74846d5a0afeb7f72ee3b21bbe965afd46968a4b16e60ca9dff08d665c380376`.
+  This closes NullRHI publication only; it grants no human or GTA acceptance.
 
 ## Requirements
 

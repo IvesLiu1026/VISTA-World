@@ -231,6 +231,15 @@ same authority.
 Retained NullRHI evidence must show UE zero, cold reload, exact inventories,
 map-plus-fixture delta, delayed current-byte validation and all acceptance
 fields false.
+
+The retained T8 evidence is attempt
+`hssd-r2-citysample-live-r5-20260830h`. Its complete receipt SHA-256 is
+`52ec2697...211a`, combined receipt SHA-256 is `869c8247...dc48`, final map
+SHA-256 is `1fda1534...d588`, and final 2,453-file project tree digest is
+`74846d5a...0376`. UE published one result marker and one scene marker; the
+host admitted exactly the map plus nine fixture packages and published all nine
+host gates true. Human review fields remain pending and negative claims remain
+false.
 Human review covers 12 views, five portals both ways, controls, pickups,
 fixtures/exposure/collision and performance.
 
