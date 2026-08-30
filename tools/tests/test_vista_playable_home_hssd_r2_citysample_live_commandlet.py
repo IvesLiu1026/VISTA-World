@@ -291,6 +291,16 @@ def migration_fixture() -> dict:
         {
             "instance_id": instance_id,
             "collision_policy": policy,
+            "blocking_contact_instance_ids": [],
+            "runtime_authority": {
+                "retained_r1_semantic_proxy_authority_unchanged": (
+                    "unchanged_r1_proxy"
+                ),
+                "secondary_simple_aabb_candidate_review_pending": (
+                    "none_until_ue_collision_receipt"
+                ),
+                "explicit_detail_no_collision": "explicit_no_collision",
+            }[policy],
         }
         for policy, instance_ids in (
             ("retained_r1_semantic_proxy_authority_unchanged", semantic_ids),

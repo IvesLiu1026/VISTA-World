@@ -866,6 +866,62 @@ def _validate_placement(value: Any, label: str) -> dict[str, Any]:
     return value
 
 
+def _validate_collision_migration(value: Any, all_ids: set[str]) -> dict[str, Any]:
+    collision = require_keys(value, {"policy_counts", "rows"}, "collision")
+    require(
+        type(all_ids) is set
+        and len(all_ids) == 60
+        and all(type(instance_id) is str and instance_id for instance_id in all_ids)
+        and collision["policy_counts"]
+        == {
+            "retained_r1_semantic_proxy_authority_unchanged": 19,
+            "secondary_simple_aabb_candidate_review_pending": 20,
+            "explicit_detail_no_collision": 21,
+        }
+        and type(collision["rows"]) is list
+        and len(collision["rows"]) == 60
+        and all(type(row) is dict for row in collision["rows"])
+        and {row.get("instance_id") for row in collision["rows"]} == all_ids,
+        "collision migration partition differs",
+    )
+    observed_policy_counts = {key: 0 for key in collision["policy_counts"]}
+    runtime_authority_by_policy = {
+        "retained_r1_semantic_proxy_authority_unchanged": "unchanged_r1_proxy",
+        "secondary_simple_aabb_candidate_review_pending": (
+            "none_until_ue_collision_receipt"
+        ),
+        "explicit_detail_no_collision": "explicit_no_collision",
+    }
+    for row in collision["rows"]:
+        require_keys(
+            row,
+            {
+                "instance_id",
+                "collision_policy",
+                "blocking_contact_instance_ids",
+                "runtime_authority",
+            },
+            "collision row",
+        )
+        require(
+            row["instance_id"] in all_ids
+            and row["collision_policy"] in observed_policy_counts,
+            "collision row policy differs",
+        )
+        require(
+            row["blocking_contact_instance_ids"] == []
+            and row["runtime_authority"]
+            == runtime_authority_by_policy[row["collision_policy"]],
+            "collision row authority differs",
+        )
+        observed_policy_counts[row["collision_policy"]] += 1
+    require(
+        observed_policy_counts == collision["policy_counts"],
+        "collision policy counts differ",
+    )
+    return collision
+
+
 def validate_migration_contract(value: Any) -> dict[str, Any]:
     require_keys(value, MIGRATION_KEYS, "migration")
     require(
@@ -981,32 +1037,7 @@ def validate_migration_contract(value: Any) -> dict[str, Any]:
     all_ids = set(final_by_id) | set(dynamic_by_id)
     require(len(all_ids) == 60, "visual slot inventory differs")
 
-    collision = require_keys(value["collision"], {"policy_counts", "rows"}, "collision")
-    require(
-        collision["policy_counts"]
-        == {
-            "retained_r1_semantic_proxy_authority_unchanged": 19,
-            "secondary_simple_aabb_candidate_review_pending": 20,
-            "explicit_detail_no_collision": 21,
-        }
-        and type(collision["rows"]) is list
-        and len(collision["rows"]) == 60
-        and {row.get("instance_id") for row in collision["rows"]} == all_ids,
-        "collision migration partition differs",
-    )
-    observed_policy_counts = {key: 0 for key in collision["policy_counts"]}
-    for row in collision["rows"]:
-        require_keys(row, {"instance_id", "collision_policy"}, "collision row")
-        require(
-            row["instance_id"] in all_ids
-            and row["collision_policy"] in observed_policy_counts,
-            "collision row policy differs",
-        )
-        observed_policy_counts[row["collision_policy"]] += 1
-    require(
-        observed_policy_counts == collision["policy_counts"],
-        "collision policy counts differ",
-    )
+    _validate_collision_migration(value["collision"], all_ids)
     return value
 
 
