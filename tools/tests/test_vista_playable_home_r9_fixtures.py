@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tools.blender.vista_playable_home_r9_fixtures import forge
+from tools.blender.vista_playable_home_r9_fixtures import blender_worker, forge
 
 
 def _fake_authority(*, tree_sha256: str = "3" * 64) -> dict:
@@ -774,6 +774,25 @@ def test_cli_and_worker_command_offer_no_binary_script_asset_or_output_override(
     assert environment["DISPLAY"] == ""
     assert environment["WAYLAND_DISPLAY"] == ""
     assert environment["CYCLES_DEVICE"] == "CPU"
+
+
+def test_blender_458_gltf_export_contract_uses_current_vertex_color_api() -> None:
+    assert blender_worker.GLTF_EXPORT_OPTIONS == {
+        "export_format": "GLB",
+        "use_selection": True,
+        "export_apply": True,
+        "export_yup": True,
+        "export_cameras": False,
+        "export_lights": False,
+        "export_animations": False,
+        "export_materials": "EXPORT",
+        "export_texcoords": True,
+        "export_normals": True,
+        "export_tangents": False,
+        "export_vertex_color": "NONE",
+        "export_extras": True,
+    }
+    assert "export_colors" not in blender_worker.GLTF_EXPORT_OPTIONS
 
 
 def test_root_owned_authority_is_required_and_runtime_tree_drift_fails(
