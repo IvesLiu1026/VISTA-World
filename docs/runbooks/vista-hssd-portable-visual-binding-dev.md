@@ -10,10 +10,14 @@ of the existing `VistaPickupActor` authority:
 - `home.r1/room/kitchen_dining/entity.coffee_cup.01` ← `hssd.static.coffee_cup`;
   disposition `already_absent_source_shell`. Before any binding mutation, the full
   actor inventory must contain zero matches for its exact HSSD instance tag, actor
-  label, and semantic-target tag.
+  label, and semantic-target tag. The source map's exact pre-existing City Sample
+  `cupA` render-only pickup presentation and fitted relative transform are separately
+  pinned as `exact_existing_presentation_to_replace`; they are not reinterpreted as
+  an HSSD shell and are replaced only on that exact pickup authority.
 - `home.r1/room/living_room/entity.slipper.01` ← `hssd.static.flip_flops`;
   disposition `exact_visual_shell_to_delete`. Its exact visual-only shell must be
-  uniquely closed and is the only actor deleted.
+  uniquely closed and is the only actor deleted. Its pickup separately requires the
+  closed `no_existing_presentation` state before the HSSD mesh is bound.
 
 The pickup actor, `PickupMesh` collision/physics root, semantic ID, transform,
 replication and portability remain authoritative. The presentation relative transform
@@ -25,9 +29,9 @@ old shell transform.
 - Contract:
   `world_packs/vista_playable_home_r1/visual_bindings/hssd_portable_pickups_r1.json`
 - Contract content digest:
-  `ac3f53d70481e4565e777e50757006a70a105e3b3c7c1fb3a27725c39453e1bd`
+  `9ff240df82ef192be745af5f774b9cd297b3a3a971a8c31bdc54f290e2683dfe`
 - Contract raw SHA-256:
-  `a39d49235b7fec3cbf0c3dd2cebd9424b97a3f3868272e56786f327e0a4f1cb5`
+  `822fd1ad7c180e9c5a590f900196e10ab745566e74207d94802940f5b089679b`
 - Fixed planner:
   `tools/ue/vista_playable_home/plan_hssd_portable_visual_binding_dev.py`
 - Fixed commandlet:
@@ -49,6 +53,14 @@ The observed portable attempt `hssd-portable-bind-dev-r1-20260901a` is permanent
 quarantined at `prove_all_identities_before_delete`: it correctly established that the
 declared coffee-cup-01 shell has zero instance-tag matches, but its older contract
 incorrectly required one shell. Never reuse that attempt directory or derivative path.
+
+The observed attempts `hssd-portable-bind-dev-r1-20260901b` and
+`hssd-portable-bind-dev-r1-20260901c` are also permanently quarantined. Attempt B
+exposed UE 5.7's exact `<ComponentMobility.MOVABLE: 2>` representation. Attempt C
+passed that closed mobility proof, then exposed the older commandlet's incorrect
+assumption that every legal source pickup had a null `PresentationMesh`. The sealed
+source map already contains the exact City Sample `cupA` presentation on the coffee
+pickup; its shell is nevertheless absent. Neither attempt may be reused.
 
 Validate the Git-side contract without resolving private HSSD payloads:
 
@@ -122,8 +134,10 @@ VISTA_HSSD_PORTABLE_VISUAL_BINDING_EXECUTION_SHA256="$EXECUTION_SHA256" \
 
 The commandlet binds each `/Game` map object path to its exact loaded-project `.umap`,
 calls `new_level_from_template(new_map, completed_fridge_map)`, proves the declared
-coffee identity is absent across the full actor inventory, and proves the unique
-slipper shell plus both pickup actors before the only deletion. Slipper proof includes
+coffee shell identity is absent across the full actor inventory, proves the coffee
+pickup's exact existing City Sample presentation and the slipper pickup's exact absent
+presentation disposition, and proves the unique slipper shell plus both pickup actors
+before the only deletion. Slipper proof includes
 unique identity tag/label closure, visual-only diagnostic/authority tags,
 root-component ownership, static mobility, visibility, disabled
 overlap/navigation/collision and no physics. It then loads both exact HSSD StaticMeshes

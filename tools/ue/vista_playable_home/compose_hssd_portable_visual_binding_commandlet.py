@@ -35,9 +35,9 @@ PICKUP_CLASS = "/Script/VistaPlayableHome.VistaPickupActor"
 SHELL_CLASS = "/Script/Engine.StaticMeshActor"
 CONTRACT_SCHEMA = "vista.playable-hssd-portable-visual-binding/v1"
 CONTRACT_ID = "hssd_portable_pickups_r1"
-CONTRACT_SHA256 = "a39d49235b7fec3cbf0c3dd2cebd9424b97a3f3868272e56786f327e0a4f1cb5"
+CONTRACT_SHA256 = "822fd1ad7c180e9c5a590f900196e10ab745566e74207d94802940f5b089679b"
 CONTRACT_CONTENT_DIGEST = (
-    "ac3f53d70481e4565e777e50757006a70a105e3b3c7c1fb3a27725c39453e1bd"
+    "9ff240df82ef192be745af5f774b9cd297b3a3a971a8c31bdc54f290e2683dfe"
 )
 SOURCE_RECEIPT_SCHEMA = "vista.playable-articulated-fridge-dev-scene-receipt/v1"
 SOURCE_SUCCESS_STATUS = "dev_derivative_composed_pending_runtime_and_human_review"
@@ -47,6 +47,8 @@ SEMANTIC_IDS = (
 )
 ABSENT_SHELL_DISPOSITION = "already_absent_source_shell"
 DELETE_SHELL_DISPOSITION = "exact_visual_shell_to_delete"
+EXACT_SOURCE_PRESENTATION = "exact_existing_presentation_to_replace"
+NO_SOURCE_PRESENTATION = "no_existing_presentation"
 SHELL_DISPOSITIONS = (
     ABSENT_SHELL_DISPOSITION,
     DELETE_SHELL_DISPOSITION,
@@ -886,7 +888,35 @@ def pickup_observation(actor):
     return observation
 
 
-def validate_unbound_pickup(actor, binding):
+def validate_source_presentation(observation, binding):
+    source = binding["source_presentation"]
+    require(
+        set(source)
+        == {"disposition", "mesh_object_path", "relative_transform", "visible"},
+        "source presentation contract fields differ: " + binding["semantic_id"],
+    )
+    disposition = source["disposition"]
+    mesh = source["mesh_object_path"]
+    require(
+        (disposition == EXACT_SOURCE_PRESENTATION and isinstance(mesh, str) and mesh)
+        or (disposition == NO_SOURCE_PRESENTATION and mesh is None),
+        "source presentation disposition is outside the closed contract: "
+        + binding["semantic_id"],
+    )
+    presentation = observation["presentation"]
+    require(
+        presentation["mesh_object_path"] == mesh
+        and transform_matches(
+            presentation["relative_transform"], source["relative_transform"]
+        )
+        and presentation["visible"] is source["visible"]
+        and presentation["mobility"] == "Movable",
+        "source presentation no longer matches the closed contract: "
+        + binding["semantic_id"],
+    )
+
+
+def validate_source_pickup(actor, binding):
     observation = pickup_observation(actor)
     require(
         observation["semantic_id"] == binding["semantic_id"]
@@ -896,11 +926,11 @@ def validate_unbound_pickup(actor, binding):
             observation["world_transform_cm"], binding["pickup_world_transform_cm"]
         )
         and observation["root"]["mesh_object_path"]
-        == binding["pickup_root_mesh_object_path"]
-        and observation["presentation"]["mesh_object_path"] is None,
-        "unbound pickup no longer matches the closed contract: "
+        == binding["pickup_root_mesh_object_path"],
+        "source pickup no longer matches the closed identity contract: "
         + binding["semantic_id"],
     )
+    validate_source_presentation(observation, binding)
     return observation
 
 
@@ -1069,7 +1099,7 @@ def run():
             pickup = pickup_for(actors, binding)
             require(shell is None or shell != pickup, "visual shell aliases pickup")
             pickups.append(pickup)
-            pickups_before.append(validate_unbound_pickup(pickup, binding))
+            pickups_before.append(validate_source_pickup(pickup, binding))
             mesh = unreal.load_asset(binding["hssd_mesh_object_path"])
             require(
                 isinstance(mesh, unreal.StaticMesh)

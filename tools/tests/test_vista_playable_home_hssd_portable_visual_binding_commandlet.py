@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -85,7 +86,7 @@ def test_absent_coffee_and_exact_slipper_are_proved_before_only_delete() -> None
         '"shell_observation_before_delete": validate_shell(', phase
     )
     validate_pickup = source.index(
-        "pickups_before.append(validate_unbound_pickup", phase
+        "pickups_before.append(validate_source_pickup", phase
     )
     closure = source.index("all_binding_identities_validated = (", phase)
     delete = source.index("actor_subsystem.destroy_actor(shell_to_delete)", closure)
@@ -93,7 +94,7 @@ def test_absent_coffee_and_exact_slipper_are_proved_before_only_delete() -> None
     assert validate_shell < closure < delete
     assert validate_pickup < closure < delete
     assert '"HSSD visual shell no longer matches the closed contract:' in source
-    assert '"unbound pickup no longer matches the closed contract:' in source
+    assert '"source pickup no longer matches the closed identity contract:' in source
     identity_gate = source.split("def validate_shell", 1)[1].split(
         "def pickup_observation", 1
     )[0]
@@ -306,6 +307,91 @@ def test_mobility_normalizer_bounds_diagnostic_repr(
     message = str(caught.value)
     assert token[:96] in message
     assert "sensitive-tail" not in message
+
+
+def test_source_presentation_accepts_only_exact_closed_dispositions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commandlet = _load_helpers(monkeypatch)
+    binding = {
+        "semantic_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+        "source_presentation": {
+            "disposition": commandlet.EXACT_SOURCE_PRESENTATION,
+            "mesh_object_path": "/Game/CitySampleCrowd/Character/Accessories/cupA.cupA",
+            "relative_transform": {
+                "location_cm": [0, 0, 3.448716],
+                "rotation_deg": [0, 0, 0],
+                "scale": [0.775532, 0.775532, 0.775532],
+            },
+            "visible": True,
+        },
+    }
+    observation = {
+        "presentation": {
+            "mesh_object_path": binding["source_presentation"]["mesh_object_path"],
+            "relative_transform": copy.deepcopy(
+                binding["source_presentation"]["relative_transform"]
+            ),
+            "visible": True,
+            "mobility": "Movable",
+        }
+    }
+
+    commandlet.validate_source_presentation(observation, binding)
+
+    for field, value in (
+        ("mesh_object_path", "/Game/CitySampleCrowd/Character/Accessories/cupB.cupB"),
+        ("visible", False),
+        ("mobility", "Static"),
+    ):
+        changed = copy.deepcopy(observation)
+        changed["presentation"][field] = value
+        with pytest.raises(RuntimeError, match="closed contract"):
+            commandlet.validate_source_presentation(changed, binding)
+
+    for disposition in (
+        commandlet.NO_SOURCE_PRESENTATION,
+        "find_any_existing_presentation",
+    ):
+        changed_binding = copy.deepcopy(binding)
+        changed_binding["source_presentation"]["disposition"] = disposition
+        with pytest.raises(RuntimeError, match="outside the closed contract"):
+            commandlet.validate_source_presentation(observation, changed_binding)
+
+
+def test_absent_source_presentation_requires_exact_null_mesh_and_identity_transform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commandlet = _load_helpers(monkeypatch)
+    binding = {
+        "semantic_id": "home.r1/room/living_room/entity.slipper.01",
+        "source_presentation": {
+            "disposition": commandlet.NO_SOURCE_PRESENTATION,
+            "mesh_object_path": None,
+            "relative_transform": {
+                "location_cm": [0, 0, 0],
+                "rotation_deg": [0, 0, 0],
+                "scale": [1, 1, 1],
+            },
+            "visible": False,
+        },
+    }
+    observation = {
+        "presentation": {
+            "mesh_object_path": None,
+            "relative_transform": copy.deepcopy(
+                binding["source_presentation"]["relative_transform"]
+            ),
+            "visible": False,
+            "mobility": "Movable",
+        }
+    }
+
+    commandlet.validate_source_presentation(observation, binding)
+    changed = copy.deepcopy(observation)
+    changed["presentation"]["relative_transform"]["location_cm"][0] = 1
+    with pytest.raises(RuntimeError, match="closed contract"):
+        commandlet.validate_source_presentation(changed, binding)
 
 
 def test_exact_shell_tags_reject_conflicting_safety_authority(
