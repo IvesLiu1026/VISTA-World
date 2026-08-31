@@ -1,0 +1,186 @@
+{
+  "schema_version": "simworld.vista.playable-event/v2",
+  "event_id": "mmg_013",
+  "title": "Coffee carried past a slipper obstacle",
+  "compatible_house": {
+    "house_id": "home.r1",
+    "revision": "vista_playable_home_r1",
+    "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+  },
+  "participating_room_ids": [
+    "home.r1/room.kitchen_dining",
+    "home.r1/room.living_room"
+  ],
+  "participating_entity_ids": [
+    "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+    "home.r1/room.kitchen_dining/entity.dining_table.01",
+    "home.r1/room.living_room/entity.slipper.01",
+    "home.r1/room.living_room/entity.spill_marker.01"
+  ],
+  "initial_operations": [
+    {
+      "op_id": "op.01",
+      "op": "set_transform",
+      "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+      "room_id": "home.r1/room.kitchen_dining",
+      "transform": {
+        "location_m": [
+          -0.55,
+          -0.2,
+          0.78
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "op_id": "op.02",
+      "op": "set_transform",
+      "target_id": "home.r1/room.living_room/entity.slipper.01",
+      "room_id": "home.r1/room.living_room",
+      "transform": {
+        "location_m": [
+          1.4,
+          -0.5,
+          0.03
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          25
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "op_id": "op.03",
+      "op": "set_visibility",
+      "target_id": "home.r1/room.living_room/entity.spill_marker.01",
+      "visible": false
+    },
+    {
+      "op_id": "op.04",
+      "op": "set_goal",
+      "goal_id": "clear_obstacle",
+      "enabled": true
+    },
+    {
+      "op_id": "op.05",
+      "op": "set_npc_queue",
+      "npc_id": "npc.resident",
+      "actions": [
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.kitchen_dining"
+        },
+        {
+          "action": "inspect",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "place",
+          "target_id": "home.r1/room.kitchen_dining/entity.dining_table.01",
+          "placement_anchor_id": "place_setting"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "drop"
+        },
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.living_room"
+        },
+        {
+          "action": "inspect",
+          "target_id": "home.r1/room.living_room/entity.slipper.01"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.living_room/entity.slipper.01"
+        },
+        {
+          "action": "drop"
+        }
+      ]
+    }
+  ],
+  "public_goals": [
+    {
+      "goal_id": "clear_obstacle",
+      "description": "Clear the slipper from the walking path before carrying the coffee through the living room.",
+      "success_condition_ids": [
+        "slipper_moved"
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "condition_id": "coffee_picked_up",
+      "type": "interaction",
+      "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+      "affordance": "pick_up"
+    }
+  ],
+  "success_conditions": [
+    {
+      "condition_id": "slipper_moved",
+      "type": "interaction",
+      "target_id": "home.r1/room.living_room/entity.slipper.01",
+      "affordance": "pick_up"
+    }
+  ],
+  "failure_conditions": [
+    {
+      "condition_id": "spill_visible",
+      "type": "entity_state",
+      "target_id": "home.r1/room.living_room/entity.spill_marker.01",
+      "field": "visible",
+      "operator": "eq",
+      "value": true
+    }
+  ],
+  "timeout_s": 600,
+  "reset_policy": {
+    "mode": "restore_baseline",
+    "reset_npc_queues": true,
+    "release_held_items": true
+  },
+  "source": {
+    "dataset": "VISTA",
+    "sample_id": "mmg_013",
+    "verification": "verified",
+    "public_reference": "vista://assist-step/mmg_013"
+  },
+  "content_digest": "72ad2345257b515809ddc899d9f478b45e6f2c27a811afeda33ac6f8d1e9baa8",
+  "action_catalog": {
+    "schema_version": "vista.playable-action-catalog/v2",
+    "catalog_id": "vista_indoor_actions",
+    "catalog_revision": "vista_indoor_actions_r2",
+    "content_digest": "07eb0a4740ea214c15fa59504b0b923787c23fa0b9232adfc18a0efc0cec7e35"
+  },
+  "derivation": {
+    "base_event_schema_version": "simworld.vista.playable-event/v1",
+    "base_event_id": "mmg_013",
+    "base_event_content_digest": "ea9d4fd5ca4f7abb0000fe92229e1d1e45251c73811b887d09a3ad988af90b96",
+    "change_scope": "append_catalog_bound_npc_action_queue"
+  }
+}
