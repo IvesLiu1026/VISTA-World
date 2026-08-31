@@ -69,8 +69,8 @@ Depends on: requirements.md, design.md
 
 - [x] T5a. Implement the dedicated-builder source milestone (R1a, R10)
   - The exact post-commit planner exposed volatile `/proc` ancestor link-count
-    drift; trace-v3 now closes that defect before any root installation or
-    candidate acceptance.
+    drift; trace-v3 closed that defect, and trace-v4 retains the same finite
+    authority while adding the exact CPU-online event-count policy.
   - Add the fixed locked `vista-r8-builder:997:997` account contract with
     `/nonexistent`, `/usr/sbin/nologin`, no supplementary groups, and no
     subordinate-ID entry or range containing 997; reject every inactive
@@ -84,13 +84,17 @@ Depends on: requirements.md, design.md
   - Add strict canonical requests, exact Git-bundle/blob extraction, symlink-safe
     held tool validation, sealed source memfds, twice-built byte identity,
     static-ELF checks, full durability, and closed job/phase manifests.
-  - Add the observation-only Phase A request planner and exhaustive trace-v3
+  - Add the observation-only Phase A request planner and exhaustive trace-v4
     contract: exact per-invocation event/search/scratch prestate, mapped-file
     device/inode/path/byte closure, resolved two-path mutation endpoints, and
     fail-closed replay against held host inputs. Reject scratch raw `..`
     before normalization; require immutable pinned host chains plus resolved
     targets for GCC host `..`; close exact procfs tokens and `/dev/null`
     `O_RDWR[|O_CLOEXEC]`; and avoid production NSS lookups.
+  - Canonicalize positive multiplicity to one only for Git's exact successful
+    `openat(O_RDONLY|O_CLOEXEC)` of `/sys/devices/system/cpu/online`, while
+    retaining the endpoint's held exact bytes/component metadata and exact
+    counts for every near-miss event in both producer and independent mirror.
   - Model only literal/canonical `/proc/sys/vm/overcommit_memory` as the finite
     kernel-virtual host authority. Stream-pin exact `0\n`/`1\n`/`2\n` bytes,
     omit only the synthesized `/proc` ancestor `nlink`, retain all other
@@ -110,11 +114,11 @@ Depends on: requirements.md, design.md
     production compilation. Initial-helper provenance consumes Phase B, and
     late native production entry points fail closed.
   - Completion evidence: source, unit, bootstrap, helper, test, and runbook
-    changes exist. The earlier trace-v2 rehearsal is historical evidence only;
-    two trace-v3 zero-publication planner/replay runs over one ephemeral exact
-    bundle produced byte-identical canonical request bytes. No root, systemd,
-    production builder phase, candidate publication, or UE action is included
-    in this completion.
+    changes exist. Earlier trace-v2/v3 rehearsals are historical evidence only.
+    Fresh clean and controlled-load trace-v4 planner/replay runs over the new
+    exact bundle remain a T5b acceptance gate; they are not claimed as source
+    completion evidence. No trace-v4 root activation, production builder phase,
+    candidate publication, or UE action is included in this completion.
 
 - [ ] T5b. Freeze and independently review builder inputs (R1a, R10)
   - Run the complete focused and related R8 source suite, Ruff/format/compile,

@@ -218,7 +218,7 @@ NATIVE_BUILDER_PHASE_B_UNIT = Path(
 NATIVE_BUILDER_PHASE_A_SCHEMA = "vista.r8-native-builder-phase-a-manifest/v1"
 NATIVE_BUILDER_PHASE_B_SCHEMA = "vista.r8-native-builder-phase-b-manifest/v1"
 NATIVE_BUILDER_REQUEST_SCHEMA = "vista.r8-native-builder-request/v2"
-NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v3"
+NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v4"
 NATIVE_BUILDER_JOB_SCHEMA = "vista.r8-native-builder-job-manifest/v1"
 NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH = Path("/proc/sys/vm/overcommit_memory")
 NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATH = Path("/proc")
@@ -231,6 +231,45 @@ NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS = (
     "/proc/sys/vm",
     "/proc/sys/vm/overcommit_memory",
 )
+NATIVE_BUILDER_CPU_ONLINE_PATH = "/sys/devices/system/cpu/online"
+NATIVE_BUILDER_CPU_ONLINE_READ_EVENT_LINE = (
+    '{"open_flags":["O_RDONLY","O_CLOEXEC"],"outcome":"OK",'
+    f'"paths":["{NATIVE_BUILDER_CPU_ONLINE_PATH}"],"syscall":"openat"}}'
+)
+NATIVE_BUILDER_CPU_ONLINE_EVENT_COUNT_POLICY = "positive-presence-v1"
+
+
+def _native_builder_trace_event_count_policies() -> list[dict[str, Any]]:
+    return [
+        {
+            "canonical_count": 1,
+            "event_line": NATIVE_BUILDER_CPU_ONLINE_READ_EVENT_LINE,
+            "policy": NATIVE_BUILDER_CPU_ONLINE_EVENT_COUNT_POLICY,
+            "profile_id": "git:fetch",
+        }
+    ]
+
+
+def _native_builder_validate_trace_event_count_policies(
+    value: Any,
+) -> list[dict[str, Any]]:
+    expected = _native_builder_trace_event_count_policies()
+    if type(value) is not list or len(value) != 1:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "event count policies")
+    item = value[0]
+    if (
+        type(item) is not dict
+        or set(item) != {"canonical_count", "event_line", "policy", "profile_id"}
+        or type(item.get("canonical_count")) is not int
+        or type(item.get("event_line")) is not str
+        or type(item.get("policy")) is not str
+        or type(item.get("profile_id")) is not str
+        or item != expected[0]
+    ):
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "event count policies")
+    return [dict(item)]
+
+
 MAX_NATIVE_BUILDER_BUNDLE_BYTES = 512 * 1024 * 1024
 MAX_NATIVE_BUILDER_TRACE_FILE_BYTES = 64 * 1024 * 1024
 MAX_NATIVE_BUILDER_TRACE_LINES = 1_000_000
@@ -6230,6 +6269,10 @@ def _native_builder_validate_trace_events(
             or item["line"] <= previous
             or type(item.get("count")) is not int
             or item["count"] <= 0
+            or (
+                item["line"] == NATIVE_BUILDER_CPU_ONLINE_READ_EVENT_LINE
+                and item["count"] != 1
+            )
             or not _native_builder_valid_trace_event(item["line"])
         ):
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} event")
@@ -6239,6 +6282,28 @@ def _native_builder_validate_trace_events(
         previous = item["line"]
         result.append(dict(item))
     return result
+
+
+def _native_builder_validate_cpu_online_profile_binding(
+    events: Sequence[Mapping[str, Any]],
+    host_files: Sequence[str],
+    label: str,
+) -> bool:
+    referenced = NATIVE_BUILDER_CPU_ONLINE_PATH in host_files
+    observed = any(
+        item["line"] == NATIVE_BUILDER_CPU_ONLINE_READ_EVENT_LINE for item in events
+    )
+    if observed and label != "git:fetch":
+        _fail(
+            "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+            f"{label} cpu online event profile",
+        )
+    if observed != referenced:
+        _fail(
+            "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+            f"{label} cpu online profile binding",
+        )
+    return observed
 
 
 def _native_builder_validate_kernel_virtual_profile_binding(
@@ -6353,6 +6418,7 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
         "tracer_runtime_files",
         "builder_runtime_files",
         "path_aliases",
+        "event_count_policies",
         "profiles",
         "phase_invocations",
     }:
@@ -6362,6 +6428,9 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
         or value.get("tracer_version") != NATIVE_BUILDER_STRACE_VERSION
     ):
         _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "schema/version")
+    _native_builder_validate_trace_event_count_policies(
+        value.get("event_count_policies")
+    )
     files = value.get("host_files")
     directories = value.get("host_directories")
     if type(files) is not list or not files or type(directories) is not list:
@@ -6442,6 +6511,7 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
                 )
     file_set = set(file_paths)
     kernel_virtual_path = str(NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH)
+    cpu_online_path = NATIVE_BUILDER_CPU_ONLINE_PATH
     runtime_sets: list[set[str]] = []
     for key in ("tracer_runtime_files", "builder_runtime_files"):
         paths = value.get(key)
@@ -6451,6 +6521,7 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
             or paths != sorted(set(paths))
             or any(path not in file_set for path in paths)
             or kernel_virtual_path in paths
+            or cpu_online_path in paths
         ):
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", key)
         runtime_sets.append(set(paths))
@@ -6475,6 +6546,7 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
     covered_directories: set[str] = set()
     observed_ids: list[str] = []
     kernel_virtual_profile_seen = False
+    cpu_online_profile_seen = False
     directory_set = set(directory_paths)
     for profile in profiles:
         if type(profile) is not dict or set(profile) != {
@@ -6510,6 +6582,10 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
             events, profile_files, profile_id
         ):
             kernel_virtual_profile_seen = True
+        if _native_builder_validate_cpu_online_profile_binding(
+            events, profile_files, profile_id
+        ):
+            cpu_online_profile_seen = True
         searches = _native_builder_validate_trace_searches(
             profile.get("search_state"), profile_id
         )
@@ -6534,6 +6610,11 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
         _fail(
             "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
             "kernel virtual profile coverage",
+        )
+    if (cpu_online_path in file_set) != cpu_online_profile_seen:
+        _fail(
+            "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+            "cpu online profile coverage",
         )
     return dict(value)
 

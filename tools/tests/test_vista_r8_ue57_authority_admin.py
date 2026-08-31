@@ -124,6 +124,7 @@ def _native_trace_contract(host: Path) -> dict[str, object]:
         "tracer_runtime_files": [str(host)],
         "builder_runtime_files": [str(host)],
         "path_aliases": [],
+        "event_count_policies": admin._native_builder_trace_event_count_policies(),
         "profiles": profiles,
         "phase_invocations": {
             phase: [
@@ -197,6 +198,7 @@ def _native_trace_contract_with_kernel_virtual() -> dict[str, object]:
         "tracer_runtime_files": [str(runtime_path)],
         "builder_runtime_files": [str(runtime_path)],
         "path_aliases": [],
+        "event_count_policies": admin._native_builder_trace_event_count_policies(),
         "profiles": profiles,
         "phase_invocations": {
             phase: [
@@ -474,7 +476,7 @@ def test_native_builder_kernel_virtual_contract_mirror_rejects_tampering() -> No
     contract = _native_trace_contract_with_kernel_virtual()
 
     stale = copy.deepcopy(contract)
-    stale["schema"] = "vista.r8-native-builder-trace-contract/v2"
+    stale["schema"] = "vista.r8-native-builder-trace-contract/v3"
     with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
         admin._native_builder_validate_trace_contract(stale)
 
@@ -641,6 +643,19 @@ def test_native_builder_independent_consumer_mirror_matches_producer_contract() 
         == native_builder.TRACE_CONTRACT_SCHEMA
     )
     assert admin.NATIVE_BUILDER_STRACE_VERSION == native_builder.STRACE_VERSION
+    assert admin.NATIVE_BUILDER_CPU_ONLINE_PATH == native_builder.CPU_ONLINE_PATH
+    assert (
+        admin.NATIVE_BUILDER_CPU_ONLINE_READ_EVENT_LINE
+        == native_builder.CPU_ONLINE_READ_EVENT_LINE
+    )
+    assert (
+        admin.NATIVE_BUILDER_CPU_ONLINE_EVENT_COUNT_POLICY
+        == native_builder.CPU_ONLINE_EVENT_COUNT_POLICY
+    )
+    assert (
+        admin._native_builder_trace_event_count_policies()
+        == native_builder._trace_event_count_policies()
+    )
     assert admin.NATIVE_BUILDER_SOURCE_PATHS == native_builder.SOURCE_PATHS
     assert (
         admin.NATIVE_BUILDER_TRACE_FILE_SYSCALLS == native_builder.TRACE_FILE_SYSCALLS
@@ -704,6 +719,111 @@ def test_native_builder_independent_consumer_mirror_matches_producer_contract() 
     assert admin._native_builder_expected_flags(
         "initial-bootstrap-installer", bindings
     ) == native_builder.expected_job_flags("initial-bootstrap-installer", bindings)
+
+
+def test_native_builder_independent_consumer_closes_cpu_online_read_count() -> None:
+    event = {
+        "line": admin.NATIVE_BUILDER_CPU_ONLINE_READ_EVENT_LINE,
+        "count": 1,
+    }
+    assert admin._native_builder_validate_trace_events([event], "cpu-online") == [
+        event
+    ]
+    invalid = {**event, "count": 2}
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_events([invalid], "cpu-online")
+
+
+def test_native_builder_cpu_online_policy_is_profile_and_host_bound() -> None:
+    contract = _native_trace_contract_with_kernel_virtual()
+    cpu_record = native_builder._planner_trace_file_record(
+        native_builder.CPU_ONLINE_PATH
+    )
+    contract["host_files"] = sorted(  # type: ignore[index]
+        [*contract["host_files"], cpu_record],  # type: ignore[index]
+        key=lambda item: item["path"],
+    )
+    fetch = next(
+        profile
+        for profile in contract["profiles"]  # type: ignore[union-attr]
+        if profile["id"] == "git:fetch"
+    )
+    fetch["host_files"] = sorted(  # type: ignore[index]
+        [*fetch["host_files"], native_builder.CPU_ONLINE_PATH]  # type: ignore[index]
+    )
+    fetch["event_multiset"] = sorted(  # type: ignore[index]
+        [
+            *fetch["event_multiset"],  # type: ignore[index]
+            {"line": native_builder.CPU_ONLINE_READ_EVENT_LINE, "count": 1},
+        ],
+        key=lambda item: item["line"],
+    )
+    assert admin._native_builder_validate_trace_contract(contract) == contract
+
+    wrong_profile = copy.deepcopy(contract)
+    wrong_fetch = next(
+        profile
+        for profile in wrong_profile["profiles"]  # type: ignore[union-attr]
+        if profile["id"] == "git:fetch"
+    )
+    wrong_init = next(
+        profile
+        for profile in wrong_profile["profiles"]  # type: ignore[union-attr]
+        if profile["id"] == "git:init"
+    )
+    wrong_fetch["host_files"].remove(native_builder.CPU_ONLINE_PATH)  # type: ignore[union-attr]
+    wrong_fetch["event_multiset"] = [  # type: ignore[index]
+        item
+        for item in wrong_fetch["event_multiset"]  # type: ignore[union-attr]
+        if item["line"] != native_builder.CPU_ONLINE_READ_EVENT_LINE
+    ]
+    wrong_init["host_files"] = sorted(  # type: ignore[index]
+        [*wrong_init["host_files"], native_builder.CPU_ONLINE_PATH]  # type: ignore[index]
+    )
+    wrong_init["event_multiset"] = sorted(  # type: ignore[index]
+        [
+            *wrong_init["event_multiset"],  # type: ignore[index]
+            {"line": native_builder.CPU_ONLINE_READ_EVENT_LINE, "count": 1},
+        ],
+        key=lambda item: item["line"],
+    )
+    with pytest.raises(admin.AuthorityError, match="cpu online event profile"):
+        admin._native_builder_validate_trace_contract(wrong_profile)
+
+    unbound_event = copy.deepcopy(contract)
+    unbound_fetch = next(
+        profile
+        for profile in unbound_event["profiles"]  # type: ignore[union-attr]
+        if profile["id"] == "git:fetch"
+    )
+    unbound_fetch["host_files"].remove(native_builder.CPU_ONLINE_PATH)  # type: ignore[union-attr]
+    with pytest.raises(admin.AuthorityError, match="cpu online profile binding"):
+        admin._native_builder_validate_trace_contract(unbound_event)
+
+    runtime_smuggle = copy.deepcopy(contract)
+    runtime_smuggle["builder_runtime_files"] = sorted(  # type: ignore[index]
+        [
+            *runtime_smuggle["builder_runtime_files"],  # type: ignore[index]
+            native_builder.CPU_ONLINE_PATH,
+        ]
+    )
+    with pytest.raises(admin.AuthorityError, match="builder_runtime_files"):
+        admin._native_builder_validate_trace_contract(runtime_smuggle)
+
+    policy_drift = copy.deepcopy(contract)
+    policy_drift["event_count_policies"][0]["profile_id"] = "git:init"  # type: ignore[index]
+    with pytest.raises(admin.AuthorityError, match="event count policies"):
+        admin._native_builder_validate_trace_contract(policy_drift)
+    for invalid_count in (True, 1.0):
+        type_drift = copy.deepcopy(contract)
+        type_drift["event_count_policies"][0]["canonical_count"] = invalid_count  # type: ignore[index]
+        with pytest.raises(admin.AuthorityError, match="event count policies"):
+            admin._native_builder_validate_trace_contract(type_drift)
+    for policies in ([], admin._native_builder_trace_event_count_policies() * 2):
+        cardinality_drift = copy.deepcopy(contract)
+        cardinality_drift["event_count_policies"] = policies
+        with pytest.raises(admin.AuthorityError, match="event count policies"):
+            admin._native_builder_validate_trace_contract(cardinality_drift)
 
 
 @pytest.mark.parametrize("replacement_kind", ["commit", "tree", "blob"])
@@ -2002,8 +2122,8 @@ def test_engine_shell_and_native_admin_launchers_have_closed_entrypoints() -> No
     bindings = admin._engine_wrapper_review_bindings(
         engine_wrapper.encode("utf-8"),
         helper_pin=admin.FilePin(
-            "ce53ea2c5a5176879858c949e1e10b538fda9e077bfd547d122cd9768c3d8d70",
-            506_104,
+            "247f5d6b0cf55de2b7840574c5529ed4c4560fb1176d152b9bed41f8f01f280f",
+            508_969,
         ),
         source_pin=admin.FilePin(
             "7b30cd3b5628a21579efc19013a1d13e9557684c6b8ab3b6495eb42544e4b3d9",
@@ -2014,7 +2134,7 @@ def test_engine_shell_and_native_admin_launchers_have_closed_entrypoints() -> No
             5_917_224,
         ),
     )
-    assert bindings["EXPECTED_HELPER_BYTES"] == "506104"
+    assert bindings["EXPECTED_HELPER_BYTES"] == "508969"
     assert bindings["EXPECTED_SOURCE_PIN_BYTES"] == "786"
     assert bindings["EXPECTED_PYTHON_BYTES"] == "5917224"
     admin_launcher = (root / "tools/admin/vista_r8_ue57_admin_launcher.c").read_text(

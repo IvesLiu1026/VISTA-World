@@ -247,6 +247,16 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   wildcards. `/dev/null` is the sole non-scratch writable endpoint, and only
   exact `O_RDWR` with the explicitly modelled non-mutating `O_CLOEXEC` flag is
   accepted.
+- WHEN Git's process tree performs one or more exact successful
+  `openat(O_RDONLY|O_CLOEXEC)` operations on
+  `/sys/devices/system/cpu/online`, planner and replay SHALL canonicalize only
+  that event's positive multiplicity to one. The endpoint SHALL remain an
+  exact held root-owned read-only host-file authority with pinned bytes and
+  component metadata. A different path, syscall, outcome, or open-flag set
+  SHALL retain ordinary exact multiplicity; no sysfs prefix rule is permitted.
+  Trace v4 SHALL carry exactly one closed `event_count_policies` entry binding
+  this rule to `git:fetch`, and both producer and independent consumer SHALL
+  reject a missing, additional, reordered, or changed policy projection.
 - WHEN an observed read-only tool invocation reads a kernel virtual sysctl,
   the trace contract SHALL accept only the literal and canonical
   `/proc/sys/vm/overcommit_memory` as a distinct finite host authority. Its
@@ -338,7 +348,7 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   sequence, and acknowledgements.
 - Phase B SHALL reuse, byte for byte, Phase A's installed-builder pin, source
   bundle pin, commit, seven-blob inventory, tools/toolchain ledger, runtime-map
-  sets, and trace-v3 contract; only its fixed service-unit binding and job may
+  sets, and trace-v4 contract; only its fixed service-unit binding and job may
   differ. Derivation SHALL re-read the exact Phase A request and manifest and
   prove manifest-to-request pin lineage. Later Phase B authority review SHALL
   hold both Phase A documents while revalidating those same common fields and

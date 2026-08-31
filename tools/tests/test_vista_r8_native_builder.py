@@ -109,6 +109,7 @@ def _trace_contract(tmp_path: Path) -> dict[str, object]:
         "tracer_runtime_files": [str(host_file)],
         "builder_runtime_files": [str(host_file)],
         "path_aliases": [],
+        "event_count_policies": builder._trace_event_count_policies(),
         "profiles": profiles,
         "phase_invocations": {
             phase: [
@@ -211,6 +212,7 @@ def _request_trace_contract() -> dict[str, object]:
         "tracer_runtime_files": [str(builder.STRACE_PATH)],
         "builder_runtime_files": [str(builder.PYTHON_PATH)],
         "path_aliases": [],
+        "event_count_policies": builder._trace_event_count_policies(),
         "profiles": profiles,
         "phase_invocations": {
             phase: [
@@ -717,6 +719,78 @@ def test_trace_multiset_is_exact_sorted_and_counted(tmp_path: Path) -> None:
             "count": 1,
         },
     ]
+
+
+def test_trace_multiset_collapses_only_exact_cpu_online_read_multiplicity(
+    tmp_path: Path,
+) -> None:
+    cpu_online = "/sys/devices/system/cpu/online"
+    cpu_possible = "/sys/devices/system/cpu/possible"
+    cpu_line = (
+        f'openat(AT_FDCWD, "{cpu_online}", O_RDONLY|O_CLOEXEC) = '
+        f'3<{cpu_online}>'
+    )
+    possible_line = (
+        f'openat(AT_FDCWD, "{cpu_possible}", O_RDONLY|O_CLOEXEC) = '
+        f'3<{cpu_possible}>'
+    )
+    no_cloexec_line = (
+        f'openat(AT_FDCWD, "{cpu_online}", O_RDONLY) = 3<{cpu_online}>'
+    )
+    denied_line = (
+        f'openat(AT_FDCWD, "{cpu_online}", O_RDONLY|O_CLOEXEC) = '
+        "-1 EACCES (Permission denied)"
+    )
+    stat_line = (
+        f'newfstatat(AT_FDCWD, "{cpu_online}", '
+        "{st_mode=S_IFREG|0444, st_size=4096, ...}, 0) = 0"
+    )
+    multiset, events = builder._trace_event_multiset(
+        [
+            cpu_line,
+            cpu_line,
+            cpu_line,
+            possible_line,
+            possible_line,
+            no_cloexec_line,
+            no_cloexec_line,
+            denied_line,
+            denied_line,
+            stat_line,
+            stat_line,
+        ],
+        cwd=tmp_path,
+        scratch=tmp_path,
+    )
+    assert len(events) == 11
+    assert {item["line"]: item["count"] for item in multiset} == {
+        builder.CPU_ONLINE_READ_EVENT_LINE: 1,
+        _trace_event(
+            "openat",
+            cpu_possible,
+            "OK",
+            open_flags=["O_RDONLY", "O_CLOEXEC"],
+        ): 2,
+        _trace_event(
+            "openat", cpu_online, "OK", open_flags=["O_RDONLY"]
+        ): 2,
+        _trace_event(
+            "openat",
+            cpu_online,
+            "EACCES",
+            open_flags=["O_RDONLY", "O_CLOEXEC"],
+        ): 2,
+        _trace_event("newfstatat", cpu_online, "OK"): 2,
+    }
+    assert builder._validate_trace_event_multiset(
+        [{"line": builder.CPU_ONLINE_READ_EVENT_LINE, "count": 1}],
+        "cpu-online",
+    ) == [{"line": builder.CPU_ONLINE_READ_EVENT_LINE, "count": 1}]
+    with pytest.raises(builder.BuilderError, match="REQUEST_INVALID"):
+        builder._validate_trace_event_multiset(
+            [{"line": builder.CPU_ONLINE_READ_EVENT_LINE, "count": 2}],
+            "cpu-online",
+        )
 
 
 def test_trace_multiset_collapses_only_held_workspace_ancestor_depth(
@@ -1283,7 +1357,7 @@ def test_kernel_virtual_sysctl_contract_requires_exact_profile_event_binding() -
     assert builder._validate_trace_contract(contract) == contract
 
     stale_schema = copy.deepcopy(contract)
-    stale_schema["schema"] = "vista.r8-native-builder-trace-contract/v2"
+    stale_schema["schema"] = "vista.r8-native-builder-trace-contract/v3"
     with pytest.raises(builder.BuilderError, match="trace contract schema/version"):
         builder._validate_trace_contract(stale_schema)
 
@@ -1336,6 +1410,96 @@ def test_kernel_virtual_sysctl_contract_requires_exact_profile_event_binding() -
     )
     with pytest.raises(builder.BuilderError, match="kernel virtual open flags"):
         builder._validate_trace_contract(failed_write)
+
+
+def test_cpu_online_count_policy_is_closed_to_git_fetch_and_held_host_file() -> None:
+    contract = _request_trace_contract()
+    cpu_record = builder._planner_trace_file_record(builder.CPU_ONLINE_PATH)
+    contract["host_files"] = sorted(  # type: ignore[index]
+        [*contract["host_files"], cpu_record],  # type: ignore[index]
+        key=lambda item: item["path"],
+    )
+    fetch = next(
+        profile
+        for profile in contract["profiles"]  # type: ignore[union-attr]
+        if profile["id"] == "git:fetch"
+    )
+    fetch["host_files"] = sorted(  # type: ignore[index]
+        [*fetch["host_files"], builder.CPU_ONLINE_PATH]  # type: ignore[index]
+    )
+    fetch["event_multiset"] = sorted(  # type: ignore[index]
+        [
+            *fetch["event_multiset"],  # type: ignore[index]
+            {"line": builder.CPU_ONLINE_READ_EVENT_LINE, "count": 1},
+        ],
+        key=lambda item: item["line"],
+    )
+    assert builder._validate_trace_contract(contract) == contract
+
+    wrong_profile = copy.deepcopy(contract)
+    wrong_fetch = next(
+        profile
+        for profile in wrong_profile["profiles"]  # type: ignore[union-attr]
+        if profile["id"] == "git:fetch"
+    )
+    wrong_init = next(
+        profile
+        for profile in wrong_profile["profiles"]  # type: ignore[union-attr]
+        if profile["id"] == "git:init"
+    )
+    wrong_fetch["host_files"].remove(builder.CPU_ONLINE_PATH)  # type: ignore[union-attr]
+    wrong_fetch["event_multiset"] = [  # type: ignore[index]
+        item
+        for item in wrong_fetch["event_multiset"]  # type: ignore[union-attr]
+        if item["line"] != builder.CPU_ONLINE_READ_EVENT_LINE
+    ]
+    wrong_init["host_files"] = sorted(  # type: ignore[index]
+        [*wrong_init["host_files"], builder.CPU_ONLINE_PATH]  # type: ignore[index]
+    )
+    wrong_init["event_multiset"] = sorted(  # type: ignore[index]
+        [
+            *wrong_init["event_multiset"],  # type: ignore[index]
+            {"line": builder.CPU_ONLINE_READ_EVENT_LINE, "count": 1},
+        ],
+        key=lambda item: item["line"],
+    )
+    with pytest.raises(builder.BuilderError, match="cpu online event profile"):
+        builder._validate_trace_contract(wrong_profile)
+
+    unbound_event = copy.deepcopy(contract)
+    unbound_fetch = next(
+        profile
+        for profile in unbound_event["profiles"]  # type: ignore[union-attr]
+        if profile["id"] == "git:fetch"
+    )
+    unbound_fetch["host_files"].remove(builder.CPU_ONLINE_PATH)  # type: ignore[union-attr]
+    with pytest.raises(builder.BuilderError, match="cpu online profile binding"):
+        builder._validate_trace_contract(unbound_event)
+
+    runtime_smuggle = copy.deepcopy(contract)
+    runtime_smuggle["builder_runtime_files"] = sorted(  # type: ignore[index]
+        [
+            *runtime_smuggle["builder_runtime_files"],  # type: ignore[index]
+            builder.CPU_ONLINE_PATH,
+        ]
+    )
+    with pytest.raises(builder.BuilderError, match="trace builder_runtime_files"):
+        builder._validate_trace_contract(runtime_smuggle)
+
+    policy_drift = copy.deepcopy(contract)
+    policy_drift["event_count_policies"][0]["profile_id"] = "git:init"  # type: ignore[index]
+    with pytest.raises(builder.BuilderError, match="event count policies"):
+        builder._validate_trace_contract(policy_drift)
+    for invalid_count in (True, 1.0):
+        type_drift = copy.deepcopy(contract)
+        type_drift["event_count_policies"][0]["canonical_count"] = invalid_count  # type: ignore[index]
+        with pytest.raises(builder.BuilderError, match="event count policies"):
+            builder._validate_trace_contract(type_drift)
+    for policies in ([], builder._trace_event_count_policies() * 2):
+        cardinality_drift = copy.deepcopy(contract)
+        cardinality_drift["event_count_policies"] = policies
+        with pytest.raises(builder.BuilderError, match="event count policies"):
+            builder._validate_trace_contract(cardinality_drift)
 
 
 def test_kernel_virtual_sysctl_contract_rejects_forged_record_fields() -> None:

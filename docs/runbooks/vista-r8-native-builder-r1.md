@@ -86,7 +86,7 @@ or any relaxation of the other process/filesystem hardening.
 Before any root installation, the unprivileged `--plan-phase-a-request` mode
 runs each Python-startup, Git, compiler, and `readelf` invocation in fresh
 private scratch. It emits canonical request bytes only; its claims remain
-`observation_only=true` and `production_native_output=false`. Trace contract v3
+`observation_only=true` and `production_native_output=false`. Trace contract v4
 pins successful host files and path-component chains, directory searches,
 negative search results, runtime mapped-file device/inode/path/bytes, and each
 invocation's exact pre-run scratch inventory. Production accepts only the same
@@ -101,12 +101,22 @@ non-writable component chain and matching `-yy` canonical result. Finite
 host directories. Exact `/dev/null` with `O_RDWR` and optional `O_CLOEXEC` is
 the only non-scratch mutating-open endpoint.
 
+The `git:fetch` process tree may perform the exact successful
+`openat(O_RDONLY|O_CLOEXEC)` of `/sys/devices/system/cpu/online` two or three
+times while producing the same output. Trace v4 therefore canonicalizes the
+multiplicity of only that exact event to one after at least one event was
+observed. The contract records this as its one exact `event_count_policies`
+entry, bound only to the `git:fetch` profile. The sysfs file remains a held,
+root-owned, read-only host authority
+with exact bytes and component metadata. A different path, syscall, outcome,
+or flag set keeps its ordinary exact count; this is not a sysfs prefix rule.
+
 The one finite procfs host authority is the literal and canonical
 `/proc/sys/vm/overcommit_memory`. It is not a `/proc/sys` allowlist. The
 planner and both replay validators require root:root `0644`, one link, an exact
 device/inode and complete endpoint component, a read-only no-follow descriptor,
 and stream-pinned bytes equal to exactly `0\n`, `1\n`, or `2\n` even though
-procfs reports size zero. Trace v3 synthesizes one closed
+procfs reports size zero. Trace v4 synthesizes one closed
 `proc-root-nlink-volatile-v1` record for that endpoint's `/proc` ancestor: only
 the volatile `nlink` is omitted. Path, mode, owner, device, inode, mtime, and
 ctime remain pinned there, and all metadata remains pinned for `/`,
@@ -120,7 +130,7 @@ non-process procfs endpoint remains visible inside the service mount namespace.
 They retain `ProtectProc=invisible` to hide other-user process details and
 `ProtectKernelTunables=yes` to keep `/proc/sys` read-only. `ProcSubset=pid` is
 not a compatible hardening substitute here: it hides `/proc/sys` entirely and
-would make the required trace-v3 authority impossible to validate.
+would make the required trace-v4 authority impossible to validate.
 
 The root bootstrap verifies the fixed account record, lock state,
 subordinate-ID exclusion, and absence of numeric-997 processes. Production
@@ -154,7 +164,7 @@ review audit, and the canonical initial-bootstrap input. The fresh
 `vista_r8_ue57_initial_bootstrap.py` Git blob must match the helper provenance
 in those embedded documents; stale helper provenance is rejected.
 It must also carry Phase A's builder pin, bundle/commit/seven-blob inventory,
-tools/toolchain ledger, runtime-map sets, and trace-v3 contract without change.
+tools/toolchain ledger, runtime-map sets, and trace-v4 contract without change.
 The zero-write derivation re-reads Phase A's request and manifest and validates
 their pin edge. The later authority audit opens and retains both documents
 while repeating that comparison against the installed Phase B request.
@@ -374,8 +384,8 @@ uv run ruff check tools/tests/test_vista_r8_native_builder_bootstrap.py
 git diff --check
 ```
 
-In addition to the static suite, the unprivileged observation-only planner was
-run twice over one ephemeral exact Git bundle after the trace-v3 correction.
+Before the event-count correction, the unprivileged trace-v3 planner was run
+twice over one ephemeral exact Git bundle.
 Both runs completed observation and cold replay for all 27 invocation profiles
 and emitted byte-identical canonical request bytes
 (`1a14f2af3e574e6c13ed15f08f2c5a958c992d95eac3f33d8ceed8749593c490`,
@@ -385,7 +395,10 @@ bundle and outputs were removed after comparison. This host's two runs did not
 emit the finite sysctl access, so the exact authority was correctly absent
 rather than admitted as an orphan; focused planner, contract, held-open, and
 revalidation tests exercise both its accepted literal form and its closed
-negative matrix.
+negative matrix. Those trace-v3 request bytes are historical evidence, not
+activation inputs. Trace v4 requires a fresh exact bundle plus clean and
+controlled-load planner/replay runs with byte-identical canonical requests
+before any root activation.
 
 No root mutation was executed during the initial authoring pass. Subsequent
 reviewed ceremonies preserved the failed 22dfa bootstrap source as evidence,
@@ -395,5 +408,6 @@ reload, enablement, or service start. A pre-start review found the incompatible
 neither builder phase ever ran. Both units remained inactive/dead, both
 `published/` roots remained absent, and no candidate publication or UE action
 resulted from that framework. The corrected framework requires a newly pinned,
-independently reviewed replacement ceremony; the c963 installation and all
-c963 bundle/request pins are historical evidence only.
+independently reviewed replacement ceremony; the c963 installation, c963
+bundle/request pins, and the failed or pre-v4 667c992d candidates are
+historical evidence only.

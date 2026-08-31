@@ -582,7 +582,7 @@ def test_units_are_network_filesystem_device_and_process_hardened() -> None:
 
 
 def test_units_expose_the_read_only_kernel_virtual_trace_authority() -> None:
-    """Trace v3 pins /proc/sys/vm/overcommit_memory inside both builders."""
+    """Trace v4 pins /proc/sys/vm/overcommit_memory inside both builders."""
     for path in (PHASE_A_UNIT, PHASE_B_UNIT):
         service = _section(_text(path), "Service")
         assert _values(service, "ProcSubset") == ["all"]

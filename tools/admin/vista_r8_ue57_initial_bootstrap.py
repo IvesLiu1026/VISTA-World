@@ -35,7 +35,7 @@ INPUT_PIN_SCHEMA = "vista.r8-ue57-initial-bootstrap-input-pin/v2"
 ADMIN_RECEIPT_SCHEMA = "vista.r8-buildplugin-admin-install-receipt/v1"
 CORE_AUDIT_SCHEMA = "vista.r8-ue57-core-bootstrap-review-audit/v2"
 NATIVE_BUILDER_JOB_SCHEMA = "vista.r8-native-builder-job-manifest/v1"
-NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v3"
+NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v4"
 NATIVE_BUILD_PROVENANCE_SCHEMA = "vista.r8-native-builder-artifact-provenance/v1"
 
 ROOT_UID = 0

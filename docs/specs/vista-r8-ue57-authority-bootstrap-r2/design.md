@@ -119,7 +119,17 @@ trace-tree tokens instead of treating `/proc` metadata as durable host input.
 The only external write-like open modeled by the observed contract is exact
 `/dev/null` with `O_RDWR` and, optionally, `O_CLOEXEC`.
 
-Trace contract v3 adds one separate finite kernel-virtual host authority for
+The `git:fetch` process tree has one observed multiplicity variation: the
+exact successful `openat` of `/sys/devices/system/cpu/online` with
+`O_RDONLY|O_CLOEXEC` occurs two or three times without changing its output.
+Both planner and replay canonicalize only that exact event's positive
+multiplicity to one. Trace v4 carries one exact `event_count_policies` entry
+that binds the rule to `git:fetch`; producer and independent consumer require
+that complete singleton projection. The file remains held and pinned by exact
+root-owned, read-only bytes and component metadata. No other path, syscall,
+outcome, or flag set receives this normalization.
+
+Trace contract v4 retains the v3 finite kernel-virtual host authority for
 the exact literal and canonical `/proc/sys/vm/overcommit_memory`; this is not a
 procfs prefix rule. Planner assembly recognizes no alias, traversal, symlink,
 or second sysctl. It opens the endpoint read-only with
@@ -184,7 +194,7 @@ accepts no `yhliu` candidate.
 
 The derivation does not discover a second toolchain contract. It copies the
 exact Phase A builder pin, bundle/commit/blob inventory, tools ledger, runtime
-map sets, and trace-v3 bytes, while replacing only the fixed systemd-unit
+map sets, and trace-v4 bytes, while replacing only the fixed systemd-unit
 binding and job. It re-reads Phase A's request and manifest and validates their
 pin edge before emitting bytes. Publication review repeats this comparison
 with both Phase A documents held, so request/manifest mutation or a coherently

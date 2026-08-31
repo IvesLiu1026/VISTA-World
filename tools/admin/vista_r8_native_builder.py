@@ -39,7 +39,7 @@ from typing import Any, Iterable, Mapping, NoReturn, Sequence
 
 
 REQUEST_SCHEMA = "vista.r8-native-builder-request/v2"
-TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v3"
+TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v4"
 PHASE_A_MANIFEST_SCHEMA = "vista.r8-native-builder-phase-a-manifest/v1"
 PHASE_B_MANIFEST_SCHEMA = "vista.r8-native-builder-phase-b-manifest/v1"
 JOB_MANIFEST_SCHEMA = "vista.r8-native-builder-job-manifest/v1"
@@ -90,6 +90,42 @@ KERNEL_VIRTUAL_COMPONENT_PATHS = (
     "/proc/sys/vm",
     "/proc/sys/vm/overcommit_memory",
 )
+CPU_ONLINE_PATH = "/sys/devices/system/cpu/online"
+CPU_ONLINE_READ_EVENT_LINE = (
+    '{"open_flags":["O_RDONLY","O_CLOEXEC"],"outcome":"OK",'
+    f'"paths":["{CPU_ONLINE_PATH}"],"syscall":"openat"}}'
+)
+CPU_ONLINE_EVENT_COUNT_POLICY = "positive-presence-v1"
+
+
+def _trace_event_count_policies() -> list[dict[str, Any]]:
+    return [
+        {
+            "canonical_count": 1,
+            "event_line": CPU_ONLINE_READ_EVENT_LINE,
+            "policy": CPU_ONLINE_EVENT_COUNT_POLICY,
+            "profile_id": "git:fetch",
+        }
+    ]
+
+
+def _validate_trace_event_count_policies(value: Any) -> list[dict[str, Any]]:
+    expected = _trace_event_count_policies()
+    if type(value) is not list or len(value) != 1:
+        _fail("REQUEST_INVALID", "trace event count policies")
+    item = value[0]
+    if (
+        type(item) is not dict
+        or set(item) != {"canonical_count", "event_line", "policy", "profile_id"}
+        or type(item.get("canonical_count")) is not int
+        or type(item.get("event_line")) is not str
+        or type(item.get("policy")) is not str
+        or type(item.get("profile_id")) is not str
+        or item != expected[0]
+    ):
+        _fail("REQUEST_INVALID", "trace event count policies")
+    return [dict(item)]
+
 
 PINNED_PYTHON_SHA256 = (
     "7d51cd6b48b521277f5caa4610a82126e315fa2be4df069823a8b1eeb5bd4a86"
@@ -1001,9 +1037,10 @@ def _trace_event_multiset(
             trace_pids=trace_pids or frozenset({emitter}),
         )
         parsed.append(event)
-        if event["paths"] and all(
-            path == "$SCRATCH_ANCESTOR" for path in event["paths"]
-        ):
+        if (
+            event["paths"]
+            and all(path == "$SCRATCH_ANCESTOR" for path in event["paths"])
+        ) or event["line"] == CPU_ONLINE_READ_EVENT_LINE:
             counter[event["line"]] = 1
         else:
             counter[event["line"]] += 1
@@ -1301,6 +1338,10 @@ def _validate_trace_event_multiset(value: Any, label: str) -> list[dict[str, Any
             or "\n" in item["line"]
             or type(item.get("count")) is not int
             or item["count"] <= 0
+            or (
+                item["line"] == CPU_ONLINE_READ_EVENT_LINE
+                and item["count"] != 1
+            )
             or item["line"] <= previous
             or not _valid_normalized_trace_event(item["line"])
         ):
@@ -1311,6 +1352,20 @@ def _validate_trace_event_multiset(value: Any, label: str) -> list[dict[str, Any
         previous = item["line"]
         result.append(dict(item))
     return result
+
+
+def _validate_cpu_online_profile_binding(
+    events: Sequence[Mapping[str, Any]],
+    host_files: Sequence[str],
+    label: str,
+) -> bool:
+    referenced = CPU_ONLINE_PATH in host_files
+    observed = any(item["line"] == CPU_ONLINE_READ_EVENT_LINE for item in events)
+    if observed and label != "git:fetch":
+        _fail("REQUEST_INVALID", f"{label} cpu online event profile")
+    if observed != referenced:
+        _fail("REQUEST_INVALID", f"{label} cpu online profile binding")
+    return observed
 
 
 def _validate_kernel_virtual_profile_binding(
@@ -1413,6 +1468,7 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
         "tracer_runtime_files",
         "builder_runtime_files",
         "path_aliases",
+        "event_count_policies",
         "profiles",
         "phase_invocations",
     }:
@@ -1422,6 +1478,7 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
         or value.get("tracer_version") != STRACE_VERSION
     ):
         _fail("REQUEST_INVALID", "trace contract schema/version")
+    _validate_trace_event_count_policies(value.get("event_count_policies"))
 
     files = value.get("host_files")
     if type(files) is not list or not files:
@@ -1527,6 +1584,7 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
 
     file_path_set = set(file_paths)
     kernel_virtual_path = str(KERNEL_VIRTUAL_SYSCTL_PATH)
+    cpu_online_path = CPU_ONLINE_PATH
     runtime_sets: list[set[str]] = []
     for key in ("tracer_runtime_files", "builder_runtime_files"):
         paths = value.get(key)
@@ -1536,6 +1594,7 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
             or paths != sorted(set(paths))
             or any(path not in file_path_set for path in paths)
             or kernel_virtual_path in paths
+            or cpu_online_path in paths
         ):
             _fail("REQUEST_INVALID", f"trace {key}")
         runtime_sets.append(set(paths))
@@ -1559,6 +1618,7 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
     covered_directories: set[str] = set()
     observed_ids: list[str] = []
     kernel_virtual_profile_seen = False
+    cpu_online_profile_seen = False
     for profile in profiles:
         if type(profile) is not dict or set(profile) != {
             "id",
@@ -1591,6 +1651,8 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
             _fail("REQUEST_INVALID", f"trace profile paths {profile_id}")
         if _validate_kernel_virtual_profile_binding(events, profile_files, profile_id):
             kernel_virtual_profile_seen = True
+        if _validate_cpu_online_profile_binding(events, profile_files, profile_id):
+            cpu_online_profile_seen = True
         searches = _validate_trace_search_state(profile.get("search_state"), profile_id)
         for search in searches:
             anchor = _deepest_existing_trace_directory(search["path"])
@@ -1606,6 +1668,8 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
         _fail("REQUEST_INVALID", "orphan trace host inputs")
     if (kernel_virtual_path in file_path_set) != kernel_virtual_profile_seen:
         _fail("REQUEST_INVALID", "kernel virtual profile coverage")
+    if (cpu_online_path in file_path_set) != cpu_online_profile_seen:
+        _fail("REQUEST_INVALID", "cpu online profile coverage")
     return dict(value)
 
 
@@ -4000,6 +4064,7 @@ def _assemble_observed_trace_contract(
             builder_runtime_canonicals, host_files
         ),
         "path_aliases": path_aliases,
+        "event_count_policies": _trace_event_count_policies(),
         "profiles": [dict(profiles[key]) for key in sorted(profiles)],
         "phase_invocations": {
             phase: [
