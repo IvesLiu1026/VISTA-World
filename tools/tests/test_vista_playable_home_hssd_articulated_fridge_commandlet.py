@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+import types
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -10,6 +14,16 @@ COMMANDLET = (
 EDITOR_MODULE = ROOT / "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor"
 AUTHORING_HEADER = EDITOR_MODULE / "Public/VistaPlayableHomeSceneAuthoringLibrary.h"
 AUTHORING_SOURCE = EDITOR_MODULE / "Private/VistaPlayableHomeSceneAuthoringLibrary.cpp"
+
+
+def _load_commandlet_helpers(monkeypatch: pytest.MonkeyPatch):
+    fake_unreal = types.ModuleType("unreal")
+    monkeypatch.setitem(sys.modules, "unreal", fake_unreal)
+    source = COMMANDLET.read_text(encoding="utf-8")
+    assert source.endswith("\nrun()\n")
+    namespace = {"__name__": "hssd_articulated_fridge_test"}
+    exec(compile(source[: -len("run()\n")], str(COMMANDLET), "exec"), namespace)
+    return types.SimpleNamespace(**namespace)
 
 
 def test_commandlet_compiles_and_is_bound_to_fresh_derivative_only() -> None:
@@ -132,6 +146,36 @@ def test_component_transform_calls_use_the_ue57_sweep_and_teleport_signature() -
     assert 'vector(transform["location_cm"]), False, False' in helper
     assert 'rotation(transform["rotation_deg"]), False, False' in helper
     assert configure.count("), False, False") == 5
+
+
+def test_component_transform_observation_uses_ue57_reflection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commandlet = _load_commandlet_helpers(monkeypatch)
+
+    class ReflectionOnlyComponent:
+        def __init__(self) -> None:
+            self.values = {
+                "relative_location": types.SimpleNamespace(x=1.0, y=2.0, z=3.0),
+                "relative_rotation": types.SimpleNamespace(
+                    roll=4.0, pitch=5.0, yaw=6.0
+                ),
+                "relative_scale3d": types.SimpleNamespace(x=0.5, y=1.0, z=2.0),
+            }
+
+        def get_editor_property(self, name: str):
+            return self.values[name]
+
+    component = ReflectionOnlyComponent()
+    assert not hasattr(component, "get_relative_location")
+    assert commandlet.relative_transform(component) == {
+        "location_cm": [1.0, 2.0, 3.0],
+        "rotation_deg": [4.0, 5.0, 6.0],
+        "scale": [0.5, 1.0, 2.0],
+    }
+    del component.values["relative_rotation"]
+    with pytest.raises(RuntimeError, match="property unavailable: relative_rotation"):
+        commandlet.relative_transform(component)
 
 
 def test_receipt_does_not_claim_runtime_visual_or_r6_acceptance() -> None:
