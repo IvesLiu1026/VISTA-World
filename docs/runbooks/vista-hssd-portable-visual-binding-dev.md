@@ -3,12 +3,17 @@
 Status: source tooling and focused tests only. This runbook does not claim that
 Unreal, pickup/place/drop, or human visual review has passed.
 
-The pipeline removes exactly two redundant HSSD visual-only shells and binds their
-already imported StaticMeshes to the render-only `PresentationMesh` child of the
-existing `VistaPickupActor` authority:
+The pipeline handles each source shell with an explicit closed disposition, then
+binds both already imported StaticMeshes to the render-only `PresentationMesh` child
+of the existing `VistaPickupActor` authority:
 
-- `home.r1/room/kitchen_dining/entity.coffee_cup.01` ← `hssd.static.coffee_cup`
-- `home.r1/room/living_room/entity.slipper.01` ← `hssd.static.flip_flops`
+- `home.r1/room/kitchen_dining/entity.coffee_cup.01` ← `hssd.static.coffee_cup`;
+  disposition `already_absent_source_shell`. Before any binding mutation, the full
+  actor inventory must contain zero matches for its exact HSSD instance tag, actor
+  label, and semantic-target tag.
+- `home.r1/room/living_room/entity.slipper.01` ← `hssd.static.flip_flops`;
+  disposition `exact_visual_shell_to_delete`. Its exact visual-only shell must be
+  uniquely closed and is the only actor deleted.
 
 The pickup actor, `PickupMesh` collision/physics root, semantic ID, transform,
 replication and portability remain authoritative. The presentation relative transform
@@ -20,7 +25,9 @@ old shell transform.
 - Contract:
   `world_packs/vista_playable_home_r1/visual_bindings/hssd_portable_pickups_r1.json`
 - Contract content digest:
-  `924bedcfbea04f6ec7f8fdbdf2871157c3b64c66b4874f68466ebb4d42bda185`
+  `ac3f53d70481e4565e777e50757006a70a105e3b3c7c1fb3a27725c39453e1bd`
+- Contract raw SHA-256:
+  `a39d49235b7fec3cbf0c3dd2cebd9424b97a3f3868272e56786f327e0a4f1cb5`
 - Fixed planner:
   `tools/ue/vista_playable_home/plan_hssd_portable_visual_binding_dev.py`
 - Fixed commandlet:
@@ -32,6 +39,16 @@ old shell transform.
 Do not use a partial/quarantined fridge result. In particular, the observed
 `hssd-r2-action-fridge-dev-r1-20260901c` receipt is quarantined at
 `prove_legacy_identity` and is not a legal source for this planner.
+
+Do not reinterpret the absent coffee shell as permission to bind a different visual
+shell such as coffee cup 02. Any one or duplicate match in any of the three declared
+coffee identity namespaces fails closed. The exact coffee HSSD StaticMesh and exact
+unbound coffee pickup must still load and validate.
+
+The observed portable attempt `hssd-portable-bind-dev-r1-20260901a` is permanently
+quarantined at `prove_all_identities_before_delete`: it correctly established that the
+declared coffee-cup-01 shell has zero instance-tag matches, but its older contract
+incorrectly required one shell. Never reuse that attempt directory or derivative path.
 
 Validate the Git-side contract without resolving private HSSD payloads:
 
@@ -104,14 +121,21 @@ VISTA_HSSD_PORTABLE_VISUAL_BINDING_EXECUTION_SHA256="$EXECUTION_SHA256" \
 ```
 
 The commandlet binds each `/Game` map object path to its exact loaded-project `.umap`,
-calls `new_level_from_template(new_map, completed_fridge_map)`, and proves both shells
-and both pickup actors before the first deletion. Shell proof includes unique identity
-tag namespaces, visual-only diagnostic/authority tags, root-component ownership,
-static mobility, visibility, disabled overlap/navigation/collision and no physics. It
-then loads the two exact HSSD
-StaticMeshes without importing/replacing assets, deletes only the shell actors, binds
-the meshes, saves/cold-reloads the derivative, and rechecks the source-map package SHA.
-Any partial derivative is append-only quarantine evidence.
+calls `new_level_from_template(new_map, completed_fridge_map)`, proves the declared
+coffee identity is absent across the full actor inventory, and proves the unique
+slipper shell plus both pickup actors before the only deletion. Slipper proof includes
+unique identity tag/label closure, visual-only diagnostic/authority tags,
+root-component ownership, static mobility, visibility, disabled
+overlap/navigation/collision and no physics. It then loads both exact HSSD StaticMeshes
+without importing/replacing assets, deletes exactly the declared slipper shell, proves
+that the actor inventory differs by only that one actor, binds the meshes,
+saves/cold-reloads the derivative, re-proves both source-shell identities absent, and
+rechecks the source-map package SHA. The receipt records each binding's declared and
+observed shell disposition. Any partial derivative is append-only quarantine evidence.
+After binding, the exact validated pickup is expected to carry its HSSD instance tag;
+the cold-reload shell-absence check excludes only that one pickup actor path from the
+instance-tag match set. Actor-label and semantic-target checks have no exception, and
+any other actor carrying the instance tag still fails closed.
 
 Even a successful source receipt remains `accepted=false`, `runtime_verified=false`,
 and `human_reviewed=false`. A separate live review must demonstrate coffee-cup and

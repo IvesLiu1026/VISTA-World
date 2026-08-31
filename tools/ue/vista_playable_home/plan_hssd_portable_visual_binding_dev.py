@@ -194,6 +194,11 @@ def _map_package_file(project_file: Path, object_path: str) -> Path:
 def _strict_binding_rows(value: Any) -> list[dict[str, Any]]:
     _require(isinstance(value, list) and len(value) == 2, "binding inventory differs")
     result = copy.deepcopy(value)
+    _require(
+        tuple(row.get("shell_disposition") for row in result)
+        == binding_contract.EXPECTED_SHELL_DISPOSITIONS,
+        "binding shell-disposition inventory differs",
+    )
     for index, row in enumerate(result):
         _require(type(row) is dict, f"binding {index} is not an object")
         for field in ("shell_world_transform_cm", "pickup_world_transform_cm"):
@@ -408,6 +413,8 @@ def plan_execution(
                 "asset_import_or_replacement_forbidden": True,
                 "exact_identity_before_delete_required": True,
                 "only_visual_shells_may_be_deleted": True,
+                "declared_absent_shell_must_be_proved": True,
+                "exact_one_visual_shell_may_be_deleted": True,
                 "pickup_authority_must_be_preserved": True,
                 "save_reload_required": True,
                 "quarantine_on_failure": True,
