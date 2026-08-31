@@ -22,6 +22,9 @@ def test_closed_contract_validates_against_house_and_hssd_profile() -> None:
         module.ABSENT_SHELL_DISPOSITION,
         module.DELETE_SHELL_DISPOSITION,
     )
+    assert tuple(
+        row["source_presentation"]["disposition"] for row in document["bindings"]
+    ) == (module.EXACT_SOURCE_PRESENTATION, module.NO_SOURCE_PRESENTATION)
     assert all(
         row["presentation_relative_transform"]
         == {
@@ -55,6 +58,31 @@ def test_slipper_historical_shell_offset_and_semantic_actor_are_separate() -> No
         not tag.startswith("VistaHssdSemanticTargetId=")
         for tag in slipper["shell_required_tags"]
     )
+    assert slipper["source_presentation"] == {
+        "disposition": module.NO_SOURCE_PRESENTATION,
+        "mesh_object_path": None,
+        "relative_transform": {
+            "location_cm": [0, 0, 0],
+            "rotation_deg": [0, 0, 0],
+            "scale": [1, 1, 1],
+        },
+        "visible": False,
+    }
+
+
+def test_coffee_replacement_pins_exact_existing_citysample_presentation() -> None:
+    coffee = module.load_contract()["bindings"][0]
+
+    assert coffee["source_presentation"] == {
+        "disposition": module.EXACT_SOURCE_PRESENTATION,
+        "mesh_object_path": "/Game/CitySampleCrowd/Character/Accessories/cupA.cupA",
+        "relative_transform": {
+            "location_cm": [0, 0, 3.448716],
+            "rotation_deg": [0, 0, 0],
+            "scale": [0.775532, 0.775532, 0.775532],
+        },
+        "visible": True,
+    }
 
 
 def test_shell_bindings_pin_visual_only_safety_and_authority_tags() -> None:
@@ -103,6 +131,34 @@ def test_shell_disposition_is_closed_and_semantic_specific() -> None:
     with pytest.raises(
         module.PortableVisualBindingContractError,
         match="shell-disposition order differs",
+    ):
+        module.validate_contract(changed)
+
+
+def test_source_presentation_disposition_and_identity_fail_closed() -> None:
+    document = module.load_contract()
+
+    for field, value in (
+        ("disposition", module.NO_SOURCE_PRESENTATION),
+        ("mesh_object_path", "/Game/CitySampleCrowd/Character/Accessories/cupB.cupB"),
+        ("visible", False),
+    ):
+        changed = copy.deepcopy(document)
+        changed["bindings"][0]["source_presentation"][field] = value
+        changed["content_digest"] = module.content_digest(changed)
+        with pytest.raises(
+            module.PortableVisualBindingContractError,
+            match="closed actor/mesh path binding differs",
+        ):
+            module.validate_contract(changed)
+
+    changed = copy.deepcopy(document)
+    changed["bindings"][0]["source_presentation"]["disposition"] = (
+        "find_any_existing_presentation"
+    )
+    changed["content_digest"] = module.content_digest(changed)
+    with pytest.raises(
+        module.PortableVisualBindingContractError, match="schema validation failed"
     ):
         module.validate_contract(changed)
 

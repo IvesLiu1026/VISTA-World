@@ -59,6 +59,16 @@
       },
       "pickup_root_component_name": "PickupMesh",
       "pickup_root_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_prop_coffee_cup/asset_prop_coffee_cup.asset_prop_coffee_cup",
+      "source_presentation": {
+        "disposition": "exact_existing_presentation_to_replace",
+        "mesh_object_path": "/Game/CitySampleCrowd/Character/Accessories/cupA.cupA",
+        "relative_transform": {
+          "location_cm": [0, 0, 3.448716],
+          "rotation_deg": [0, 0, 0],
+          "scale": [0.775532, 0.775532, 0.775532]
+        },
+        "visible": true
+      },
       "presentation_component_name": "PresentationMesh",
       "presentation_relative_transform": {
         "location_cm": [0, 0, 0],
@@ -112,6 +122,16 @@
       },
       "pickup_root_component_name": "PickupMesh",
       "pickup_root_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_prop_slipper/asset_prop_slipper.asset_prop_slipper",
+      "source_presentation": {
+        "disposition": "no_existing_presentation",
+        "mesh_object_path": null,
+        "relative_transform": {
+          "location_cm": [0, 0, 0],
+          "rotation_deg": [0, 0, 0],
+          "scale": [1, 1, 1]
+        },
+        "visible": false
+      },
       "presentation_component_name": "PresentationMesh",
       "presentation_relative_transform": {
         "location_cm": [0, 0, 0],
@@ -129,5 +149,5 @@
       }
     }
   ],
-  "content_digest": "ac3f53d70481e4565e777e50757006a70a105e3b3c7c1fb3a27725c39453e1bd"
+  "content_digest": "9ff240df82ef192be745af5f774b9cd297b3a3a971a8c31bdc54f290e2683dfe"
 }

@@ -219,6 +219,28 @@ def _strict_binding_rows(value: Any) -> list[dict[str, Any]]:
                     ),
                     f"binding {index} {field}.{key} differs",
                 )
+        source_presentation = row.get("source_presentation")
+        _require(
+            type(source_presentation) is dict,
+            f"binding {index} source_presentation shape differs",
+        )
+        transform = source_presentation.get("relative_transform")
+        _require(
+            type(transform) is dict
+            and set(transform) == {"location_cm", "rotation_deg", "scale"},
+            f"binding {index} source presentation transform shape differs",
+        )
+        for key in ("location_cm", "rotation_deg", "scale"):
+            vector = transform[key]
+            _require(
+                isinstance(vector, list)
+                and len(vector) == 3
+                and all(
+                    type(item) in (int, float) and math.isfinite(item)
+                    for item in vector
+                ),
+                f"binding {index} source presentation {key} differs",
+            )
     return result
 
 
