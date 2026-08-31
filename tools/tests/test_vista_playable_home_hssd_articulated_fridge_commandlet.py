@@ -130,7 +130,8 @@ def test_commandlet_binds_and_reloads_body_hinges_doors_and_handle() -> None:
         '"map_cold_reloaded": map_reloaded',
     ):
         assert token in source
-    assert 'transform_matches(hinge_transforms["primary_hinge"]' in source
+    assert '"primary_hinge_transform": transform_matches(' in source
+    assert 'hinge_transforms["primary_hinge"], expected_primary_hinge' in source
     assert 'observation["handle_relative_location_cm"]' in source
 
 
@@ -176,6 +177,22 @@ def test_component_transform_observation_uses_ue57_reflection(
     del component.values["relative_rotation"]
     with pytest.raises(RuntimeError, match="property unavailable: relative_rotation"):
         commandlet.relative_transform(component)
+
+
+def test_articulated_observation_uses_float32_tolerance_and_named_failures() -> None:
+    source = COMMANDLET.read_text(encoding="utf-8")
+    observation = source.split("def articulated_observation", 1)[1].split("def run", 1)[
+        0
+    ]
+
+    assert '"angular_speed": math.isclose(' in observation
+    assert 'float(binding["angular_speed_deg_s"])' in observation
+    assert "rel_tol=0.0" in observation
+    assert "abs_tol=0.0001" in observation
+    assert "failed = sorted(name for name, passed in checks.items() if not passed)" in (
+        observation
+    )
+    assert '"articulated-fridge binding differs; failed checks: "' in observation
 
 
 def test_receipt_does_not_claim_runtime_visual_or_r6_acceptance() -> None:
