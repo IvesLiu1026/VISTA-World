@@ -190,9 +190,9 @@ BUILDPLUGIN_HELPER_PATH = Path(
     "/root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py"
 )
 BUILDPLUGIN_HELPER_SHA256 = (
-    "e3a62276111da8f832d41145580f1dc79fe4c56ff04b44e8ba6ec2d4ee89b772"
+    "1e699c84d025dfa73872b20eb035610b2dc85074fa28f716a48ae34f324cfca2"
 )
-BUILDPLUGIN_HELPER_SIZE_BYTES = 74_019
+BUILDPLUGIN_HELPER_SIZE_BYTES = 80_566
 BUILDPLUGIN_INTERPRETER = {
     "path": "/usr/bin/python3.10",
     "mode": "0755",

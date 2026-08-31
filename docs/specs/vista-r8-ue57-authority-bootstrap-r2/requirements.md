@@ -1,7 +1,7 @@
 # Requirements: VISTA R8 UE 5.7 Authority Bootstrap R2
 
-Status: Security revision in progress; root publication blocked
-Updated: 2026-08-30
+Status: Dedicated-builder source milestone complete; privileged activation blocked
+Updated: 2026-08-31
 Owner: Codex integrator
 
 ## Problem
@@ -38,6 +38,46 @@ existing UE service, claim GTA-level quality, or satisfy R10/human review.
 ## Fixed Authority Layout
 
 ```text
+/root/vista-r8-native-builder-bootstrap-r1/
+  bootstrap_vista_r8_native_builder.sh
+  vista_r8_native_builder.py
+  systemd/
+    vista-r8-native-builder-phase-a.service
+    vista-r8-native-builder-phase-b.service
+
+/root/vista-r8-native-builder-bootstrap-input-r1/
+  source.bundle
+  phase-a-request.json
+  phase-b-request.json              # appended only after closed phase A
+
+/usr/local/libexec/vista-r8-native-builder-r1/
+  vista_r8_native_builder.py
+
+/etc/vista-r8-native-builder-r1/
+  source.bundle
+  phase-a-request.json
+  phase-b-request.json              # appended only after closed phase A
+
+/etc/systemd/system/
+  vista-r8-native-builder-phase-a.service
+  vista-r8-native-builder-phase-b.service
+
+/var/lib/vista-r8-native-builder-r1/
+  phase-a-slot/
+    .build.lock
+    published/
+      artifacts/
+      manifests/
+      parent-seal-candidate/
+      manifest.json
+  phase-b-slot/
+    .build.lock
+    published/
+      initial-bootstrap-candidate/
+      initial-bootstrap-installer/
+      manifests/
+      manifest.json
+
 /root/vista-r8-ue57-authority-r2/
   vista_r8_ue57_authority_admin.py
   provision_vista_r8_ue57_engine.sh
@@ -58,6 +98,15 @@ existing UE service, claim GTA-level quality, or satisfy R10/human review.
 /root/vista-r8-buildplugin-admin-r1/
   publish-reconcile-buildplugin
   receipt.json
+
+/root/vista-r8-ue57-initial-bootstrap-r1/
+  bootstrap-r8-ue57-initial-authorities
+  vista_r8_ue57_initial_bootstrap.py
+  input-pin.json
+  .bootstrap.lock
+
+/root/vista-r8-ue57-initial-bootstrap-installer-r1/
+  install-reconcile-r8-ue57-initial-bootstrap
 
 /data/vista-authorities/ue-5.7.3-r1/
   engine/
@@ -149,93 +198,246 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   BuildPlugin publisher create its fixed child; BuildPlugin, engine, and runtime
   publishers require exact `0555` and never call chmod/fchmod on the parent.
 
-### R1a. Sequential input and plan authorities
+### R1a. Dedicated native-builder bootstrap
 
-- Bootstrap uses a two-commit trust sequence. HEAD A contains reviewed tooling
-  and may retain explicit wrapper placeholders; core generation is forbidden.
-  The full engine projection is then externally reviewed and its exact source
-  pin candidate frozen. Final helper/source-pin/Python literals are substituted
-  into the wrapper and all final source bytes are committed as HEAD B. Transfer,
-  parent-seal, BuildPlugin, and core candidates must all equal HEAD B.
-- `audit-core-bootstrap-review-inputs` is `yhliu`-only and zero-write. It rejects
-  any placeholder or zero pin, missing engine source pin, non-HEAD source,
-  incomplete/aliased candidate inventory, non-static native launcher, or
-  cross-candidate helper/Python mismatch. Root cannot run this review command.
-- A separately reviewed downstream one-shot consumes the audit's externally
-  reviewed pin and publishes the fixed roots in append-only prefix order:
-  core, parent-seal, BuildPlugin-helper, BuildPlugin-admin. It never rolls back
-  or deletes a renamed root; durability-unknown is exact reconcile-only before
-  continuing to the next absent root.
-- Runtime and bundle input/plan pins are never appended below the already
-  sealed core bootstrap authority. They use the four fresh, flat authorities
-  shown above; every root has an exact inventory and is published once.
-- The unprivileged review identity is exactly `yhliu` (UID `1000021`, primary
-  GID `1000001`). It performs Git proof, `readelf` discovery, compiler/toolchain
-  discovery, and both native builds from the committed checkout. It cannot
-  traverse `/root` and does not publish an authority.
-- Runtime input candidate inventory is exactly `{input-pin.json}`. Bundle input
-  candidate inventory is exactly `{input-pin.json, launch-r8-ue57}`. Runtime
-  and bundle plan candidates are each exactly
-  `{reviewed-plan-pin.json, publish-reconcile-r8-ue57}`.
-- Reviewed-plan schema v2 binds the canonical plan SHA/size/content digest and
-  exact native administrator launcher SHA/size. The launcher is built only
-  after the plan and frozen input exist, from the committed C blob through a
-  sealed memfd, with helper/Python pins embedded.
-- A user-owned `0555` candidate is not itself a root trust anchor. For each of
-  the four stages, a distinct reviewed one-shot native installer is built only
-  after that candidate exists. Its compile-time literals bind the fixed
-  candidate/final paths, candidate file SHA/size values, installed helper and
-  Python SHA/size values, operation, and exact acknowledgement. Runtime accepts
-  no caller path or pin; it exposes only install or reconcile for that frozen
-  stage.
-- The user-built one-shot is never executed through `sudo` from its mutable
-  candidate path. The sealed core helper is the fixed transfer primitive: its
-  bootstrap-only transfer command accepts only the externally reviewed
-  installer SHA/size and exact acknowledgement, opens and holds the fixed
-  candidate, and atomically publishes the corresponding immutable two-file
-  installer authority above. Transfer receipt v1 pins the candidate/final
-  installer, fixed paths, core helper/live Python, stage operations/acks, and
-  no-replace/reconcile-only claims. The root-owned one-shot validates that
-  exact sibling receipt and passes its inherited held-self FD to the helper.
-- The initial reviewed core includes a separate static generic transfer
-  launcher. This is the first trusted entry chain: it pins/reopens its fixed
-  core path, helper, and Python before executing anything; accepts only the
-  four-value stage enum, externally reviewed candidate SHA/size, and exact
-  transfer acknowledgement; and passes a held-self FD to the generic helper
-  transfer command. It accepts no path. The engine shell wrapper is not reused
-  for sequential stage transfer.
-- The BuildPlugin helper authority is root:root `0555` with exact sole helper
-  mode `0500`. Its separate admin authority is root:root `0555` with exact
-  `{publish-reconcile-buildplugin:0500, receipt.json:0444}`. The generated shell
-  is invoked only by fixed `env -i` system bash, holds its own FD, and passes it
-  to the helper. Privileged helper operations require an FD opened and passed
-  by a trusted root process and live-validate the immutable receipt, self
-  inode/bytes, helper/Python pins, and bootstrap provenance before any
-  BuildPlugin write; this is an invocation requirement, not a claim that root
-  cannot construct an equivalent FD. Published BuildPlugin receipt v2 carries
-  the exact closed `admin_publication` lineage and all later consumers reject
-  v1, omission, unknown keys, tamper, or rebinding. Root-side consumers also
-  require the exact one-file BuildPlugin helper authority, live-rehash its
-  single-link `0500` helper against the publisher pin, and cross-bind the
-  publisher interpreter to the independently live-rehashed policy Python pin.
-- `/root/vista-r8-ue57-stage-installers-r1` remains root:root `0700` solely so
-  the four fixed child authorities can be added with no-replace. Each child is
-  root:root `0555` with the exact two-file inventory shown above. Every later
-  transfer snapshots and preserves all earlier child inode/bytes/modes; no
-  child is ever appended, replaced, repaired, or deleted.
-- The held root helper compares those independently transferred pins, validates
-  exact candidate inventory/owner/modes/single links, copies through held FDs,
-  rehashes before and after, publishes with no-replace and full fsync, and
-  reopens the exact root inventory. A collision is reconcile-only; no root is
-  repaired, replaced, or deleted.
-- Every later install/reconcile snapshots the sealed core plus every earlier
-  stage root by device/inode/mode/owner/link count/size/hash and proves those
-  snapshots unchanged. Runtime input requires no future plan/bundle root;
-  runtime plan requires runtime input; bundle input requires both runtime
-  roots; bundle plan requires bundle input. No future-root gate is allowed.
-- Root install/publish/reconcile paths execute no Git, `readelf`, GCC, cc1,
-  assembler, linker, specs discovery, `ldd`, or other subprocess. They consume
-  only fixed sealed documents and component-held source bytes.
+- Production native artifacts SHALL be built only by the locked system account
+  `vista-r8-builder`, whose UID and primary GID are exactly `997`, home is
+  `/nonexistent`, shell is `/usr/sbin/nologin`, password is locked, and
+  supplementary groups are empty. Neither `/etc/subuid` nor `/etc/subgid`
+  may contain an entry for that account or any range containing numeric ID 997.
+  Every inactive bootstrap operation SHALL also reject any live process whose
+  real/effective/saved/fs UID, GID, or supplementary groups contain numeric
+  ID 997, including an orphan process that predates account creation.
+- The finite root trust ceremony SHALL begin from the exact, independently
+  pinned, root-owned `0555`
+  `/root/vista-r8-native-builder-bootstrap-r1` inventory shown above. The
+  bootstrap script may only install or exactly reconcile the inactive
+  framework, append the Phase A inputs, or append the Phase B request. It SHALL
+  NOT reload, enable, start, or execute either service or builder.
+- The installed builder SHALL be the exact root-owned `0444`
+  `/usr/local/libexec/vista-r8-native-builder-r1/vista_r8_native_builder.py`
+  and SHALL run only through the pinned `/usr/bin/python3.10 -I -B`. The source
+  bundle and canonical requests SHALL be root-owned `0444` regular,
+  single-link files below `/etc/vista-r8-native-builder-r1`; no worktree,
+  `yhliu`-owned candidate, caller path, or first-seen source is a production
+  build input.
+- The source bundle SHALL be an exact Git bundle bound to one full source
+  commit. Each phase request SHALL be canonical, closed-schema JSON that pins
+  that bundle, commit, complete required Git-blob inventory, builder, service
+  unit, compiler, linker/toolchain inputs, readelf, Python, flags, bindings,
+  output names, and phase lineage. Any unknown key, duplicate key, NaN,
+  symlink, metadata drift, hash drift, non-HEAD blob, missing source, extra
+  source, or tool alias SHALL fail closed.
+- The request SHALL bind one exhaustive `strace` contract for every actual
+  Python-startup, Git, compiler, and `readelf` invocation. That contract SHALL
+  include exact successful regular-file pins and component chains, searched
+  directory identities, failed-search state, runtime mapped-file
+  device/inode/path/byte bindings, and the exact pre-run private-scratch
+  inventory. Unknown, unfinished, restart, state-changing-cwd, unresolved
+  relative, deleted-mapping, unbound `/proc/<pid>`, implicit alias, or
+  unmodelled file syscall results SHALL fail closed. Successful scratch
+  mutations SHALL remain beneath the held invocation root; transient leaves
+  require matching create/delete trace evidence, and every two-path mutation
+  SHALL validate both endpoints. A raw `..` component beneath invocation
+  scratch SHALL be rejected before lexical normalization. A raw `..` in a
+  host-tool path is accepted only when its complete requested and canonical
+  component chains are root-owned, non-writable, held, and cross-bound to the
+  tracer's resolved target. Exact procfs startup/source probes are finite
+  tokens tied to `self` or the emitting trace tree; they are not host-input
+  wildcards. `/dev/null` is the sole non-scratch writable endpoint, and only
+  exact `O_RDWR` with the explicitly modelled non-mutating `O_CLOEXEC` flag is
+  accepted.
+- The unprivileged Phase A request planner SHALL be observation-only: it SHALL
+  run in fresh private temporary roots, emit only canonical request bytes, and
+  assert `observation_only=true` and `production_native_output=false`. Cleanup
+  failure SHALL not yield a successful request. Production replay SHALL
+  revalidate the same held host inputs and exact trace profile; the rehearsal
+  binary or its observations are never production artifacts.
+- The only writable builder state SHALL be
+  `/var/lib/vista-r8-native-builder-r1`. Its root is root:root `0555`;
+  `phase-a-slot` and `phase-b-slot` are `997:997 0711`; each slot contains
+  one `997:997 0600` `.build.lock`; and each final authority is the fresh
+  no-replace `slot/published` root. Phase A SHALL NOT write Phase B, and Phase
+  B SHALL have only read access to the closed Phase A root plus write access to
+  its own slot.
+- The two units SHALL be fixed root-owned systemd oneshots with
+  `User=Group=vista-r8-builder`, empty supplementary/capability sets,
+  `PrivateNetwork=yes`, `ProtectSystem=strict`, `ProtectHome=yes`,
+  `PrivateDevices=yes`, `PrivateTmp=yes`, `UMask=0077`, closed device and
+  address-family policy, namespace restrictions, a closed environment, fixed
+  paths, and phase-specific `ReadWritePaths`. They SHALL remain inactive until
+  a separate privileged activation approval.
+- Every native job SHALL extract its exact committed C blob from the held Git
+  bundle, place it in a sealed memfd, compile it twice in fresh scratch paths
+  with the exact frozen flags (including explicit `-x c`), and require
+  byte-identical output and identical static-ELF inspection. A result with
+  `PT_INTERP`, `PT_DYNAMIC`, dynamic dependencies, build drift, tool drift,
+  or metadata drift SHALL not publish.
+- The production builder SHALL verify its runtime identity only from kernel
+  UID/GID/group state and an exact `/proc/self/status` projection before trace
+  snapshotting. Account name, home, shell, password lock, subordinate-ID, and
+  orphan-process policy remain root-bootstrap invariants; production SHALL not
+  perform a late `pwd`/`grp` NSS lookup that could load an untraced provider.
+- Every job SHALL emit a closed canonical job manifest binding request, bundle,
+  commit, source blob, bindings, flags, environment, canonical tool paths and
+  pins, both build observations, output pin/mode, static-ELF result, builder
+  identity, and negative network/worktree/user-candidate claims. Each phase
+  SHALL emit one closed aggregate manifest whose exact inventory pins every
+  artifact and job manifest. All directories and files are fsynced before a
+  kernel no-replace promotion; an existing final is reconcile/audit-only.
+
+#### R1a.1 Phase A
+
+- Phase A SHALL contain exactly three deterministic native jobs:
+  `transfer-r8-ue57-stage-installer`,
+  `launch-vista-authority-parent-seal`, and
+  `bootstrap-r8-ue57-initial-authorities`.
+- In addition to the three artifacts and their manifests, Phase A SHALL assemble
+  the exact builder-owned `parent-seal-candidate`:
+  `vista_authority_parent_seal.py:0444` and
+  `launch-vista-authority-parent-seal:0555`. Its helper must equal the exact
+  committed blob and its launcher must equal the Phase A native artifact.
+- The authority administrator SHALL accept Phase A only through standard-library
+  canonical JSON, held-FD, path/owner/mode/link/inventory, SHA-256, request,
+  source-bundle, source-commit, job-manifest, and static-ELF validation. It SHALL
+  keep Phase A descriptors open while comparing core and parent-seal review
+  material and SHALL NOT invoke a local compiler, `readelf`, Bubblewrap, a
+  user namespace, or a `yhliu` production build.
+
+#### R1a.2 Phase B
+
+- Phase B SHALL be requested only after the complete Phase A authority validates.
+  Its root-owned canonical request SHALL embed the independently derived,
+  canonical core review audit and the complete initial-bootstrap input document,
+  and SHALL cross-bind both documents to the Phase A manifest, job provenance,
+  launcher/helper/Python pins, exact Git bundle/commit/blobs, fixed four-root
+  sequence, and acknowledgements.
+- Phase B SHALL reuse, byte for byte, Phase A's installed-builder pin, source
+  bundle pin, commit, seven-blob inventory, tools/toolchain ledger, runtime-map
+  sets, and trace-v2 contract; only its fixed service-unit binding and job may
+  differ. Derivation SHALL re-read the exact Phase A request and manifest and
+  prove manifest-to-request pin lineage. Later Phase B authority review SHALL
+  hold both Phase A documents while revalidating those same common fields and
+  the Phase B `phase_inputs.phase_a` manifest pin/content digest.
+- Phase B SHALL assemble the exact builder-owned three-file
+  `initial-bootstrap-candidate`:
+  `bootstrap-r8-ue57-initial-authorities:0555`,
+  `vista_r8_ue57_initial_bootstrap.py:0444`, and
+  `input-pin.json:0444`. It SHALL then build twice and publish the sole
+  `install-reconcile-r8-ue57-initial-bootstrap:0555` installer. No
+  `yhliu`-owned candidate may be read.
+- The Phase B aggregate and candidate/job manifests SHALL bind the embedded
+  documents, Phase A provenance, all three candidate pins/modes, installer pin,
+  exact inventory, deterministic double-build, static-ELF result, and negative
+  network/worktree/user-candidate claims. The authority administrator SHALL
+  rederive the expected request independently and validate the published files
+  through held descriptors before any separate manual root ceremony.
+
+#### R1a.3 Initial four-root installation
+
+- Only after independent review of Phase B may the finite manual root ceremony
+  copy the sole installer into the exact root-owned `0500`, sole-inventory
+  installer authority. The mutable worktree, builder slot, and builder-owned
+  candidate SHALL never be sudo-executed directly.
+- Fresh installer execution SHALL hold and revalidate all three candidate
+  files, create the exact root-owned `0555` initial-bootstrap authority through
+  private same-filesystem staging and no-replace rename, install launcher and
+  helper as `0500`, install the input document as `0444`, and create one
+  single-link zero-byte root:root `0600` lock. Installer reconcile is
+  candidate-free and fsync-only; it never creates, deletes, renames, or chmods.
+- The installed launcher SHALL embed no self or input-document hash. It opens
+  and hashes its held live self, proves the canonical input document binds that
+  observation plus its compiled helper/Python pins, takes the nonblocking lock,
+  and enters held Python with `execveat`, `-I -B`, a closed environment, and
+  held launcher/helper/input/Python/lock descriptors.
+- Its public CLI SHALL be exactly one operation plus its literal
+  acknowledgement. Operations are `publish-initial-authorities`,
+  `reconcile-initial-authorities`, and `resume-initial-authorities`; no caller
+  path, pin, candidate, final root, or stage is accepted.
+- The installer and initial-bootstrap helper retain the existing fixed-path,
+  held-FD, no-subprocess, no-network, no-replace, full-fsync, collision,
+  durability-unknown, and candidate-free reconcile contracts. Installed state
+  remains the five-state prefix automaton `EXACT^k ABSENT^(4-k)` for
+  `k=0..4`: core, parent-seal, BuildPlugin-helper, BuildPlugin-admin.
+- Publish is permitted only from the empty prefix. Reconcile is candidate-free
+  and permitted only for a nonempty exact prefix. Resume first reconciles a
+  nonempty incomplete prefix and then holds every fixed Phase B candidate
+  component before appending the remaining roots. Gaps, mutation, aliases,
+  extra entries, owner/mode/link drift, or a changed earlier root fail closed.
+- Before the first publish/resume write, the helper SHALL open every fixed
+  candidate component with `O_NOFOLLOW|O_NONBLOCK`, reject special, sparse,
+  oversized, multi-link, wrong-owner, wrong-mode, missing, or extra files, and
+  retain every descriptor. It revalidates all candidates and the immutable
+  prefix before and after each transition, including the shared BuildPlugin
+  candidate between helper and administrator publication.
+- Each root SHALL use a private direct child below held `/root`, held-FD copy,
+  root ownership/modes, file and directory fsync, no-replace promotion, final
+  reopen/rehash, and held `/root` fsync. Cleanup first proves a staging name
+  still binds the held staging inode and can never mutate a promoted final.
+- Every successful rename is irreversible. A post-rename error preserves the
+  final inode, reports durability unknown, and permits only exact
+  reconcile/resume; no failure path deletes, repairs, chmods, replaces, or
+  republishes an installed root.
+- The deterministic BuildPlugin admin receipt and direct-first-use fsync rules
+  remain unchanged: the initial helper, parent-seal helper, core helper, and
+  BuildPlugin helper each live-open, hash, fsync, and revalidate their complete
+  installed roots and held `/root` before the first downstream mutation.
+
+### R1b. Deferred sequential runtime and bundle authorities
+
+- Runtime and bundle input/plan pins SHALL remain outside the sealed core and use
+  the four fresh flat authorities shown above. The exact candidate inventories,
+  reviewed-plan schemas, operation locks, no-future-root ordering, held-FD
+  transfer, no-replace publication, candidate-free reconcile, immutable
+  earlier-root snapshots, BuildPlugin lineage, and zero privileged subprocess
+  contracts remain unchanged.
+- Runtime input inventory is exactly `{input-pin.json}`; bundle input inventory
+  is exactly `{input-pin.json, launch-r8-ue57}`; runtime and bundle plan
+  inventories are each exactly
+  `{reviewed-plan-pin.json, publish-reconcile-r8-ue57}`. Reviewed-plan schema v2
+  binds the canonical plan SHA/size/content digest and exact administrator
+  launcher SHA/size.
+- Each later stage SHALL have a distinct static one-shot installer whose closed
+  recipe binds fixed candidate/final paths, all candidate pins and modes,
+  installed helper/Python pins, operation, and literal acknowledgement. It
+  accepts only install or reconcile for its frozen stage and never accepts a
+  caller path or pin. A user-owned review surface is never executed through
+  sudo; only a separately transferred root-owned installer may mutate a stage.
+- The sealed core's generic transfer launcher remains the only installer
+  transfer primitive. It accepts only the four-value stage enum, externally
+  reviewed installer SHA/size, and exact transfer acknowledgement; it accepts
+  no path. The core helper holds the fixed candidate and publishes the exact
+  root-owned installer plus transfer receipt, which cross-binds candidate and
+  final pins/paths, launcher, helper/Python, stage operation/acknowledgement,
+  no-replace, and reconcile-only claims.
+- The BuildPlugin helper authority remains exact root:root `0555` with its sole
+  helper `0500`. Its administrator authority remains exact root:root `0555`
+  with `{publish-reconcile-buildplugin:0500, receipt.json:0444}`. Receipt v2,
+  held administrator FD, live helper/interpreter/launcher binding,
+  `admin_launcher_fd_required:true`, `launcher_receipt_live_bound:true`, and
+  `downstream_live_fsync_required:true` remain mandatory for all consumers.
+- `/root/vista-r8-ue57-stage-installers-r1` remains root:root `0700` only so its
+  four fixed child authorities can be appended by no-replace. Each child is
+  root:root `0555` with exactly
+  `{install-reconcile-r8-ue57-stage:0500, receipt.json:0444}`. No child is ever
+  appended internally, replaced, repaired, or deleted.
+- Stage ordering remains: runtime input requires no future root; runtime plan
+  requires runtime input; bundle input requires both runtime roots; bundle plan
+  requires bundle input. Each operation snapshots the sealed core and every
+  earlier stage by device/inode/owner/mode/link/size/hash and proves them
+  unchanged. Root install, publish, and reconcile execute no Git, compiler,
+  assembler, linker, `readelf`, `ldd`, toolchain discovery, or other subprocess.
+- Production recipes for `launch-r8-ue57`, the runtime and bundle
+  administrator launchers, and the four stage installers have not yet been
+  added to the dedicated builder. Until each recipe and its closed manifests are
+  approved, every corresponding production candidate entry point SHALL fail
+  with `DEDICATED_BUILDER_AUTHORITY_REQUIRED` before writing or compiling.
+  Test-only compile helpers may remain, but they are not production authority.
+- No native production artifact may be compiled by `yhliu`, root, an
+  interactive shell, Bubblewrap, a user namespace, or an ad hoc service.
+  Adding later recipes is a new reviewed source milestone and does not authorize
+  bootstrap installation, service activation, candidate execution, root
+  publication, or T7.
 
 ### R2. Engine authority
 
@@ -402,7 +604,8 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
 ## Approval
 
 - User approval: `批准！幫我做到好`
-- Interpreted scope: implement and execute the already described fresh
-  BuildPlugin plus sealed UE animation authority phase, while preserving later
-  runtime/human/GTA acceptance gates.
+- Interpreted scope for this milestone: implement, locally validate, review,
+  commit, and push the fresh BuildPlugin and sealed UE authority source. Root
+  bootstrap, builder activation, authority publication, and UE execution each
+  remain separately gated after the committed bundle/request is reviewed.
 - Date: 2026-08-30

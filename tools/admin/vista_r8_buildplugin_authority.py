@@ -1208,6 +1208,154 @@ def _require_exact_installed_helper_root() -> FilePin:
     )
 
 
+def _live_fsync_bootstrap_authorities(
+    *,
+    helper_pin: FilePin,
+    launcher_pin: FilePin,
+    receipt_pin: FilePin,
+) -> None:
+    """Make the exact bootstrap roots durable immediately before first use.
+
+    The immutable admin receipt deliberately does not claim that publication-
+    time parent fsync completed.  Instead every state-changing BuildPlugin
+    entry live-revalidates and fsyncs the exact helper/admin files, both root
+    directories, and their held ``/root`` parent before any ``/data`` write.
+    """
+
+    parent_path = INSTALLED_ROOT.parent
+    if (
+        parent_path != ADMIN_ROOT.parent
+        or INSTALLED_ROOT.name in ("", ".", "..")
+        or ADMIN_ROOT.name in ("", ".", "..")
+    ):
+        _fail(
+            "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+            "bootstrap authority parent differs",
+        )
+    descriptors: list[int] = []
+    try:
+        parent_before = os.lstat(parent_path)
+        parent_fd = os.open(parent_path, _directory_flags())
+        descriptors.append(parent_fd)
+        parent_opened = os.fstat(parent_fd)
+        if (
+            _identity(parent_before) != _identity(parent_opened)
+            or not stat.S_ISDIR(parent_opened.st_mode)
+            or parent_opened.st_uid != ROOT_UID
+            or parent_opened.st_gid != ROOT_GID
+            or stat.S_IMODE(parent_opened.st_mode) != 0o700
+        ):
+            _fail(
+                "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+                "held bootstrap parent differs",
+            )
+        helper_root_fd = os.open(
+            INSTALLED_ROOT.name, _directory_flags(), dir_fd=parent_fd
+        )
+        admin_root_fd = os.open(ADMIN_ROOT.name, _directory_flags(), dir_fd=parent_fd)
+        descriptors.extend((helper_root_fd, admin_root_fd))
+        helper_root_info = os.fstat(helper_root_fd)
+        admin_root_info = os.fstat(admin_root_fd)
+        if (
+            not stat.S_ISDIR(helper_root_info.st_mode)
+            or helper_root_info.st_uid != ROOT_UID
+            or helper_root_info.st_gid != ROOT_GID
+            or helper_root_info.st_nlink != 2
+            or stat.S_IMODE(helper_root_info.st_mode) != INSTALLED_ROOT_MODE
+            or set(os.listdir(helper_root_fd)) != {INSTALLED_HELPER.name}
+            or not stat.S_ISDIR(admin_root_info.st_mode)
+            or admin_root_info.st_uid != ROOT_UID
+            or admin_root_info.st_gid != ROOT_GID
+            or admin_root_info.st_nlink != 2
+            or stat.S_IMODE(admin_root_info.st_mode) != 0o555
+            or set(os.listdir(admin_root_fd))
+            != {ADMIN_LAUNCHER.name, ADMIN_RECEIPT.name}
+        ):
+            _fail(
+                "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+                "bootstrap authority inventory differs before live fsync",
+            )
+        helper_fd = os.open(INSTALLED_HELPER.name, _file_flags(), dir_fd=helper_root_fd)
+        launcher_fd = os.open(ADMIN_LAUNCHER.name, _file_flags(), dir_fd=admin_root_fd)
+        receipt_fd = os.open(ADMIN_RECEIPT.name, _file_flags(), dir_fd=admin_root_fd)
+        descriptors.extend((helper_fd, launcher_fd, receipt_fd))
+        files = (
+            (helper_fd, INSTALLED_HELPER_MODE, helper_pin, "helper"),
+            (launcher_fd, 0o500, launcher_pin, "admin launcher"),
+            (receipt_fd, 0o444, receipt_pin, "admin receipt"),
+        )
+        identities: dict[str, StatIdentity] = {}
+        for descriptor, mode, pin, label in files:
+            metadata = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or metadata.st_uid != ROOT_UID
+                or metadata.st_gid != ROOT_GID
+                or stat.S_IMODE(metadata.st_mode) != mode
+                or _hash_fd(descriptor, MAX_JSON_BYTES) != (pin.sha256, pin.size_bytes)
+            ):
+                _fail(
+                    "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+                    f"{label} differs before live fsync",
+                )
+            identities[label] = _identity(metadata)
+            os.fsync(descriptor)
+        os.fsync(helper_root_fd)
+        os.fsync(admin_root_fd)
+        os.fsync(parent_fd)
+        if (
+            _identity(os.fstat(parent_fd)) != _identity(parent_opened)
+            or _identity(os.fstat(helper_root_fd)) != _identity(helper_root_info)
+            or _identity(os.fstat(admin_root_fd)) != _identity(admin_root_info)
+            or set(os.listdir(helper_root_fd)) != {INSTALLED_HELPER.name}
+            or set(os.listdir(admin_root_fd))
+            != {ADMIN_LAUNCHER.name, ADMIN_RECEIPT.name}
+        ):
+            _fail(
+                "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+                "bootstrap authority drifted during live fsync",
+            )
+        for descriptor, mode, pin, label in files:
+            metadata = os.fstat(descriptor)
+            if (
+                _identity(metadata) != identities[label]
+                or stat.S_IMODE(metadata.st_mode) != mode
+                or _hash_fd(descriptor, MAX_JSON_BYTES) != (pin.sha256, pin.size_bytes)
+            ):
+                _fail(
+                    "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+                    f"{label} drifted during live fsync",
+                )
+        reopened_helper = os.open(
+            INSTALLED_ROOT.name, _directory_flags(), dir_fd=parent_fd
+        )
+        reopened_admin = os.open(ADMIN_ROOT.name, _directory_flags(), dir_fd=parent_fd)
+        descriptors.extend((reopened_helper, reopened_admin))
+        if (
+            _identity(os.fstat(reopened_helper)) != _identity(helper_root_info)
+            or _identity(os.fstat(reopened_admin)) != _identity(admin_root_info)
+            or _identity(os.lstat(parent_path)) != _identity(parent_opened)
+        ):
+            _fail(
+                "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+                "bootstrap authority path drifted during live fsync",
+            )
+    except BuildPluginAuthorityError:
+        raise
+    except OSError as exc:
+        raise BuildPluginAuthorityError(
+            "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+            "bootstrap authority live fsync failed",
+        ) from exc
+    finally:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
 def _require_admin_launcher_invocation(
     descriptor: int, helper_pin: FilePin, interpreter_pin: FilePin
 ) -> dict[str, Any]:
@@ -1341,7 +1489,7 @@ def _require_admin_launcher_invocation(
         or claims
         != {
             "fresh_no_replace": True,
-            "final_and_parent_fsynced": True,
+            "downstream_live_fsync_required": True,
             "admin_launcher_fd_required": True,
             "launcher_receipt_live_bound": True,
         }
@@ -1350,6 +1498,11 @@ def _require_admin_launcher_invocation(
             "BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
             "administrator receipt binding differs",
         )
+    _live_fsync_bootstrap_authorities(
+        helper_pin=helper_pin,
+        launcher_pin=FilePin(installed_sha, installed_bytes, 0o500),
+        receipt_pin=receipt_pin,
+    )
     return _validate_admin_publication(
         {
             "authority_root": str(ADMIN_ROOT),

@@ -308,6 +308,7 @@ def test_live_execution_binds_fixed_helper_python_and_rejects_tamper(
     python = Path(os.readlink("/proc/self/exe")).resolve(strict=True)
     python_raw = python.read_bytes()
     root_metadata = os.lstat(installed_root)
+    parent_metadata = os.lstat(installed_root.parent)
     helper_metadata = os.lstat(helper)
     launcher_metadata = os.lstat(launcher)
     real_fstat = os.fstat
@@ -323,6 +324,7 @@ def test_live_execution_binds_fixed_helper_python_and_rejects_tamper(
         metadata = real_fstat(descriptor)
         if (metadata.st_dev, metadata.st_ino) in {
             (root_metadata.st_dev, root_metadata.st_ino),
+            (parent_metadata.st_dev, parent_metadata.st_ino),
             (helper_metadata.st_dev, helper_metadata.st_ino),
             (launcher_metadata.st_dev, launcher_metadata.st_ino),
         }:
@@ -331,7 +333,7 @@ def test_live_execution_binds_fixed_helper_python_and_rejects_tamper(
 
     def trusted_lstat(path: os.PathLike[str] | str) -> os.stat_result:
         metadata = real_lstat(path)
-        if Path(path) in {installed_root, helper, launcher}:
+        if Path(path) in {installed_root.parent, installed_root, helper, launcher}:
             return root_owned(metadata)
         return metadata
 
@@ -359,8 +361,23 @@ def test_live_execution_binds_fixed_helper_python_and_rejects_tamper(
 
     descriptor = os.open(launcher, os.O_RDONLY | os.O_CLOEXEC)
     wrong = os.open(helper, os.O_RDONLY | os.O_CLOEXEC)
+    real_fsync = os.fsync
+    fsynced_inodes: set[int] = set()
+
+    def record_fsync(file_descriptor: int) -> None:
+        fsynced_inodes.add(real_fstat(file_descriptor).st_ino)
+        real_fsync(file_descriptor)
+
+    monkeypatch.setattr(os, "fsync", record_fsync)
     try:
         seal._bind_live_execution(descriptor)
+        assert {
+            parent_metadata.st_ino,
+            root_metadata.st_ino,
+            launcher_metadata.st_ino,
+            helper_metadata.st_ino,
+        } <= fsynced_inodes
+        monkeypatch.setattr(os, "fsync", real_fsync)
         with pytest.raises(
             seal.ParentSealError, match="held launcher identity differs"
         ):
@@ -371,6 +388,34 @@ def test_live_execution_binds_fixed_helper_python_and_rejects_tamper(
         ):
             seal._bind_live_execution(descriptor)
         helper.chmod(0o500)
+        monkeypatch.setattr(
+            os,
+            "fsync",
+            lambda _descriptor: (_ for _ in ()).throw(OSError("injected fsync")),
+        )
+        with pytest.raises(
+            seal.ParentSealError, match="installed authority live fsync failed"
+        ):
+            seal._bind_live_execution(descriptor)
+
+        mutated = False
+
+        def mutate_during_fsync(file_descriptor: int) -> None:
+            nonlocal mutated
+            real_fsync(file_descriptor)
+            if not mutated:
+                mutated = True
+                helper.chmod(0o700)
+                helper.write_bytes(b"# mutated during live fsync\n")
+                helper.chmod(0o500)
+
+        monkeypatch.setattr(os, "fsync", mutate_during_fsync)
+        with pytest.raises(seal.ParentSealError, match="drifted during live fsync"):
+            seal._bind_live_execution(descriptor)
+        helper.chmod(0o700)
+        helper.write_bytes(b"# reviewed helper\n")
+        helper.chmod(0o500)
+        monkeypatch.setattr(os, "fsync", real_fsync)
         monkeypatch.setattr(seal, "PINNED_PYTHON_SHA256", "0" * 64)
         with pytest.raises(seal.ParentSealError, match="pinned Python bytes differ"):
             seal._bind_live_execution(descriptor)

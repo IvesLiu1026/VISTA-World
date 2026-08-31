@@ -521,12 +521,22 @@ def _admin_authority_fixture(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> tuple[Path, Path, authority.FilePin, authority.FilePin]:
     uid, gid = os.getuid(), os.getgid()
+    tmp_path.chmod(0o700)
+    helper_root = tmp_path / "vista-r8-buildplugin-authority-r1"
+    helper_root.mkdir(mode=0o755)
+    helper = helper_root / "vista_r8_buildplugin_authority.py"
+    helper.write_bytes(b"# reviewed BuildPlugin publisher\n")
+    helper.chmod(0o500)
+    helper_raw = helper.read_bytes()
+    helper_pin = authority.FilePin(
+        hashlib.sha256(helper_raw).hexdigest(), len(helper_raw), 0o500
+    )
+    helper_root.chmod(0o555)
     root = tmp_path / "vista-r8-buildplugin-admin-r1"
     root.mkdir(mode=0o755)
     launcher = root / "publish-reconcile-buildplugin"
     launcher.write_bytes(b"#!/bin/sh\n# reviewed admin\n")
     launcher.chmod(0o500)
-    helper_pin = authority.FilePin("1" * 64, 11, 0o500)
     interpreter_pin = authority.FilePin("2" * 64, 22, 0o755)
     launcher_raw = launcher.read_bytes()
     receipt = authority._seal_document(
@@ -544,7 +554,7 @@ def _admin_authority_fixture(
                 "mode": "0500",
             },
             "helper": {
-                "path": str(tmp_path / "installed-helper.py"),
+                "path": str(helper),
                 "pin": {
                     "sha256": helper_pin.sha256,
                     "size_bytes": helper_pin.size_bytes,
@@ -568,7 +578,7 @@ def _admin_authority_fixture(
             },
             "claims": {
                 "fresh_no_replace": True,
-                "final_and_parent_fsynced": True,
+                "downstream_live_fsync_required": True,
                 "admin_launcher_fd_required": True,
                 "launcher_receipt_live_bound": True,
             },
@@ -584,7 +594,8 @@ def _admin_authority_fixture(
     monkeypatch.setattr(authority, "ADMIN_LAUNCHER", launcher)
     monkeypatch.setattr(authority, "ADMIN_RECEIPT", receipt_path)
     monkeypatch.setattr(authority, "_ancestor_chain", lambda _path: (root,))
-    monkeypatch.setattr(authority, "INSTALLED_HELPER", tmp_path / "installed-helper.py")
+    monkeypatch.setattr(authority, "INSTALLED_ROOT", helper_root)
+    monkeypatch.setattr(authority, "INSTALLED_HELPER", helper)
     monkeypatch.setattr(authority, "PINNED_PYTHON", tmp_path / "python3.10")
     return root, launcher, helper_pin, interpreter_pin
 
@@ -645,6 +656,133 @@ def test_buildplugin_admin_receipt_and_held_self_are_live_bound(
             )
     finally:
         os.close(copied_fd)
+        os.close(descriptor)
+
+
+def test_buildplugin_live_fsync_covers_files_roots_and_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, launcher, helper_pin, interpreter_pin = _admin_authority_fixture(
+        tmp_path, monkeypatch
+    )
+    helper_root = authority.INSTALLED_ROOT
+    helper = authority.INSTALLED_HELPER
+    receipt = root / "receipt.json"
+    expected_inodes = {
+        path.stat().st_ino
+        for path in (helper, launcher, receipt, helper_root, root, tmp_path)
+    }
+    observed: set[int] = set()
+    real_fsync = os.fsync
+
+    def record_fsync(descriptor: int) -> None:
+        observed.add(os.fstat(descriptor).st_ino)
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(authority.os, "fsync", record_fsync)
+    descriptor = os.open(launcher, os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        authority._require_admin_launcher_invocation(
+            descriptor, helper_pin, interpreter_pin
+        )
+    finally:
+        os.close(descriptor)
+    assert expected_inodes <= observed
+
+
+def test_buildplugin_live_fsync_failure_aborts_before_data_access(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _root, launcher, helper_pin, interpreter_pin = _admin_authority_fixture(
+        tmp_path, monkeypatch
+    )
+    monkeypatch.setattr(
+        authority,
+        "_require_installed_root_helper",
+        lambda: (helper_pin, interpreter_pin),
+    )
+    reached: list[str] = []
+    monkeypatch.setattr(
+        authority,
+        "_require_authority_parent",
+        lambda *_args, **_kwargs: reached.append("authority-parent"),
+    )
+    monkeypatch.setattr(
+        authority.os,
+        "fsync",
+        lambda _descriptor: (_ for _ in ()).throw(OSError("injected fsync")),
+    )
+    descriptor = os.open(launcher, os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        with pytest.raises(
+            authority.BuildPluginAuthorityError,
+            match="BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+        ):
+            authority.publish_fixed_authority(authority.ACKNOWLEDGEMENT, descriptor)
+    finally:
+        os.close(descriptor)
+    assert reached == []
+
+
+def test_buildplugin_live_fsync_detects_byte_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _root, launcher, helper_pin, interpreter_pin = _admin_authority_fixture(
+        tmp_path, monkeypatch
+    )
+    helper = authority.INSTALLED_HELPER
+    real_fsync = os.fsync
+    mutated = False
+
+    def mutate_after_first_fsync(descriptor: int) -> None:
+        nonlocal mutated
+        real_fsync(descriptor)
+        if not mutated:
+            mutated = True
+            helper.chmod(0o700)
+            helper.write_bytes(b"mutated after first live fsync\n")
+            helper.chmod(0o500)
+
+    monkeypatch.setattr(authority.os, "fsync", mutate_after_first_fsync)
+    descriptor = os.open(launcher, os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        with pytest.raises(
+            authority.BuildPluginAuthorityError,
+            match="BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+        ):
+            authority._require_admin_launcher_invocation(
+                descriptor, helper_pin, interpreter_pin
+            )
+    finally:
+        os.close(descriptor)
+
+
+def test_buildplugin_old_historical_fsync_claim_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, launcher, helper_pin, interpreter_pin = _admin_authority_fixture(
+        tmp_path, monkeypatch
+    )
+    receipt_path = root / "receipt.json"
+    root.chmod(0o755)
+    receipt_path.chmod(0o644)
+    document = authority._strict_json(receipt_path.read_bytes(), "receipt")
+    document["claims"].pop("downstream_live_fsync_required")
+    document["claims"]["final_and_parent_fsynced"] = True
+    document["content_digest"] = authority._content_digest(document)
+    receipt_path.write_bytes(authority.canonical_json(document))
+    receipt_path.chmod(0o444)
+    root.chmod(0o555)
+    descriptor = os.open(launcher, os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        with pytest.raises(
+            authority.BuildPluginAuthorityError,
+            match="BUILDPLUGIN_AUTHORITY_ADMIN_REQUIRED",
+        ):
+            authority._require_admin_launcher_invocation(
+                descriptor, helper_pin, interpreter_pin
+            )
+    finally:
         os.close(descriptor)
 
 

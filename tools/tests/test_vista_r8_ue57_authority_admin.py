@@ -6,12 +6,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import subprocess
 
 import pytest
 
+from tools.admin import vista_r8_native_builder as native_builder
 from tools.admin import vista_r8_ue57_authority_admin as admin
 
 
@@ -19,6 +21,120 @@ def _write(path: Path, raw: bytes, mode: int = 0o644) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(raw)
     path.chmod(mode)
+
+
+def _run_test_git(repository: Path, *arguments: str) -> str:
+    result = subprocess.run(
+        ["/usr/bin/git", "-C", str(repository), *arguments],
+        check=True,
+        env={
+            "PATH": "/usr/bin:/bin",
+            "HOME": "/nonexistent",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_CONFIG_COUNT": "0",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "GIT_TERMINAL_PROMPT": "0",
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def _native_trace_event(
+    syscall: str,
+    path: str,
+    outcome: str,
+    *,
+    open_flags: list[str] | None = None,
+) -> str:
+    event: dict[str, object] = {
+        "outcome": outcome,
+        "paths": [path],
+        "syscall": syscall,
+    }
+    if open_flags is not None:
+        event["open_flags"] = open_flags
+    return json.dumps(
+        event,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _native_trace_contract(host: Path) -> dict[str, object]:
+    raw = host.read_bytes()
+    file_record = {
+        "path": str(host),
+        "canonical": str(host.resolve()),
+        "mode": f"{stat.S_IMODE(host.stat().st_mode):04o}",
+        "pin": {"sha256": hashlib.sha256(raw).hexdigest(), "size_bytes": len(raw)},
+        "storage": "empty" if not raw else "regular",
+        "component_chain": admin._native_builder_live_component_chain(
+            host, "fixture host"
+        ),
+    }
+    directory = host.parent
+    directory_record = {
+        "path": str(directory),
+        "canonical": str(directory.resolve()),
+        "component_chain": admin._native_builder_live_component_chain(
+            directory, "fixture directory"
+        ),
+    }
+    expected_tools = {
+        invocation: tool
+        for phase in ("phase-a", "phase-b")
+        for invocation, tool in admin._native_builder_expected_trace_invocations(phase)
+    }
+    absent = str(directory / "vista-r8-absent")
+    profiles = [
+        {
+            "id": invocation,
+            "tool": tool,
+            "event_multiset": [
+                {
+                    "line": _native_trace_event("access", absent, "ENOENT"),
+                    "count": 1,
+                }
+            ],
+            "host_files": [str(host)],
+            "host_directories": [str(directory)],
+            "search_state": [
+                {
+                    "syscall": "access",
+                    "path": absent,
+                    "errno": "ENOENT",
+                    "count": 1,
+                }
+            ],
+            "scratch_prestate": [],
+        }
+        for invocation, tool in sorted(expected_tools.items())
+    ]
+    return {
+        "schema": admin.NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA,
+        "tracer_version": admin.NATIVE_BUILDER_STRACE_VERSION,
+        "host_files": [file_record],
+        "host_directories": [directory_record],
+        "tracer_runtime_files": [str(host)],
+        "builder_runtime_files": [str(host)],
+        "path_aliases": [],
+        "profiles": profiles,
+        "phase_invocations": {
+            phase: [
+                invocation
+                for invocation, _tool in admin._native_builder_expected_trace_invocations(
+                    phase
+                )
+            ]
+            for phase in ("phase-a", "phase-b")
+        },
+    }
 
 
 def _engine_source(root: Path) -> None:
@@ -75,6 +191,401 @@ def test_snapshot_is_complete_deterministic_and_projection_compatible(
     )
     assert first.projection()["directory_count"] == 6  # executor includes root "."
     assert all(item["uid"] == os.getuid() for item in first.entries)
+
+
+def test_native_builder_trace_contract_is_independently_closed_and_projected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(admin, "ROOT_UID", os.getuid())
+    monkeypatch.setattr(admin, "ROOT_GID", os.getgid())
+    monkeypatch.setattr(
+        admin,
+        "_native_builder_component_chain_is_immutable_root_owned",
+        lambda _chain: True,
+    )
+    host = tmp_path / "runtime"
+    _write(host, b"runtime", 0o644)
+    contract = _native_trace_contract(host)
+
+    assert admin._native_builder_validate_trace_contract(contract) == contract
+    assert admin._native_builder_trace_toolchain(contract) == [
+        {
+            key: contract["host_files"][0][key]  # type: ignore[index]
+            for key in ("path", "canonical", "mode", "pin")
+        }
+    ]
+    tools = {
+        "compiler": {"pin": {"sha256": "1" * 64, "size_bytes": 1}},
+        "readelf": {"pin": {"sha256": "2" * 64, "size_bytes": 2}},
+        "tracer": {"pin": {"sha256": "3" * 64, "size_bytes": 3}},
+        "toolchain": admin._native_builder_trace_toolchain(contract),
+    }
+    trace_raw = admin.canonical_json(contract)
+    assert admin._native_builder_job_tools(tools, contract)["trace_contract"] == {
+        "schema": admin.NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA,
+        "sha256": hashlib.sha256(trace_raw).hexdigest(),
+        "size_bytes": len(trace_raw),
+    }
+
+    missing_profile = copy.deepcopy(contract)
+    missing_profile["profiles"] = missing_profile["profiles"][:-1]  # type: ignore[index]
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_contract(missing_profile)
+
+    orphan = copy.deepcopy(contract)
+    orphan["profiles"][0]["host_directories"] = []  # type: ignore[index]
+    for profile in orphan["profiles"][1:]:  # type: ignore[index]
+        profile["host_directories"] = []
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_contract(orphan)
+
+    invalid_scratch = copy.deepcopy(contract)
+    invalid_scratch["profiles"][0]["scratch_prestate"] = [  # type: ignore[index]
+        {
+            "relative_path": "../escape",
+            "kind": "directory",
+            "mode": "0700",
+        }
+    ]
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_contract(invalid_scratch)
+
+    assert admin._native_builder_valid_trace_event(
+        _native_trace_event("openat", "/dev/null", "OK", open_flags=["O_RDWR"])
+    )
+    assert not admin._native_builder_valid_trace_event(
+        _native_trace_event("openat", "/dev/null", "OK", open_flags=["O_WRONLY"])
+    )
+    assert not admin._native_builder_valid_trace_event(
+        _native_trace_event(
+            "openat",
+            "/dev/null",
+            "OK",
+            open_flags=["O_RDWR", "O_TRUNC"],
+        )
+    )
+
+
+def test_native_builder_trace_inputs_hold_empty_bytes_and_reject_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(admin, "ROOT_UID", os.getuid())
+    monkeypatch.setattr(admin, "ROOT_GID", os.getgid())
+    monkeypatch.setattr(
+        admin,
+        "_native_builder_component_chain_is_immutable_root_owned",
+        lambda _chain: True,
+    )
+    host = tmp_path / "empty-runtime.py"
+    _write(host, b"", 0o644)
+    contract = _native_trace_contract(host)
+    admin._native_builder_validate_trace_contract(contract)
+    authority = admin.HeldNativeBuilderPhase(
+        contextlib.ExitStack(), {}, {}, {}, {}, {}, {}
+    )
+    try:
+        admin._native_builder_hold_trace_inputs(authority, contract)
+        authority.revalidate()
+        _write(host, b"replacement", 0o644)
+        with pytest.raises(
+            admin.AuthorityError, match="NATIVE_BUILDER_(?:AUTHORITY|TRACE_INPUT)_DRIFT"
+        ):
+            authority.revalidate()
+    finally:
+        authority.close()
+
+
+def test_native_builder_trace_contract_rejects_unmodelled_symlink_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(admin, "ROOT_UID", os.getuid())
+    monkeypatch.setattr(admin, "ROOT_GID", os.getgid())
+    host = tmp_path / "runtime"
+    _write(host, b"runtime", 0o644)
+    alias = tmp_path / "runtime-link"
+    alias.symlink_to(host.name)
+    contract = _native_trace_contract(host)
+    alias_record = copy.deepcopy(contract["host_files"][0])  # type: ignore[index]
+    alias_record["path"] = str(alias)
+    alias_record["canonical"] = str(host)
+    alias_record["component_chain"] = admin._native_builder_live_component_chain(
+        alias, "alias"
+    )
+    contract["host_files"] = sorted(  # type: ignore[index]
+        [contract["host_files"][0], alias_record],  # type: ignore[index]
+        key=lambda item: item["path"],
+    )
+    for profile in contract["profiles"]:  # type: ignore[index]
+        profile["host_files"] = sorted((str(host), str(alias)))
+    contract["tracer_runtime_files"] = sorted((str(host), str(alias)))
+    contract["builder_runtime_files"] = sorted((str(host), str(alias)))
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_contract(contract)
+
+
+def test_native_builder_flags_pin_active_input_macro_and_closed_compiler_mode() -> None:
+    bindings = {
+        "launcher_pin": {"sha256": "1" * 64, "size_bytes": 1},
+        "helper_pin": {"sha256": "2" * 64, "size_bytes": 2},
+        "input_pin": {"sha256": "3" * 64, "size_bytes": 3},
+    }
+    flags = admin._native_builder_expected_flags(
+        "initial-bootstrap-installer", bindings
+    )
+    assert "-pipe" in flags
+    assert "-fno-use-linker-plugin" in flags
+    assert '-DEXPECTED_INPUT_PIN_SHA256="' + ("3" * 64) + '"' in flags
+    assert not any(flag.startswith("-DEXPECTED_INPUT_SHA256=") for flag in flags)
+
+
+def test_native_builder_independent_consumer_mirror_matches_producer_contract() -> None:
+    assert admin.NATIVE_BUILDER_REQUEST_SCHEMA == native_builder.REQUEST_SCHEMA
+    assert (
+        admin.NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA
+        == native_builder.TRACE_CONTRACT_SCHEMA
+    )
+    assert admin.NATIVE_BUILDER_STRACE_VERSION == native_builder.STRACE_VERSION
+    assert admin.NATIVE_BUILDER_SOURCE_PATHS == native_builder.SOURCE_PATHS
+    assert (
+        admin.NATIVE_BUILDER_TRACE_FILE_SYSCALLS == native_builder.TRACE_FILE_SYSCALLS
+    )
+    assert (
+        admin.NATIVE_BUILDER_TRACE_ALLOWED_ERRNOS == native_builder.TRACE_ALLOWED_ERRNOS
+    )
+    assert (
+        admin.NATIVE_BUILDER_TRACE_OPEN_SYSCALLS == native_builder.TRACE_OPEN_SYSCALLS
+    )
+    assert (
+        admin.NATIVE_BUILDER_TRACE_OPEN_ACCESS_MODES
+        == native_builder.TRACE_OPEN_ACCESS_MODES
+    )
+    assert (
+        admin.NATIVE_BUILDER_TRACE_OPEN_FLAG_TOKENS
+        == native_builder.TRACE_OPEN_FLAG_TOKENS
+    )
+    assert (
+        admin.NATIVE_BUILDER_TRACE_DEV_NULL_ALLOWED_NONMUTATING_FLAGS
+        == native_builder.TRACE_DEV_NULL_ALLOWED_NONMUTATING_FLAGS
+    )
+    assert admin.NATIVE_BUILDER_BUILD_ENVIRONMENT == native_builder.BUILD_ENVIRONMENT
+    for phase in ("phase-a", "phase-b"):
+        assert admin._native_builder_expected_trace_invocations(
+            phase
+        ) == native_builder._expected_trace_invocations(phase)
+    bindings = {
+        "launcher_pin": {"sha256": "1" * 64, "size_bytes": 1},
+        "helper_pin": {"sha256": "2" * 64, "size_bytes": 2},
+        "input_pin": {"sha256": "3" * 64, "size_bytes": 3},
+    }
+    assert admin._native_builder_expected_flags(
+        "initial-bootstrap-installer", bindings
+    ) == native_builder.expected_job_flags("initial-bootstrap-installer", bindings)
+
+
+@pytest.mark.parametrize("replacement_kind", ["commit", "tree", "blob"])
+def test_git_review_binding_ignores_replace_refs_and_hostile_global_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    replacement_kind: str,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    source = repository / "reviewed.txt"
+    _run_test_git(repository, "init", "-b", "main")
+    _write(source, b"reviewed\n")
+    _run_test_git(repository, "add", "--", source.name)
+    _run_test_git(
+        repository,
+        "-c",
+        "user.name=VISTA test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-m",
+        "reviewed",
+    )
+    original_commit = _run_test_git(repository, "rev-parse", "HEAD")
+    original_tree = _run_test_git(repository, "rev-parse", "HEAD^{tree}")
+    original_blob = _run_test_git(repository, "rev-parse", "HEAD:reviewed.txt")
+
+    _run_test_git(repository, "switch", "-c", "hostile")
+    _write(source, b"hostile replacement\n")
+    _run_test_git(repository, "add", "--", source.name)
+    _run_test_git(
+        repository,
+        "-c",
+        "user.name=VISTA test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-m",
+        "hostile",
+    )
+    hostile_commit = _run_test_git(repository, "rev-parse", "HEAD")
+    hostile_tree = _run_test_git(repository, "rev-parse", "HEAD^{tree}")
+    hostile_blob = _run_test_git(repository, "rev-parse", "HEAD:reviewed.txt")
+    _run_test_git(repository, "switch", "main")
+    original, hostile = {
+        "commit": (original_commit, hostile_commit),
+        "tree": (original_tree, hostile_tree),
+        "blob": (original_blob, hostile_blob),
+    }[replacement_kind]
+    _run_test_git(repository, "replace", original, hostile)
+
+    hostile_home = tmp_path / "hostile-home"
+    hostile_home.mkdir()
+    hostile_config = hostile_home / ".gitconfig"
+    _write(
+        hostile_config,
+        b"[core]\n\tworktree = /nonexistent-hostile-worktree\n"
+        b"[alias]\n\tshow = !exit 97\n",
+    )
+    monkeypatch.setenv("HOME", str(hostile_home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(hostile_home))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(hostile_config))
+    monkeypatch.setattr(admin, "CHECKOUT_ROOT", repository)
+    monkeypatch.setattr(admin, "BUNDLE_SOURCE_PATHS", {"fixture": source})
+    for name in (
+        "LAUNCHER_SOURCE",
+        "REVIEW_HELPER_SOURCE",
+        "ADMIN_LAUNCHER_SOURCE",
+        "STAGE_INSTALLER_SOURCE",
+        "STAGE_TRANSFER_LAUNCHER_SOURCE",
+        "ENGINE_WRAPPER_SOURCE",
+        "BUILDPLUGIN_HELPER_SOURCE",
+        "PARENT_SEAL_HELPER_SOURCE",
+        "PARENT_SEAL_LAUNCHER_SOURCE",
+        "INITIAL_BOOTSTRAP_HELPER_SOURCE",
+        "INITIAL_BOOTSTRAP_INSTALLER_SOURCE",
+        "INITIAL_BOOTSTRAP_LAUNCHER_SOURCE",
+    ):
+        monkeypatch.setattr(admin, name, source)
+    monkeypatch.setattr(admin, "_reviewed_git_relative_paths", lambda: [source.name])
+
+    binding, committed = admin._git_source_binding(return_committed_sources=True)
+
+    assert binding["commit"] == original_commit
+    assert committed == {source.name: b"reviewed\n"}
+    assert source.read_bytes() == b"reviewed\n"
+
+
+def test_git_review_binding_captures_commit_before_concurrent_ref_and_worktree_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    source = repository / "reviewed.txt"
+    _run_test_git(repository, "init", "-b", "main")
+    _write(source, b"reviewed\n")
+    _run_test_git(repository, "add", "--", source.name)
+    _run_test_git(
+        repository,
+        "-c",
+        "user.name=VISTA test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-m",
+        "reviewed",
+    )
+    original_commit = _run_test_git(repository, "rev-parse", "HEAD")
+    _run_test_git(repository, "switch", "-c", "hostile")
+    _write(source, b"concurrent hostile replacement\n")
+    _run_test_git(repository, "add", "--", source.name)
+    _run_test_git(
+        repository,
+        "-c",
+        "user.name=VISTA test",
+        "-c",
+        "user.email=test@example.invalid",
+        "commit",
+        "-m",
+        "hostile",
+    )
+    _run_test_git(repository, "switch", "main")
+    assert _run_test_git(repository, "rev-parse", "HEAD") == original_commit
+    assert source.read_bytes() == b"reviewed\n"
+
+    monkeypatch.setattr(admin, "CHECKOUT_ROOT", repository)
+    monkeypatch.setattr(admin, "BUNDLE_SOURCE_PATHS", {"fixture": source})
+    for name in (
+        "LAUNCHER_SOURCE",
+        "REVIEW_HELPER_SOURCE",
+        "ADMIN_LAUNCHER_SOURCE",
+        "STAGE_INSTALLER_SOURCE",
+        "STAGE_TRANSFER_LAUNCHER_SOURCE",
+        "ENGINE_WRAPPER_SOURCE",
+        "BUILDPLUGIN_HELPER_SOURCE",
+        "PARENT_SEAL_HELPER_SOURCE",
+        "PARENT_SEAL_LAUNCHER_SOURCE",
+        "INITIAL_BOOTSTRAP_HELPER_SOURCE",
+        "INITIAL_BOOTSTRAP_INSTALLER_SOURCE",
+        "INITIAL_BOOTSTRAP_LAUNCHER_SOURCE",
+    ):
+        monkeypatch.setattr(admin, name, source)
+    monkeypatch.setattr(admin, "_reviewed_git_relative_paths", lambda: [source.name])
+
+    real_run = subprocess.run
+    switched = False
+
+    def switch_after_commit_capture(
+        command: list[str], *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess[object]:
+        nonlocal switched
+        result = real_run(command, *args, **kwargs)
+        if (
+            not switched
+            and "rev-parse" in command
+            and any(argument.startswith("HEAD") for argument in command)
+        ):
+            switched = True
+            real_run(
+                ["/usr/bin/git", "-C", str(repository), "switch", "hostile"],
+                check=True,
+                env={
+                    "PATH": "/usr/bin:/bin",
+                    "HOME": "/nonexistent",
+                    "LANG": "C",
+                    "LC_ALL": "C",
+                    "GIT_CONFIG_NOSYSTEM": "1",
+                    "GIT_CONFIG_GLOBAL": "/dev/null",
+                    "GIT_CONFIG_COUNT": "0",
+                    "GIT_NO_REPLACE_OBJECTS": "1",
+                    "GIT_TERMINAL_PROMPT": "0",
+                },
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        return result
+
+    monkeypatch.setattr(admin.subprocess, "run", switch_after_commit_capture)
+    with pytest.raises(admin.AuthorityError, match="source differs from commit"):
+        admin._git_source_binding(return_committed_sources=True)
+    assert switched
+    assert _run_test_git(repository, "rev-parse", "HEAD") != original_commit
+    assert source.read_bytes() == b"concurrent hostile replacement\n"
+
+
+def test_git_review_tree_parser_requires_exact_regular_blob_inventory() -> None:
+    expected = ["a.txt", "dir/b.sh"]
+    raw = (
+        b"100644 blob " + (b"1" * 40) + b"\ta.txt\0"
+        b"100755 blob " + (b"2" * 40) + b"\tdir/b.sh\0"
+    )
+    assert admin._parse_reviewed_git_tree(raw, expected) == {
+        "a.txt": "1" * 40,
+        "dir/b.sh": "2" * 40,
+    }
+    invalid = [
+        b"120000 blob " + (b"1" * 40) + b"\ta.txt\0",
+        b"100644 tree " + (b"1" * 40) + b"\ta.txt\0",
+        b"100644 blob " + (b"z" * 40) + b"\ta.txt\0",
+        raw + b"100644 blob " + (b"3" * 40) + b"\ta.txt\0",
+        raw.removesuffix(b"\0"),
+    ]
+    for candidate in invalid:
+        with pytest.raises(admin.AuthorityError, match="GIT_SOURCE_INVALID"):
+            admin._parse_reviewed_git_tree(candidate, expected)
 
 
 def _buildplugin_state_documents(
@@ -337,7 +848,7 @@ def _live_buildplugin_publication_fixture(
             "bootstrap_provenance": bootstrap,
             "claims": {
                 "fresh_no_replace": True,
-                "final_and_parent_fsynced": True,
+                "downstream_live_fsync_required": True,
                 "admin_launcher_fd_required": True,
                 "launcher_receipt_live_bound": True,
             },
@@ -1145,15 +1656,43 @@ def test_engine_shell_and_native_admin_launchers_have_closed_entrypoints() -> No
         encoding="utf-8"
     )
     assert "/root/vista-r8-ue57-authority-r2/" in engine_wrapper
-    assert "sha256sum" in engine_wrapper
-    assert "stat -Lc" in engine_wrapper
-    assert "REQUIRED" in engine_wrapper
+    assert "PATH=/usr/sbin:/usr/bin:/sbin:/bin" in engine_wrapper
+    assert (
+        "unset ENV BASH_ENV CDPATH GLOBIGNORE PYTHONHOME PYTHONPATH" in engine_wrapper
+    )
+    assert "/usr/bin/id -u" in engine_wrapper
+    assert "/usr/bin/sha256sum" in engine_wrapper
+    assert "/usr/bin/stat -Lc" in engine_wrapper
+    assert "/usr/bin/cut" in engine_wrapper
+    assert (
+        re.search(r"(?<!/usr/bin/)\b(?:id|stat|sha256sum|cut)\s", engine_wrapper)
+        is None
+    )
+    assert "REQUIRED" not in engine_wrapper
     assert "env -i" in engine_wrapper
     assert "sudo" not in engine_wrapper
     assert 'exec 9<"$PYTHON"' in engine_wrapper
     assert "/proc/self/fd/9 -I -B" in engine_wrapper
     assert "reconcile-engine" in engine_wrapper
     assert ".engine.lock" in engine_wrapper
+    bindings = admin._engine_wrapper_review_bindings(
+        engine_wrapper.encode("utf-8"),
+        helper_pin=admin.FilePin(
+            "225a2e77a2e88ff6ea09b6f5749fe37971c4f226ca295409f1650264126718c9",
+            497_127,
+        ),
+        source_pin=admin.FilePin(
+            "7b30cd3b5628a21579efc19013a1d13e9557684c6b8ab3b6495eb42544e4b3d9",
+            786,
+        ),
+        python_pin=admin.FilePin(
+            "7d51cd6b48b521277f5caa4610a82126e315fa2be4df069823a8b1eeb5bd4a86",
+            5_917_224,
+        ),
+    )
+    assert bindings["EXPECTED_HELPER_BYTES"] == "497127"
+    assert bindings["EXPECTED_SOURCE_PIN_BYTES"] == "786"
+    assert bindings["EXPECTED_PYTHON_BYTES"] == "5917224"
     admin_launcher = (root / "tools/admin/vista_r8_ue57_admin_launcher.c").read_text(
         encoding="utf-8"
     )
@@ -1459,110 +1998,21 @@ def test_root_bundle_validation_never_rehashes_compiler_or_toolchain(
     )
 
 
-def test_user_plan_candidate_build_never_reads_root(
+def test_runtime_plan_local_native_build_is_fail_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    uid, gid = os.getuid(), os.getgid()
-    input_root = tmp_path / "input-candidate"
-    input_root.mkdir()
-    input_path = input_root / "input-pin.json"
-    _write(input_path, b"{}\n", 0o444)
-    input_root.chmod(0o555)
-    plan_root = tmp_path / "plan-candidate"
-    python_path = tmp_path / "python3.10"
-    helper_path = tmp_path / "helper.py"
-    _write(python_path, b"python", 0o755)
-    _write(helper_path, b"helper", 0o644)
-    python_pin = _pin_for(python_path)
-    input_document = {
-        "tool_pins": {"python": {"pin": python_pin.public()}},
-        "content_digest": "1" * 64,
-    }
-    plan = admin.seal_document(
-        {"schema": admin.RUNTIME_AUDIT_PLAN_SCHEMA, "publication_performed": False}
-    )
-    monkeypatch.setattr(admin, "REVIEW_UID", uid)
-    monkeypatch.setattr(admin, "REVIEW_GID", gid)
-    monkeypatch.setattr(admin, "RUNTIME_INPUT_REVIEW_CANDIDATE", input_path)
-    monkeypatch.setattr(admin, "RUNTIME_PLAN_REVIEW_CANDIDATE_ROOT", plan_root)
-    monkeypatch.setattr(
-        admin, "RUNTIME_REVIEWED_PLAN_CANDIDATE", plan_root / "reviewed-plan-pin.json"
-    )
     monkeypatch.setattr(
         admin,
-        "RUNTIME_ADMIN_LAUNCHER_CANDIDATE",
-        plan_root / admin.ADMIN_LAUNCHER_NAME,
+        "_compile_admin_launcher",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("local compiler must not run")
+        ),
     )
-    monkeypatch.setattr(admin, "PYTHON_PATH", python_path)
-    monkeypatch.setattr(admin, "REVIEW_HELPER_SOURCE", helper_path)
-    monkeypatch.setattr(admin, "_require_unprivileged_review_helper", lambda: None)
-    monkeypatch.setattr(
-        admin,
-        "_load_runtime_input_pin",
-        lambda *, review_candidate: (input_document, _pin_for(input_path)),
-    )
-    monkeypatch.setattr(
-        admin, "_validate_runtime_input_against_live", lambda _document: {}
-    )
-    monkeypatch.setattr(admin, "_runtime_plan_from_input", lambda _document, _pin: plan)
-
-    def fake_compile(
-        _stage: str,
-        *,
-        committed_source: bytes,
-        python_pin: object,
-        helper_pin: object,
-        output: Path,
-    ) -> tuple[admin.FilePin, dict[str, object]]:
-        del python_pin, helper_pin
-        assert committed_source == b"committed admin source"
-        _write(output, b"\x7fELFadmin", 0o755)
-        pin = _pin_for(output, executable=True)
-        return pin, {"output_pin": pin.public()}
-
-    monkeypatch.setattr(admin, "_compile_admin_launcher", fake_compile)
-    monkeypatch.setattr(
-        admin,
-        "_require_static_review_elf",
-        lambda path, _label: _pin_for(path, executable=True),
-    )
-    helper_relative = helper_path.relative_to(tmp_path).as_posix()
-    admin_source = tmp_path / "admin-launcher.c"
-    monkeypatch.setattr(admin, "CHECKOUT_ROOT", tmp_path)
-    monkeypatch.setattr(admin, "ADMIN_LAUNCHER_SOURCE", admin_source)
-    monkeypatch.setattr(
-        admin,
-        "_require_unprivileged_review_helper",
-        lambda: {
-            helper_relative: b"helper",
-            admin_source.relative_to(tmp_path).as_posix(): b"committed admin source",
-        },
-    )
-    real_lstat = admin.os.lstat
-    real_open = admin.os.open
-
-    def reject_root_lstat(
-        path: os.PathLike[str] | str, *args: object, **kwargs: object
+    with pytest.raises(
+        admin.AuthorityError, match="DEDICATED_BUILDER_AUTHORITY_REQUIRED"
     ):
-        if str(path).startswith("/root"):
-            raise AssertionError("user candidate touched /root")
-        return real_lstat(path, *args, **kwargs)
-
-    def reject_root_open(path: os.PathLike[str] | str, *args: object, **kwargs: object):
-        if str(path).startswith("/root"):
-            raise AssertionError("user candidate touched /root")
-        return real_open(path, *args, **kwargs)
-
-    monkeypatch.setattr(admin.os, "lstat", reject_root_lstat)
-    monkeypatch.setattr(admin.os, "open", reject_root_open)
-
-    result = admin.build_runtime_plan_review_candidate()
-
-    assert result["root_execution_performed"] is False
-    assert set(path.name for path in plan_root.iterdir()) == {
-        "reviewed-plan-pin.json",
-        admin.ADMIN_LAUNCHER_NAME,
-    }
+        admin.build_runtime_plan_review_candidate()
+    assert not (tmp_path / "plan-candidate").exists()
 
 
 def test_admin_launcher_compiles_exact_head_blob_memfd_not_reopened_checkout(
@@ -1593,6 +2043,8 @@ def test_admin_launcher_compiles_exact_head_blob_memfd_not_reopened_checkout(
         source_argument = next(
             item for item in command if item.startswith("/proc/self/fd/")
         )
+        assert command[command.index("-x") + 1] == "c"
+        assert command.index("-x") < command.index(source_argument)
         descriptor = int(source_argument.rsplit("/", 1)[1])
         os.lseek(descriptor, 0, os.SEEK_SET)
         assert os.read(descriptor, len(committed) + 1) == committed
@@ -1647,6 +2099,8 @@ def test_stage_installer_compiles_exact_head_blob_memfd_and_candidate_pins(
         source_argument = next(
             item for item in command if item.startswith("/proc/self/fd/")
         )
+        assert command[command.index("-x") + 1] == "c"
+        assert command.index("-x") < command.index(source_argument)
         descriptor = int(source_argument.rsplit("/", 1)[1])
         os.lseek(descriptor, 0, os.SEEK_SET)
         assert os.read(descriptor, len(committed) + 1) == committed
@@ -1679,226 +2133,56 @@ def test_stage_installer_compiles_exact_head_blob_memfd_and_candidate_pins(
     assert provenance["secondary_pin"] == {"sha256": "4" * 64, "size_bytes": 44}
 
 
-def test_stage_installer_review_candidate_build_is_user_only_and_root_path_free(
+def test_all_stage_installer_local_native_builds_are_fail_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    uid, gid = os.geteuid(), os.getegid()
-    checkout = tmp_path / "checkout"
-    checkout.mkdir()
-    helper = checkout / "helper.py"
-    source = checkout / "stage-installer.c"
-    _write(helper, b"helper bytes", 0o644)
-    _write(source, b"source bytes", 0o644)
-    final = tmp_path / "runtime-input-installer-candidate"
-    helper_raw = helper.read_bytes()
-    source_raw = source.read_bytes()
-    monkeypatch.setattr(admin, "REVIEW_UID", uid)
-    monkeypatch.setattr(admin, "REVIEW_GID", gid)
-    monkeypatch.setattr(admin, "CHECKOUT_ROOT", checkout)
-    monkeypatch.setattr(admin, "REVIEW_HELPER_SOURCE", helper)
-    monkeypatch.setattr(admin, "STAGE_INSTALLER_SOURCE", source)
     monkeypatch.setattr(
         admin,
-        "STAGE_INSTALLER_REVIEW_ROOTS",
-        {**admin.STAGE_INSTALLER_REVIEW_ROOTS, "runtime-input": final},
-    )
-    monkeypatch.setattr(
-        admin,
-        "_require_unprivileged_review_helper",
-        lambda: {
-            "helper.py": helper_raw,
-            "stage-installer.c": source_raw,
-        },
-    )
-    monkeypatch.setattr(
-        admin,
-        "_stage_installer_build_inputs",
-        lambda _key: (
-            admin.FilePin("3" * 64, 33),
-            None,
-            admin.FilePin("1" * 64, 11),
-            {"candidate_root": str(tmp_path / "input")},
+        "_compile_stage_installer",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("local compiler must not run")
         ),
     )
-
-    def fake_compile(
-        key: str,
-        *,
-        committed_source: bytes,
-        python_pin: dict[str, object],
-        helper_pin: dict[str, object],
-        primary_pin: dict[str, object],
-        secondary_pin: dict[str, object] | None,
-        output: Path,
-    ) -> tuple[admin.FilePin, dict[str, object]]:
-        assert key == "runtime-input"
-        assert committed_source == source_raw
-        assert secondary_pin is None
-        _write(output, b"\x7fELFreviewed", 0o755)
-        actual = _pin_for(output, executable=True)
-        return actual, {"output_pin": actual.public()}
-
-    monkeypatch.setattr(admin, "_compile_stage_installer", fake_compile)
-    monkeypatch.setattr(
-        admin,
-        "_require_static_review_elf",
-        lambda path, _label: _pin_for(path, executable=True),
-    )
-    original_lstat = admin.os.lstat
-    original_open = admin.os.open
-
-    def bomb_root_lstat(path: object, *args: object, **kwargs: object):
-        if os.fspath(path).startswith("/root/"):
-            raise AssertionError("user candidate touched /root")
-        return original_lstat(path, *args, **kwargs)
-
-    def bomb_root_open(path: object, *args: object, **kwargs: object):
-        if isinstance(path, (str, bytes, os.PathLike)) and os.fsdecode(
-            os.fspath(path)
-        ).startswith("/root/"):
-            raise AssertionError("user candidate opened /root")
-        return original_open(path, *args, **kwargs)
-
-    monkeypatch.setattr(admin.os, "lstat", bomb_root_lstat)
-    monkeypatch.setattr(admin.os, "open", bomb_root_open)
-
-    result = admin.build_stage_installer_review_candidate("runtime-input")
-
-    assert result["accepted"] is False
-    assert result["root_execution_performed"] is False
-    assert set(path.name for path in final.iterdir()) == {admin.STAGE_INSTALLER_NAME}
-    assert stat.S_IMODE(final.stat().st_mode) == 0o555
-    assert stat.S_IMODE((final / admin.STAGE_INSTALLER_NAME).stat().st_mode) == 0o555
+    for key in admin.STAGE_KEYS:
+        with pytest.raises(
+            admin.AuthorityError, match="DEDICATED_BUILDER_AUTHORITY_REQUIRED"
+        ):
+            admin.build_stage_installer_review_candidate(key)
+    assert not any(tmp_path.iterdir())
 
 
-def test_stage_transfer_review_candidate_is_exact_user_frozen_and_static_prechecked(
+def test_stage_transfer_local_native_build_is_fail_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    uid, gid = os.getuid(), os.getgid()
-    checkout = tmp_path / "checkout"
-    checkout.mkdir()
-    helper = checkout / "helper.py"
-    source = checkout / "transfer.c"
-    python = tmp_path / "python3.10"
-    _write(helper, b"reviewed helper", 0o644)
-    _write(source, b"reviewed transfer source", 0o644)
-    _write(python, b"reviewed python", 0o755)
-    final = tmp_path / "transfer-review" / "transfer-r8-ue57-stage-installer"
-    monkeypatch.setattr(admin, "REVIEW_UID", uid)
-    monkeypatch.setattr(admin, "REVIEW_GID", gid)
-    monkeypatch.setattr(admin, "CHECKOUT_ROOT", checkout)
-    monkeypatch.setattr(admin, "REVIEW_HELPER_SOURCE", helper)
-    monkeypatch.setattr(admin, "STAGE_TRANSFER_LAUNCHER_SOURCE", source)
-    monkeypatch.setattr(admin, "PYTHON_PATH", python)
-    monkeypatch.setattr(admin, "STAGE_TRANSFER_LAUNCHER_REVIEW_CANDIDATE", final)
     monkeypatch.setattr(
         admin,
-        "_require_unprivileged_review_helper",
-        lambda: {"helper.py": helper.read_bytes(), "transfer.c": source.read_bytes()},
+        "_compile_stage_transfer_launcher",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("local compiler must not run")
+        ),
     )
-
-    def fake_compile(**kwargs: object) -> tuple[admin.FilePin, dict[str, object]]:
-        output = kwargs["output"]
-        assert isinstance(output, Path)
-        _write(output, b"\x7fELFstatic-transfer", 0o755)
-        pin = _pin_for(output, executable=True)
-        return pin, {"output_pin": pin.public()}
-
-    observed: list[Path] = []
-    monkeypatch.setattr(admin, "_compile_stage_transfer_launcher", fake_compile)
-    monkeypatch.setattr(
-        admin,
-        "_require_static_review_elf",
-        lambda path, _label: observed.append(path) or _pin_for(path, executable=True),
-    )
-    _bomb_root_access(monkeypatch)
-
-    result = admin.build_stage_transfer_launcher_review_candidate()
-
-    assert result["accepted"] is False
-    assert observed and observed[0].parent.name.startswith(".transfer-review.staging-")
-    assert set(path.name for path in final.parent.iterdir()) == {final.name}
-    assert stat.S_IMODE(final.parent.stat().st_mode) == 0o555
-    assert stat.S_IMODE(final.stat().st_mode) == 0o555
-    with pytest.raises(admin.AuthorityError, match="FINAL_NOT_FRESH"):
+    with pytest.raises(
+        admin.AuthorityError, match="DEDICATED_BUILDER_AUTHORITY_REQUIRED"
+    ):
         admin.build_stage_transfer_launcher_review_candidate()
+    assert not any(tmp_path.iterdir())
 
 
-def test_parent_seal_static_audit_failure_leaves_fixed_candidate_absent(
+def test_parent_seal_local_native_build_is_fail_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    uid, gid = os.getuid(), os.getgid()
-    checkout = tmp_path / "checkout"
-    checkout.mkdir()
-    helper = checkout / "parent.py"
-    source = checkout / "parent.c"
-    python = tmp_path / "python3.10"
-    helper_raw = b"reviewed parent helper"
-    _write(helper, helper_raw, 0o644)
-    _write(python, b"reviewed python", 0o755)
-    python_pin = _pin_for(python)
-    helper_pin = admin.FilePin(hashlib.sha256(helper_raw).hexdigest(), len(helper_raw))
-    source_raw = b"|".join(
-        (
-            helper_pin.sha256.encode(),
-            str(helper_pin.size_bytes).encode(),
-            python_pin.sha256.encode(),
-            str(python_pin.size_bytes).encode(),
-        )
-    )
-    _write(source, source_raw, 0o644)
-    final = tmp_path / "parent-seal-review"
-    monkeypatch.setattr(admin, "REVIEW_UID", uid)
-    monkeypatch.setattr(admin, "REVIEW_GID", gid)
-    monkeypatch.setattr(admin, "CHECKOUT_ROOT", checkout)
-    monkeypatch.setattr(admin, "PARENT_SEAL_HELPER_SOURCE", helper)
-    monkeypatch.setattr(admin, "PARENT_SEAL_LAUNCHER_SOURCE", source)
-    monkeypatch.setattr(admin, "PARENT_SEAL_REVIEW_CANDIDATE_ROOT", final)
-    monkeypatch.setattr(admin, "PYTHON_PATH", python)
     monkeypatch.setattr(
         admin,
-        "_require_unprivileged_review_helper",
-        lambda: {"parent.py": helper_raw, "parent.c": source_raw},
-    )
-
-    def fake_compile(**kwargs: object) -> tuple[admin.FilePin, dict[str, object]]:
-        output = kwargs["output"]
-        assert isinstance(output, Path)
-        _write(output, b"\x7fELFstatic-parent", 0o755)
-        pin = _pin_for(output, executable=True)
-        return pin, {"output_pin": pin.public()}
-
-    monkeypatch.setattr(admin, "_compile_parent_seal_launcher", fake_compile)
-    monkeypatch.setattr(
-        admin,
-        "_require_static_review_elf",
-        lambda _path, _label: (_ for _ in ()).throw(
-            admin.AuthorityError("CORE_BOOTSTRAP_REVIEW_INVALID", "not static")
+        "_compile_parent_seal_launcher",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("local compiler must not run")
         ),
     )
-    _bomb_root_access(monkeypatch)
-
-    with pytest.raises(admin.AuthorityError, match="CORE_BOOTSTRAP_REVIEW_INVALID"):
+    with pytest.raises(
+        admin.AuthorityError, match="DEDICATED_BUILDER_AUTHORITY_REQUIRED"
+    ):
         admin.build_parent_seal_review_candidate()
-
-    assert not final.exists()
-    assert not list(final.parent.glob(f".{final.name}.staging-*"))
-
-    monkeypatch.setattr(
-        admin,
-        "_require_static_review_elf",
-        lambda path, _label: _pin_for(path, executable=True),
-    )
-    result = admin.build_parent_seal_review_candidate()
-    assert result["accepted"] is False
-    assert set(path.name for path in final.iterdir()) == {
-        helper.name,
-        admin.PARENT_SEAL_LAUNCHER_NAME,
-    }
-    assert stat.S_IMODE((final / helper.name).stat().st_mode) == 0o444
-    assert (
-        stat.S_IMODE((final / admin.PARENT_SEAL_LAUNCHER_NAME).stat().st_mode) == 0o555
-    )
+    assert not any(tmp_path.iterdir())
 
 
 def test_buildplugin_admin_candidate_is_exact_closed_shell_and_root_path_free(
@@ -2018,12 +2302,54 @@ def test_core_bootstrap_audit_is_user_only_canonical_and_zero_write(
     result = admin.audit_core_bootstrap_review_inputs()
 
     assert result["schema"] == admin.CORE_BOOTSTRAP_REVIEW_AUDIT_SCHEMA
-    assert result["claims"]["output_write_performed"] is False
+    assert result["claims"]["persistent_authority_write_performed"] is False
+    assert result["claims"]["ephemeral_review_build_performed"] is False
+    assert result["claims"]["dedicated_builder_phase_a_validated"] is True
+    assert result["claims"]["local_user_native_compile_performed"] is False
     assert result["content_digest"] == admin.content_digest(result)
 
     monkeypatch.setattr(admin.os, "geteuid", lambda: admin.ROOT_UID)
     with pytest.raises(admin.AuthorityError, match="UNPRIVILEGED_REVIEW_REQUIRED"):
         admin.audit_core_bootstrap_review_inputs()
+
+
+def _fake_static_pin(path: Path, _label: str) -> admin.FilePin:
+    raw = path.read_bytes()
+    return admin.FilePin(hashlib.sha256(raw).hexdigest(), len(raw), True)
+
+
+def _fake_static_fd(descriptor: int, label: str) -> admin.FilePin:
+    return admin._read_sealed_native_output(descriptor, label)[1]
+
+
+def test_stdlib_static_elf_audit_rejects_malformed_stage_artifact() -> None:
+    with pytest.raises(admin.AuthorityError, match="NATIVE_BUILDER_ARTIFACT_INVALID"):
+        admin._stdlib_require_static_elf(b"\\x7fELFmalformed", "stage transfer")
+
+
+def test_stdlib_static_elf_audit_rejects_dynamic_parent_artifact() -> None:
+    with pytest.raises(admin.AuthorityError, match="NATIVE_BUILDER_ARTIFACT_INVALID"):
+        admin._stdlib_require_static_elf(Path("/bin/true").read_bytes(), "parent seal")
+
+
+def test_core_native_local_rebuild_entrypoints_are_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        admin,
+        "_compile_core_native_isolated",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy bwrap rebuild must not run")
+        ),
+    )
+    for operation in (
+        admin.build_stage_transfer_launcher_review_candidate,
+        admin.build_parent_seal_review_candidate,
+    ):
+        with pytest.raises(
+            admin.AuthorityError, match="DEDICATED_BUILDER_AUTHORITY_REQUIRED"
+        ):
+            operation()
 
 
 def test_one_shot_installer_transfer_is_pinned_immutable_and_fd_bound(
@@ -2131,6 +2457,98 @@ def test_one_shot_installer_transfer_is_pinned_immutable_and_fd_bound(
     finally:
         os.close(wrong)
         os.close(descriptor)
+
+
+def test_core_live_fsync_covers_exact_root_and_fails_closed_on_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    uid, gid = os.getuid(), os.getgid()
+    parent = tmp_path / "root"
+    parent.mkdir(mode=0o700)
+    root = parent / "vista-r8-ue57-authority-r2"
+    root.mkdir(mode=0o700)
+    paths = {
+        "vista_r8_ue57_authority_admin.py": 0o500,
+        "provision_vista_r8_ue57_engine.sh": 0o500,
+        "transfer-r8-ue57-stage-installer": 0o555,
+        "engine-source-pin.json": 0o444,
+        ".engine.lock": 0o600,
+        ".runtime.lock": 0o600,
+        ".bundle.lock": 0o600,
+        ".executor.lock": 0o600,
+    }
+    for name, mode in paths.items():
+        _write(root / name, b"" if name.startswith(".") else name.encode(), mode)
+    root.chmod(0o555)
+    monkeypatch.setattr(admin, "ROOT_UID", uid)
+    monkeypatch.setattr(admin, "ROOT_GID", gid)
+    monkeypatch.setattr(admin, "INSTALLED_ROOT", root)
+    monkeypatch.setattr(
+        admin, "INSTALLED_HELPER", root / "vista_r8_ue57_authority_admin.py"
+    )
+    monkeypatch.setattr(
+        admin,
+        "INSTALLED_ENGINE_WRAPPER",
+        root / "provision_vista_r8_ue57_engine.sh",
+    )
+    monkeypatch.setattr(
+        admin,
+        "INSTALLED_STAGE_TRANSFER_LAUNCHER",
+        root / "transfer-r8-ue57-stage-installer",
+    )
+    monkeypatch.setattr(
+        admin, "ENGINE_SOURCE_PIN_PATH", root / "engine-source-pin.json"
+    )
+    monkeypatch.setattr(
+        admin,
+        "OPERATION_LOCKS",
+        {
+            "engine": root / ".engine.lock",
+            "runtime": root / ".runtime.lock",
+            "bundle": root / ".bundle.lock",
+            "executor": root / ".executor.lock",
+        },
+    )
+    monkeypatch.setattr(admin, "_require_core_installed", lambda: None)
+    expected = {path.stat().st_ino for path in (parent, root, *root.iterdir())}
+    observed: set[int] = set()
+    real_fsync = os.fsync
+
+    def record_fsync(descriptor: int) -> None:
+        observed.add(os.fstat(descriptor).st_ino)
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(admin.os, "fsync", record_fsync)
+    admin._live_fsync_core_authority()
+    assert expected <= observed
+
+    monkeypatch.setattr(
+        admin.os,
+        "fsync",
+        lambda _descriptor: (_ for _ in ()).throw(OSError("injected fsync")),
+    )
+    with pytest.raises(
+        admin.AuthorityError, match="CORE_AUTHORITY_LIVE_FSYNC_REQUIRED"
+    ):
+        admin._live_fsync_core_authority()
+
+    helper = admin.INSTALLED_HELPER
+    mutated = False
+
+    def mutate_during_fsync(descriptor: int) -> None:
+        nonlocal mutated
+        real_fsync(descriptor)
+        if not mutated:
+            mutated = True
+            helper.chmod(0o700)
+            helper.write_bytes(b"mutated core helper")
+            helper.chmod(0o500)
+
+    monkeypatch.setattr(admin.os, "fsync", mutate_during_fsync)
+    with pytest.raises(
+        admin.AuthorityError, match="CORE_AUTHORITY_LIVE_FSYNC_REQUIRED"
+    ):
+        admin._live_fsync_core_authority()
 
 
 def test_one_shot_installer_transfer_rejects_wrong_external_pin(
@@ -2322,3 +2740,406 @@ def test_candidate_size_mismatch_rejects_before_hash_or_read(
                 admin.FilePin("0" * 64, 1),
                 "oversized candidate",
             )
+
+
+def test_initial_bootstrap_phase_b_request_derivation_is_zero_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = admin.seal_document(
+        {
+            "schema": admin.NATIVE_BUILDER_REQUEST_SCHEMA,
+            "phase": "phase-b",
+            "accepted": False,
+        }
+    )
+    initial = admin.seal_document(
+        {"schema": admin.INITIAL_BOOTSTRAP_INPUT_PIN_SCHEMA, "accepted": False}
+    )
+    audit = admin.seal_document(
+        {"schema": admin.CORE_BOOTSTRAP_REVIEW_AUDIT_SCHEMA, "accepted": False}
+    )
+    monkeypatch.setattr(
+        admin,
+        "_derive_native_builder_phase_b_request",
+        lambda _pin: (request, initial, audit),
+    )
+    result = admin.build_initial_bootstrap_review_candidate(
+        {"sha256": "1" * 64, "size_bytes": 1}
+    )
+    assert result["status"] == "native_builder_phase_b_request_derived_zero_write"
+    assert result["request_document"] == request
+    assert result["candidate_publication_performed"] is False
+    assert not any(tmp_path.iterdir())
+
+
+def _phase_b_cross_binding_documents(
+    host: Path,
+) -> tuple[
+    dict[str, object],
+    admin.FilePin,
+    dict[str, object],
+    admin.FilePin,
+    dict[str, object],
+]:
+    trace_contract = _native_trace_contract(host)
+    source_pin = {"sha256": "1" * 64, "size_bytes": 11}
+    builder_pin = {"sha256": "2" * 64, "size_bytes": 22}
+    bundle_pin = {"sha256": "3" * 64, "size_bytes": 33}
+    common_builder = {
+        "path": str(admin.NATIVE_BUILDER_HELPER),
+        "mode": "0444",
+        "uid": admin.ROOT_UID,
+        "gid": admin.ROOT_GID,
+        "pin": builder_pin,
+    }
+    tools = {
+        "python": {"pin": {"sha256": "4" * 64, "size_bytes": 44}},
+        "git": {"pin": {"sha256": "5" * 64, "size_bytes": 55}},
+        "compiler": {"pin": {"sha256": "6" * 64, "size_bytes": 66}},
+        "readelf": {"pin": {"sha256": "7" * 64, "size_bytes": 77}},
+        "tracer": {"pin": {"sha256": "8" * 64, "size_bytes": 88}},
+        "toolchain": admin._native_builder_trace_toolchain(trace_contract),
+    }
+    phase_a_request = admin.seal_document(
+        {
+            "schema": admin.NATIVE_BUILDER_REQUEST_SCHEMA,
+            "phase": "phase-a",
+            "status": "reviewed_native_build_request",
+            "accepted": False,
+            "builder": {
+                **common_builder,
+                "service_unit": {"path": "phase-a.service"},
+            },
+            "source_bundle": {"path": "source.bundle", "pin": bundle_pin},
+            "source_commit": "a" * 40,
+            "sources": [{"path": "source.c", "pin": source_pin}],
+            "tools": tools,
+            "trace_contract": trace_contract,
+            "jobs": [],
+            "phase_inputs": {},
+            "claims": {"accepted": False},
+        }
+    )
+    phase_a_raw = admin.canonical_json(phase_a_request)
+    phase_a_request_pin = admin.FilePin(
+        hashlib.sha256(phase_a_raw).hexdigest(), len(phase_a_raw)
+    )
+    phase_a_manifest = admin.seal_document(
+        {
+            "schema": admin.NATIVE_BUILDER_PHASE_A_SCHEMA,
+            "status": "dedicated_builder_phase_closed",
+            "accepted": False,
+            "phase": "phase-a",
+            "request_pin": phase_a_request_pin.public(),
+            "source_commit": phase_a_request["source_commit"],
+            "source_bundle_pin": bundle_pin,
+            "jobs": [],
+            "inventory": {},
+            "claims": {"closed": True},
+        }
+    )
+    phase_a_manifest_raw = admin.canonical_json(phase_a_manifest)
+    phase_a_manifest_pin = admin.FilePin(
+        hashlib.sha256(phase_a_manifest_raw).hexdigest(),
+        len(phase_a_manifest_raw),
+    )
+    phase_b_request = admin.seal_document(
+        {
+            "schema": admin.NATIVE_BUILDER_REQUEST_SCHEMA,
+            "phase": "phase-b",
+            "status": "reviewed_native_build_request",
+            "accepted": False,
+            "builder": {
+                **common_builder,
+                "service_unit": {"path": "phase-b.service"},
+            },
+            "source_bundle": phase_a_request["source_bundle"],
+            "source_commit": phase_a_request["source_commit"],
+            "sources": phase_a_request["sources"],
+            "tools": phase_a_request["tools"],
+            "trace_contract": phase_a_request["trace_contract"],
+            "jobs": [],
+            "phase_inputs": {
+                "phase_a": {
+                    "root": str(admin.NATIVE_BUILDER_PHASE_A_ROOT),
+                    "manifest_pin": phase_a_manifest_pin.public(),
+                    "content_digest": phase_a_manifest["content_digest"],
+                },
+                "core_review_audit": {},
+                "initial_input": {},
+            },
+            "claims": {"accepted": False},
+        }
+    )
+    return (
+        phase_a_request,
+        phase_a_request_pin,
+        phase_a_manifest,
+        phase_a_manifest_pin,
+        phase_b_request,
+    )
+
+
+def test_phase_b_job_rejects_coherently_resealed_extra_top_level_key(
+    tmp_path: Path,
+) -> None:
+    host = tmp_path / "runtime"
+    _write(host, b"runtime", 0o644)
+    *_phase_a, request = _phase_b_cross_binding_documents(host)
+    request = copy.deepcopy(request)
+    source_pin = {"sha256": "9" * 64, "size_bytes": 99}
+    installer_pin = admin.FilePin("a" * 64, 111)
+    expected_job = {
+        "id": "initial-bootstrap-installer",
+        "source_path": "tools/admin/vista_r8_ue57_initial_bootstrap_installer.c",
+        "output_name": admin.INITIAL_BOOTSTRAP_INSTALLER_NAME,
+        "output_mode": "0555",
+        "bindings": {"input_pin": {"sha256": "b" * 64, "size_bytes": 12}},
+        "flags": ["-closed-test-flag"],
+    }
+    request["sources"] = [{"path": expected_job["source_path"], "pin": source_pin}]
+    request["jobs"] = [expected_job]
+    job = admin.seal_document(
+        {
+            "schema": admin.NATIVE_BUILDER_JOB_SCHEMA,
+            "status": "deterministic_static_native_closed",
+            "accepted": False,
+            "phase": "phase-b",
+            "job_id": "initial-bootstrap-installer",
+            "source": {
+                "git_bundle_pin": request["source_bundle"]["pin"],
+                "commit": request["source_commit"],
+                "git_path": expected_job["source_path"],
+                "pin": source_pin,
+                "compiled_from_sealed_memfd": True,
+            },
+            "bindings": expected_job["bindings"],
+            "flags": expected_job["flags"],
+            "environment": admin.NATIVE_BUILDER_BUILD_ENVIRONMENT,
+            "tools": admin._native_builder_job_tools(
+                request["tools"], request["trace_contract"]
+            ),
+            "output": {
+                "relative_path": (
+                    "initial-bootstrap-installer/"
+                    + admin.INITIAL_BOOTSTRAP_INSTALLER_NAME
+                ),
+                "mode": "0555",
+                "pin": installer_pin.public(),
+            },
+            "determinism": {
+                "build_count": 2,
+                "byte_identical": True,
+                "first_pin": installer_pin.public(),
+                "second_pin": installer_pin.public(),
+            },
+            "static_elf": {
+                "interpreter": None,
+                "needed": [],
+                "readelf_pin": request["tools"]["readelf"]["pin"],
+            },
+            "claims": {
+                "builder_uid_gid": [
+                    admin.NATIVE_BUILDER_UID,
+                    admin.NATIVE_BUILDER_GID,
+                ],
+                "network_access": False,
+                "worktree_input": False,
+                "user_candidate_input": False,
+            },
+        }
+    )
+    assert (
+        admin._native_builder_validate_phase_b_job(
+            job,
+            expected_request=request,
+            installer_source_pin=source_pin,
+            installer_pin=installer_pin,
+        )
+        == job
+    )
+
+    resealed = copy.deepcopy(job)
+    resealed["unexpected"] = {"aggregate_manifest_also_updated": True}
+    resealed.pop("content_digest")
+    resealed = admin.seal_document(resealed)
+    with pytest.raises(admin.AuthorityError, match="phase B installer job"):
+        admin._native_builder_validate_phase_b_job(
+            resealed,
+            expected_request=request,
+            installer_source_pin=source_pin,
+            installer_pin=installer_pin,
+        )
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        "bundle",
+        "commit",
+        "sources",
+        "builder",
+        "tools",
+        "runtime_trace",
+        "phase_a_request_pin",
+        "phase_a_manifest_pin",
+        "phase_a_binding",
+    ],
+)
+def test_phase_b_cross_binding_is_exact_and_rejects_each_lineage_break(
+    tmp_path: Path,
+    tamper: str,
+) -> None:
+    host = tmp_path / "runtime"
+    _write(host, b"runtime", 0o644)
+    (
+        phase_a_request,
+        phase_a_request_pin,
+        phase_a_manifest,
+        phase_a_manifest_pin,
+        phase_b_request,
+    ) = _phase_b_cross_binding_documents(host)
+    admin._native_builder_validate_phase_b_cross_binding(
+        phase_b_request=phase_b_request,
+        phase_a_request=phase_a_request,
+        phase_a_request_pin=phase_a_request_pin,
+        phase_a_manifest=phase_a_manifest,
+        phase_a_manifest_pin=phase_a_manifest_pin,
+    )
+
+    broken_request = copy.deepcopy(phase_b_request)
+    broken_request_pin = phase_a_request_pin
+    broken_manifest_pin = phase_a_manifest_pin
+    if tamper == "bundle":
+        broken_request["source_bundle"]["pin"]["sha256"] = "9" * 64  # type: ignore[index]
+    elif tamper == "commit":
+        broken_request["source_commit"] = "b" * 40
+    elif tamper == "sources":
+        broken_request["sources"][0]["pin"]["sha256"] = "9" * 64  # type: ignore[index]
+    elif tamper == "builder":
+        broken_request["builder"]["pin"]["sha256"] = "9" * 64  # type: ignore[index]
+    elif tamper == "tools":
+        broken_request["tools"]["tracer"]["pin"]["sha256"] = "9" * 64  # type: ignore[index]
+    elif tamper == "runtime_trace":
+        broken_request["trace_contract"]["builder_runtime_files"] = []  # type: ignore[index]
+    elif tamper == "phase_a_request_pin":
+        broken_request_pin = admin.FilePin("9" * 64, phase_a_request_pin.size_bytes)
+    elif tamper == "phase_a_manifest_pin":
+        broken_manifest_pin = admin.FilePin("9" * 64, phase_a_manifest_pin.size_bytes)
+    else:
+        broken_request["phase_inputs"]["phase_a"]["root"] = "/wrong"  # type: ignore[index]
+    if tamper not in {"phase_a_request_pin", "phase_a_manifest_pin"}:
+        broken_request.pop("content_digest")
+        broken_request = admin.seal_document(broken_request)
+
+    with pytest.raises(
+        admin.AuthorityError, match="NATIVE_BUILDER_PHASE_B_LINEAGE_INVALID"
+    ):
+        admin._native_builder_validate_phase_b_cross_binding(
+            phase_b_request=broken_request,
+            phase_a_request=phase_a_request,
+            phase_a_request_pin=broken_request_pin,
+            phase_a_manifest=phase_a_manifest,
+            phase_a_manifest_pin=broken_manifest_pin,
+        )
+
+
+def test_phase_b_cross_binding_runs_at_derivation_and_held_audit_boundaries() -> None:
+    source = Path(admin.__file__).read_text()
+    assert source.count("_native_builder_validate_phase_b_cross_binding(") == 3
+
+
+def test_initial_bootstrap_candidate_rejects_root_and_external_pin_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(admin.os, "geteuid", lambda: admin.ROOT_UID)
+    with pytest.raises(admin.AuthorityError, match="UNPRIVILEGED_REVIEW_REQUIRED"):
+        admin.build_initial_bootstrap_review_candidate(
+            {"sha256": "0" * 64, "size_bytes": 1}
+        )
+
+
+def test_initial_bootstrap_installer_consumes_only_phase_b_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(admin, "NATIVE_BUILDER_PHASE_B_REQUEST", tmp_path / "absent")
+    monkeypatch.setattr(
+        admin,
+        "_compile_initial_bootstrap_installer",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("local compiler must not run")
+        ),
+    )
+    with pytest.raises(admin.AuthorityError, match="FILE_INVALID"):
+        admin.build_initial_bootstrap_installer_review_candidate()
+    assert not any(tmp_path.iterdir())
+
+
+def test_initial_bootstrap_installer_candidate_rejects_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(admin.os, "geteuid", lambda: admin.ROOT_UID)
+    with pytest.raises(admin.AuthorityError, match="UNPRIVILEGED_REVIEW_REQUIRED"):
+        admin.build_initial_bootstrap_installer_review_candidate()
+
+
+def test_initial_bootstrap_candidate_rejects_external_pin_mismatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(admin.os, "geteuid", lambda: admin.REVIEW_UID)
+    monkeypatch.setattr(admin.os, "getegid", lambda: admin.REVIEW_GID)
+    git = {"commit": "a" * 40}
+    audit = admin.seal_document(
+        {
+            "schema": admin.CORE_BOOTSTRAP_REVIEW_AUDIT_SCHEMA,
+            "git": git,
+            "reviewed_inputs": {},
+        }
+    )
+    monkeypatch.setattr(
+        admin,
+        "_require_unprivileged_review_binding",
+        lambda: (git, {}),
+    )
+    monkeypatch.setattr(admin, "audit_core_bootstrap_review_inputs", lambda: audit)
+    monkeypatch.setattr(
+        admin.tempfile,
+        "mkdtemp",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("pin mismatch reached staging")
+        ),
+    )
+    with pytest.raises(
+        admin.AuthorityError, match="INITIAL_BOOTSTRAP_AUDIT_PIN_MISMATCH"
+    ):
+        admin.build_initial_bootstrap_review_candidate(
+            {"sha256": "0" * 64, "size_bytes": 1}
+        )
+
+
+def test_all_unfrozen_native_recipe_entrypoints_are_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        admin,
+        "_compile_admin_launcher",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("local compiler must not run")
+        ),
+    )
+    for operation in (
+        admin.build_runtime_plan_review_candidate,
+        admin.build_bundle_plan_review_candidate,
+        admin.build_bundle_input_review_candidate,
+        admin.build_stage_transfer_launcher_review_candidate,
+        admin.build_parent_seal_review_candidate,
+    ):
+        with pytest.raises(
+            admin.AuthorityError, match="DEDICATED_BUILDER_AUTHORITY_REQUIRED"
+        ):
+            operation()
+    for key in admin.STAGE_KEYS:
+        with pytest.raises(
+            admin.AuthorityError, match="DEDICATED_BUILDER_AUTHORITY_REQUIRED"
+        ):
+            admin.build_stage_installer_review_candidate(key)

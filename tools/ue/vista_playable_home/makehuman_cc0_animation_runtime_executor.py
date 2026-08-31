@@ -2705,7 +2705,7 @@ def _validate_buildplugin_admin_receipt(
             document.get("claims"),
             {
                 "fresh_no_replace": True,
-                "final_and_parent_fsynced": True,
+                "downstream_live_fsync_required": True,
                 "admin_launcher_fd_required": True,
                 "launcher_receipt_live_bound": True,
             },

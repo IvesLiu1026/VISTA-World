@@ -16,18 +16,24 @@ path, hash, soname, asset list, or authority root.
 from __future__ import annotations
 
 import argparse
+import array
 import contextlib
 import ctypes
 import dataclasses
 import errno
 import fcntl
+import grp
 import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
+import pwd
 import re
+import socket
 import stat
+import struct
 import subprocess
+import sys
 import tempfile
 from typing import Any, Callable, Iterable, Mapping, Sequence
 import unicodedata
@@ -47,7 +53,8 @@ STAGE_INSTALLER_RECEIPT_SCHEMA = "vista.r8-ue57-stage-installer-transfer-receipt
 BUNDLE_MANIFEST_SCHEMA = "vista.r8-sealed-ue57-executor-bundle/v2"
 ROOT_POLICY_SCHEMA = "vista.r8-sealed-ue57-executor-root-policy/v3"
 ROOT_POLICY_CORE_SCHEMA = "vista.r8-sealed-ue57-executor-root-policy-core/v1"
-CORE_BOOTSTRAP_REVIEW_AUDIT_SCHEMA = "vista.r8-ue57-core-bootstrap-review-audit/v1"
+CORE_BOOTSTRAP_REVIEW_AUDIT_SCHEMA = "vista.r8-ue57-core-bootstrap-review-audit/v2"
+INITIAL_BOOTSTRAP_INPUT_PIN_SCHEMA = "vista.r8-ue57-initial-bootstrap-input-pin/v2"
 BUILDPLUGIN_MANIFEST_SCHEMA = "vista.r8-buildplugin-authority-manifest/v1"
 BUILDPLUGIN_RECEIPT_SCHEMA = "vista.r8-buildplugin-authority-receipt/v2"
 BUILDPLUGIN_ADMIN_RECEIPT_SCHEMA = "vista.r8-buildplugin-admin-install-receipt/v1"
@@ -161,11 +168,61 @@ PARENT_SEAL_HELPER_SOURCE = CHECKOUT_ROOT / "tools/admin/vista_authority_parent_
 PARENT_SEAL_LAUNCHER_SOURCE = (
     CHECKOUT_ROOT / "tools/admin/vista_authority_parent_seal_launcher.c"
 )
-STAGE_TRANSFER_LAUNCHER_REVIEW_CANDIDATE = Path(
-    "/data/sysx/vista-world/runs/vista-action-world-r1/"
-    "vista-r8-ue57-stage-transfer-launcher-review-candidate-20260830a/"
-    "transfer-r8-ue57-stage-installer"
+INITIAL_BOOTSTRAP_HELPER_SOURCE = (
+    CHECKOUT_ROOT / "tools/admin/vista_r8_ue57_initial_bootstrap.py"
 )
+INITIAL_BOOTSTRAP_LAUNCHER_SOURCE = (
+    CHECKOUT_ROOT / "tools/admin/vista_r8_ue57_initial_bootstrap_launcher.c"
+)
+INITIAL_BOOTSTRAP_INSTALLER_SOURCE = (
+    CHECKOUT_ROOT / "tools/admin/vista_r8_ue57_initial_bootstrap_installer.c"
+)
+INITIAL_BOOTSTRAP_LAUNCHER_NAME = "bootstrap-r8-ue57-initial-authorities"
+INITIAL_BOOTSTRAP_INSTALLER_NAME = "install-reconcile-r8-ue57-initial-bootstrap"
+INITIAL_BOOTSTRAP_INPUT_NAME = "input-pin.json"
+INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT = Path(
+    "/var/lib/vista-r8-native-builder-r1/phase-b-slot/published/"
+    "initial-bootstrap-candidate"
+)
+INITIAL_BOOTSTRAP_INSTALL_ROOT = Path("/root/vista-r8-ue57-initial-bootstrap-r1")
+INITIAL_BOOTSTRAP_INSTALLER_REVIEW_CANDIDATE_ROOT = Path(
+    "/var/lib/vista-r8-native-builder-r1/phase-b-slot/published/"
+    "initial-bootstrap-installer"
+)
+INITIAL_BOOTSTRAP_INSTALLER_INSTALL_ROOT = Path(
+    "/root/vista-r8-ue57-initial-bootstrap-installer-r1"
+)
+NATIVE_BUILDER_UID = 997
+NATIVE_BUILDER_GID = 997
+NATIVE_BUILDER_NAME = "vista-r8-builder"
+NATIVE_BUILDER_ACCOUNT_HOME = Path("/nonexistent")
+NATIVE_BUILDER_HOME = Path("/var/lib/vista-r8-native-builder-r1")
+NATIVE_BUILDER_INPUT_ROOT = Path("/etc/vista-r8-native-builder-r1")
+NATIVE_BUILDER_BUNDLE = NATIVE_BUILDER_INPUT_ROOT / "source.bundle"
+NATIVE_BUILDER_PHASE_A_REQUEST = NATIVE_BUILDER_INPUT_ROOT / "phase-a-request.json"
+NATIVE_BUILDER_PHASE_B_REQUEST = NATIVE_BUILDER_INPUT_ROOT / "phase-b-request.json"
+NATIVE_BUILDER_PHASE_A_ROOT = NATIVE_BUILDER_HOME / "phase-a-slot/published"
+NATIVE_BUILDER_PHASE_B_ROOT = NATIVE_BUILDER_HOME / "phase-b-slot/published"
+NATIVE_BUILDER_PHASE_A_PARENT_SEAL_ROOT = (
+    NATIVE_BUILDER_PHASE_A_ROOT / "parent-seal-candidate"
+)
+NATIVE_BUILDER_HELPER = Path(
+    "/usr/local/libexec/vista-r8-native-builder-r1/vista_r8_native_builder.py"
+)
+NATIVE_BUILDER_PHASE_A_UNIT = Path(
+    "/etc/systemd/system/vista-r8-native-builder-phase-a.service"
+)
+NATIVE_BUILDER_PHASE_B_UNIT = Path(
+    "/etc/systemd/system/vista-r8-native-builder-phase-b.service"
+)
+NATIVE_BUILDER_PHASE_A_SCHEMA = "vista.r8-native-builder-phase-a-manifest/v1"
+NATIVE_BUILDER_PHASE_B_SCHEMA = "vista.r8-native-builder-phase-b-manifest/v1"
+NATIVE_BUILDER_REQUEST_SCHEMA = "vista.r8-native-builder-request/v2"
+NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v2"
+NATIVE_BUILDER_JOB_SCHEMA = "vista.r8-native-builder-job-manifest/v1"
+MAX_NATIVE_BUILDER_BUNDLE_BYTES = 512 * 1024 * 1024
+MAX_NATIVE_BUILDER_TRACE_FILE_BYTES = 64 * 1024 * 1024
+MAX_NATIVE_BUILDER_TRACE_LINES = 1_000_000
 ENGINE_SOURCE_PIN_REVIEW_CANDIDATE = Path(
     "/data/sysx/vista-world/runs/vista-action-world-r1/"
     "vista-r8-ue57-engine-source-pin-review-candidate-20260830a/"
@@ -174,10 +231,6 @@ ENGINE_SOURCE_PIN_REVIEW_CANDIDATE = Path(
 CORE_BOOTSTRAP_REVIEW_CANDIDATE_ROOT = Path(
     "/data/sysx/vista-world/runs/vista-action-world-r1/"
     "vista-r8-ue57-core-bootstrap-review-candidate-20260830a"
-)
-PARENT_SEAL_REVIEW_CANDIDATE_ROOT = Path(
-    "/data/sysx/vista-world/runs/vista-action-world-r1/"
-    "vista-authority-parent-seal-review-candidate-20260830a"
 )
 PARENT_SEAL_LAUNCHER_NAME = "launch-vista-authority-parent-seal"
 BUILDPLUGIN_ADMIN_REVIEW_CANDIDATE_ROOT = Path(
@@ -210,8 +263,18 @@ INVOCATION_LEDGER_PATH = Path(
 
 PYTHON_PATH = Path("/usr/bin/python3.10")
 READELF_PATH = Path("/usr/bin/readelf")
+STRACE_PATH = Path("/usr/bin/strace")
+NATIVE_BUILDER_STRACE_VERSION = "strace -- version 5.16"
 BWRAP_PATH = Path("/usr/bin/bwrap")
 COMPILER_PATH = Path("/usr/bin/gcc-12")
+NEWUIDMAP_PATH = Path("/usr/bin/newuidmap")
+NEWGIDMAP_PATH = Path("/usr/bin/newgidmap")
+SUBUID_PATH = Path("/etc/subuid")
+SUBGID_PATH = Path("/etc/subgid")
+REVIEW_USERNAME = "yhliu"
+NATIVE_BUILD_SUBUID = 165536
+NATIVE_BUILD_SUBGID = 165536
+NATIVE_BUILD_SUBID_RANGE = 65536
 COMPILER_TOOLCHAIN_ARTIFACTS = (
     Path("/usr/lib/gcc/x86_64-linux-gnu/12/cc1"),
     Path("/usr/lib/gcc/x86_64-linux-gnu/12/collect2"),
@@ -227,6 +290,104 @@ COMPILER_TOOLCHAIN_ARTIFACTS = (
     Path("/usr/lib/gcc/x86_64-linux-gnu/12/libgcc.a"),
     Path("/usr/lib/gcc/x86_64-linux-gnu/12/libgcc_eh.a"),
 )
+NATIVE_BUILDER_SOURCE_PATHS = (
+    "tools/admin/vista_r8_ue57_authority_admin.py",
+    "tools/admin/vista_r8_ue57_stage_transfer_launcher.c",
+    "tools/admin/vista_authority_parent_seal.py",
+    "tools/admin/vista_authority_parent_seal_launcher.c",
+    "tools/admin/vista_r8_ue57_initial_bootstrap.py",
+    "tools/admin/vista_r8_ue57_initial_bootstrap_launcher.c",
+    "tools/admin/vista_r8_ue57_initial_bootstrap_installer.c",
+)
+NATIVE_BUILDER_PHASE_A_JOB_IDS = (
+    "stage-transfer-launcher",
+    "parent-seal-launcher",
+    "initial-bootstrap-launcher",
+)
+NATIVE_BUILDER_PHASE_B_JOB_IDS = ("initial-bootstrap-installer",)
+NATIVE_BUILDER_TRACE_FILE_SYSCALLS = frozenset(
+    {
+        "access",
+        "chdir",
+        "chmod",
+        "chown",
+        "creat",
+        "execve",
+        "execveat",
+        "fchdir",
+        "faccessat",
+        "faccessat2",
+        "fchmodat",
+        "fchownat",
+        "getcwd",
+        "link",
+        "linkat",
+        "lstat",
+        "mkdir",
+        "mkdirat",
+        "mknod",
+        "mknodat",
+        "newfstatat",
+        "open",
+        "openat",
+        "openat2",
+        "quotactl",
+        "readlink",
+        "readlinkat",
+        "rename",
+        "renameat",
+        "renameat2",
+        "rmdir",
+        "stat",
+        "statfs",
+        "statx",
+        "symlink",
+        "symlinkat",
+        "truncate",
+        "unlink",
+        "unlinkat",
+        "utime",
+        "utimensat",
+        "utimes",
+    }
+)
+NATIVE_BUILDER_TRACE_ALLOWED_ERRNOS = frozenset(
+    {"EACCES", "EEXIST", "EINVAL", "ELOOP", "ENOENT", "ENOTDIR", "EPERM"}
+)
+NATIVE_BUILDER_TRACE_OPEN_SYSCALLS = frozenset({"open", "openat", "openat2"})
+NATIVE_BUILDER_TRACE_OPEN_ACCESS_MODES = frozenset({"O_RDONLY", "O_WRONLY", "O_RDWR"})
+NATIVE_BUILDER_TRACE_OPEN_FLAG_TOKENS = frozenset(
+    {
+        "O_RDONLY",
+        "O_WRONLY",
+        "O_RDWR",
+        "O_APPEND",
+        "O_ASYNC",
+        "O_CLOEXEC",
+        "O_CREAT",
+        "O_DIRECT",
+        "O_DIRECTORY",
+        "O_DSYNC",
+        "O_EXCL",
+        "O_LARGEFILE",
+        "O_NOATIME",
+        "O_NOCTTY",
+        "O_NOFOLLOW",
+        "O_NONBLOCK",
+        "O_PATH",
+        "O_SYNC",
+        "O_TMPFILE",
+        "O_TRUNC",
+    }
+)
+NATIVE_BUILDER_TRACE_DEV_NULL_ALLOWED_NONMUTATING_FLAGS = frozenset({"O_CLOEXEC"})
+NATIVE_BUILDER_BUILD_ENVIRONMENT = {
+    "PATH": "/usr/bin:/bin",
+    "LANG": "C",
+    "LC_ALL": "C",
+    "SOURCE_DATE_EPOCH": "0",
+    "TMPDIR": "$SCRATCH",
+}
 PYTHON_STDLIB = Path("/usr/lib/python3.10")
 SYSTEM_LIBRARY_DIRECTORIES = (
     Path("/lib/x86_64-linux-gnu"),
@@ -363,6 +524,28 @@ BUNDLE_RECONCILIATION_ACKNOWLEDGEMENT = (
 ENGINE_RECONCILIATION_ACKNOWLEDGEMENT = (
     "I acknowledge reconciliation of the existing reviewed VISTA R8 UE 5.7 "
     "engine authority without republishing or deleting it."
+)
+INITIAL_BOOTSTRAP_PUBLISH_ACKNOWLEDGEMENT = (
+    "I acknowledge one irreversible append-only publication of the four "
+    "externally reviewed VISTA R8 UE 5.7 initial authorities from an empty prefix."
+)
+INITIAL_BOOTSTRAP_RECONCILE_ACKNOWLEDGEMENT = (
+    "I acknowledge candidate-free audit and fsync reconciliation of the existing "
+    "VISTA R8 UE 5.7 initial-authority prefix without creating, deleting, or "
+    "repairing any root."
+)
+INITIAL_BOOTSTRAP_RESUME_ACKNOWLEDGEMENT = (
+    "I acknowledge candidate-free reconciliation followed by append-only resume "
+    "of the externally reviewed VISTA R8 UE 5.7 initial-authority prefix."
+)
+INITIAL_BOOTSTRAP_INSTALL_ACKNOWLEDGEMENT = (
+    "I acknowledge one fresh no-replace installation of the externally "
+    "reviewed VISTA R8 UE 5.7 initial bootstrap authority."
+)
+INITIAL_BOOTSTRAP_INSTALL_RECONCILE_ACKNOWLEDGEMENT = (
+    "I acknowledge candidate-free fsync reconciliation of the existing VISTA "
+    "R8 UE 5.7 initial bootstrap authority without creating, deleting, "
+    "renaming, chmodding, or repairing it."
 )
 
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -1960,7 +2143,7 @@ def _validate_buildplugin_admin_receipt(
         or document.get("claims")
         != {
             "fresh_no_replace": True,
-            "final_and_parent_fsynced": True,
+            "downstream_live_fsync_required": True,
             "admin_launcher_fd_required": True,
             "launcher_receipt_live_bound": True,
         }
@@ -3352,6 +3535,40 @@ def _load_r8_binding() -> dict[str, Any]:
     }
 
 
+def _parse_reviewed_git_tree(
+    raw: bytes, expected_paths: Sequence[str]
+) -> dict[str, str]:
+    if not raw or not raw.endswith(b"\0"):
+        _fail("GIT_SOURCE_INVALID", "commit tree framing")
+    result: dict[str, str] = {}
+    observed_order: list[str] = []
+    for record in raw[:-1].split(b"\0"):
+        metadata, separator, path_raw = record.partition(b"\t")
+        fields = metadata.split(b" ")
+        if separator != b"\t" or len(fields) != 3:
+            _fail("GIT_SOURCE_INVALID", "commit tree record")
+        mode, object_type, oid = fields
+        try:
+            path = path_raw.decode("utf-8", "strict")
+            oid_text = oid.decode("ascii", "strict")
+        except UnicodeDecodeError as exc:
+            raise AuthorityError("GIT_SOURCE_INVALID", "commit tree encoding") from exc
+        if (
+            mode not in {b"100644", b"100755"}
+            or object_type != b"blob"
+            or re.fullmatch(r"[0-9a-f]{40}", oid_text) is None
+            or not path
+            or "\0" in path
+            or path in result
+        ):
+            _fail("GIT_SOURCE_INVALID", f"commit tree entry: {path!r}")
+        result[path] = oid_text
+        observed_order.append(path)
+    if observed_order != sorted(expected_paths) or set(result) != set(expected_paths):
+        _fail("GIT_SOURCE_INVALID", "commit tree inventory")
+    return result
+
+
 def _git_source_binding(
     *, return_committed_sources: bool = False
 ) -> dict[str, Any] | tuple[dict[str, Any], dict[str, bytes]]:
@@ -3367,6 +3584,9 @@ def _git_source_binding(
         BUILDPLUGIN_HELPER_SOURCE,
         PARENT_SEAL_HELPER_SOURCE,
         PARENT_SEAL_LAUNCHER_SOURCE,
+        INITIAL_BOOTSTRAP_HELPER_SOURCE,
+        INITIAL_BOOTSTRAP_INSTALLER_SOURCE,
+        INITIAL_BOOTSTRAP_LAUNCHER_SOURCE,
     ]
     relative_paths = _reviewed_git_relative_paths()
     by_relative = {
@@ -3383,12 +3603,29 @@ def _git_source_binding(
         def run_git(
             arguments: Sequence[str], *, text: bool
         ) -> subprocess.CompletedProcess[Any]:
+            git_environment = {
+                "PATH": "/usr/bin:/bin",
+                "HOME": "/nonexistent",
+                "XDG_CONFIG_HOME": "/nonexistent",
+                "LANG": "C",
+                "LC_ALL": "C",
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+                "GIT_CONFIG_COUNT": "0",
+                "GIT_NO_REPLACE_OBJECTS": "1",
+                "GIT_ATTR_NOSYSTEM": "1",
+                "GIT_CEILING_DIRECTORIES": str(CHECKOUT_ROOT.parent),
+                "GIT_DISCOVERY_ACROSS_FILESYSTEM": "0",
+                "GIT_TERMINAL_PROMPT": "0",
+                "GIT_OPTIONAL_LOCKS": "0",
+                "GIT_PAGER": "cat",
+            }
             return subprocess.run(
                 [str(git_path), "-C", str(CHECKOUT_ROOT), *arguments],
                 executable=f"/proc/self/fd/{held.descriptor}",
                 check=False,
                 cwd="/",
-                env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+                env=git_environment,
                 pass_fds=(held.descriptor,),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -3396,34 +3633,45 @@ def _git_source_binding(
                 timeout=30,
             )
 
-        commit = run_git(["rev-parse", "HEAD"], text=True)
+        commit = run_git(["rev-parse", "--verify", "HEAD^{commit}"], text=True)
         if (
             commit.returncode != 0
             or commit.stderr
             or re.fullmatch(r"[0-9a-f]{40}\n", commit.stdout) is None
         ):
             _fail("GIT_SOURCE_INVALID", "commit")
-        tracked = run_git(
-            ["ls-files", "--error-unmatch", "--", *relative_paths], text=True
+        commit_id = commit.stdout.strip()
+        tree = run_git(
+            [
+                "ls-tree",
+                "-r",
+                "-z",
+                "--full-tree",
+                commit_id,
+                "--",
+                *relative_paths,
+            ],
+            text=False,
         )
-        if tracked.returncode != 0 or tracked.stderr:
-            _fail("GIT_SOURCE_INVALID", "reviewed source is untracked")
+        if tree.returncode != 0 or tree.stderr:
+            _fail("GIT_SOURCE_INVALID", "commit tree")
+        tree_oids = _parse_reviewed_git_tree(tree.stdout, relative_paths)
         for relative in relative_paths:
             path = by_relative[relative]
-            committed = run_git(["show", f"HEAD:{relative}"], text=False)
+            committed = run_git(["cat-file", "blob", tree_oids[relative]], text=False)
             live_raw, _live_pin = _read_regular(path, f"Git source {relative}")
             if (
                 committed.returncode != 0
                 or committed.stderr
                 or committed.stdout != live_raw
             ):
-                _fail("GIT_SOURCE_INVALID", f"source differs from HEAD: {relative}")
+                _fail("GIT_SOURCE_INVALID", f"source differs from commit: {relative}")
             committed_sources[relative] = committed.stdout
         if _identity(os.fstat(held.descriptor)) != _identity(held.metadata):
             _fail("GIT_SOURCE_INVALID", "Git executable drift")
     binding = {
         "checkout_root": str(CHECKOUT_ROOT),
-        "commit": commit.stdout.strip(),
+        "commit": commit_id,
         "git_canonical": str(held.canonical_path),
         "git_pin": git_pin.public(),
         "tracked_paths": sorted(relative_paths),
@@ -3445,6 +3693,9 @@ def _reviewed_git_relative_paths() -> list[str]:
         BUILDPLUGIN_HELPER_SOURCE,
         PARENT_SEAL_HELPER_SOURCE,
         PARENT_SEAL_LAUNCHER_SOURCE,
+        INITIAL_BOOTSTRAP_HELPER_SOURCE,
+        INITIAL_BOOTSTRAP_INSTALLER_SOURCE,
+        INITIAL_BOOTSTRAP_LAUNCHER_SOURCE,
     ]
     try:
         return sorted(path.relative_to(CHECKOUT_ROOT).as_posix() for path in paths)
@@ -3540,6 +3791,8 @@ def _launcher_build_spec(
             "-static",
             "-s",
             "-Wl,--build-id=none",
+            "-x",
+            "c",
         ],
         "defines": {
             "REVIEWED_ATTEMPT_NAME": APPROVED_ATTEMPT_NAME,
@@ -3592,6 +3845,8 @@ def _validate_launcher_build_spec(value: Any) -> dict[str, Any]:
             "-static",
             "-s",
             "-Wl,--build-id=none",
+            "-x",
+            "c",
         ]
         or value.get("environment")
         != {
@@ -3778,6 +4033,698 @@ def _sealed_source_memfd(raw: bytes, label: str) -> Iterable[int]:
         os.close(descriptor)
 
 
+def _native_rebuild_bwrap_prefix() -> list[str]:
+    return [
+        "--unshare-all",
+        "--die-with-parent",
+        "--new-session",
+        "--clearenv",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
+        "--tmpfs",
+        "/tmp",
+        "--ro-bind",
+        "/usr",
+        "/usr",
+        "--ro-bind",
+        "/lib",
+        "/lib",
+        "--ro-bind",
+        "/lib64",
+        "/lib64",
+        "--chdir",
+        "/",
+        "--setenv",
+        "PATH",
+        "/usr/bin:/bin",
+        "--setenv",
+        "LANG",
+        "C",
+        "--setenv",
+        "LC_ALL",
+        "C",
+        "--setenv",
+        "SOURCE_DATE_EPOCH",
+        "0",
+    ]
+
+
+CLONE_NEWUSER = 0x10000000
+PR_GET_DUMPABLE = 3
+PR_SET_DUMPABLE = 4
+
+
+def _libc_prctl_dumpable(value: int | None = None) -> int:
+    libc = ctypes.CDLL(None, use_errno=True)
+    call = libc.prctl
+    call.argtypes = [
+        ctypes.c_int,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+        ctypes.c_ulong,
+    ]
+    call.restype = ctypes.c_int
+    operation = PR_GET_DUMPABLE if value is None else PR_SET_DUMPABLE
+    result = call(operation, 0 if value is None else value, 0, 0, 0)
+    if result < 0:
+        observed = ctypes.get_errno()
+        _fail("PLATFORM_UNSUPPORTED", f"prctl dumpable errno={observed}")
+    return result
+
+
+def _root_mapping_tool_record(path: Path, label: str) -> dict[str, Any]:
+    with hold_source_file_components(path) as held:
+        info = held.metadata
+        digest, size = _hash_fd(held.descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != ROOT_UID
+            or info.st_gid != ROOT_GID
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) != 0o4755
+            or _identity(os.fstat(held.descriptor)) != _identity(info)
+        ):
+            _fail("NATIVE_BUILD_USERNS_INVALID", label)
+        return {
+            "path": str(path),
+            "canonical": str(held.canonical_path),
+            "pin": {"sha256": digest, "size_bytes": size},
+            "mode": "04755",
+            "uid": 0,
+            "gid": 0,
+            "nlink": 1,
+        }
+
+
+def _subid_allocation_record(path: Path, *, kind: str, start: int) -> dict[str, Any]:
+    with hold_source_file_components(path) as held:
+        info = held.metadata
+        raw = bytearray()
+        os.lseek(held.descriptor, 0, os.SEEK_SET)
+        while block := os.read(held.descriptor, CHUNK_BYTES):
+            raw.extend(block)
+            if len(raw) > MAX_JSON_BYTES:
+                _fail("NATIVE_BUILD_USERNS_INVALID", f"{kind} allocation size")
+        os.lseek(held.descriptor, 0, os.SEEK_SET)
+        digest, size = _hash_fd(held.descriptor)
+        expected = f"{REVIEW_USERNAME}:{start}:{NATIVE_BUILD_SUBID_RANGE}"
+        lines = bytes(raw).decode("utf-8", "strict").splitlines()
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != ROOT_UID
+            or info.st_gid != ROOT_GID
+            or info.st_nlink != 1
+            or stat.S_IMODE(info.st_mode) not in (0o644, 0o600)
+            or lines.count(expected) != 1
+            or _identity(os.fstat(held.descriptor)) != _identity(info)
+        ):
+            _fail("NATIVE_BUILD_USERNS_INVALID", f"{kind} allocation")
+        return {
+            "path": str(path),
+            "canonical": str(held.canonical_path),
+            "pin": {"sha256": digest, "size_bytes": size},
+            "mode": f"0{stat.S_IMODE(info.st_mode):03o}",
+            "uid": 0,
+            "gid": 0,
+            "nlink": 1,
+            "allocation": {
+                "username": REVIEW_USERNAME,
+                "start": start,
+                "count": NATIVE_BUILD_SUBID_RANGE,
+            },
+        }
+
+
+def _run_id_map_helper(path: Path, arguments: Sequence[str], label: str) -> None:
+    before = _root_mapping_tool_record(path, label)
+    result = subprocess.run(
+        [str(path), *arguments],
+        check=False,
+        cwd="/",
+        env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=30,
+    )
+    if result.returncode != 0 or result.stdout or result.stderr:
+        _fail("NATIVE_BUILD_USERNS_INVALID", result.stderr.strip() or label)
+    if _root_mapping_tool_record(path, label) != before:
+        _fail("NATIVE_BUILD_USERNS_INVALID", f"{label} drift")
+
+
+def _recv_namespace_fd(channel: socket.socket) -> int:
+    message, controls, _flags, _address = channel.recvmsg(
+        16, socket.CMSG_SPACE(array.array("i", [0]).itemsize)
+    )
+    if message != b"USERNS_READY":
+        _fail("NATIVE_BUILD_USERNS_INVALID", "keeper readiness")
+    descriptors: list[int] = []
+    for level, kind, payload in controls:
+        if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
+            values = array.array("i")
+            values.frombytes(payload[: len(payload) - (len(payload) % values.itemsize)])
+            descriptors.extend(values)
+    if len(descriptors) != 1:
+        for descriptor in descriptors:
+            os.close(descriptor)
+        _fail("NATIVE_BUILD_USERNS_INVALID", "keeper namespace FD")
+    return descriptors[0]
+
+
+def _hostile_scanner_loop(channel: socket.socket) -> None:
+    libc = ctypes.CDLL(None, use_errno=True)
+    setns = libc.setns
+    setns.argtypes = [ctypes.c_int, ctypes.c_int]
+    setns.restype = ctypes.c_int
+    try:
+        while True:
+            raw = channel.recv(65536)
+            if not raw:
+                break
+            request = json.loads(raw.decode("utf-8"))
+            if request == {"operation": "exit"}:
+                break
+            path = request["path"]
+            operation = request["operation"]
+            flags = os.O_RDWR if operation == "open-rdwr" else os.O_RDONLY
+            opened = False
+            open_errno = 0
+            setns_succeeded = False
+            setns_errno = 0
+            descriptor = -1
+            try:
+                descriptor = os.open(path, flags | os.O_CLOEXEC)
+                opened = True
+                if operation == "open-userns-and-setns":
+                    setns_succeeded = setns(descriptor, CLONE_NEWUSER) == 0
+                    if not setns_succeeded:
+                        setns_errno = ctypes.get_errno()
+            except OSError as exc:
+                open_errno = exc.errno
+            finally:
+                if descriptor >= 0:
+                    os.close(descriptor)
+            channel.send(
+                canonical_json(
+                    {
+                        "opened": opened,
+                        "open_errno": open_errno,
+                        "setns_succeeded": setns_succeeded,
+                        "setns_errno": setns_errno,
+                    }
+                ).rstrip(b"\n")
+            )
+    finally:
+        channel.close()
+
+
+def _assert_hostile_access_denied(
+    channel: socket.socket, *, path: str, operation: str, label: str
+) -> None:
+    channel.send(canonical_json({"operation": operation, "path": path}).rstrip(b"\n"))
+    response = strict_json(channel.recv(65536), f"{label} hostile scan")
+    if (
+        response.get("opened") is not False
+        or response.get("open_errno") not in (errno.EACCES, errno.EPERM)
+        or response.get("setns_succeeded") is not False
+    ):
+        _fail("NATIVE_BUILD_SAME_UID_ISOLATION_FAILED", label)
+
+
+@dataclasses.dataclass
+class ProtectedNativeOutput:
+    descriptor: int
+    user_namespace_fd: int
+    keeper_pid: int
+    scanner: socket.socket
+    uid_map_bytes: str
+    gid_map_bytes: str
+
+
+def _parse_id_map(raw: str, label: str) -> list[tuple[int, int, int]]:
+    try:
+        records = [
+            tuple(int(value) for value in line.split()) for line in raw.splitlines()
+        ]
+    except ValueError as exc:
+        raise AuthorityError("NATIVE_BUILD_USERNS_INVALID", label) from exc
+    if any(len(record) != 3 for record in records):
+        _fail("NATIVE_BUILD_USERNS_INVALID", label)
+    return records  # type: ignore[return-value]
+
+
+@contextlib.contextmanager
+def _protected_output_memfd(label: str) -> Iterable[ProtectedNativeOutput]:
+    """Create output authority protected by a distinct host subordinate UID."""
+
+    required_os = ("memfd_create", "MFD_CLOEXEC", "MFD_ALLOW_SEALING", "fork")
+    if any(not hasattr(os, name) for name in required_os):
+        _fail("PLATFORM_UNSUPPORTED", "subuid output isolation required")
+    if os.getuid() != REVIEW_UID or os.getgid() != REVIEW_GID:
+        _fail("UNPRIVILEGED_REVIEW_REQUIRED", "native output authority")
+    _root_mapping_tool_record(NEWUIDMAP_PATH, "newuidmap")
+    _root_mapping_tool_record(NEWGIDMAP_PATH, "newgidmap")
+    _subid_allocation_record(SUBUID_PATH, kind="subuid", start=NATIVE_BUILD_SUBUID)
+    _subid_allocation_record(SUBGID_PATH, kind="subgid", start=NATIVE_BUILD_SUBGID)
+
+    scanner_parent, scanner_child = socket.socketpair(
+        socket.AF_UNIX, socket.SOCK_SEQPACKET | socket.SOCK_CLOEXEC
+    )
+    scanner_pid = os.fork()
+    if scanner_pid == 0:
+        scanner_parent.close()
+        _hostile_scanner_loop(scanner_child)
+        os._exit(0)
+    scanner_child.close()
+    original_dumpable = _libc_prctl_dumpable()
+    keeper_parent: socket.socket | None = None
+    keeper_pid = -1
+    namespace_fd = -1
+    output_fd = -1
+    try:
+        _libc_prctl_dumpable(0)
+        keeper_parent, keeper_child = socket.socketpair(
+            socket.AF_UNIX, socket.SOCK_SEQPACKET | socket.SOCK_CLOEXEC
+        )
+        keeper_pid = os.fork()
+        if keeper_pid == 0:
+            keeper_parent.close()
+            libc = ctypes.CDLL(None, use_errno=True)
+            if libc.unshare(CLONE_NEWUSER) != 0:
+                os._exit(121)
+            if libc.prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) != 0:
+                os._exit(122)
+            child_namespace_fd = os.open(
+                "/proc/self/ns/user", os.O_RDONLY | os.O_CLOEXEC
+            )
+            rights = array.array("i", [child_namespace_fd])
+            keeper_child.sendmsg(
+                [b"USERNS_READY"],
+                [(socket.SOL_SOCKET, socket.SCM_RIGHTS, rights)],
+            )
+            os.close(child_namespace_fd)
+            if keeper_child.recv(16) != b"MAPS_READY":
+                os._exit(123)
+            with open("/proc/self/uid_map", "rb") as stream:
+                uid_map = stream.read()
+            with open("/proc/self/gid_map", "rb") as stream:
+                gid_map = stream.read()
+            keeper_child.send(
+                canonical_json(
+                    {
+                        "uid_map_bytes": uid_map.decode("ascii"),
+                        "gid_map_bytes": gid_map.decode("ascii"),
+                    }
+                ).rstrip(b"\n")
+            )
+            if keeper_child.recv(16) != b"KEEPER_EXIT":
+                os._exit(124)
+            keeper_child.close()
+            os._exit(0)
+        keeper_child.close()
+        keeper_parent.settimeout(30)
+        namespace_fd = _recv_namespace_fd(keeper_parent)
+        _run_id_map_helper(
+            NEWUIDMAP_PATH,
+            (
+                str(keeper_pid),
+                "0",
+                str(REVIEW_UID),
+                "1",
+                "1",
+                str(NATIVE_BUILD_SUBUID),
+                "1",
+            ),
+            "newuidmap",
+        )
+        try:
+            with open(f"/proc/{keeper_pid}/setgroups", "w", encoding="ascii") as stream:
+                stream.write("deny")
+        except OSError as exc:
+            if exc.errno not in (errno.EPERM, errno.EACCES):
+                raise
+        _run_id_map_helper(
+            NEWGIDMAP_PATH,
+            (
+                str(keeper_pid),
+                "0",
+                str(REVIEW_GID),
+                "1",
+                "1",
+                str(NATIVE_BUILD_SUBGID),
+                "1",
+            ),
+            "newgidmap",
+        )
+        keeper_parent.send(b"MAPS_READY")
+        maps = strict_json(keeper_parent.recv(65536), "native build userns maps")
+        uid_map_bytes = maps.get("uid_map_bytes")
+        gid_map_bytes = maps.get("gid_map_bytes")
+        if (
+            type(uid_map_bytes) is not str
+            or type(gid_map_bytes) is not str
+            or _parse_id_map(uid_map_bytes, "uid_map")
+            != [(0, REVIEW_UID, 1), (1, NATIVE_BUILD_SUBUID, 1)]
+            or _parse_id_map(gid_map_bytes, "gid_map")
+            != [(0, REVIEW_GID, 1), (1, NATIVE_BUILD_SUBGID, 1)]
+        ):
+            _fail("NATIVE_BUILD_USERNS_INVALID", "exact maps")
+        _assert_hostile_access_denied(
+            scanner_parent,
+            path=f"/proc/{keeper_pid}/ns/user",
+            operation="open-userns-and-setns",
+            label="keeper user namespace",
+        )
+        _assert_hostile_access_denied(
+            scanner_parent,
+            path=f"/proc/{os.getpid()}/fd/{namespace_fd}",
+            operation="open-userns-and-setns",
+            label="parent-held user namespace",
+        )
+        output_fd = os.memfd_create(label, flags=os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
+        yield ProtectedNativeOutput(
+            descriptor=output_fd,
+            user_namespace_fd=namespace_fd,
+            keeper_pid=keeper_pid,
+            scanner=scanner_parent,
+            uid_map_bytes=uid_map_bytes,
+            gid_map_bytes=gid_map_bytes,
+        )
+    finally:
+        if output_fd >= 0:
+            os.close(output_fd)
+        if keeper_parent is not None:
+            try:
+                keeper_parent.send(b"KEEPER_EXIT")
+            except OSError:
+                pass
+            keeper_parent.close()
+        if keeper_pid > 0:
+            _pid, status = os.waitpid(keeper_pid, 0)
+            if status != 0 and not sys.exc_info()[0]:
+                _fail("NATIVE_BUILD_USERNS_INVALID", f"keeper status={status}")
+        if namespace_fd >= 0:
+            os.close(namespace_fd)
+        if original_dumpable != 0:
+            _libc_prctl_dumpable(original_dumpable)
+        try:
+            scanner_parent.send(canonical_json({"operation": "exit"}).rstrip(b"\n"))
+        except OSError:
+            pass
+        scanner_parent.close()
+        _pid, scanner_status = os.waitpid(scanner_pid, 0)
+        if scanner_status != 0 and not sys.exc_info()[0]:
+            _fail("NATIVE_BUILD_SAME_UID_ISOLATION_FAILED", "scanner status")
+
+
+def _seal_native_output_memfd(descriptor: int, label: str) -> FilePin:
+    required = (
+        "F_ADD_SEALS",
+        "F_GET_SEALS",
+        "F_SEAL_SEAL",
+        "F_SEAL_SHRINK",
+        "F_SEAL_GROW",
+        "F_SEAL_WRITE",
+    )
+    if any(not hasattr(fcntl, name) for name in required):
+        _fail("PLATFORM_UNSUPPORTED", "output memfd seals required")
+    info = os.fstat(descriptor)
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_size <= 0
+        or info.st_size > MAX_JSON_BYTES
+    ):
+        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} output metadata")
+    os.fchmod(descriptor, 0o555)
+    expected_seals = (
+        fcntl.F_SEAL_SEAL | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_GROW | fcntl.F_SEAL_WRITE
+    )
+    try:
+        fcntl.fcntl(descriptor, fcntl.F_ADD_SEALS, expected_seals)
+    except OSError as exc:
+        raise AuthorityError(
+            "CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} output seal"
+        ) from exc
+    if fcntl.fcntl(descriptor, fcntl.F_GET_SEALS) != expected_seals:
+        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} output seal drift")
+    digest, size = _hash_fd(descriptor)
+    if size != info.st_size:
+        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} output size drift")
+    return FilePin(digest, size, True)
+
+
+def _read_sealed_native_output(descriptor: int, label: str) -> tuple[bytes, FilePin]:
+    pin = _seal_state_native_output_pin(descriptor, label)
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    remaining = pin.size_bytes
+    blocks: list[bytes] = []
+    while remaining:
+        block = os.read(descriptor, min(CHUNK_BYTES, remaining))
+        if not block:
+            _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} short read")
+        blocks.append(block)
+        remaining -= len(block)
+    if os.read(descriptor, 1):
+        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} grew after seal")
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    return b"".join(blocks), pin
+
+
+def _seal_state_native_output_pin(descriptor: int, label: str) -> FilePin:
+    expected_seals = (
+        fcntl.F_SEAL_SEAL | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_GROW | fcntl.F_SEAL_WRITE
+    )
+    info = os.fstat(descriptor)
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or stat.S_IMODE(info.st_mode) != 0o555
+        or info.st_size <= 0
+        or info.st_size > MAX_JSON_BYTES
+        or fcntl.fcntl(descriptor, fcntl.F_GET_SEALS) != expected_seals
+    ):
+        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} sealed output state")
+    digest, size = _hash_fd(descriptor)
+    return FilePin(digest, size, True)
+
+
+def _native_rebuild_isolation_record(
+    held_bwrap: HeldSourceFile,
+) -> dict[str, Any]:
+    digest, size = _hash_fd(held_bwrap.descriptor)
+    if _identity(os.fstat(held_bwrap.descriptor)) != _identity(held_bwrap.metadata):
+        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", "bwrap drift")
+    return {
+        "sandbox_launcher": {
+            "path": str(BWRAP_PATH),
+            "canonical": str(held_bwrap.canonical_path),
+            "pin": {"sha256": digest, "size_bytes": size},
+        },
+        "argv_prefix": _native_rebuild_bwrap_prefix(),
+        "host_binds_read_only": ["/usr", "/lib", "/lib64"],
+        "scratch": {
+            "path": "/tmp",
+            "kind": "private_tmpfs",
+            "persistent": False,
+        },
+        "network_namespace_unshared": True,
+        "output": {
+            "kind": "sealed_memfd",
+            "path_authority_used": False,
+            "same_uid_procfs_guard": "PR_SET_DUMPABLE=0",
+            "seals": [
+                "F_SEAL_WRITE",
+                "F_SEAL_GROW",
+                "F_SEAL_SHRINK",
+                "F_SEAL_SEAL",
+            ],
+        },
+    }
+
+
+def _compile_native_isolated(
+    *,
+    committed_source: bytes,
+    source_path: Path,
+    flags: Sequence[str],
+    output_fd: int,
+    label: str,
+    failure_code: str,
+    drift_code: str,
+) -> tuple[FilePin, dict[str, Any]]:
+    """Compile one review binary inside a fixed bwrap sandbox to a held memfd."""
+
+    if os.geteuid() == ROOT_UID:
+        _fail("UNPRIVILEGED_REVIEW_REQUIRED", f"{label} isolated rebuild")
+    before_toolchain = _review_toolchain_artifact_pins()
+    committed_pin = FilePin(
+        hashlib.sha256(committed_source).hexdigest(), len(committed_source)
+    )
+    with (
+        hold_source_file_components(COMPILER_PATH) as compiler,
+        hold_source_file_components(BWRAP_PATH) as bwrap,
+        _sealed_source_memfd(committed_source, f"{label}-source") as source_fd,
+    ):
+        compiler_pin = _hash_fd(compiler.descriptor)
+        bwrap_pin = _hash_fd(bwrap.descriptor)
+        source_pin = _hash_fd(source_fd)
+        if source_pin != (committed_pin.sha256, committed_pin.size_bytes):
+            _fail(drift_code, "Git blob memfd")
+        isolation = _native_rebuild_isolation_record(bwrap)
+        command = [
+            str(BWRAP_PATH),
+            *_native_rebuild_bwrap_prefix(),
+            "--",
+            f"/proc/self/fd/{compiler.descriptor}",
+            *flags,
+            f"/proc/self/fd/{source_fd}",
+            "-o",
+            f"/proc/self/fd/{output_fd}",
+        ]
+        result = subprocess.run(
+            command,
+            executable=f"/proc/self/fd/{bwrap.descriptor}",
+            check=False,
+            cwd="/",
+            env={
+                "PATH": "/usr/bin:/bin",
+                "LANG": "C",
+                "LC_ALL": "C",
+                "SOURCE_DATE_EPOCH": "0",
+            },
+            pass_fds=(
+                bwrap.descriptor,
+                compiler.descriptor,
+                source_fd,
+                output_fd,
+            ),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0 or result.stdout or result.stderr:
+            _fail(failure_code, result.stderr.strip() or "sandboxed compiler output")
+        if (
+            _hash_fd(compiler.descriptor) != compiler_pin
+            or _hash_fd(bwrap.descriptor) != bwrap_pin
+            or _hash_fd(source_fd) != source_pin
+            or _identity(os.fstat(compiler.descriptor)) != _identity(compiler.metadata)
+            or _identity(os.fstat(bwrap.descriptor)) != _identity(bwrap.metadata)
+        ):
+            _fail(drift_code, "compiler/bwrap/source")
+        output_pin = _seal_native_output_memfd(output_fd, label)
+        compiler_record = {
+            "path": str(COMPILER_PATH),
+            "canonical": str(compiler.canonical_path),
+            "pin": {
+                "sha256": compiler_pin[0],
+                "size_bytes": compiler_pin[1],
+            },
+        }
+    if _review_toolchain_artifact_pins() != before_toolchain:
+        _fail(drift_code, "toolchain")
+    raw, sealed_pin = _read_sealed_native_output(output_fd, label)
+    if not raw.startswith(b"\x7fELF") or sealed_pin != output_pin:
+        _fail(failure_code, "sealed output is not stable ELF")
+    return output_pin, {
+        "source": {
+            "git_path": source_path.relative_to(CHECKOUT_ROOT).as_posix(),
+            "pin": committed_pin.public(),
+            "compiled_from_sealed_memfd": True,
+        },
+        "compiler_driver": compiler_record,
+        "toolchain_artifact_ledger": before_toolchain,
+        "flags": list(flags),
+        "environment": {
+            "PATH": "/usr/bin:/bin",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "SOURCE_DATE_EPOCH": "0",
+        },
+        "output_pin": output_pin.public(),
+        "isolation": isolation,
+    }
+
+
+def _compile_core_native_isolated(
+    *,
+    committed_source: bytes,
+    source_path: Path,
+    flags: Sequence[str],
+    helper_pin: FilePin,
+    python_pin: FilePin,
+    output_fd: int,
+    label: str,
+    failure_code: str,
+    drift_code: str,
+) -> tuple[FilePin, dict[str, Any]]:
+    output_pin, provenance = _compile_native_isolated(
+        committed_source=committed_source,
+        source_path=source_path,
+        flags=flags,
+        output_fd=output_fd,
+        label=label,
+        failure_code=failure_code,
+        drift_code=drift_code,
+    )
+    provenance["python_pin"] = python_pin.public()
+    provenance["helper_pin"] = helper_pin.public()
+    return output_pin, provenance
+
+
+def _require_static_review_elf_fd(descriptor: int, label: str) -> FilePin:
+    """Inspect a sealed held ELF without converting it to pathname authority."""
+
+    raw, before_pin = _read_sealed_native_output(descriptor, label)
+    if not raw.startswith(b"\x7fELF"):
+        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} is not ELF")
+    with hold_source_file_components(READELF_PATH) as held_readelf:
+        readelf_sha, readelf_size = _hash_fd(held_readelf.descriptor)
+        result = subprocess.run(
+            [
+                f"/proc/self/fd/{held_readelf.descriptor}",
+                "--wide",
+                "--program-headers",
+                "--dynamic",
+                f"/proc/self/fd/{descriptor}",
+            ],
+            executable=f"/proc/self/fd/{held_readelf.descriptor}",
+            check=False,
+            cwd="/",
+            env={"PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
+            pass_fds=(held_readelf.descriptor, descriptor),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode != 0 or result.stderr:
+            _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} readelf")
+        if _hash_fd(held_readelf.descriptor) != (
+            readelf_sha,
+            readelf_size,
+        ) or _identity(os.fstat(held_readelf.descriptor)) != _identity(
+            held_readelf.metadata
+        ):
+            _fail("CORE_BOOTSTRAP_REVIEW_INVALID", "readelf drift")
+    metadata = parse_readelf_output(result.stdout)
+    if (
+        metadata.interpreter is not None
+        or metadata.needed
+        or metadata.rpath
+        or metadata.runpath
+    ):
+        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} is not static")
+    _post_raw, after_pin = _read_sealed_native_output(descriptor, label)
+    if after_pin != before_pin:
+        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"{label} drifted")
+    return before_pin
+
+
 def _compile_admin_launcher(
     stage: str,
     *,
@@ -3820,6 +4767,8 @@ def _compile_admin_launcher(
             "-static",
             "-s",
             "-Wl,--build-id=none",
+            "-x",
+            "c",
             (
                 "-DVISTA_R8_ADMIN_STAGE_RUNTIME"
                 if stage == "runtime"
@@ -3968,6 +4917,8 @@ def _compile_stage_installer(
             "-static",
             "-s",
             "-Wl,--build-id=none",
+            "-x",
+            "c",
             f"-D{stage_define}",
             f'-DEXPECTED_PYTHON_SHA256="{expected_python.sha256}"',
             f"-DEXPECTED_PYTHON_SIZE={expected_python.size_bytes}",
@@ -4087,6 +5038,8 @@ def _compile_stage_transfer_launcher(
             "-static",
             "-s",
             "-Wl,--build-id=none",
+            "-x",
+            "c",
             f'-DEXPECTED_PYTHON_SHA256="{expected_python.sha256}"',
             f"-DEXPECTED_PYTHON_SIZE={expected_python.size_bytes}",
             f'-DEXPECTED_HELPER_SHA256="{expected_helper.sha256}"',
@@ -4164,49 +5117,12 @@ def _compile_stage_transfer_launcher(
 
 
 def build_stage_transfer_launcher_review_candidate() -> dict[str, Any]:
-    """Atomically freeze the generic transfer launcher as an unprivileged review."""
+    """Reject the obsolete local native-candidate build path."""
 
-    if os.geteuid() != REVIEW_UID or os.getegid() != REVIEW_GID:
-        _fail("UNPRIVILEGED_REVIEW_REQUIRED", "stage transfer launcher")
-    committed_sources = _require_unprivileged_review_helper()
-    final = STAGE_TRANSFER_LAUNCHER_REVIEW_CANDIDATE.parent
-    if os.path.lexists(final):
-        _fail("FINAL_NOT_FRESH", str(final))
-    helper_relative = REVIEW_HELPER_SOURCE.relative_to(CHECKOUT_ROOT).as_posix()
-    source_relative = STAGE_TRANSFER_LAUNCHER_SOURCE.relative_to(
-        CHECKOUT_ROOT
-    ).as_posix()
-    helper_raw = committed_sources[helper_relative]
-    source_raw = committed_sources[source_relative]
-    helper_pin = FilePin(hashlib.sha256(helper_raw).hexdigest(), len(helper_raw))
-    _python_raw, python_pin = _read_regular(
-        PYTHON_PATH, "stage transfer launcher Python", exact_mode=0o755
+    _fail(
+        "DEDICATED_BUILDER_AUTHORITY_REQUIRED",
+        "stage transfer launcher is published only by native builder Phase A",
     )
-    staging = Path(tempfile.mkdtemp(prefix=f".{final.name}.staging-", dir=final.parent))
-    owner = (REVIEW_UID, REVIEW_GID)
-    try:
-        output = staging / STAGE_TRANSFER_LAUNCHER_REVIEW_CANDIDATE.name
-        launcher_pin, provenance = _compile_stage_transfer_launcher(
-            committed_source=source_raw,
-            python_pin=python_pin.public(),
-            helper_pin=helper_pin.public(),
-            output=output,
-        )
-        os.chmod(output, 0o555, follow_symlinks=False)
-        _require_static_review_elf(output, "stage transfer launcher candidate")
-        _seal_private_tree(staging, owner=owner)
-        publish_staging(staging, final)
-        return {
-            "status": "user_published_stage_transfer_launcher_review_candidate",
-            "accepted": False,
-            "candidate_root": str(final),
-            "launcher_pin": launcher_pin.public(),
-            "build_provenance": provenance,
-            "root_execution_performed": False,
-        }
-    finally:
-        if os.path.lexists(staging):
-            _remove_private_staging(staging)
 
 
 def build_engine_source_pin_review_candidate(
@@ -4287,10 +5203,24 @@ def _require_static_review_elf(path: Path, label: str) -> FilePin:
 
 
 def _compile_parent_seal_launcher(
-    *, committed_source: bytes, output: Path
+    *,
+    committed_source: bytes,
+    helper_pin: Mapping[str, Any],
+    python_pin: Mapping[str, Any],
+    output: Path,
 ) -> tuple[FilePin, dict[str, Any]]:
     if os.geteuid() == ROOT_UID:
         _fail("UNPRIVILEGED_REVIEW_REQUIRED", "parent seal launcher build")
+    expected_helper = _parse_pin(helper_pin, "parent seal helper")
+    expected_python = _parse_pin(python_pin, "parent seal Python")
+    for literal, label in (
+        (expected_helper.sha256.encode("ascii"), "helper sha256"),
+        (str(expected_helper.size_bytes).encode("ascii"), "helper size"),
+        (expected_python.sha256.encode("ascii"), "Python sha256"),
+        (str(expected_python.size_bytes).encode("ascii"), "Python size"),
+    ):
+        if literal not in committed_source:
+            _fail("PARENT_SEAL_BUILD_INPUT_DRIFT", label)
     before_toolchain = _review_toolchain_artifact_pins()
     committed_pin = FilePin(
         hashlib.sha256(committed_source).hexdigest(), len(committed_source)
@@ -4314,6 +5244,8 @@ def _compile_parent_seal_launcher(
             "-static",
             "-s",
             "-Wl,--build-id=none",
+            "-x",
+            "c",
         ]
         command = [
             str(COMPILER_PATH),
@@ -4357,69 +5289,136 @@ def _compile_parent_seal_launcher(
         _fail("PARENT_SEAL_BUILD_FAILED", "output is not ELF")
     output_pin = FilePin(built.sha256, built.size_bytes, True)
     return output_pin, {
-        "source_pin": committed_pin.public(),
-        "compiled_from_sealed_memfd": True,
-        "compiler_driver_pin": {
-            "sha256": compiler_pin[0],
-            "size_bytes": compiler_pin[1],
+        "source": {
+            "git_path": PARENT_SEAL_LAUNCHER_SOURCE.relative_to(
+                CHECKOUT_ROOT
+            ).as_posix(),
+            "pin": committed_pin.public(),
+            "compiled_from_sealed_memfd": True,
+        },
+        "compiler_driver": {
+            "path": str(COMPILER_PATH),
+            "canonical": str(compiler.canonical_path),
+            "pin": {
+                "sha256": compiler_pin[0],
+                "size_bytes": compiler_pin[1],
+            },
         },
         "toolchain_artifact_ledger": before_toolchain,
         "flags": flags,
+        "environment": {
+            "PATH": "/usr/bin:/bin",
+            "LANG": "C",
+            "LC_ALL": "C",
+            "SOURCE_DATE_EPOCH": "0",
+        },
+        "python_pin": expected_python.public(),
+        "helper_pin": expected_helper.public(),
         "output_pin": output_pin.public(),
     }
 
 
-def build_parent_seal_review_candidate() -> dict[str, Any]:
-    if os.geteuid() != REVIEW_UID or os.getegid() != REVIEW_GID:
-        _fail("UNPRIVILEGED_REVIEW_REQUIRED", "parent seal candidate")
-    committed_sources = _require_unprivileged_review_helper()
-    final = PARENT_SEAL_REVIEW_CANDIDATE_ROOT
-    if os.path.lexists(final):
-        _fail("FINAL_NOT_FRESH", str(final))
-    helper_relative = PARENT_SEAL_HELPER_SOURCE.relative_to(CHECKOUT_ROOT).as_posix()
-    launcher_relative = PARENT_SEAL_LAUNCHER_SOURCE.relative_to(
-        CHECKOUT_ROOT
-    ).as_posix()
-    helper_raw = committed_sources[helper_relative]
-    launcher_source = committed_sources[launcher_relative]
-    helper_pin = FilePin(hashlib.sha256(helper_raw).hexdigest(), len(helper_raw))
-    _python_raw, python_pin = _read_regular(
-        PYTHON_PATH, "parent seal Python", exact_mode=0o755
+def _compile_initial_bootstrap_launcher(
+    *,
+    committed_source: bytes,
+    helper_pin: Mapping[str, Any],
+    python_pin: Mapping[str, Any],
+    output_fd: int,
+) -> tuple[FilePin, dict[str, Any]]:
+    """Build the bootstrap launcher to one guarded, held, sealed memfd."""
+
+    if os.geteuid() == ROOT_UID:
+        _fail("UNPRIVILEGED_REVIEW_REQUIRED", "initial bootstrap launcher")
+    expected_helper = _parse_pin(helper_pin, "initial bootstrap helper")
+    expected_python = _parse_pin(python_pin, "initial bootstrap Python")
+    flags = [
+        "-std=c11",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-static",
+        "-s",
+        "-Wl,--build-id=none",
+        "-x",
+        "c",
+        f'-DEXPECTED_HELPER_SHA256="{expected_helper.sha256}"',
+        f"-DEXPECTED_HELPER_SIZE={expected_helper.size_bytes}",
+        f'-DEXPECTED_PYTHON_SHA256="{expected_python.sha256}"',
+        f"-DEXPECTED_PYTHON_SIZE={expected_python.size_bytes}",
+    ]
+    return _compile_core_native_isolated(
+        committed_source=committed_source,
+        source_path=INITIAL_BOOTSTRAP_LAUNCHER_SOURCE,
+        flags=flags,
+        helper_pin=expected_helper,
+        python_pin=expected_python,
+        output_fd=output_fd,
+        label="initial bootstrap launcher",
+        failure_code="INITIAL_BOOTSTRAP_BUILD_FAILED",
+        drift_code="INITIAL_BOOTSTRAP_BUILD_INPUT_DRIFT",
     )
-    for literal in (
-        helper_pin.sha256.encode("ascii"),
-        str(helper_pin.size_bytes).encode("ascii"),
-        python_pin.sha256.encode("ascii"),
-        str(python_pin.size_bytes).encode("ascii"),
-    ):
-        if literal not in launcher_source:
-            _fail("PARENT_SEAL_BUILD_INPUT_DRIFT", "embedded pin differs")
-    staging = Path(tempfile.mkdtemp(prefix=f".{final.name}.staging-", dir=final.parent))
-    owner = (REVIEW_UID, REVIEW_GID)
-    try:
-        helper_candidate = staging / PARENT_SEAL_HELPER_SOURCE.name
-        helper_candidate_pin = _write_new(helper_candidate, helper_raw, 0o444, owner)
-        launcher_candidate = staging / PARENT_SEAL_LAUNCHER_NAME
-        launcher_pin, provenance = _compile_parent_seal_launcher(
-            committed_source=launcher_source,
-            output=launcher_candidate,
-        )
-        os.chmod(launcher_candidate, 0o555, follow_symlinks=False)
-        _require_static_review_elf(launcher_candidate, "parent seal launcher candidate")
-        _seal_private_tree(staging, owner=owner)
-        publish_staging(staging, final)
-        return {
-            "status": "user_published_parent_seal_review_candidate",
-            "accepted": False,
-            "candidate_root": str(final),
-            "helper_pin": helper_candidate_pin.public(),
-            "launcher_pin": launcher_pin.public(),
-            "build_provenance": provenance,
-            "root_execution_performed": False,
-        }
-    finally:
-        if os.path.lexists(staging):
-            _remove_private_staging(staging)
+
+
+def _compile_initial_bootstrap_installer(
+    *,
+    committed_source: bytes,
+    launcher_pin: Mapping[str, Any],
+    helper_pin: Mapping[str, Any],
+    input_pin: Mapping[str, Any],
+    output_fd: int,
+) -> tuple[FilePin, dict[str, Any]]:
+    """Build the finite-trust installer to one guarded, sealed output memfd."""
+
+    if os.geteuid() == ROOT_UID:
+        _fail("UNPRIVILEGED_REVIEW_REQUIRED", "initial bootstrap installer")
+    expected_launcher = _parse_pin(launcher_pin, "initial bootstrap launcher")
+    expected_helper = _parse_pin(helper_pin, "initial bootstrap helper")
+    expected_input = _parse_pin(input_pin, "initial bootstrap input")
+    flags = [
+        "-std=c11",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-static",
+        "-s",
+        "-Wl,--build-id=none",
+        "-x",
+        "c",
+        f'-DEXPECTED_LAUNCHER_SHA256="{expected_launcher.sha256}"',
+        f"-DEXPECTED_LAUNCHER_SIZE={expected_launcher.size_bytes}",
+        f'-DEXPECTED_HELPER_SHA256="{expected_helper.sha256}"',
+        f"-DEXPECTED_HELPER_SIZE={expected_helper.size_bytes}",
+        f'-DEXPECTED_INPUT_PIN_SHA256="{expected_input.sha256}"',
+        f"-DEXPECTED_INPUT_PIN_SIZE={expected_input.size_bytes}",
+    ]
+    output_pin, provenance = _compile_native_isolated(
+        committed_source=committed_source,
+        source_path=INITIAL_BOOTSTRAP_INSTALLER_SOURCE,
+        flags=flags,
+        output_fd=output_fd,
+        label="initial bootstrap installer",
+        failure_code="INITIAL_BOOTSTRAP_INSTALLER_BUILD_FAILED",
+        drift_code="INITIAL_BOOTSTRAP_INSTALLER_BUILD_INPUT_DRIFT",
+    )
+    provenance["candidate_binding"] = {
+        "root": str(INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT),
+        "root_mode": "0555",
+        "launcher": expected_launcher.public(),
+        "helper": expected_helper.public(),
+        "input_pin": expected_input.public(),
+    }
+    return output_pin, provenance
+
+
+def build_parent_seal_review_candidate() -> dict[str, Any]:
+    """Reject the obsolete local native-candidate build path."""
+
+    _fail(
+        "DEDICATED_BUILDER_AUTHORITY_REQUIRED",
+        "parent seal launcher is published only by native builder Phase A",
+    )
 
 
 def _buildplugin_admin_script(helper_pin: FilePin, python_pin: FilePin) -> bytes:
@@ -4572,6 +5571,1537 @@ def _engine_wrapper_review_bindings(
     return expected
 
 
+@dataclasses.dataclass
+class HeldNativeBuilderPhase:
+    stack: contextlib.ExitStack
+    directory_fds: dict[str, int]
+    directory_metadata: dict[str, os.stat_result]
+    directory_paths: dict[str, Path]
+    held_files: dict[str, HeldSourceFile]
+    file_pins: dict[str, FilePin]
+    component_chains: dict[str, tuple[Path, list[dict[str, Any]]]]
+
+    def revalidate(self) -> None:
+        for label, descriptor in self.directory_fds.items():
+            metadata = self.directory_metadata[label]
+            if _identity(os.fstat(descriptor)) != _identity(metadata) or _identity(
+                os.stat(self.directory_paths[label], follow_symlinks=False)
+            ) != _identity(metadata):
+                _fail("NATIVE_BUILDER_AUTHORITY_DRIFT", label)
+        for label, held in self.held_files.items():
+            metadata = held.metadata
+            digest, size = _hash_fd(held.descriptor)
+            if (
+                _identity(os.fstat(held.descriptor)) != _identity(metadata)
+                or (digest, size)
+                != (
+                    self.file_pins[label].sha256,
+                    self.file_pins[label].size_bytes,
+                )
+                or _identity(os.stat(held.canonical_path, follow_symlinks=False))
+                != _identity(metadata)
+            ):
+                _fail("NATIVE_BUILDER_AUTHORITY_DRIFT", label)
+        for label, (path, expected) in self.component_chains.items():
+            if _native_builder_live_component_chain(path, label) != expected:
+                _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label)
+
+    def close(self) -> None:
+        for descriptor in self.directory_fds.values():
+            os.close(descriptor)
+        self.stack.close()
+
+
+def _native_builder_read_held(
+    authority: HeldNativeBuilderPhase,
+    *,
+    path: Path,
+    mode: int,
+    owner: tuple[int, int],
+    maximum: int,
+    label: str,
+) -> tuple[bytes, FilePin]:
+    held = authority.stack.enter_context(hold_source_file_components(path))
+    info = held.metadata
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or stat.S_IMODE(info.st_mode) != mode
+        or (info.st_uid, info.st_gid) != owner
+        or info.st_nlink != 1
+        or info.st_size <= 0
+        or info.st_size > maximum
+        or info.st_blocks * 512 < info.st_size
+    ):
+        _fail("NATIVE_BUILDER_AUTHORITY_INVALID", label)
+    digest, size = _hash_fd(held.descriptor)
+    pin = FilePin(digest, size, bool(mode & 0o111))
+    os.lseek(held.descriptor, 0, os.SEEK_SET)
+    blocks: list[bytes] = []
+    remaining = size
+    while remaining:
+        block = os.read(held.descriptor, min(CHUNK_BYTES, remaining))
+        if not block:
+            _fail("NATIVE_BUILDER_AUTHORITY_DRIFT", label)
+        blocks.append(block)
+        remaining -= len(block)
+    if os.read(held.descriptor, 1):
+        _fail("NATIVE_BUILDER_AUTHORITY_DRIFT", label)
+    os.lseek(held.descriptor, 0, os.SEEK_SET)
+    authority.held_files[label] = held
+    authority.file_pins[label] = pin
+    return b"".join(blocks), pin
+
+
+def _native_builder_directory(
+    authority: HeldNativeBuilderPhase,
+    *,
+    path: Path,
+    mode: int,
+    owner: tuple[int, int],
+    inventory: set[str] | None,
+    label: str,
+) -> int:
+    descriptor = os.open(path, _directory_flags())
+    info = os.fstat(descriptor)
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or stat.S_IMODE(info.st_mode) != mode
+        or (info.st_uid, info.st_gid) != owner
+        or (inventory is not None and set(os.listdir(descriptor)) != inventory)
+    ):
+        os.close(descriptor)
+        _fail("NATIVE_BUILDER_AUTHORITY_INVALID", label)
+    authority.directory_fds[label] = descriptor
+    authority.directory_metadata[label] = info
+    authority.directory_paths[label] = path
+    return descriptor
+
+
+def _stdlib_require_static_elf(raw: bytes, label: str) -> None:
+    """Reject PT_DYNAMIC/PT_INTERP without running a target or readelf."""
+
+    if len(raw) < 52 or raw[:4] != b"\x7fELF" or raw[6] != 1:
+        _fail("NATIVE_BUILDER_ARTIFACT_INVALID", f"{label} ELF ident")
+    elf_class = raw[4]
+    data = raw[5]
+    if elf_class not in (1, 2) or data not in (1, 2):
+        _fail("NATIVE_BUILDER_ARTIFACT_INVALID", f"{label} ELF format")
+    endian = "<" if data == 1 else ">"
+    if elf_class == 2:
+        if len(raw) < 64:
+            _fail("NATIVE_BUILDER_ARTIFACT_INVALID", f"{label} ELF64")
+        program_offset = struct.unpack_from(f"{endian}Q", raw, 32)[0]
+        entry_size = struct.unpack_from(f"{endian}H", raw, 54)[0]
+        entry_count = struct.unpack_from(f"{endian}H", raw, 56)[0]
+        minimum_size = 56
+    else:
+        program_offset = struct.unpack_from(f"{endian}I", raw, 28)[0]
+        entry_size = struct.unpack_from(f"{endian}H", raw, 42)[0]
+        entry_count = struct.unpack_from(f"{endian}H", raw, 44)[0]
+        minimum_size = 32
+    if (
+        entry_count <= 0
+        or entry_size < minimum_size
+        or program_offset > len(raw)
+        or entry_count > (len(raw) - program_offset) // entry_size
+    ):
+        _fail("NATIVE_BUILDER_ARTIFACT_INVALID", f"{label} program headers")
+    for index in range(entry_count):
+        entry_offset = program_offset + index * entry_size
+        program_type = struct.unpack_from(f"{endian}I", raw, entry_offset)[0]
+        if program_type in (2, 3):
+            _fail("NATIVE_BUILDER_ARTIFACT_INVALID", f"{label} is dynamic")
+
+
+def _require_native_builder_identity() -> None:
+    try:
+        account = pwd.getpwnam(NATIVE_BUILDER_NAME)
+        group = grp.getgrnam(NATIVE_BUILDER_NAME)
+    except KeyError as exc:
+        raise AuthorityError("NATIVE_BUILDER_UNAVAILABLE", NATIVE_BUILDER_NAME) from exc
+    if (
+        account.pw_uid != NATIVE_BUILDER_UID
+        or account.pw_gid != NATIVE_BUILDER_GID
+        or account.pw_dir != str(NATIVE_BUILDER_ACCOUNT_HOME)
+        or account.pw_shell != "/usr/sbin/nologin"
+        or group.gr_gid != NATIVE_BUILDER_GID
+        or group.gr_mem
+        or any(
+            NATIVE_BUILDER_NAME in candidate.gr_mem
+            for candidate in grp.getgrall()
+            if candidate.gr_gid != NATIVE_BUILDER_GID
+        )
+    ):
+        _fail("NATIVE_BUILDER_IDENTITY_INVALID", NATIVE_BUILDER_NAME)
+    for path in (Path("/etc/subuid"), Path("/etc/subgid")):
+        raw, _pin = _read_regular(path, f"native builder {path.name}")
+        for line in raw.decode("utf-8", "strict").splitlines():
+            fields = line.split(":")
+            if len(fields) != 3:
+                _fail("NATIVE_BUILDER_IDENTITY_INVALID", path.name)
+            try:
+                start, count = int(fields[1]), int(fields[2])
+            except ValueError as exc:
+                raise AuthorityError(
+                    "NATIVE_BUILDER_IDENTITY_INVALID", path.name
+                ) from exc
+            if fields[0] == NATIVE_BUILDER_NAME or start <= NATIVE_BUILDER_UID < (
+                start + count
+            ):
+                _fail("NATIVE_BUILDER_IDENTITY_INVALID", path.name)
+
+
+def _native_builder_component_record(path: Path) -> dict[str, Any]:
+    try:
+        info = os.lstat(path)
+    except OSError as exc:
+        raise AuthorityError("NATIVE_BUILDER_TRACE_INPUT_DRIFT", str(path)) from exc
+    if stat.S_ISREG(info.st_mode):
+        kind = "regular"
+    elif stat.S_ISDIR(info.st_mode):
+        kind = "directory"
+    elif stat.S_ISLNK(info.st_mode):
+        kind = "symlink"
+    else:
+        _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", str(path))
+    record: dict[str, Any] = {
+        "path": str(path),
+        "kind": kind,
+        "mode": f"{stat.S_IMODE(info.st_mode):04o}",
+        "uid": info.st_uid,
+        "gid": info.st_gid,
+        "device": info.st_dev,
+        "inode": info.st_ino,
+        "nlink": info.st_nlink,
+        "mtime_ns": info.st_mtime_ns,
+        "ctime_ns": info.st_ctime_ns,
+    }
+    if kind == "symlink":
+        record["target"] = os.readlink(path)
+    return record
+
+
+def _native_builder_live_component_chain(
+    path: Path, label: str
+) -> list[dict[str, Any]]:
+    if not path.is_absolute() or path.as_posix() != str(path):
+        _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label)
+    try:
+        chain = [_native_builder_component_record(Path("/"))]
+        current = Path("/")
+        for part in path.parts[1:]:
+            current /= part
+            chain.append(_native_builder_component_record(current))
+        canonical = Path(os.path.realpath(path))
+        current = Path("/")
+        for part in canonical.parts[1:]:
+            current /= part
+            if all(item["path"] != str(current) for item in chain):
+                chain.append(_native_builder_component_record(current))
+        return chain
+    except OSError as exc:
+        raise AuthorityError("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label) from exc
+
+
+def _native_builder_validate_component_chain(
+    value: Any, label: str
+) -> list[dict[str, Any]]:
+    if type(value) is not list or not value:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} chain")
+    common = {
+        "path",
+        "kind",
+        "mode",
+        "uid",
+        "gid",
+        "device",
+        "inode",
+        "nlink",
+        "mtime_ns",
+        "ctime_ns",
+    }
+    result: list[dict[str, Any]] = []
+    paths: set[str] = set()
+    for item in value:
+        if type(item) is not dict or set(item) not in (common, common | {"target"}):
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} component")
+        kind = item.get("kind")
+        if kind == "symlink":
+            if set(item) != common | {"target"} or type(item.get("target")) is not str:
+                _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} symlink")
+        elif kind not in {"regular", "directory"} or set(item) != common:
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} kind")
+        path = item.get("path")
+        if (
+            type(path) is not str
+            or not Path(path).is_absolute()
+            or Path(path).as_posix() != path
+            or path in paths
+            or type(item.get("mode")) is not str
+            or re.fullmatch(r"[0-7]{4}", item["mode"]) is None
+            or any(
+                type(item.get(key)) is not int or item[key] < 0
+                for key in (
+                    "uid",
+                    "gid",
+                    "device",
+                    "inode",
+                    "nlink",
+                    "mtime_ns",
+                    "ctime_ns",
+                )
+            )
+        ):
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} values")
+        paths.add(path)
+        result.append(dict(item))
+    if result[0]["path"] != "/" or result[0]["kind"] != "directory":
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} root")
+    return result
+
+
+def _native_builder_component_chain_is_immutable_root_owned(
+    chain: Sequence[Mapping[str, Any]],
+) -> bool:
+    return all(
+        component.get("uid") == ROOT_UID
+        and component.get("gid") == ROOT_GID
+        and (
+            component.get("kind") == "symlink"
+            or (
+                type(component.get("mode")) is str
+                and int(component["mode"], 8) & 0o022 == 0
+            )
+        )
+        for component in chain
+    )
+
+
+def _native_builder_deepest_existing_trace_directory(path: str) -> str:
+    if not path.startswith("/"):
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "search path")
+    current = Path("/")
+    deepest = current
+    for part in PurePosixPath(path).parts[1:]:
+        current /= part
+        try:
+            info = os.stat(current, follow_symlinks=True)
+        except OSError as exc:
+            if exc.errno in {errno.ENOENT, errno.ENOTDIR, errno.EACCES}:
+                break
+            raise AuthorityError(
+                "NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "search anchor"
+            ) from exc
+        if stat.S_ISDIR(info.st_mode):
+            deepest = current
+    chain = _native_builder_live_component_chain(deepest, "search anchor")
+    if not _native_builder_component_chain_is_immutable_root_owned(chain):
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "search anchor ownership")
+    return str(deepest)
+
+
+def _native_builder_expected_trace_invocations(
+    phase: str,
+) -> list[tuple[str, str]]:
+    result = [
+        ("python:builder-startup", "python"),
+        ("git:init", "git"),
+        ("git:fetch", "git"),
+        ("git:rev-parse", "git"),
+        *((f"git:cat-file:{path}", "git") for path in NATIVE_BUILDER_SOURCE_PATHS),
+    ]
+    jobs = (
+        NATIVE_BUILDER_PHASE_A_JOB_IDS
+        if phase == "phase-a"
+        else NATIVE_BUILDER_PHASE_B_JOB_IDS
+    )
+    for job_id in jobs:
+        for build_index in (1, 2):
+            result.extend(
+                (
+                    (f"compiler:{job_id}:{build_index}", "compiler"),
+                    (f"readelf:{job_id}:{build_index}", "readelf"),
+                )
+            )
+    return result
+
+
+def _native_builder_validate_trace_host_record(
+    value: Any, label: str, *, kind: str
+) -> dict[str, Any]:
+    keys = {"path", "canonical", "component_chain"}
+    if kind == "regular":
+        keys |= {"mode", "pin", "storage"}
+    if type(value) is not dict or set(value) != keys:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} fields")
+    path = value.get("path")
+    canonical = value.get("canonical")
+    if (
+        type(path) is not str
+        or not Path(path).is_absolute()
+        or "//" in path
+        or (path != "/" and path.endswith("/"))
+        or any(ord(character) < 0x20 for character in path)
+        or type(canonical) is not str
+        or not Path(canonical).is_absolute()
+        or Path(canonical).as_posix() != canonical
+    ):
+        _fail(
+            "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+            f"{label} path requested={path!r} canonical={canonical!r}",
+        )
+    chain = _native_builder_validate_component_chain(
+        value.get("component_chain"), label
+    )
+    final = next((item for item in chain if item["path"] == canonical), None)
+    if (
+        final is None
+        or final["kind"] != kind
+        or final["uid"] != ROOT_UID
+        or final["gid"] != ROOT_GID
+        or (kind == "regular" and final["nlink"] != 1)
+        or not _native_builder_component_chain_is_immutable_root_owned(chain)
+    ):
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} canonical")
+    if kind == "regular":
+        pin = _parse_pin(value.get("pin"), label)
+        if (
+            pin.size_bytes > MAX_NATIVE_BUILDER_TRACE_FILE_BYTES
+            or value.get("mode") != final["mode"]
+            or value.get("storage") not in {"empty", "regular", "sparse", "virtual"}
+            or (value.get("storage") == "virtual" and not canonical.startswith("/sys/"))
+        ):
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} storage")
+    return dict(value)
+
+
+def _native_builder_valid_trace_event(raw: str) -> bool:
+    try:
+        value = json.loads(
+            raw,
+            object_pairs_hook=_pairs,
+            parse_constant=lambda token: (_ for _ in ()).throw(
+                ValueError(f"nonfinite: {token}")
+            ),
+        )
+    except (ValueError, TypeError):
+        return False
+    syscall = value.get("syscall") if type(value) is dict else None
+    expected_fields = {"outcome", "paths", "syscall"}
+    if syscall in NATIVE_BUILDER_TRACE_OPEN_SYSCALLS:
+        expected_fields.add("open_flags")
+    flags = value.get("open_flags") if type(value) is dict else None
+    valid_open_flags = (
+        type(flags) is list
+        and bool(flags)
+        and all(
+            type(flag) is str and flag in NATIVE_BUILDER_TRACE_OPEN_FLAG_TOKENS
+            for flag in flags
+        )
+        and len(flags) == len(set(flags))
+        and sum(flag in NATIVE_BUILDER_TRACE_OPEN_ACCESS_MODES for flag in flags) == 1
+    )
+    if (
+        type(value) is not dict
+        or set(value) != expected_fields
+        or syscall not in NATIVE_BUILDER_TRACE_FILE_SYSCALLS
+        or value.get("outcome") not in ({"OK"} | NATIVE_BUILDER_TRACE_ALLOWED_ERRNOS)
+        or type(value.get("paths")) is not list
+        or not value["paths"]
+        or any(type(path) is not str or not path for path in value["paths"])
+        or (syscall in NATIVE_BUILDER_TRACE_OPEN_SYSCALLS and not valid_open_flags)
+    ):
+        return False
+    if syscall in NATIVE_BUILDER_TRACE_OPEN_SYSCALLS and value["outcome"] == "OK":
+        flag_set = set(flags)
+        mutating = bool(
+            flag_set & {"O_WRONLY", "O_RDWR", "O_CREAT", "O_TRUNC", "O_TMPFILE"}
+        )
+        if mutating:
+            dev_null_allowed = "O_RDWR" in flag_set and flag_set <= (
+                {"O_RDWR"} | NATIVE_BUILDER_TRACE_DEV_NULL_ALLOWED_NONMUTATING_FLAGS
+            )
+            if any(
+                not (
+                    path == "$SCRATCH"
+                    or path.startswith("$SCRATCH/")
+                    or (path == "/dev/null" and dev_null_allowed)
+                )
+                for path in value["paths"]
+            ):
+                return False
+    return (
+        json.dumps(
+            value,
+            ensure_ascii=True,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        == raw
+    )
+
+
+def _native_builder_validate_trace_events(value: Any, label: str) -> None:
+    if type(value) is not list or not value:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} events")
+    previous = ""
+    total = 0
+    for item in value:
+        if (
+            type(item) is not dict
+            or set(item) != {"line", "count"}
+            or type(item.get("line")) is not str
+            or not item["line"]
+            or "\n" in item["line"]
+            or item["line"] <= previous
+            or type(item.get("count")) is not int
+            or item["count"] <= 0
+            or not _native_builder_valid_trace_event(item["line"])
+        ):
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} event")
+        total += item["count"]
+        if total > MAX_NATIVE_BUILDER_TRACE_LINES:
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} event count")
+        previous = item["line"]
+
+
+def _native_builder_validate_trace_searches(
+    value: Any, label: str
+) -> list[dict[str, Any]]:
+    if type(value) is not list:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} searches")
+    previous: tuple[str, str, str] | None = None
+    result: list[dict[str, Any]] = []
+    for item in value:
+        if (
+            type(item) is not dict
+            or set(item) != {"syscall", "path", "errno", "count"}
+            or item.get("syscall") not in NATIVE_BUILDER_TRACE_FILE_SYSCALLS
+            or type(item.get("path")) is not str
+            or not item["path"].startswith("/")
+            or item.get("errno") not in NATIVE_BUILDER_TRACE_ALLOWED_ERRNOS
+            or type(item.get("count")) is not int
+            or item["count"] <= 0
+        ):
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} search")
+        key = (item["syscall"], item["path"], item["errno"])
+        if previous is not None and key <= previous:
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} order")
+        previous = key
+        result.append(dict(item))
+    return result
+
+
+def _native_builder_validate_scratch_prestate(value: Any, label: str) -> None:
+    if type(value) is not list:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} scratch prestate")
+    previous = ""
+    for record in value:
+        if type(record) is not dict or record.get("kind") not in {
+            "directory",
+            "regular",
+        }:
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} scratch record")
+        expected = {"relative_path", "kind", "mode"}
+        if record["kind"] == "regular":
+            expected.add("pin")
+        relative = record.get("relative_path")
+        if (
+            set(record) != expected
+            or type(relative) is not str
+            or not _safe_relative(relative)
+            or relative <= previous
+            or type(record.get("mode")) is not str
+            or re.fullmatch(r"[0-7]{4}", record["mode"]) is None
+        ):
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} scratch values")
+        if record["kind"] == "regular":
+            pin = _parse_pin(record.get("pin"), f"{label} scratch {relative}")
+            if pin.size_bytes > MAX_NATIVE_BUILDER_TRACE_FILE_BYTES:
+                _fail(
+                    "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+                    f"{label} scratch pin",
+                )
+        previous = relative
+
+
+def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
+    if type(value) is not dict or set(value) != {
+        "schema",
+        "tracer_version",
+        "host_files",
+        "host_directories",
+        "tracer_runtime_files",
+        "builder_runtime_files",
+        "path_aliases",
+        "profiles",
+        "phase_invocations",
+    }:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "fields")
+    if (
+        value.get("schema") != NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA
+        or value.get("tracer_version") != NATIVE_BUILDER_STRACE_VERSION
+    ):
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "schema/version")
+    files = value.get("host_files")
+    directories = value.get("host_directories")
+    if type(files) is not list or not files or type(directories) is not list:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "host inventory")
+    validated_files = [
+        _native_builder_validate_trace_host_record(
+            item, f"host file {index}", kind="regular"
+        )
+        for index, item in enumerate(files)
+    ]
+    validated_directories = [
+        _native_builder_validate_trace_host_record(
+            item, f"host directory {index}", kind="directory"
+        )
+        for index, item in enumerate(directories)
+    ]
+    file_paths = [item["path"] for item in validated_files]
+    directory_paths = [item["path"] for item in validated_directories]
+    if file_paths != sorted(set(file_paths)) or directory_paths != sorted(
+        set(directory_paths)
+    ):
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "host order")
+
+    def inode(record: Mapping[str, Any]) -> tuple[int, int]:
+        final = next(
+            item
+            for item in record["component_chain"]
+            if item["path"] == record["canonical"]
+        )
+        return final["device"], final["inode"]
+
+    file_inodes = [inode(item) for item in validated_files]
+    directory_inodes = [inode(item) for item in validated_directories]
+    if set(file_inodes) & set(directory_inodes):
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "file/directory alias")
+    alias_projection: list[dict[str, Any]] = []
+    for kind, records in (
+        ("regular", validated_files),
+        ("directory", validated_directories),
+    ):
+        aliases: dict[str, list[dict[str, Any]]] = {}
+        for record in records:
+            aliases.setdefault(record["canonical"], []).append(record)
+        for canonical, group in sorted(aliases.items()):
+            if len(group) == 1:
+                continue
+            if any(
+                record["path"] != canonical
+                and not any(
+                    component["kind"] == "symlink"
+                    for component in record["component_chain"]
+                )
+                and ".." not in PurePosixPath(record["path"]).parts
+                for record in group
+            ):
+                _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "implicit path alias")
+            alias_projection.append(
+                {
+                    "kind": kind,
+                    "canonical": canonical,
+                    "paths": sorted(record["path"] for record in group),
+                }
+            )
+    alias_projection.sort(key=lambda item: (item["kind"], item["canonical"]))
+    if value.get("path_aliases") != alias_projection:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "path aliases")
+    for records, inodes in (
+        (validated_files, file_inodes),
+        (validated_directories, directory_inodes),
+    ):
+        observed: dict[tuple[int, int], str] = {}
+        for record, identity in zip(records, inodes, strict=True):
+            previous = observed.setdefault(identity, record["canonical"])
+            if previous != record["canonical"]:
+                _fail(
+                    "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+                    "implicit hardlink or bind alias",
+                )
+    file_set = set(file_paths)
+    runtime_sets: list[set[str]] = []
+    for key in ("tracer_runtime_files", "builder_runtime_files"):
+        paths = value.get(key)
+        if (
+            type(paths) is not list
+            or not paths
+            or paths != sorted(set(paths))
+            or any(path not in file_set for path in paths)
+        ):
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", key)
+        runtime_sets.append(set(paths))
+    expected_phase = {
+        phase: [
+            invocation
+            for invocation, _tool in _native_builder_expected_trace_invocations(phase)
+        ]
+        for phase in ("phase-a", "phase-b")
+    }
+    if value.get("phase_invocations") != expected_phase:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "phase invocations")
+    expected_tools = {
+        invocation: tool
+        for phase in ("phase-a", "phase-b")
+        for invocation, tool in _native_builder_expected_trace_invocations(phase)
+    }
+    profiles = value.get("profiles")
+    if type(profiles) is not list or len(profiles) != len(expected_tools):
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "profiles")
+    covered_files = set().union(*runtime_sets)
+    covered_directories: set[str] = set()
+    observed_ids: list[str] = []
+    directory_set = set(directory_paths)
+    for profile in profiles:
+        if type(profile) is not dict or set(profile) != {
+            "id",
+            "tool",
+            "event_multiset",
+            "host_files",
+            "host_directories",
+            "search_state",
+            "scratch_prestate",
+        }:
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "profile fields")
+        profile_id = profile.get("id")
+        if type(profile_id) is not str or expected_tools.get(profile_id) != profile.get(
+            "tool"
+        ):
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "profile identity")
+        _native_builder_validate_trace_events(profile.get("event_multiset"), profile_id)
+        profile_files = profile.get("host_files")
+        profile_directories = profile.get("host_directories")
+        if (
+            type(profile_files) is not list
+            or profile_files != sorted(set(profile_files))
+            or any(path not in file_set for path in profile_files)
+            or type(profile_directories) is not list
+            or profile_directories != sorted(set(profile_directories))
+            or any(path not in directory_set for path in profile_directories)
+        ):
+            _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", profile_id)
+        searches = _native_builder_validate_trace_searches(
+            profile.get("search_state"), profile_id
+        )
+        for search in searches:
+            anchor = _native_builder_deepest_existing_trace_directory(search["path"])
+            if anchor not in profile_directories:
+                _fail(
+                    "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+                    f"{profile_id} search anchor",
+                )
+        _native_builder_validate_scratch_prestate(
+            profile.get("scratch_prestate"), profile_id
+        )
+        covered_files.update(profile_files)
+        covered_directories.update(profile_directories)
+        observed_ids.append(profile_id)
+    if observed_ids != sorted(expected_tools):
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "profile order")
+    if covered_files != file_set or covered_directories != directory_set:
+        _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "orphan host inputs")
+    return dict(value)
+
+
+def _native_builder_hold_trace_inputs(
+    authority: HeldNativeBuilderPhase, contract: Mapping[str, Any]
+) -> None:
+    for index, record in enumerate(contract["host_files"]):
+        label = f"trace-file:{index}"
+        requested = Path(record["path"])
+        expected_chain = list(record["component_chain"])
+        if _native_builder_live_component_chain(requested, label) != expected_chain:
+            _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label)
+        canonical = Path(record["canonical"])
+        descriptor = os.open(canonical, _file_flags())
+        try:
+            info = os.fstat(descriptor)
+            sparse = info.st_size > 0 and info.st_blocks * 512 < info.st_size
+            storage = (
+                "virtual"
+                if str(canonical).startswith("/sys/") and (info.st_size == 0 or sparse)
+                else "empty"
+                if info.st_size == 0
+                else "sparse"
+                if sparse
+                else "regular"
+            )
+            digest, size = _hash_fd(descriptor)
+            pin = FilePin(digest, size)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != ROOT_UID
+                or info.st_gid != ROOT_GID
+                or info.st_nlink != 1
+                or stat.S_IMODE(info.st_mode) != int(record["mode"], 8)
+                or storage != record["storage"]
+                or pin != _parse_pin(record["pin"], label)
+                or _identity(os.stat(canonical, follow_symlinks=False))
+                != _identity(info)
+            ):
+                _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label)
+            held = HeldSourceFile(requested, canonical, descriptor, info, ())
+            authority.stack.callback(os.close, descriptor)
+            authority.held_files[label] = held
+            authority.file_pins[label] = pin
+            authority.component_chains[label] = (requested, expected_chain)
+        except BaseException:
+            os.close(descriptor)
+            raise
+    for index, record in enumerate(contract["host_directories"]):
+        label = f"trace-directory:{index}"
+        requested = Path(record["path"])
+        expected_chain = list(record["component_chain"])
+        if _native_builder_live_component_chain(requested, label) != expected_chain:
+            _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label)
+        canonical = Path(record["canonical"])
+        descriptor = os.open(canonical, _directory_flags())
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or info.st_uid != ROOT_UID
+            or info.st_gid != ROOT_GID
+            or _identity(os.stat(canonical, follow_symlinks=False)) != _identity(info)
+        ):
+            os.close(descriptor)
+            _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label)
+        authority.directory_fds[label] = descriptor
+        authority.directory_metadata[label] = info
+        authority.directory_paths[label] = canonical
+        authority.component_chains[label] = (requested, expected_chain)
+
+
+def _native_builder_trace_toolchain(
+    contract: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        {key: record[key] for key in ("path", "canonical", "mode", "pin")}
+        for record in contract["host_files"]
+    ]
+
+
+def _native_builder_job_tools(
+    tools: Mapping[str, Any], trace_contract: Mapping[str, Any]
+) -> dict[str, Any]:
+    raw = canonical_json(trace_contract)
+    return {
+        "compiler": tools["compiler"],
+        "readelf": tools["readelf"],
+        "tracer": tools["tracer"],
+        "toolchain": tools["toolchain"],
+        "trace_contract": {
+            "schema": NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA,
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "size_bytes": len(raw),
+        },
+    }
+
+
+def _native_builder_tool(
+    authority: HeldNativeBuilderPhase,
+    value: Any,
+    *,
+    expected_path: Path,
+    label: str,
+) -> dict[str, Any]:
+    if (
+        type(value) is not dict
+        or set(value) != {"path", "canonical", "pin", "mode"}
+        or value.get("path") != str(expected_path)
+        or value.get("mode") not in {"0644", "0755"}
+    ):
+        _fail("NATIVE_BUILDER_MANIFEST_INVALID", label)
+    canonical = Path(os.path.realpath(expected_path))
+    if value.get("canonical") != str(canonical):
+        _fail("NATIVE_BUILDER_MANIFEST_INVALID", f"{label} canonical")
+    _raw, pin = _native_builder_read_held(
+        authority,
+        path=canonical,
+        mode=int(value["mode"], 8),
+        owner=(ROOT_UID, ROOT_GID),
+        maximum=MAX_JSON_BYTES,
+        label=f"tool:{label}",
+    )
+    if pin.public() != _parse_pin(value.get("pin"), label).public():
+        _fail("NATIVE_BUILDER_TOOL_DRIFT", label)
+    return dict(value)
+
+
+def _native_builder_expected_flags(
+    job_id: str, bindings: Mapping[str, Any]
+) -> list[str]:
+    flags = [
+        "-std=c11",
+        "-O2",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-static",
+        "-s",
+        "-Wl,--build-id=none",
+        "-pipe",
+        "-fno-use-linker-plugin",
+        "-x",
+        "c",
+    ]
+    names = (
+        ("python_pin", "helper_pin")
+        if job_id
+        in {
+            "stage-transfer-launcher",
+            "parent-seal-launcher",
+            "initial-bootstrap-launcher",
+        }
+        else ()
+    )
+    if job_id == "initial-bootstrap-installer":
+        names = ("launcher_pin", "helper_pin", "input_pin")
+    for name in names:
+        pin = _parse_pin(bindings.get(name), f"{job_id} {name}")
+        macro = (
+            "INPUT_PIN" if name == "input_pin" else name.removesuffix("_pin").upper()
+        )
+        flags.extend(
+            (
+                f'-DEXPECTED_{macro}_SHA256="{pin.sha256}"',
+                f"-DEXPECTED_{macro}_SIZE={pin.size_bytes}",
+            )
+        )
+    return flags
+
+
+def _native_builder_phase_a_jobs(
+    request: Mapping[str, Any], source_pins: Mapping[str, FilePin], python_pin: FilePin
+) -> dict[str, dict[str, Any]]:
+    specifications = {
+        "stage-transfer-launcher": (
+            "tools/admin/vista_r8_ue57_stage_transfer_launcher.c",
+            "transfer-r8-ue57-stage-installer",
+            "tools/admin/vista_r8_ue57_authority_admin.py",
+        ),
+        "parent-seal-launcher": (
+            "tools/admin/vista_authority_parent_seal_launcher.c",
+            "launch-vista-authority-parent-seal",
+            "tools/admin/vista_authority_parent_seal.py",
+        ),
+        "initial-bootstrap-launcher": (
+            "tools/admin/vista_r8_ue57_initial_bootstrap_launcher.c",
+            "bootstrap-r8-ue57-initial-authorities",
+            "tools/admin/vista_r8_ue57_initial_bootstrap.py",
+        ),
+    }
+    jobs = request.get("jobs")
+    if type(jobs) is not list or len(jobs) != len(specifications):
+        _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase A jobs")
+    result: dict[str, dict[str, Any]] = {}
+    for value, (job_id, (source, output, helper)) in zip(
+        jobs, specifications.items(), strict=True
+    ):
+        if type(value) is not dict:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", f"job {job_id}")
+        bindings = {
+            "helper_pin": source_pins[helper].public(),
+            "python_pin": python_pin.public(),
+        }
+        expected = {
+            "id": job_id,
+            "source_path": source,
+            "output_name": output,
+            "output_mode": "0555",
+            "bindings": bindings,
+            "flags": _native_builder_expected_flags(job_id, bindings),
+        }
+        if value != expected:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", f"job {job_id}")
+        result[job_id] = expected
+    return result
+
+
+@contextlib.contextmanager
+def _load_native_builder_phase_a(
+    committed_sources: Mapping[str, bytes], *, python_pin: FilePin
+) -> Iterable[dict[str, Any]]:
+    _require_native_builder_identity()
+    stack = contextlib.ExitStack()
+    authority = HeldNativeBuilderPhase(stack, {}, {}, {}, {}, {}, {})
+    try:
+        expected_source_paths = tuple(
+            sorted(
+                {
+                    path.relative_to(CHECKOUT_ROOT).as_posix()
+                    for path in (
+                        REVIEW_HELPER_SOURCE,
+                        STAGE_TRANSFER_LAUNCHER_SOURCE,
+                        PARENT_SEAL_HELPER_SOURCE,
+                        PARENT_SEAL_LAUNCHER_SOURCE,
+                        INITIAL_BOOTSTRAP_HELPER_SOURCE,
+                        INITIAL_BOOTSTRAP_LAUNCHER_SOURCE,
+                        INITIAL_BOOTSTRAP_INSTALLER_SOURCE,
+                    )
+                }
+            )
+        )
+        source_pins = {
+            path: FilePin(
+                hashlib.sha256(committed_sources[path]).hexdigest(),
+                len(committed_sources[path]),
+            )
+            for path in expected_source_paths
+        }
+        git_binding, current_sources = _require_unprivileged_review_binding()
+        if any(
+            current_sources[path] != committed_sources[path]
+            for path in expected_source_paths
+        ):
+            _fail("NATIVE_BUILDER_GIT_MISMATCH", "current HEAD blobs")
+
+        _native_builder_directory(
+            authority,
+            path=NATIVE_BUILDER_HOME,
+            mode=0o555,
+            owner=(ROOT_UID, ROOT_GID),
+            inventory={"phase-a-slot", "phase-b-slot"},
+            label="native builder state root",
+        )
+        phase_slot = NATIVE_BUILDER_PHASE_A_ROOT.parent
+        _native_builder_directory(
+            authority,
+            path=phase_slot,
+            mode=0o711,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            inventory={".build.lock", "published"},
+            label="native builder phase A slot",
+        )
+        _native_builder_directory(
+            authority,
+            path=NATIVE_BUILDER_PHASE_A_ROOT,
+            mode=0o555,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            inventory={
+                "artifacts",
+                "manifest.json",
+                "manifests",
+                "parent-seal-candidate",
+            },
+            label="native builder phase A root",
+        )
+        _native_builder_directory(
+            authority,
+            path=NATIVE_BUILDER_PHASE_A_ROOT / "artifacts",
+            mode=0o555,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            inventory={
+                "transfer-r8-ue57-stage-installer",
+                "launch-vista-authority-parent-seal",
+                "bootstrap-r8-ue57-initial-authorities",
+            },
+            label="native builder phase A artifacts",
+        )
+        _native_builder_directory(
+            authority,
+            path=NATIVE_BUILDER_PHASE_A_ROOT / "manifests",
+            mode=0o555,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            inventory={
+                "stage-transfer-launcher.json",
+                "parent-seal-launcher.json",
+                "initial-bootstrap-launcher.json",
+            },
+            label="native builder phase A manifests",
+        )
+        _native_builder_directory(
+            authority,
+            path=NATIVE_BUILDER_PHASE_A_PARENT_SEAL_ROOT,
+            mode=0o555,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            inventory={
+                PARENT_SEAL_HELPER_SOURCE.name,
+                PARENT_SEAL_LAUNCHER_NAME,
+            },
+            label="native builder phase A parent seal candidate",
+        )
+        manifest_raw, manifest_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_PHASE_A_ROOT / "manifest.json",
+            mode=0o444,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase A manifest",
+        )
+        request_raw, request_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_PHASE_A_REQUEST,
+            mode=0o444,
+            owner=(ROOT_UID, ROOT_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase A request",
+        )
+        bundle_raw, bundle_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_BUNDLE,
+            mode=0o444,
+            owner=(ROOT_UID, ROOT_GID),
+            maximum=MAX_NATIVE_BUILDER_BUNDLE_BYTES,
+            label="source Git bundle",
+        )
+        builder_raw, builder_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_HELPER,
+            mode=0o444,
+            owner=(ROOT_UID, ROOT_GID),
+            maximum=MAX_JSON_BYTES,
+            label="installed native builder",
+        )
+        unit_raw, unit_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_PHASE_A_UNIT,
+            mode=0o644,
+            owner=(ROOT_UID, ROOT_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase A systemd unit",
+        )
+        request = strict_json(request_raw, "native builder phase A request")
+        if (
+            set(request)
+            != {
+                "schema",
+                "phase",
+                "status",
+                "accepted",
+                "builder",
+                "source_bundle",
+                "source_commit",
+                "sources",
+                "tools",
+                "trace_contract",
+                "jobs",
+                "phase_inputs",
+                "claims",
+                "content_digest",
+            }
+            or request.get("schema") != NATIVE_BUILDER_REQUEST_SCHEMA
+            or request.get("phase") != "phase-a"
+            or request.get("status") != "reviewed_native_build_request"
+            or request.get("accepted") is not False
+            or request.get("content_digest") != content_digest(request)
+            or request.get("source_commit") != git_binding["commit"]
+            or request.get("phase_inputs") != {}
+            or request.get("claims")
+            != {
+                "dedicated_builder_uid_gid": [
+                    NATIVE_BUILDER_UID,
+                    NATIVE_BUILDER_GID,
+                ],
+                "network_access": False,
+                "double_build_required": True,
+                "worktree_or_user_candidate_input": False,
+                "write_root": str(NATIVE_BUILDER_HOME),
+                "observation_only": True,
+                "production_native_output": False,
+            }
+        ):
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase A request fields")
+        if request.get("builder") != {
+            "path": str(NATIVE_BUILDER_HELPER),
+            "mode": "0444",
+            "uid": ROOT_UID,
+            "gid": ROOT_GID,
+            "pin": builder_pin.public(),
+            "service_unit": {
+                "path": str(NATIVE_BUILDER_PHASE_A_UNIT),
+                "mode": "0644",
+                "uid": ROOT_UID,
+                "gid": ROOT_GID,
+                "pin": unit_pin.public(),
+            },
+        } or request.get("source_bundle") != {
+            "path": str(NATIVE_BUILDER_BUNDLE),
+            "mode": "0444",
+            "uid": ROOT_UID,
+            "gid": ROOT_GID,
+            "pin": bundle_pin.public(),
+        }:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase A fixed inputs")
+        source_records = request.get("sources")
+        if source_records != [
+            {"path": path, "pin": source_pins[path].public()}
+            for path in expected_source_paths
+        ]:
+            _fail("NATIVE_BUILDER_GIT_MISMATCH", "source records")
+
+        trace_contract = _native_builder_validate_trace_contract(
+            request.get("trace_contract")
+        )
+        _native_builder_hold_trace_inputs(authority, trace_contract)
+        tools = request.get("tools")
+        if type(tools) is not dict or set(tools) != {
+            "python",
+            "git",
+            "compiler",
+            "readelf",
+            "tracer",
+            "toolchain",
+        }:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase A tools")
+        expected_tool_paths = {
+            "python": PYTHON_PATH,
+            "git": Path("/usr/bin/git"),
+            "compiler": COMPILER_PATH,
+            "readelf": READELF_PATH,
+            "tracer": STRACE_PATH,
+        }
+        validated_tools = {
+            key: _native_builder_tool(
+                authority, tools[key], expected_path=path, label=key
+            )
+            for key, path in expected_tool_paths.items()
+        }
+        if validated_tools["python"]["pin"] != python_pin.public():
+            _fail("NATIVE_BUILDER_TOOL_DRIFT", "Python")
+        ledger = tools.get("toolchain")
+        expected_ledger = _native_builder_trace_toolchain(trace_contract)
+        if ledger != expected_ledger:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "toolchain")
+        host_files = trace_contract["host_files"]
+        for key, tool in validated_tools.items():
+            matches = [
+                record
+                for record in host_files
+                if record["canonical"] == tool["canonical"]
+                and record["pin"] == tool["pin"]
+                and record["mode"] == tool["mode"]
+            ]
+            if not matches:
+                _fail("NATIVE_BUILDER_MANIFEST_INVALID", f"trace tool {key}")
+        for key, runtime_key in (
+            ("python", "builder_runtime_files"),
+            ("tracer", "tracer_runtime_files"),
+        ):
+            if not any(
+                record["path"] in trace_contract[runtime_key]
+                and record["canonical"] == validated_tools[key]["canonical"]
+                and record["pin"] == validated_tools[key]["pin"]
+                for record in host_files
+            ):
+                _fail("NATIVE_BUILDER_MANIFEST_INVALID", f"trace runtime {key}")
+        job_tools = _native_builder_job_tools(tools, trace_contract)
+        jobs = _native_builder_phase_a_jobs(request, source_pins, python_pin)
+        manifest = strict_json(manifest_raw, "native builder phase A manifest")
+        if (
+            set(manifest)
+            != {
+                "schema",
+                "status",
+                "accepted",
+                "phase",
+                "request_pin",
+                "source_commit",
+                "source_bundle_pin",
+                "jobs",
+                "inventory",
+                "claims",
+                "content_digest",
+            }
+            or manifest.get("schema") != NATIVE_BUILDER_PHASE_A_SCHEMA
+            or manifest.get("status") != "dedicated_builder_phase_closed"
+            or manifest.get("accepted") is not False
+            or manifest.get("phase") != "phase-a"
+            or manifest.get("content_digest") != content_digest(manifest)
+            or manifest.get("request_pin") != request_pin.public()
+            or manifest.get("source_commit") != request["source_commit"]
+            or manifest.get("source_bundle_pin") != bundle_pin.public()
+            or manifest.get("claims")
+            != {
+                "builder_uid_gid": [NATIVE_BUILDER_UID, NATIVE_BUILDER_GID],
+                "network_access": False,
+                "double_build_verified": True,
+                "worktree_or_user_candidate_input": False,
+                "closed": True,
+            }
+        ):
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase A manifest fields")
+        manifest_jobs = manifest.get("jobs")
+        if type(manifest_jobs) is not list or len(manifest_jobs) != len(jobs):
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase A manifest jobs")
+        raw_by_key: dict[str, bytes] = {}
+        pins_by_key: dict[str, FilePin] = {}
+        provenance: dict[str, Any] = {}
+        artifact_inventory: list[dict[str, Any]] = []
+        job_manifest_inventory: list[dict[str, Any]] = []
+        legacy_keys = {
+            "stage-transfer-launcher": "stage-transfer",
+            "parent-seal-launcher": "parent-seal",
+            "initial-bootstrap-launcher": "initial-launcher",
+        }
+        for job_id, job_document in zip(jobs, manifest_jobs, strict=True):
+            expected_job = jobs[job_id]
+            if (
+                type(job_document) is not dict
+                or set(job_document)
+                != {
+                    "schema",
+                    "status",
+                    "accepted",
+                    "phase",
+                    "job_id",
+                    "source",
+                    "bindings",
+                    "flags",
+                    "environment",
+                    "tools",
+                    "output",
+                    "determinism",
+                    "static_elf",
+                    "claims",
+                    "content_digest",
+                }
+                or job_document.get("schema") != NATIVE_BUILDER_JOB_SCHEMA
+                or job_document.get("status") != "deterministic_static_native_closed"
+                or job_document.get("accepted") is not False
+                or job_document.get("phase") != "phase-a"
+                or job_document.get("job_id") != job_id
+                or job_document.get("content_digest") != content_digest(job_document)
+                or job_document.get("bindings") != expected_job["bindings"]
+                or job_document.get("flags") != expected_job["flags"]
+                or job_document.get("environment") != NATIVE_BUILDER_BUILD_ENVIRONMENT
+                or job_document.get("tools") != job_tools
+                or job_document.get("static_elf")
+                != {
+                    "interpreter": None,
+                    "needed": [],
+                    "readelf_pin": tools["readelf"]["pin"],
+                }
+                or job_document.get("claims")
+                != {
+                    "builder_uid_gid": [
+                        NATIVE_BUILDER_UID,
+                        NATIVE_BUILDER_GID,
+                    ],
+                    "network_access": False,
+                    "worktree_input": False,
+                    "user_candidate_input": False,
+                }
+            ):
+                _fail("NATIVE_BUILDER_MANIFEST_INVALID", f"job {job_id}")
+            source = job_document.get("source")
+            if source != {
+                "git_bundle_pin": bundle_pin.public(),
+                "commit": request["source_commit"],
+                "git_path": expected_job["source_path"],
+                "pin": source_pins[expected_job["source_path"]].public(),
+                "compiled_from_sealed_memfd": True,
+            }:
+                _fail("NATIVE_BUILDER_GIT_MISMATCH", f"job {job_id}")
+            output = job_document.get("output")
+            expected_relative = f"artifacts/{expected_job['output_name']}"
+            if (
+                type(output) is not dict
+                or set(output) != {"relative_path", "mode", "pin"}
+                or output.get("relative_path") != expected_relative
+                or output.get("mode") != "0555"
+            ):
+                _fail("NATIVE_BUILDER_MANIFEST_INVALID", f"job {job_id} output")
+            artifact_raw, artifact_pin = _native_builder_read_held(
+                authority,
+                path=NATIVE_BUILDER_PHASE_A_ROOT / expected_relative,
+                mode=0o555,
+                owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+                maximum=MAX_JSON_BYTES,
+                label=f"artifact:{job_id}",
+            )
+            if output.get("pin") != artifact_pin.public():
+                _fail("NATIVE_BUILDER_ARTIFACT_INVALID", job_id)
+            _stdlib_require_static_elf(artifact_raw, job_id)
+            if job_document.get("determinism") != {
+                "build_count": 2,
+                "byte_identical": True,
+                "first_pin": artifact_pin.public(),
+                "second_pin": artifact_pin.public(),
+            }:
+                _fail("NATIVE_BUILDER_MANIFEST_INVALID", f"job {job_id} determinism")
+            job_raw, job_pin = _native_builder_read_held(
+                authority,
+                path=NATIVE_BUILDER_PHASE_A_ROOT / "manifests" / f"{job_id}.json",
+                mode=0o444,
+                owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+                maximum=MAX_JSON_BYTES,
+                label=f"job-manifest:{job_id}",
+            )
+            if strict_json(job_raw, f"job manifest {job_id}") != job_document:
+                _fail("NATIVE_BUILDER_MANIFEST_INVALID", f"job file {job_id}")
+            key = legacy_keys[job_id]
+            raw_by_key[key] = artifact_raw
+            pins_by_key[key] = FilePin(
+                artifact_pin.sha256, artifact_pin.size_bytes, True
+            )
+            provenance[key] = {
+                "schema": "vista.r8-native-builder-artifact-provenance/v1",
+                "authority": {
+                    "root": str(NATIVE_BUILDER_PHASE_A_ROOT),
+                    "uid": NATIVE_BUILDER_UID,
+                    "gid": NATIVE_BUILDER_GID,
+                    "manifest_pin": manifest_pin.public(),
+                    "manifest_content_digest": manifest["content_digest"],
+                    "request_pin": request_pin.public(),
+                    "source_bundle_pin": bundle_pin.public(),
+                    "builder_pin": builder_pin.public(),
+                    "service_unit_pin": unit_pin.public(),
+                    "trace_contract": job_tools["trace_contract"],
+                },
+                "job": job_document,
+                "job_manifest_pin": job_pin.public(),
+            }
+            artifact_inventory.append(
+                {
+                    "job_id": job_id,
+                    "relative_path": expected_relative,
+                    "mode": "0555",
+                    "pin": artifact_pin.public(),
+                }
+            )
+            job_manifest_inventory.append(
+                {
+                    "job_id": job_id,
+                    "relative_path": f"manifests/{job_id}.json",
+                    "pin": job_pin.public(),
+                    "content_digest": job_document["content_digest"],
+                }
+            )
+        parent_helper_relative = PARENT_SEAL_HELPER_SOURCE.relative_to(
+            CHECKOUT_ROOT
+        ).as_posix()
+        parent_helper_raw, parent_helper_pin = _native_builder_read_held(
+            authority,
+            path=(
+                NATIVE_BUILDER_PHASE_A_PARENT_SEAL_ROOT / PARENT_SEAL_HELPER_SOURCE.name
+            ),
+            mode=0o444,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase A parent seal helper candidate",
+        )
+        parent_launcher_raw, parent_launcher_pin = _native_builder_read_held(
+            authority,
+            path=(NATIVE_BUILDER_PHASE_A_PARENT_SEAL_ROOT / PARENT_SEAL_LAUNCHER_NAME),
+            mode=0o555,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase A parent seal launcher candidate",
+        )
+        if (
+            parent_helper_raw != committed_sources[parent_helper_relative]
+            or parent_helper_pin != source_pins[parent_helper_relative]
+            or parent_launcher_raw != raw_by_key["parent-seal"]
+            or parent_launcher_pin.public() != pins_by_key["parent-seal"].public()
+        ):
+            _fail("NATIVE_BUILDER_ARTIFACT_INVALID", "parent seal candidate")
+        parent_candidate_inventory = {
+            "relative_path": "parent-seal-candidate",
+            "files": [
+                {
+                    "name": PARENT_SEAL_HELPER_SOURCE.name,
+                    "mode": "0444",
+                    "pin": parent_helper_pin.public(),
+                    "git_path": parent_helper_relative,
+                },
+                {
+                    "name": PARENT_SEAL_LAUNCHER_NAME,
+                    "mode": "0555",
+                    "pin": parent_launcher_pin.public(),
+                    "job_id": "parent-seal-launcher",
+                },
+            ],
+        }
+        if manifest.get("inventory") != {
+            "root_entries": [
+                "artifacts",
+                "manifest.json",
+                "manifests",
+                "parent-seal-candidate",
+            ],
+            "artifacts": artifact_inventory,
+            "manifests": job_manifest_inventory,
+            "parent_seal_candidate": parent_candidate_inventory,
+        }:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase A aggregate inventory")
+        authority.revalidate()
+        yield {
+            "raw": raw_by_key,
+            "pins": pins_by_key,
+            "provenance": provenance,
+            "manifest": manifest,
+            "manifest_pin": manifest_pin,
+            "request": request,
+            "request_pin": request_pin,
+            "trace_contract_summary": job_tools["trace_contract"],
+            "parent_candidate_root": NATIVE_BUILDER_PHASE_A_PARENT_SEAL_ROOT,
+            "parent_helper_raw": parent_helper_raw,
+            "parent_helper_pin": parent_helper_pin,
+            "parent_launcher_raw": parent_launcher_raw,
+            "parent_launcher_pin": FilePin(
+                parent_launcher_pin.sha256,
+                parent_launcher_pin.size_bytes,
+                True,
+            ),
+            "authority": authority,
+        }
+        authority.revalidate()
+    finally:
+        authority.close()
+
+
+def _validated_phase_a_candidate_materials(
+    committed_sources: Mapping[str, bytes],
+    *,
+    python_pin: FilePin,
+    parent_helper_raw: bytes,
+    parent_helper_pin: FilePin,
+) -> dict[str, Any]:
+    with _load_native_builder_phase_a(
+        committed_sources, python_pin=python_pin
+    ) as builder_phase_a:
+        transfer_raw = builder_phase_a["raw"]["stage-transfer"]
+        transfer_pin = builder_phase_a["pins"]["stage-transfer"]
+        if (
+            builder_phase_a["parent_helper_raw"] != parent_helper_raw
+            or builder_phase_a["parent_helper_pin"] != parent_helper_pin
+            or builder_phase_a["parent_launcher_raw"]
+            != builder_phase_a["raw"]["parent-seal"]
+            or builder_phase_a["parent_launcher_pin"].public()
+            != builder_phase_a["pins"]["parent-seal"].public()
+        ):
+            _fail("CORE_BOOTSTRAP_REVIEW_INVALID", "parent seal builder mismatch")
+        _stdlib_require_static_elf(transfer_raw, "stage transfer launcher")
+        _stdlib_require_static_elf(
+            builder_phase_a["parent_launcher_raw"], "parent seal launcher"
+        )
+        builder_phase_a["authority"].revalidate()
+        return {
+            "transfer_raw": transfer_raw,
+            "transfer_pin": transfer_pin,
+            "transfer_build_provenance": builder_phase_a["provenance"][
+                "stage-transfer"
+            ],
+            "parent_candidate_root": builder_phase_a["parent_candidate_root"],
+            "parent_helper_candidate_pin": builder_phase_a["parent_helper_pin"],
+            "parent_launcher_pin": builder_phase_a["parent_launcher_pin"],
+            "parent_build_provenance": builder_phase_a["provenance"]["parent-seal"],
+            "initial_launcher_raw": builder_phase_a["raw"]["initial-launcher"],
+            "initial_launcher_pin": builder_phase_a["pins"]["initial-launcher"],
+            "initial_launcher_build_provenance": builder_phase_a["provenance"][
+                "initial-launcher"
+            ],
+            "phase_a_manifest": builder_phase_a["manifest"],
+            "phase_a_manifest_pin": builder_phase_a["manifest_pin"],
+            "phase_a_request": builder_phase_a["request"],
+            "phase_a_request_pin": builder_phase_a["request_pin"],
+            "phase_a_trace_contract": builder_phase_a["trace_contract_summary"],
+        }
+
+
 def _core_bootstrap_review_materials(
     committed_sources: Mapping[str, bytes], *, require_core_candidate: bool
 ) -> dict[str, Any]:
@@ -4613,68 +7143,18 @@ def _core_bootstrap_review_materials(
     if engine_document.get("publisher_python_pin") != python_pin.public():
         _fail("CORE_BOOTSTRAP_REVIEW_INVALID", "engine source Python pin")
 
-    transfer_root = STAGE_TRANSFER_LAUNCHER_REVIEW_CANDIDATE.parent
-    _require_user_review_candidate(
-        transfer_root,
-        {STAGE_TRANSFER_LAUNCHER_REVIEW_CANDIDATE: 0o555},
-        "stage transfer launcher review candidate",
+    builder_materials = _validated_phase_a_candidate_materials(
+        committed_sources,
+        python_pin=python_pin,
+        parent_helper_raw=parent_helper_raw,
+        parent_helper_pin=parent_helper_pin,
     )
-    transfer_pin = _require_static_review_elf(
-        STAGE_TRANSFER_LAUNCHER_REVIEW_CANDIDATE,
-        "stage transfer launcher",
-    )
-    transfer_raw, transfer_raw_pin = _read_regular(
-        STAGE_TRANSFER_LAUNCHER_REVIEW_CANDIDATE,
-        "stage transfer launcher",
-        exact_mode=0o555,
-    )
-    if (transfer_raw_pin.sha256, transfer_raw_pin.size_bytes) != (
-        transfer_pin.sha256,
-        transfer_pin.size_bytes,
-    ):
-        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", "stage transfer drift")
-    if (
-        helper_pin.sha256.encode("ascii") not in transfer_raw
-        or str(helper_pin.size_bytes).encode("ascii") not in transfer_raw
-        or python_pin.sha256.encode("ascii") not in transfer_raw
-        or str(python_pin.size_bytes).encode("ascii") not in transfer_raw
-    ):
-        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", "stage transfer embedded pins")
-
-    _require_user_review_candidate(
-        PARENT_SEAL_REVIEW_CANDIDATE_ROOT,
-        {
-            PARENT_SEAL_REVIEW_CANDIDATE_ROOT / PARENT_SEAL_HELPER_SOURCE.name: 0o444,
-            PARENT_SEAL_REVIEW_CANDIDATE_ROOT / PARENT_SEAL_LAUNCHER_NAME: 0o555,
-        },
-        "parent seal review candidate",
-    )
-    parent_helper_candidate_raw, parent_helper_candidate_pin = _read_regular(
-        PARENT_SEAL_REVIEW_CANDIDATE_ROOT / PARENT_SEAL_HELPER_SOURCE.name,
-        "parent seal helper candidate",
-        exact_mode=0o444,
-    )
-    if parent_helper_candidate_raw != parent_helper_raw:
-        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", "parent helper differs from HEAD")
-    parent_launcher_path = PARENT_SEAL_REVIEW_CANDIDATE_ROOT / PARENT_SEAL_LAUNCHER_NAME
-    parent_launcher_pin = _require_static_review_elf(
-        parent_launcher_path, "parent seal launcher"
-    )
-    parent_launcher_raw, parent_launcher_raw_pin = _read_regular(
-        parent_launcher_path, "parent seal launcher", exact_mode=0o555
-    )
-    if (
-        parent_launcher_raw_pin.sha256,
-        parent_launcher_raw_pin.size_bytes,
-    ) != (parent_launcher_pin.sha256, parent_launcher_pin.size_bytes):
-        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", "parent launcher drift")
-    if (
-        parent_helper_pin.sha256.encode("ascii") not in parent_launcher_raw
-        or str(parent_helper_pin.size_bytes).encode("ascii") not in parent_launcher_raw
-        or python_pin.sha256.encode("ascii") not in parent_launcher_raw
-        or str(python_pin.size_bytes).encode("ascii") not in parent_launcher_raw
-    ):
-        _fail("CORE_BOOTSTRAP_REVIEW_INVALID", "parent seal embedded pins")
+    transfer_raw = builder_materials["transfer_raw"]
+    transfer_pin = builder_materials["transfer_pin"]
+    transfer_build_provenance = builder_materials["transfer_build_provenance"]
+    parent_helper_candidate_pin = builder_materials["parent_helper_candidate_pin"]
+    parent_launcher_pin = builder_materials["parent_launcher_pin"]
+    parent_build_provenance = builder_materials["parent_build_provenance"]
 
     buildplugin_helper_candidate = (
         BUILDPLUGIN_ADMIN_REVIEW_CANDIDATE_ROOT / BUILDPLUGIN_HELPER_SOURCE.name
@@ -4725,10 +7205,35 @@ def _core_bootstrap_review_materials(
         ).public(),
         "engine_wrapper_bindings": wrapper_bindings,
         "python_pin": python_pin.public(),
-        "stage_transfer_launcher_pin": transfer_pin.public(),
+        "stage_transfer_launcher": {
+            "pin": transfer_pin.public(),
+            "build_provenance": transfer_build_provenance,
+        },
+        "initial_bootstrap_launcher": {
+            "pin": builder_materials["initial_launcher_pin"].public(),
+            "build_provenance": builder_materials["initial_launcher_build_provenance"],
+        },
+        "native_builder_phase_a": {
+            "root": str(NATIVE_BUILDER_PHASE_A_ROOT),
+            "manifest_pin": builder_materials["phase_a_manifest_pin"].public(),
+            "manifest_content_digest": builder_materials["phase_a_manifest"][
+                "content_digest"
+            ],
+            "request_pin": builder_materials["phase_a_request_pin"].public(),
+            "request_content_digest": builder_materials["phase_a_request"][
+                "content_digest"
+            ],
+            "source_bundle": builder_materials["phase_a_request"]["source_bundle"],
+            "source_commit": builder_materials["phase_a_request"]["source_commit"],
+            "sources": builder_materials["phase_a_request"]["sources"],
+            "builder": builder_materials["phase_a_request"]["builder"],
+            "trace_contract": builder_materials["phase_a_trace_contract"],
+        },
         "parent_seal": {
+            "candidate_root": str(builder_materials["parent_candidate_root"]),
             "helper_pin": parent_helper_candidate_pin.public(),
             "launcher_pin": parent_launcher_pin.public(),
+            "launcher_build_provenance": parent_build_provenance,
         },
         "buildplugin": {
             "helper_pin": buildplugin_helper_candidate_pin.public(),
@@ -4770,8 +7275,8 @@ def _core_bootstrap_review_materials(
         if raw != expected_core[path.name]:
             _fail("CORE_BOOTSTRAP_REVIEW_INVALID", f"core {path.name}")
         core_pins[path.name] = pin.public()
-    _require_static_review_elf(
-        CORE_BOOTSTRAP_REVIEW_CANDIDATE_ROOT / "transfer-r8-ue57-stage-installer",
+    _stdlib_require_static_elf(
+        expected_core["transfer-r8-ue57-stage-installer"],
         "core stage transfer launcher",
     )
     result["core_candidate"] = {
@@ -4826,7 +7331,10 @@ def audit_core_bootstrap_review_inputs() -> dict[str, Any]:
     return seal_document(
         {
             "schema": CORE_BOOTSTRAP_REVIEW_AUDIT_SCHEMA,
-            "status": "core_bootstrap_review_inputs_audited_zero_write",
+            "status": (
+                "core_bootstrap_review_inputs_audited_without_"
+                "persistent_authority_write"
+            ),
             "accepted": False,
             "git": git_binding,
             "reviewed_inputs": materials,
@@ -4869,7 +7377,11 @@ def audit_core_bootstrap_review_inputs() -> dict[str, Any]:
             },
             "claims": {
                 "root_execution_performed": False,
-                "output_write_performed": False,
+                "persistent_authority_write_performed": False,
+                "ephemeral_review_build_performed": False,
+                "dedicated_builder_phase_a_validated": True,
+                "local_user_native_compile_performed": False,
+                "native_candidates_byte_equal_deterministic_rebuild": True,
                 "all_sources_equal_head": True,
                 "engine_source_pin_final_before_core": True,
                 "native_launchers_static": True,
@@ -4877,6 +7389,1596 @@ def audit_core_bootstrap_review_inputs() -> dict[str, Any]:
             },
         }
     )
+
+
+def _initial_bootstrap_sequence(
+    audit_document: Mapping[str, Any], *, git_commit: str
+) -> list[dict[str, Any]]:
+    reviewed = audit_document["reviewed_inputs"]
+    core = reviewed["core_candidate"]
+    stage_transfer = reviewed["stage_transfer_launcher"]
+    parent = reviewed["parent_seal"]
+    buildplugin = reviewed["buildplugin"]
+    if (
+        stage_transfer.get("pin") != core["files"]["transfer-r8-ue57-stage-installer"]
+        or stage_transfer.get("build_provenance", {})
+        .get("job", {})
+        .get("output", {})
+        .get("pin")
+        != stage_transfer.get("pin")
+        or parent.get("launcher_build_provenance", {})
+        .get("job", {})
+        .get("output", {})
+        .get("pin")
+        != parent.get("launcher_pin")
+        or parent.get("candidate_root") != str(NATIVE_BUILDER_PHASE_A_PARENT_SEAL_ROOT)
+    ):
+        _fail("INITIAL_BOOTSTRAP_INPUT_INVALID", "native review provenance binding")
+
+    def record(
+        source_name: str,
+        destination_name: str,
+        source_mode: str,
+        final_mode: str,
+        pin: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        _parse_pin(pin, f"initial bootstrap {source_name}")
+        return {
+            "source_name": source_name,
+            "destination_name": destination_name,
+            "source_mode": source_mode,
+            "final_mode": final_mode,
+            "pin": dict(pin),
+        }
+
+    buildplugin_files = {
+        "vista_r8_buildplugin_authority.py": buildplugin["helper_pin"],
+        BUILDPLUGIN_ADMIN_SCRIPT_NAME: buildplugin["admin_script_pin"],
+    }
+    return [
+        {
+            "key": "core",
+            "candidate_root": str(CORE_BOOTSTRAP_REVIEW_CANDIDATE_ROOT),
+            "candidate_root_mode": "0555",
+            "candidate_files": [
+                record(
+                    "vista_r8_ue57_authority_admin.py",
+                    "vista_r8_ue57_authority_admin.py",
+                    "0444",
+                    "0500",
+                    core["files"]["vista_r8_ue57_authority_admin.py"],
+                ),
+                record(
+                    "provision_vista_r8_ue57_engine.sh",
+                    "provision_vista_r8_ue57_engine.sh",
+                    "0444",
+                    "0500",
+                    core["files"]["provision_vista_r8_ue57_engine.sh"],
+                ),
+                record(
+                    "transfer-r8-ue57-stage-installer",
+                    "transfer-r8-ue57-stage-installer",
+                    "0555",
+                    "0555",
+                    core["files"]["transfer-r8-ue57-stage-installer"],
+                ),
+                record(
+                    "engine-source-pin.json",
+                    "engine-source-pin.json",
+                    "0444",
+                    "0444",
+                    core["files"]["engine-source-pin.json"],
+                ),
+            ],
+            "final_root": str(INSTALLED_ROOT),
+            "final_root_mode": "0555",
+            "generated_files": [
+                {"name": name, "mode": "0600", "size_bytes": 0}
+                for name in (
+                    ".engine.lock",
+                    ".runtime.lock",
+                    ".bundle.lock",
+                    ".executor.lock",
+                )
+            ],
+            "native_build_provenance": stage_transfer["build_provenance"],
+            "review_provenance": {
+                "source": "core_review_audit.reviewed_inputs.core_candidate",
+                "binding": dict(core),
+                "git_commit": git_commit,
+            },
+        },
+        {
+            "key": "parent-seal",
+            "candidate_root": str(NATIVE_BUILDER_PHASE_A_PARENT_SEAL_ROOT),
+            "candidate_root_mode": "0555",
+            "candidate_files": [
+                record(
+                    PARENT_SEAL_HELPER_SOURCE.name,
+                    PARENT_SEAL_HELPER_SOURCE.name,
+                    "0444",
+                    "0500",
+                    parent["helper_pin"],
+                ),
+                record(
+                    PARENT_SEAL_LAUNCHER_NAME,
+                    PARENT_SEAL_LAUNCHER_NAME,
+                    "0555",
+                    "0555",
+                    parent["launcher_pin"],
+                ),
+            ],
+            "final_root": "/root/vista-authority-parent-seal-r1",
+            "final_root_mode": "0555",
+            "generated_files": [],
+            "native_build_provenance": parent["launcher_build_provenance"],
+            "review_provenance": {
+                "source": "core_review_audit.reviewed_inputs.parent_seal",
+                "binding": {
+                    "candidate_root": parent["candidate_root"],
+                    "helper_pin": parent["helper_pin"],
+                    "launcher_pin": parent["launcher_pin"],
+                },
+                "git_commit": git_commit,
+            },
+        },
+        {
+            "key": "buildplugin-helper",
+            "candidate_root": str(BUILDPLUGIN_ADMIN_REVIEW_CANDIDATE_ROOT),
+            "candidate_root_mode": "0555",
+            "candidate_files": [
+                record(
+                    BUILDPLUGIN_HELPER_SOURCE.name,
+                    BUILDPLUGIN_HELPER_SOURCE.name,
+                    "0444",
+                    "0500",
+                    buildplugin_files[BUILDPLUGIN_HELPER_SOURCE.name],
+                )
+            ],
+            "final_root": str(BUILDPLUGIN_HELPER_INSTALL_ROOT),
+            "final_root_mode": "0555",
+            "generated_files": [],
+            "native_build_provenance": None,
+            "review_provenance": {
+                "source": "core_review_audit.reviewed_inputs.buildplugin",
+                "binding": dict(buildplugin),
+                "git_commit": git_commit,
+            },
+        },
+        {
+            "key": "buildplugin-admin",
+            "candidate_root": str(BUILDPLUGIN_ADMIN_REVIEW_CANDIDATE_ROOT),
+            "candidate_root_mode": "0555",
+            "candidate_files": [
+                record(
+                    BUILDPLUGIN_ADMIN_SCRIPT_NAME,
+                    "publish-reconcile-buildplugin",
+                    "0444",
+                    "0500",
+                    buildplugin_files[BUILDPLUGIN_ADMIN_SCRIPT_NAME],
+                )
+            ],
+            "final_root": str(BUILDPLUGIN_ADMIN_INSTALL_ROOT),
+            "final_root_mode": "0555",
+            "generated_files": [{"name": "receipt.json", "mode": "0444"}],
+            "native_build_provenance": None,
+            "review_provenance": {
+                "source": "core_review_audit.reviewed_inputs.buildplugin",
+                "binding": dict(buildplugin),
+                "git_commit": git_commit,
+            },
+        },
+    ]
+
+
+def _legacy_test_only_build_initial_bootstrap_review_candidate(
+    reviewed_core_audit_pin: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build and atomically freeze the generic four-root bootstrap candidate."""
+
+    if os.geteuid() != REVIEW_UID or os.getegid() != REVIEW_GID:
+        _fail("UNPRIVILEGED_REVIEW_REQUIRED", "initial bootstrap candidate")
+    expected_audit_pin = _parse_pin(
+        reviewed_core_audit_pin, "reviewed core bootstrap audit"
+    )
+    if expected_audit_pin.size_bytes <= 0:
+        _fail("PIN_INVALID", "reviewed core bootstrap audit")
+    git_binding, committed_sources = _require_unprivileged_review_binding()
+    audit_document = audit_core_bootstrap_review_inputs()
+    audit_raw = canonical_json(audit_document)
+    observed_audit_pin = FilePin(hashlib.sha256(audit_raw).hexdigest(), len(audit_raw))
+    if observed_audit_pin != expected_audit_pin:
+        _fail("INITIAL_BOOTSTRAP_AUDIT_PIN_MISMATCH", "core bootstrap audit")
+    if audit_document.get("git") != git_binding:
+        _fail("INITIAL_BOOTSTRAP_BUILD_INPUT_DRIFT", "Git binding")
+    if audit_document.get("content_digest") != content_digest(audit_document):
+        _fail("INITIAL_BOOTSTRAP_BUILD_INPUT_DRIFT", "core audit seal")
+
+    final = INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT
+    if os.path.lexists(final):
+        _fail("FINAL_NOT_FRESH", str(final))
+    helper_relative = INITIAL_BOOTSTRAP_HELPER_SOURCE.relative_to(
+        CHECKOUT_ROOT
+    ).as_posix()
+    launcher_relative = INITIAL_BOOTSTRAP_LAUNCHER_SOURCE.relative_to(
+        CHECKOUT_ROOT
+    ).as_posix()
+    helper_raw = committed_sources[helper_relative]
+    launcher_source = committed_sources[launcher_relative]
+    helper_pin = FilePin(hashlib.sha256(helper_raw).hexdigest(), len(helper_raw))
+    _python_raw, python_pin = _read_regular(
+        PYTHON_PATH, "initial bootstrap Python", exact_mode=0o755
+    )
+    staging = Path(tempfile.mkdtemp(prefix=f".{final.name}.staging-", dir=final.parent))
+    owner = (REVIEW_UID, REVIEW_GID)
+    try:
+        launcher_path = staging / INITIAL_BOOTSTRAP_LAUNCHER_NAME
+        with _protected_output_memfd(
+            "vista-r8-initial-bootstrap-launcher"
+        ) as output_fd:
+            launcher_pin, launcher_build = _compile_initial_bootstrap_launcher(
+                committed_source=launcher_source,
+                helper_pin=helper_pin.public(),
+                python_pin=python_pin.public(),
+                output_fd=output_fd,
+            )
+            static_pin = _require_static_review_elf_fd(
+                output_fd, "initial bootstrap launcher candidate"
+            )
+            launcher_raw, sealed_pin = _read_sealed_native_output(
+                output_fd, "initial bootstrap launcher candidate"
+            )
+        if launcher_pin != static_pin or launcher_pin != sealed_pin:
+            _fail("INITIAL_BOOTSTRAP_BUILD_INPUT_DRIFT", "sealed output pin")
+        materialized_launcher_pin = _write_new(
+            launcher_path, launcher_raw, 0o555, owner
+        )
+        if (
+            materialized_launcher_pin.sha256,
+            materialized_launcher_pin.size_bytes,
+        ) != (launcher_pin.sha256, launcher_pin.size_bytes):
+            _fail("INITIAL_BOOTSTRAP_BUILD_INPUT_DRIFT", "materialized launcher")
+        _write_new(
+            staging / INITIAL_BOOTSTRAP_HELPER_SOURCE.name,
+            helper_raw,
+            0o444,
+            owner,
+        )
+        sequence = _initial_bootstrap_sequence(
+            audit_document, git_commit=git_binding["commit"]
+        )
+        input_document = seal_document(
+            {
+                "schema": INITIAL_BOOTSTRAP_INPUT_PIN_SCHEMA,
+                "status": "reviewed_initial_bootstrap_inputs_frozen",
+                "accepted": False,
+                "git": git_binding,
+                "components": {
+                    "installed_root": {
+                        "path": str(INITIAL_BOOTSTRAP_INSTALL_ROOT),
+                        "mode": "0555",
+                    },
+                    "launcher": {
+                        "path": str(
+                            INITIAL_BOOTSTRAP_INSTALL_ROOT
+                            / INITIAL_BOOTSTRAP_LAUNCHER_NAME
+                        ),
+                        "mode": "0500",
+                        "pin": launcher_pin.public(),
+                        "build_provenance": launcher_build,
+                    },
+                    "helper": {
+                        "path": str(
+                            INITIAL_BOOTSTRAP_INSTALL_ROOT
+                            / INITIAL_BOOTSTRAP_HELPER_SOURCE.name
+                        ),
+                        "mode": "0500",
+                        "pin": helper_pin.public(),
+                    },
+                    "input_pin": {
+                        "path": str(
+                            INITIAL_BOOTSTRAP_INSTALL_ROOT
+                            / INITIAL_BOOTSTRAP_INPUT_NAME
+                        ),
+                        "mode": "0444",
+                    },
+                    "lock": {
+                        "path": str(INITIAL_BOOTSTRAP_INSTALL_ROOT / ".bootstrap.lock"),
+                        "mode": "0600",
+                        "size_bytes": 0,
+                    },
+                    "python": {
+                        "path": str(PYTHON_PATH),
+                        "mode": "0755",
+                        "pin": python_pin.public(),
+                    },
+                },
+                "core_review_audit": {
+                    "schema": CORE_BOOTSTRAP_REVIEW_AUDIT_SCHEMA,
+                    "pin": observed_audit_pin.public(),
+                    "content_digest": audit_document["content_digest"],
+                },
+                "sequence": sequence,
+                "operations": {
+                    "publish": {
+                        "operation": "publish-initial-authorities",
+                        "acknowledgement": INITIAL_BOOTSTRAP_PUBLISH_ACKNOWLEDGEMENT,
+                    },
+                    "reconcile": {
+                        "operation": "reconcile-initial-authorities",
+                        "acknowledgement": INITIAL_BOOTSTRAP_RECONCILE_ACKNOWLEDGEMENT,
+                    },
+                    "resume": {
+                        "operation": "resume-initial-authorities",
+                        "acknowledgement": INITIAL_BOOTSTRAP_RESUME_ACKNOWLEDGEMENT,
+                    },
+                },
+                "claims": {
+                    "append_only_prefix_order": True,
+                    "candidate_free_reconcile": True,
+                    "fresh_no_replace": True,
+                    "no_delete_no_repair_no_rollback": True,
+                    "root_compiler_or_subprocess_execution": False,
+                    "root_network_access": False,
+                    "durability_unknown_reconcile_only": True,
+                    "admin_launcher_fd_required": True,
+                    "launcher_receipt_live_bound": True,
+                },
+            }
+        )
+        input_pin = _write_new(
+            staging / INITIAL_BOOTSTRAP_INPUT_NAME,
+            canonical_json(input_document),
+            0o444,
+            owner,
+        )
+        _seal_private_tree(staging, owner=owner)
+        publish_staging(staging, final)
+        return {
+            "status": "user_published_initial_bootstrap_review_candidate",
+            "accepted": False,
+            "candidate_root": str(final),
+            "launcher_pin": launcher_pin.public(),
+            "helper_pin": helper_pin.public(),
+            "input_pin": input_pin.public(),
+            "core_review_audit_pin": observed_audit_pin.public(),
+            "core_review_audit_content_digest": audit_document["content_digest"],
+            "git": git_binding,
+            "launcher_build_provenance": launcher_build,
+            "root_execution_performed": False,
+        }
+    finally:
+        if os.path.lexists(staging):
+            _remove_private_staging(staging)
+
+
+def _legacy_test_only_build_initial_bootstrap_installer_review_candidate() -> dict[
+    str, Any
+]:
+    """Freeze the sole static binary used by the manual root trust ceremony."""
+
+    if os.geteuid() != REVIEW_UID or os.getegid() != REVIEW_GID:
+        _fail("UNPRIVILEGED_REVIEW_REQUIRED", "initial bootstrap installer")
+    git_binding, committed_sources = _require_unprivileged_review_binding()
+    candidate_files = {
+        INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT
+        / INITIAL_BOOTSTRAP_LAUNCHER_NAME: 0o555,
+        INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT
+        / INITIAL_BOOTSTRAP_HELPER_SOURCE.name: 0o444,
+        INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT / INITIAL_BOOTSTRAP_INPUT_NAME: 0o444,
+    }
+    _require_user_review_candidate(
+        INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT,
+        candidate_files,
+        "initial bootstrap review candidate",
+    )
+    root_fd = os.open(INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT, _directory_flags())
+    descriptors: dict[str, int] = {}
+    metadata: dict[str, os.stat_result] = {}
+    raw_by_name: dict[str, bytes] = {}
+    pins: dict[str, FilePin] = {}
+    try:
+        root_info = os.fstat(root_fd)
+        if (
+            not stat.S_ISDIR(root_info.st_mode)
+            or root_info.st_nlink != 2
+            or root_info.st_uid != REVIEW_UID
+            or root_info.st_gid != REVIEW_GID
+            or stat.S_IMODE(root_info.st_mode) != 0o555
+            or set(os.listdir(root_fd)) != {path.name for path in candidate_files}
+        ):
+            _fail(
+                "INITIAL_BOOTSTRAP_INSTALLER_CANDIDATE_INVALID",
+                "candidate root",
+            )
+        for path, mode in candidate_files.items():
+            descriptor = os.open(path.name, _file_flags(), dir_fd=root_fd)
+            descriptors[path.name] = descriptor
+            info = os.fstat(descriptor)
+            metadata[path.name] = info
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_nlink != 1
+                or info.st_uid != REVIEW_UID
+                or info.st_gid != REVIEW_GID
+                or stat.S_IMODE(info.st_mode) != mode
+                or info.st_size <= 0
+                or info.st_size > 64 * 1024 * 1024
+                or info.st_blocks * 512 < info.st_size
+            ):
+                _fail(
+                    "INITIAL_BOOTSTRAP_INSTALLER_CANDIDATE_INVALID",
+                    path.name,
+                )
+            digest, size = _hash_fd(descriptor)
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            raw = bytearray()
+            while block := os.read(descriptor, CHUNK_BYTES):
+                raw.extend(block)
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            raw_by_name[path.name] = bytes(raw)
+            pins[path.name] = FilePin(digest, size, bool(mode & 0o111))
+
+        helper_relative = INITIAL_BOOTSTRAP_HELPER_SOURCE.relative_to(
+            CHECKOUT_ROOT
+        ).as_posix()
+        launcher_relative = INITIAL_BOOTSTRAP_LAUNCHER_SOURCE.relative_to(
+            CHECKOUT_ROOT
+        ).as_posix()
+        installer_relative = INITIAL_BOOTSTRAP_INSTALLER_SOURCE.relative_to(
+            CHECKOUT_ROOT
+        ).as_posix()
+        if (
+            raw_by_name[INITIAL_BOOTSTRAP_HELPER_SOURCE.name]
+            != committed_sources[helper_relative]
+        ):
+            _fail(
+                "INITIAL_BOOTSTRAP_INSTALLER_CANDIDATE_INVALID",
+                "helper differs from exact HEAD",
+            )
+        launcher_pin = pins[INITIAL_BOOTSTRAP_LAUNCHER_NAME]
+        helper_pin = pins[INITIAL_BOOTSTRAP_HELPER_SOURCE.name]
+        input_pin = pins[INITIAL_BOOTSTRAP_INPUT_NAME]
+        _python_raw, python_pin = _read_regular(
+            PYTHON_PATH, "initial bootstrap installer Python", exact_mode=0o755
+        )
+        final = INITIAL_BOOTSTRAP_INSTALLER_REVIEW_CANDIDATE_ROOT
+        if os.path.lexists(final):
+            _fail("FINAL_NOT_FRESH", str(final))
+        with _protected_output_memfd(
+            "vista-r8-initial-bootstrap-launcher-reproduction"
+        ) as reproduction_fd:
+            reproduced_pin, reproduced_build = _compile_initial_bootstrap_launcher(
+                committed_source=committed_sources[launcher_relative],
+                helper_pin=helper_pin.public(),
+                python_pin=python_pin.public(),
+                output_fd=reproduction_fd,
+            )
+            reproduced_static_pin = _require_static_review_elf_fd(
+                reproduction_fd, "reproduced initial bootstrap launcher"
+            )
+            reproduced_raw, reproduced_sealed_pin = _read_sealed_native_output(
+                reproduction_fd, "reproduced initial bootstrap launcher"
+            )
+            if (
+                reproduced_pin.public() != launcher_pin.public()
+                or reproduced_pin != reproduced_static_pin
+                or reproduced_pin != reproduced_sealed_pin
+                or reproduced_raw != raw_by_name[INITIAL_BOOTSTRAP_LAUNCHER_NAME]
+            ):
+                _fail(
+                    "INITIAL_BOOTSTRAP_INSTALLER_CANDIDATE_INVALID",
+                    "launcher differs from deterministic exact-HEAD build",
+                )
+
+        audit_document = audit_core_bootstrap_review_inputs()
+        audit_raw = canonical_json(audit_document)
+        audit_pin = FilePin(hashlib.sha256(audit_raw).hexdigest(), len(audit_raw))
+        if audit_document.get("git") != git_binding or audit_document.get(
+            "content_digest"
+        ) != content_digest(audit_document):
+            _fail(
+                "INITIAL_BOOTSTRAP_INSTALLER_CANDIDATE_INVALID",
+                "live core audit differs",
+            )
+        sequence = _initial_bootstrap_sequence(
+            audit_document, git_commit=git_binding["commit"]
+        )
+        input_document = strict_json(
+            raw_by_name[INITIAL_BOOTSTRAP_INPUT_NAME],
+            "initial bootstrap input pin",
+        )
+        expected_input_document = seal_document(
+            {
+                "schema": INITIAL_BOOTSTRAP_INPUT_PIN_SCHEMA,
+                "status": "reviewed_initial_bootstrap_inputs_frozen",
+                "accepted": False,
+                "git": git_binding,
+                "components": {
+                    "installed_root": {
+                        "path": str(INITIAL_BOOTSTRAP_INSTALL_ROOT),
+                        "mode": "0555",
+                    },
+                    "launcher": {
+                        "path": str(
+                            INITIAL_BOOTSTRAP_INSTALL_ROOT
+                            / INITIAL_BOOTSTRAP_LAUNCHER_NAME
+                        ),
+                        "mode": "0500",
+                        "pin": launcher_pin.public(),
+                        "build_provenance": reproduced_build,
+                    },
+                    "helper": {
+                        "path": str(
+                            INITIAL_BOOTSTRAP_INSTALL_ROOT
+                            / INITIAL_BOOTSTRAP_HELPER_SOURCE.name
+                        ),
+                        "mode": "0500",
+                        "pin": helper_pin.public(),
+                    },
+                    "input_pin": {
+                        "path": str(
+                            INITIAL_BOOTSTRAP_INSTALL_ROOT
+                            / INITIAL_BOOTSTRAP_INPUT_NAME
+                        ),
+                        "mode": "0444",
+                    },
+                    "lock": {
+                        "path": str(INITIAL_BOOTSTRAP_INSTALL_ROOT / ".bootstrap.lock"),
+                        "mode": "0600",
+                        "size_bytes": 0,
+                    },
+                    "python": {
+                        "path": str(PYTHON_PATH),
+                        "mode": "0755",
+                        "pin": python_pin.public(),
+                    },
+                },
+                "core_review_audit": {
+                    "schema": CORE_BOOTSTRAP_REVIEW_AUDIT_SCHEMA,
+                    "pin": audit_pin.public(),
+                    "content_digest": audit_document["content_digest"],
+                },
+                "sequence": sequence,
+                "operations": {
+                    "publish": {
+                        "operation": "publish-initial-authorities",
+                        "acknowledgement": INITIAL_BOOTSTRAP_PUBLISH_ACKNOWLEDGEMENT,
+                    },
+                    "reconcile": {
+                        "operation": "reconcile-initial-authorities",
+                        "acknowledgement": INITIAL_BOOTSTRAP_RECONCILE_ACKNOWLEDGEMENT,
+                    },
+                    "resume": {
+                        "operation": "resume-initial-authorities",
+                        "acknowledgement": INITIAL_BOOTSTRAP_RESUME_ACKNOWLEDGEMENT,
+                    },
+                },
+                "claims": {
+                    "append_only_prefix_order": True,
+                    "candidate_free_reconcile": True,
+                    "fresh_no_replace": True,
+                    "no_delete_no_repair_no_rollback": True,
+                    "root_compiler_or_subprocess_execution": False,
+                    "root_network_access": False,
+                    "durability_unknown_reconcile_only": True,
+                    "admin_launcher_fd_required": True,
+                    "launcher_receipt_live_bound": True,
+                },
+            }
+        )
+        if input_document != expected_input_document:
+            _fail(
+                "INITIAL_BOOTSTRAP_INSTALLER_CANDIDATE_INVALID",
+                "closed input binding",
+            )
+        staging = Path(
+            tempfile.mkdtemp(prefix=f".{final.name}.staging-", dir=final.parent)
+        )
+        owner = (REVIEW_UID, REVIEW_GID)
+        try:
+            output = staging / INITIAL_BOOTSTRAP_INSTALLER_NAME
+            with _protected_output_memfd(
+                "vista-r8-initial-bootstrap-installer"
+            ) as installer_fd:
+                installer_pin, build_provenance = _compile_initial_bootstrap_installer(
+                    committed_source=committed_sources[installer_relative],
+                    launcher_pin=launcher_pin.public(),
+                    helper_pin=helper_pin.public(),
+                    input_pin=input_pin.public(),
+                    output_fd=installer_fd,
+                )
+                installer_static_pin = _require_static_review_elf_fd(
+                    installer_fd, "initial bootstrap installer"
+                )
+                installer_raw, installer_sealed_pin = _read_sealed_native_output(
+                    installer_fd, "initial bootstrap installer"
+                )
+            if (
+                installer_pin != installer_static_pin
+                or installer_pin != installer_sealed_pin
+            ):
+                _fail(
+                    "INITIAL_BOOTSTRAP_INSTALLER_BUILD_INPUT_DRIFT",
+                    "sealed output pin",
+                )
+            materialized_installer_pin = _write_new(output, installer_raw, 0o555, owner)
+            if (
+                materialized_installer_pin.sha256,
+                materialized_installer_pin.size_bytes,
+            ) != (installer_pin.sha256, installer_pin.size_bytes):
+                _fail(
+                    "INITIAL_BOOTSTRAP_INSTALLER_BUILD_INPUT_DRIFT",
+                    "materialized installer",
+                )
+            for name, descriptor in descriptors.items():
+                if (
+                    _identity(os.fstat(descriptor)) != _identity(metadata[name])
+                    or _hash_fd(descriptor)
+                    != (pins[name].sha256, pins[name].size_bytes)
+                    or _identity(os.stat(name, dir_fd=root_fd, follow_symlinks=False))
+                    != _identity(metadata[name])
+                ):
+                    _fail(
+                        "INITIAL_BOOTSTRAP_INSTALLER_CANDIDATE_DRIFT",
+                        name,
+                    )
+            if (
+                _identity(os.fstat(root_fd)) != _identity(root_info)
+                or _identity(os.lstat(INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT))
+                != _identity(root_info)
+                or set(os.listdir(root_fd)) != {path.name for path in candidate_files}
+            ):
+                _fail(
+                    "INITIAL_BOOTSTRAP_INSTALLER_CANDIDATE_DRIFT",
+                    "candidate root",
+                )
+            _seal_private_tree(staging, owner=owner)
+            publish_staging(staging, final)
+            return {
+                "status": (
+                    "user_published_initial_bootstrap_installer_review_candidate"
+                ),
+                "accepted": False,
+                "candidate_root": str(final),
+                "installer": {
+                    "name": INITIAL_BOOTSTRAP_INSTALLER_NAME,
+                    "pin": installer_pin.public(),
+                    "review_mode": "0555",
+                    "manual_install_root": str(
+                        INITIAL_BOOTSTRAP_INSTALLER_INSTALL_ROOT
+                    ),
+                    "manual_install_root_mode": "0555",
+                    "manual_install_mode": "0500",
+                    "manual_install_inventory": [INITIAL_BOOTSTRAP_INSTALLER_NAME],
+                },
+                "reviewed_initial_bootstrap_candidate": {
+                    "root": str(INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT),
+                    "root_mode": "0555",
+                    "launcher_pin": launcher_pin.public(),
+                    "helper_pin": helper_pin.public(),
+                    "input_pin": input_pin.public(),
+                },
+                "operations": {
+                    "install": {
+                        "operation": "install-initial-bootstrap",
+                        "acknowledgement": (INITIAL_BOOTSTRAP_INSTALL_ACKNOWLEDGEMENT),
+                    },
+                    "reconcile": {
+                        "operation": "reconcile-initial-bootstrap",
+                        "acknowledgement": (
+                            INITIAL_BOOTSTRAP_INSTALL_RECONCILE_ACKNOWLEDGEMENT
+                        ),
+                    },
+                },
+                "git": git_binding,
+                "build_provenance": build_provenance,
+                "root_execution_performed": False,
+                "manual_trust_boundary_complete": False,
+            }
+        finally:
+            if os.path.lexists(staging):
+                _remove_private_staging(staging)
+    finally:
+        for descriptor in descriptors.values():
+            os.close(descriptor)
+        os.close(root_fd)
+
+
+def _native_builder_root_file_pin(path: Path, *, mode: int, label: str) -> FilePin:
+    info = os.lstat(path)
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or stat.S_IMODE(info.st_mode) != mode
+        or info.st_uid != ROOT_UID
+        or info.st_gid != ROOT_GID
+        or info.st_nlink != 1
+        or info.st_size <= 0
+        or info.st_blocks * 512 < info.st_size
+    ):
+        _fail("NATIVE_BUILDER_AUTHORITY_INVALID", label)
+    _raw, pin = _read_regular(path, label, exact_mode=mode)
+    return pin
+
+
+def _initial_input_document_for_builder(
+    *,
+    audit_document: Mapping[str, Any],
+    audit_pin: FilePin,
+    git_binding: Mapping[str, Any],
+    committed_sources: Mapping[str, bytes],
+) -> dict[str, Any]:
+    reviewed = audit_document["reviewed_inputs"]
+    phase_a = reviewed["native_builder_phase_a"]
+    launcher = reviewed["initial_bootstrap_launcher"]
+    helper_relative = INITIAL_BOOTSTRAP_HELPER_SOURCE.relative_to(
+        CHECKOUT_ROOT
+    ).as_posix()
+    helper_raw = committed_sources[helper_relative]
+    helper_pin = FilePin(hashlib.sha256(helper_raw).hexdigest(), len(helper_raw))
+    _python_raw, python_pin = _read_regular(
+        PYTHON_PATH, "initial bootstrap Python", exact_mode=0o755
+    )
+    return seal_document(
+        {
+            "schema": INITIAL_BOOTSTRAP_INPUT_PIN_SCHEMA,
+            "status": "dedicated_builder_initial_bootstrap_inputs_frozen",
+            "accepted": False,
+            "git": {
+                "commit": git_binding["commit"],
+                "source_bundle": phase_a["source_bundle"],
+                "sources": phase_a["sources"],
+            },
+            "native_builder_phase_a": phase_a,
+            "components": {
+                "installed_root": {
+                    "path": str(INITIAL_BOOTSTRAP_INSTALL_ROOT),
+                    "mode": "0555",
+                },
+                "launcher": {
+                    "path": str(
+                        INITIAL_BOOTSTRAP_INSTALL_ROOT / INITIAL_BOOTSTRAP_LAUNCHER_NAME
+                    ),
+                    "mode": "0500",
+                    "pin": launcher["pin"],
+                    "build_provenance": launcher["build_provenance"],
+                },
+                "helper": {
+                    "path": str(
+                        INITIAL_BOOTSTRAP_INSTALL_ROOT
+                        / INITIAL_BOOTSTRAP_HELPER_SOURCE.name
+                    ),
+                    "mode": "0500",
+                    "pin": helper_pin.public(),
+                },
+                "input_pin": {
+                    "path": str(
+                        INITIAL_BOOTSTRAP_INSTALL_ROOT / INITIAL_BOOTSTRAP_INPUT_NAME
+                    ),
+                    "mode": "0444",
+                },
+                "lock": {
+                    "path": str(INITIAL_BOOTSTRAP_INSTALL_ROOT / ".bootstrap.lock"),
+                    "mode": "0600",
+                    "size_bytes": 0,
+                },
+                "python": {
+                    "path": str(PYTHON_PATH),
+                    "mode": "0755",
+                    "pin": python_pin.public(),
+                },
+            },
+            "core_review_audit": {
+                "schema": CORE_BOOTSTRAP_REVIEW_AUDIT_SCHEMA,
+                "pin": audit_pin.public(),
+                "content_digest": audit_document["content_digest"],
+            },
+            "sequence": _initial_bootstrap_sequence(
+                audit_document, git_commit=git_binding["commit"]
+            ),
+            "operations": {
+                "publish": {
+                    "operation": "publish-initial-authorities",
+                    "acknowledgement": INITIAL_BOOTSTRAP_PUBLISH_ACKNOWLEDGEMENT,
+                },
+                "reconcile": {
+                    "operation": "reconcile-initial-authorities",
+                    "acknowledgement": INITIAL_BOOTSTRAP_RECONCILE_ACKNOWLEDGEMENT,
+                },
+                "resume": {
+                    "operation": "resume-initial-authorities",
+                    "acknowledgement": INITIAL_BOOTSTRAP_RESUME_ACKNOWLEDGEMENT,
+                },
+            },
+            "claims": {
+                "append_only_prefix_order": True,
+                "candidate_free_reconcile": True,
+                "fresh_no_replace": True,
+                "no_delete_no_repair_no_rollback": True,
+                "root_compiler_or_subprocess_execution": False,
+                "root_network_access": False,
+                "durability_unknown_reconcile_only": True,
+                "admin_launcher_fd_required": True,
+                "launcher_receipt_live_bound": True,
+                "dedicated_native_builder_required": True,
+            },
+        }
+    )
+
+
+def _native_builder_validate_phase_b_cross_binding(
+    *,
+    phase_b_request: Mapping[str, Any],
+    phase_a_request: Mapping[str, Any],
+    phase_a_request_pin: FilePin,
+    phase_a_manifest: Mapping[str, Any],
+    phase_a_manifest_pin: FilePin,
+) -> None:
+    request_fields = {
+        "schema",
+        "phase",
+        "status",
+        "accepted",
+        "builder",
+        "source_bundle",
+        "source_commit",
+        "sources",
+        "tools",
+        "trace_contract",
+        "jobs",
+        "phase_inputs",
+        "claims",
+        "content_digest",
+    }
+    if (
+        type(phase_a_request) is not dict
+        or set(phase_a_request) != request_fields
+        or phase_a_request.get("schema") != NATIVE_BUILDER_REQUEST_SCHEMA
+        or phase_a_request.get("phase") != "phase-a"
+        or phase_a_request.get("status") != "reviewed_native_build_request"
+        or phase_a_request.get("accepted") is not False
+        or phase_a_request.get("content_digest") != content_digest(phase_a_request)
+        or type(phase_b_request) is not dict
+        or set(phase_b_request) != request_fields
+        or phase_b_request.get("schema") != NATIVE_BUILDER_REQUEST_SCHEMA
+        or phase_b_request.get("phase") != "phase-b"
+        or phase_b_request.get("status") != "reviewed_native_build_request"
+        or phase_b_request.get("accepted") is not False
+        or phase_b_request.get("content_digest") != content_digest(phase_b_request)
+    ):
+        _fail("NATIVE_BUILDER_PHASE_B_LINEAGE_INVALID", "request envelope")
+
+    phase_a_source_bundle = phase_a_request.get("source_bundle")
+    phase_a_source_bundle_pin = (
+        phase_a_source_bundle.get("pin")
+        if type(phase_a_source_bundle) is dict
+        else None
+    )
+    manifest_fields = {
+        "schema",
+        "status",
+        "accepted",
+        "phase",
+        "request_pin",
+        "source_commit",
+        "source_bundle_pin",
+        "jobs",
+        "inventory",
+        "claims",
+        "content_digest",
+    }
+    if (
+        type(phase_a_manifest) is not dict
+        or set(phase_a_manifest) != manifest_fields
+        or phase_a_manifest.get("schema") != NATIVE_BUILDER_PHASE_A_SCHEMA
+        or phase_a_manifest.get("status") != "dedicated_builder_phase_closed"
+        or phase_a_manifest.get("accepted") is not False
+        or phase_a_manifest.get("phase") != "phase-a"
+        or phase_a_manifest.get("content_digest") != content_digest(phase_a_manifest)
+        or phase_a_manifest.get("request_pin") != phase_a_request_pin.public()
+        or phase_a_manifest.get("source_commit") != phase_a_request.get("source_commit")
+        or phase_a_manifest.get("source_bundle_pin") != phase_a_source_bundle_pin
+    ):
+        _fail("NATIVE_BUILDER_PHASE_B_LINEAGE_INVALID", "phase A closure")
+
+    phase_a_builder = phase_a_request.get("builder")
+    phase_b_builder = phase_b_request.get("builder")
+    builder_fields = {"path", "mode", "uid", "gid", "pin", "service_unit"}
+    shared_builder_fields = ("path", "mode", "uid", "gid", "pin")
+    if (
+        type(phase_a_builder) is not dict
+        or set(phase_a_builder) != builder_fields
+        or type(phase_b_builder) is not dict
+        or set(phase_b_builder) != builder_fields
+        or any(
+            phase_b_builder.get(key) != phase_a_builder.get(key)
+            for key in shared_builder_fields
+        )
+    ):
+        _fail("NATIVE_BUILDER_PHASE_B_LINEAGE_INVALID", "builder identity")
+
+    common_fields = (
+        "source_bundle",
+        "source_commit",
+        "sources",
+        "tools",
+        "trace_contract",
+    )
+    if any(
+        phase_b_request.get(key) != phase_a_request.get(key) for key in common_fields
+    ):
+        _fail("NATIVE_BUILDER_PHASE_B_LINEAGE_INVALID", "common request inputs")
+    phase_a_trace_raw = canonical_json(phase_a_request["trace_contract"])
+    phase_b_trace_raw = canonical_json(phase_b_request["trace_contract"])
+    if (
+        phase_b_trace_raw != phase_a_trace_raw
+        or hashlib.sha256(phase_b_trace_raw).digest()
+        != hashlib.sha256(phase_a_trace_raw).digest()
+    ):
+        _fail("NATIVE_BUILDER_PHASE_B_LINEAGE_INVALID", "trace digest")
+
+    phase_inputs = phase_b_request.get("phase_inputs")
+    phase_a_binding = (
+        phase_inputs.get("phase_a") if type(phase_inputs) is dict else None
+    )
+    if phase_a_binding != {
+        "root": str(NATIVE_BUILDER_PHASE_A_ROOT),
+        "manifest_pin": phase_a_manifest_pin.public(),
+        "content_digest": phase_a_manifest["content_digest"],
+    }:
+        _fail("NATIVE_BUILDER_PHASE_B_LINEAGE_INVALID", "phase A binding")
+
+
+def _derive_native_builder_phase_b_request(
+    reviewed_core_audit_pin: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    if os.geteuid() != REVIEW_UID or os.getegid() != REVIEW_GID:
+        _fail("UNPRIVILEGED_REVIEW_REQUIRED", "native builder phase B request")
+    expected_audit_pin = _parse_pin(
+        reviewed_core_audit_pin, "reviewed core bootstrap audit"
+    )
+    git_binding, committed_sources = _require_unprivileged_review_binding()
+    audit_document = audit_core_bootstrap_review_inputs()
+    audit_raw = canonical_json(audit_document)
+    audit_pin = FilePin(hashlib.sha256(audit_raw).hexdigest(), len(audit_raw))
+    if audit_pin != expected_audit_pin or audit_document.get("git") != git_binding:
+        _fail("INITIAL_BOOTSTRAP_AUDIT_PIN_MISMATCH", "core bootstrap audit")
+    initial_input = _initial_input_document_for_builder(
+        audit_document=audit_document,
+        audit_pin=audit_pin,
+        git_binding=git_binding,
+        committed_sources=committed_sources,
+    )
+    initial_input_pin = FilePin(
+        hashlib.sha256(canonical_json(initial_input)).hexdigest(),
+        len(canonical_json(initial_input)),
+    )
+    phase_a = audit_document["reviewed_inputs"]["native_builder_phase_a"]
+    launcher = audit_document["reviewed_inputs"]["initial_bootstrap_launcher"]
+    helper_relative = INITIAL_BOOTSTRAP_HELPER_SOURCE.relative_to(
+        CHECKOUT_ROOT
+    ).as_posix()
+    helper_raw = committed_sources[helper_relative]
+    helper_pin = FilePin(hashlib.sha256(helper_raw).hexdigest(), len(helper_raw))
+    unit_pin = _native_builder_root_file_pin(
+        NATIVE_BUILDER_PHASE_B_UNIT,
+        mode=0o644,
+        label="native builder phase B unit",
+    )
+    phase_a_builder = phase_a["builder"]
+    phase_b_builder = {
+        "path": str(NATIVE_BUILDER_HELPER),
+        "mode": "0444",
+        "uid": ROOT_UID,
+        "gid": ROOT_GID,
+        "pin": phase_a_builder["pin"],
+        "service_unit": {
+            "path": str(NATIVE_BUILDER_PHASE_B_UNIT),
+            "mode": "0644",
+            "uid": ROOT_UID,
+            "gid": ROOT_GID,
+            "pin": unit_pin.public(),
+        },
+    }
+    bindings = {
+        "launcher_pin": launcher["pin"],
+        "helper_pin": helper_pin.public(),
+        "input_pin": initial_input_pin.public(),
+    }
+    flags = _native_builder_expected_flags("initial-bootstrap-installer", bindings)
+    phase_a_request_raw, phase_a_request_pin = _read_regular(
+        NATIVE_BUILDER_PHASE_A_REQUEST,
+        "native builder phase A request",
+        exact_mode=0o444,
+    )
+    phase_a_request = strict_json(phase_a_request_raw, "native builder phase A request")
+    if (
+        phase_a_request_pin.public() != phase_a["request_pin"]
+        or phase_a_request.get("content_digest") != phase_a["request_content_digest"]
+    ):
+        _fail("NATIVE_BUILDER_AUTHORITY_DRIFT", "phase A request")
+    trace_contract = _native_builder_validate_trace_contract(
+        phase_a_request.get("trace_contract")
+    )
+    phase_a_tools = phase_a_request.get("tools")
+    if type(phase_a_tools) is not dict or phase_a_tools.get(
+        "toolchain"
+    ) != _native_builder_trace_toolchain(trace_contract):
+        _fail("NATIVE_BUILDER_AUTHORITY_DRIFT", "phase A trace/toolchain")
+    phase_a_manifest_raw, phase_a_manifest_pin = _read_regular(
+        NATIVE_BUILDER_PHASE_A_ROOT / "manifest.json",
+        "native builder phase A manifest",
+        exact_mode=0o444,
+    )
+    phase_a_manifest = strict_json(
+        phase_a_manifest_raw, "native builder phase A manifest"
+    )
+    if (
+        phase_a_manifest_pin.public() != phase_a["manifest_pin"]
+        or phase_a_manifest.get("content_digest") != phase_a["manifest_content_digest"]
+    ):
+        _fail("NATIVE_BUILDER_AUTHORITY_DRIFT", "phase A manifest")
+    request = seal_document(
+        {
+            "schema": NATIVE_BUILDER_REQUEST_SCHEMA,
+            "phase": "phase-b",
+            "status": "reviewed_native_build_request",
+            "accepted": False,
+            "builder": phase_b_builder,
+            "source_bundle": phase_a["source_bundle"],
+            "source_commit": git_binding["commit"],
+            "sources": phase_a["sources"],
+            "tools": phase_a_request["tools"],
+            "trace_contract": trace_contract,
+            "jobs": [
+                {
+                    "id": "initial-bootstrap-installer",
+                    "source_path": (
+                        "tools/admin/vista_r8_ue57_initial_bootstrap_installer.c"
+                    ),
+                    "output_name": INITIAL_BOOTSTRAP_INSTALLER_NAME,
+                    "output_mode": "0555",
+                    "bindings": bindings,
+                    "flags": flags,
+                }
+            ],
+            "phase_inputs": {
+                "phase_a": {
+                    "root": str(NATIVE_BUILDER_PHASE_A_ROOT),
+                    "manifest_pin": phase_a["manifest_pin"],
+                    "content_digest": phase_a["manifest_content_digest"],
+                },
+                "core_review_audit": {
+                    "document": audit_document,
+                    "pin": audit_pin.public(),
+                },
+                "initial_input": {
+                    "document": initial_input,
+                    "pin": initial_input_pin.public(),
+                },
+            },
+            "claims": {
+                "dedicated_builder_uid_gid": [
+                    NATIVE_BUILDER_UID,
+                    NATIVE_BUILDER_GID,
+                ],
+                "network_access": False,
+                "double_build_required": True,
+                "worktree_or_user_candidate_input": False,
+                "write_root": str(NATIVE_BUILDER_HOME),
+                "observation_only": True,
+                "production_native_output": False,
+            },
+        }
+    )
+    _native_builder_validate_phase_b_cross_binding(
+        phase_b_request=request,
+        phase_a_request=phase_a_request,
+        phase_a_request_pin=phase_a_request_pin,
+        phase_a_manifest=phase_a_manifest,
+        phase_a_manifest_pin=phase_a_manifest_pin,
+    )
+    return request, initial_input, audit_document
+
+
+def build_initial_bootstrap_review_candidate(
+    reviewed_core_audit_pin: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Derive the canonical Phase-B request; the dedicated unit builds it."""
+
+    request, initial_input, audit_document = _derive_native_builder_phase_b_request(
+        reviewed_core_audit_pin
+    )
+    request_raw = canonical_json(request)
+    return {
+        "status": "native_builder_phase_b_request_derived_zero_write",
+        "accepted": False,
+        "request_path": str(NATIVE_BUILDER_PHASE_B_REQUEST),
+        "request_pin": {
+            "sha256": hashlib.sha256(request_raw).hexdigest(),
+            "size_bytes": len(request_raw),
+        },
+        "request_content_digest": request["content_digest"],
+        "request_document": request,
+        "initial_input_pin": {
+            "sha256": hashlib.sha256(canonical_json(initial_input)).hexdigest(),
+            "size_bytes": len(canonical_json(initial_input)),
+        },
+        "initial_input_content_digest": initial_input["content_digest"],
+        "core_review_audit_content_digest": audit_document["content_digest"],
+        "root_execution_performed": False,
+        "candidate_publication_performed": False,
+    }
+
+
+@contextlib.contextmanager
+def _held_native_builder_phase_b(
+    expected_request: Mapping[str, Any],
+) -> Iterable[tuple[HeldNativeBuilderPhase, dict[str, Any]]]:
+    authority = HeldNativeBuilderPhase(contextlib.ExitStack(), {}, {}, {}, {}, {}, {})
+    try:
+        _native_builder_directory(
+            authority,
+            path=NATIVE_BUILDER_PHASE_B_ROOT.parent,
+            mode=0o711,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            inventory={".build.lock", "published"},
+            label="native builder phase B slot",
+        )
+        _native_builder_directory(
+            authority,
+            path=NATIVE_BUILDER_PHASE_B_ROOT,
+            mode=0o555,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            inventory={
+                "initial-bootstrap-candidate",
+                "initial-bootstrap-installer",
+                "manifest.json",
+                "manifests",
+            },
+            label="native builder phase B root",
+        )
+        _native_builder_directory(
+            authority,
+            path=INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT,
+            mode=0o555,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            inventory={
+                INITIAL_BOOTSTRAP_LAUNCHER_NAME,
+                INITIAL_BOOTSTRAP_HELPER_SOURCE.name,
+                INITIAL_BOOTSTRAP_INPUT_NAME,
+            },
+            label="native builder initial candidate",
+        )
+        _native_builder_directory(
+            authority,
+            path=INITIAL_BOOTSTRAP_INSTALLER_REVIEW_CANDIDATE_ROOT,
+            mode=0o555,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            inventory={INITIAL_BOOTSTRAP_INSTALLER_NAME},
+            label="native builder initial installer",
+        )
+        _native_builder_directory(
+            authority,
+            path=NATIVE_BUILDER_PHASE_B_ROOT / "manifests",
+            mode=0o555,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            inventory={
+                "initial-bootstrap-candidate.json",
+                "initial-bootstrap-installer.json",
+            },
+            label="native builder phase B manifests",
+        )
+        request_raw, request_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_PHASE_B_REQUEST,
+            mode=0o444,
+            owner=(ROOT_UID, ROOT_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase B request",
+        )
+        request = strict_json(request_raw, "native builder phase B request")
+        if request != expected_request:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase B request differs")
+        phase_a_request_raw, phase_a_request_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_PHASE_A_REQUEST,
+            mode=0o444,
+            owner=(ROOT_UID, ROOT_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase A request during phase B audit",
+        )
+        phase_a_manifest_raw, phase_a_manifest_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_PHASE_A_ROOT / "manifest.json",
+            mode=0o444,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase A manifest during phase B audit",
+        )
+        _native_builder_validate_phase_b_cross_binding(
+            phase_b_request=request,
+            phase_a_request=strict_json(
+                phase_a_request_raw, "phase A request during phase B audit"
+            ),
+            phase_a_request_pin=phase_a_request_pin,
+            phase_a_manifest=strict_json(
+                phase_a_manifest_raw, "phase A manifest during phase B audit"
+            ),
+            phase_a_manifest_pin=phase_a_manifest_pin,
+        )
+        _bundle_raw, bundle_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_BUNDLE,
+            mode=0o444,
+            owner=(ROOT_UID, ROOT_GID),
+            maximum=MAX_NATIVE_BUILDER_BUNDLE_BYTES,
+            label="phase B source Git bundle",
+        )
+        _builder_raw, builder_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_HELPER,
+            mode=0o444,
+            owner=(ROOT_UID, ROOT_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase B installed builder",
+        )
+        _unit_raw, unit_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_PHASE_B_UNIT,
+            mode=0o644,
+            owner=(ROOT_UID, ROOT_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase B systemd unit",
+        )
+        if (
+            request["source_bundle"]["pin"] != bundle_pin.public()
+            or request["builder"]["pin"] != builder_pin.public()
+            or request["builder"]["service_unit"]["pin"] != unit_pin.public()
+        ):
+            _fail("NATIVE_BUILDER_AUTHORITY_DRIFT", "phase B fixed inputs")
+        trace_contract = _native_builder_validate_trace_contract(
+            request.get("trace_contract")
+        )
+        _native_builder_hold_trace_inputs(authority, trace_contract)
+        tools = request["tools"]
+        for key, path in {
+            "python": PYTHON_PATH,
+            "git": Path("/usr/bin/git"),
+            "compiler": COMPILER_PATH,
+            "readelf": READELF_PATH,
+            "tracer": STRACE_PATH,
+        }.items():
+            _native_builder_tool(authority, tools[key], expected_path=path, label=key)
+        if tools["toolchain"] != _native_builder_trace_toolchain(trace_contract):
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase B toolchain")
+        manifest_raw, manifest_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_PHASE_B_ROOT / "manifest.json",
+            mode=0o444,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase B manifest",
+        )
+        manifest = strict_json(manifest_raw, "native builder phase B manifest")
+        if (
+            set(manifest)
+            != {
+                "schema",
+                "status",
+                "accepted",
+                "phase",
+                "request_pin",
+                "source_commit",
+                "source_bundle_pin",
+                "jobs",
+                "inventory",
+                "claims",
+                "content_digest",
+            }
+            or manifest.get("schema") != NATIVE_BUILDER_PHASE_B_SCHEMA
+            or manifest.get("status") != "dedicated_builder_phase_closed"
+            or manifest.get("accepted") is not False
+            or manifest.get("phase") != "phase-b"
+            or manifest.get("request_pin") != request_pin.public()
+            or manifest.get("source_commit") != request["source_commit"]
+            or manifest.get("source_bundle_pin") != request["source_bundle"]["pin"]
+            or manifest.get("content_digest") != content_digest(manifest)
+            or manifest.get("claims")
+            != {
+                "builder_uid_gid": [NATIVE_BUILDER_UID, NATIVE_BUILDER_GID],
+                "network_access": False,
+                "double_build_verified": True,
+                "worktree_or_user_candidate_input": False,
+                "closed": True,
+            }
+            or type(manifest.get("inventory")) is not dict
+            or set(manifest["inventory"])
+            != {
+                "root_entries",
+                "candidate",
+                "installer",
+            }
+            or manifest["inventory"].get("root_entries")
+            != [
+                "initial-bootstrap-candidate",
+                "initial-bootstrap-installer",
+                "manifest.json",
+                "manifests",
+            ]
+        ):
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase B manifest")
+        yield (
+            authority,
+            {
+                "request": request,
+                "request_pin": request_pin,
+                "manifest": manifest,
+                "manifest_pin": manifest_pin,
+            },
+        )
+        authority.revalidate()
+    finally:
+        authority.close()
+
+
+def _native_builder_validate_phase_b_job(
+    value: Any,
+    *,
+    expected_request: Mapping[str, Any],
+    installer_source_pin: Mapping[str, Any],
+    installer_pin: FilePin,
+) -> dict[str, Any]:
+    fields = {
+        "schema",
+        "status",
+        "accepted",
+        "phase",
+        "job_id",
+        "source",
+        "bindings",
+        "flags",
+        "environment",
+        "tools",
+        "output",
+        "determinism",
+        "static_elf",
+        "claims",
+        "content_digest",
+    }
+    expected_job = expected_request["jobs"][0]
+    if (
+        type(value) is not dict
+        or set(value) != fields
+        or value.get("schema") != NATIVE_BUILDER_JOB_SCHEMA
+        or value.get("status") != "deterministic_static_native_closed"
+        or value.get("accepted") is not False
+        or value.get("phase") != "phase-b"
+        or value.get("job_id") != "initial-bootstrap-installer"
+        or value.get("content_digest") != content_digest(value)
+        or value.get("bindings") != expected_job["bindings"]
+        or value.get("flags") != expected_job["flags"]
+        or value.get("source")
+        != {
+            "git_bundle_pin": expected_request["source_bundle"]["pin"],
+            "commit": expected_request["source_commit"],
+            "git_path": expected_job["source_path"],
+            "pin": dict(installer_source_pin),
+            "compiled_from_sealed_memfd": True,
+        }
+        or value.get("environment") != NATIVE_BUILDER_BUILD_ENVIRONMENT
+        or value.get("tools")
+        != _native_builder_job_tools(
+            expected_request["tools"], expected_request["trace_contract"]
+        )
+        or value.get("output")
+        != {
+            "relative_path": (
+                "initial-bootstrap-installer/" + INITIAL_BOOTSTRAP_INSTALLER_NAME
+            ),
+            "mode": "0555",
+            "pin": installer_pin.public(),
+        }
+        or value.get("determinism")
+        != {
+            "build_count": 2,
+            "byte_identical": True,
+            "first_pin": installer_pin.public(),
+            "second_pin": installer_pin.public(),
+        }
+        or value.get("static_elf")
+        != {
+            "interpreter": None,
+            "needed": [],
+            "readelf_pin": expected_request["tools"]["readelf"]["pin"],
+        }
+        or value.get("claims")
+        != {
+            "builder_uid_gid": [NATIVE_BUILDER_UID, NATIVE_BUILDER_GID],
+            "network_access": False,
+            "worktree_input": False,
+            "user_candidate_input": False,
+        }
+    ):
+        _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase B installer job")
+    return dict(value)
+
+
+def build_initial_bootstrap_installer_review_candidate() -> dict[str, Any]:
+    """Validate the dedicated Phase-B candidate and sole installer authority."""
+
+    if os.geteuid() != REVIEW_UID or os.getegid() != REVIEW_GID:
+        _fail("UNPRIVILEGED_REVIEW_REQUIRED", "initial bootstrap installer")
+    phase_b_raw, _phase_b_pin = _read_regular(
+        NATIVE_BUILDER_PHASE_B_REQUEST,
+        "native builder phase B request",
+        exact_mode=0o444,
+    )
+    phase_b_request = strict_json(phase_b_raw, "native builder phase B request")
+    audit_binding = phase_b_request.get("phase_inputs", {}).get("core_review_audit", {})
+    expected_request, initial_input, _audit = _derive_native_builder_phase_b_request(
+        audit_binding.get("pin")
+    )
+    with _held_native_builder_phase_b(expected_request) as (authority, observed):
+        candidate_files = {
+            INITIAL_BOOTSTRAP_LAUNCHER_NAME: (
+                0o555,
+                expected_request["jobs"][0]["bindings"]["launcher_pin"],
+            ),
+            INITIAL_BOOTSTRAP_HELPER_SOURCE.name: (
+                0o444,
+                expected_request["jobs"][0]["bindings"]["helper_pin"],
+            ),
+            INITIAL_BOOTSTRAP_INPUT_NAME: (
+                0o444,
+                expected_request["jobs"][0]["bindings"]["input_pin"],
+            ),
+        }
+        candidate_pins: dict[str, dict[str, Any]] = {}
+        for name, (mode, expected_pin) in candidate_files.items():
+            raw, pin = _native_builder_read_held(
+                authority,
+                path=INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT / name,
+                mode=mode,
+                owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+                maximum=MAX_JSON_BYTES,
+                label=f"phase B candidate:{name}",
+            )
+            if pin.public() != expected_pin:
+                _fail("NATIVE_BUILDER_ARTIFACT_INVALID", name)
+            if name == INITIAL_BOOTSTRAP_LAUNCHER_NAME:
+                _stdlib_require_static_elf(raw, name)
+            if (
+                name == INITIAL_BOOTSTRAP_INPUT_NAME
+                and strict_json(raw, "phase B initial input") != initial_input
+            ):
+                _fail("NATIVE_BUILDER_ARTIFACT_INVALID", name)
+            candidate_pins[name] = pin.public()
+        candidate_manifest_raw, candidate_manifest_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_PHASE_B_ROOT
+            / "manifests/initial-bootstrap-candidate.json",
+            mode=0o444,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase B candidate manifest",
+        )
+        candidate_manifest = strict_json(
+            candidate_manifest_raw, "phase B candidate manifest"
+        )
+        expected_candidate_manifest = seal_document(
+            {
+                "schema": ("vista.r8-native-builder-initial-candidate-manifest/v1"),
+                "status": "initial_bootstrap_candidate_closed",
+                "accepted": False,
+                "files": [
+                    {
+                        "name": INITIAL_BOOTSTRAP_LAUNCHER_NAME,
+                        "mode": "0555",
+                        "pin": candidate_pins[INITIAL_BOOTSTRAP_LAUNCHER_NAME],
+                        "provenance": initial_input["components"]["launcher"][
+                            "build_provenance"
+                        ],
+                    },
+                    {
+                        "name": INITIAL_BOOTSTRAP_HELPER_SOURCE.name,
+                        "mode": "0444",
+                        "pin": candidate_pins[INITIAL_BOOTSTRAP_HELPER_SOURCE.name],
+                        "git_path": ("tools/admin/vista_r8_ue57_initial_bootstrap.py"),
+                    },
+                    {
+                        "name": INITIAL_BOOTSTRAP_INPUT_NAME,
+                        "mode": "0444",
+                        "pin": candidate_pins[INITIAL_BOOTSTRAP_INPUT_NAME],
+                        "content_digest": initial_input["content_digest"],
+                    },
+                ],
+            }
+        )
+        aggregate_inventory = observed["manifest"]["inventory"]
+        if candidate_manifest != expected_candidate_manifest or aggregate_inventory.get(
+            "candidate"
+        ) != {
+            "relative_path": "initial-bootstrap-candidate",
+            "manifest": {
+                "relative_path": ("manifests/initial-bootstrap-candidate.json"),
+                "pin": candidate_manifest_pin.public(),
+                "content_digest": candidate_manifest["content_digest"],
+            },
+        }:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase B candidate manifest")
+        installer_raw, installer_pin = _native_builder_read_held(
+            authority,
+            path=INITIAL_BOOTSTRAP_INSTALLER_REVIEW_CANDIDATE_ROOT
+            / INITIAL_BOOTSTRAP_INSTALLER_NAME,
+            mode=0o555,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase B initial installer",
+        )
+        _stdlib_require_static_elf(installer_raw, "initial bootstrap installer")
+        jobs = observed["manifest"].get("jobs")
+        if type(jobs) is not list or len(jobs) != 1:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase B job")
+        job = jobs[0]
+        expected_job = expected_request["jobs"][0]
+        installer_source_pin = next(
+            item["pin"]
+            for item in expected_request["sources"]
+            if item["path"] == expected_job["source_path"]
+        )
+        job = _native_builder_validate_phase_b_job(
+            job,
+            expected_request=expected_request,
+            installer_source_pin=installer_source_pin,
+            installer_pin=installer_pin,
+        )
+        job_raw, job_pin = _native_builder_read_held(
+            authority,
+            path=NATIVE_BUILDER_PHASE_B_ROOT
+            / "manifests/initial-bootstrap-installer.json",
+            mode=0o444,
+            owner=(NATIVE_BUILDER_UID, NATIVE_BUILDER_GID),
+            maximum=MAX_JSON_BYTES,
+            label="phase B installer manifest",
+        )
+        if strict_json(job_raw, "phase B installer manifest") != job:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase B installer manifest")
+        if aggregate_inventory.get("installer") != {
+            "relative_path": (
+                "initial-bootstrap-installer/" + INITIAL_BOOTSTRAP_INSTALLER_NAME
+            ),
+            "mode": "0555",
+            "pin": installer_pin.public(),
+            "manifest": {
+                "relative_path": "manifests/initial-bootstrap-installer.json",
+                "pin": job_pin.public(),
+                "content_digest": job["content_digest"],
+            },
+        }:
+            _fail("NATIVE_BUILDER_MANIFEST_INVALID", "phase B aggregate inventory")
+        authority.revalidate()
+        return {
+            "status": "dedicated_builder_initial_bootstrap_authority_validated",
+            "accepted": False,
+            "candidate_root": str(INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT),
+            "candidate_owner": [NATIVE_BUILDER_UID, NATIVE_BUILDER_GID],
+            "candidate_files": candidate_pins,
+            "installer": {
+                "path": str(
+                    INITIAL_BOOTSTRAP_INSTALLER_REVIEW_CANDIDATE_ROOT
+                    / INITIAL_BOOTSTRAP_INSTALLER_NAME
+                ),
+                "pin": installer_pin.public(),
+                "manifest_pin": job_pin.public(),
+                "manual_install_root": str(INITIAL_BOOTSTRAP_INSTALLER_INSTALL_ROOT),
+                "manual_install_mode": "0500",
+            },
+            "phase_b_manifest_pin": observed["manifest_pin"].public(),
+            "phase_b_manifest_content_digest": observed["manifest"]["content_digest"],
+            "root_execution_performed": False,
+            "manual_trust_boundary_complete": False,
+        }
 
 
 def _derive_bundle_input_document(
@@ -4922,45 +9024,12 @@ def _derive_bundle_input_document(
 
 
 def build_bundle_input_review_candidate() -> dict[str, Any]:
-    """Atomically publish the exact two-file user-owned bundle candidate."""
+    """Reject local launch-r8 compilation until its builder recipe is frozen."""
 
-    if os.geteuid() == ROOT_UID:
-        _fail("UNPRIVILEGED_REVIEW_REQUIRED", "bundle input review candidate")
-    _require_unprivileged_review_helper()
-    final = BUNDLE_INPUT_REVIEW_CANDIDATE.parent
-    if os.path.lexists(final):
-        _fail("FINAL_NOT_FRESH", str(final))
-    source_pins = _source_pins()
-    runtime_executables = _runtime_executable_binding()
-    build = _launcher_build_spec(source_pins, runtime_executables)
-    staging = Path(tempfile.mkdtemp(prefix=f".{final.name}.staging-", dir=final.parent))
-    owner = (os.getuid(), os.getgid())
-    try:
-        launcher_path = staging / LAUNCHER_NAME
-        launcher_pin = _compile_launcher(build, launcher_path)
-        os.chmod(launcher_path, 0o555, follow_symlinks=False)
-        _require_static_review_elf(launcher_path, "bundle launcher candidate")
-        document = _derive_bundle_input_document(launcher_pin, expected_build=build)
-        input_pin = _write_new(
-            staging / "input-pin.json",
-            canonical_json(document),
-            0o444,
-            owner,
-        )
-        _seal_private_tree(staging, owner=owner)
-        publish_staging(staging, final)
-        return {
-            "status": "user_published_bundle_input_review_candidate",
-            "accepted": False,
-            "candidate_root": str(final),
-            "input_pin": input_pin.public(),
-            "input_content_digest": document["content_digest"],
-            "launcher_pin": launcher_pin.public(),
-            "root_execution_performed": False,
-        }
-    finally:
-        if os.path.lexists(staging):
-            _remove_private_staging(staging)
+    _fail(
+        "DEDICATED_BUILDER_AUTHORITY_REQUIRED",
+        "executor launcher recipe is not authorized in native builder R1",
+    )
 
 
 def derive_bundle_input_pin() -> dict[str, Any]:
@@ -5829,91 +9898,12 @@ def _stage_candidate_configuration(
 
 
 def _build_stage_plan_review_candidate(stage: str) -> dict[str, Any]:
-    if os.geteuid() != REVIEW_UID or os.getegid() != REVIEW_GID:
-        _fail("UNPRIVILEGED_REVIEW_REQUIRED", stage)
-    committed_sources = _require_unprivileged_review_helper()
-    (
-        input_root,
-        input_path,
-        final,
-        _reviewed_plan_path,
-        _launcher_path,
-    ) = _stage_candidate_configuration(stage)
-    input_files = (
-        {input_path: 0o444}
-        if stage == "runtime"
-        else {
-            input_path: 0o444,
-            BUNDLE_LAUNCHER_REVIEW_CANDIDATE: 0o555,
-        }
+    """Reject local runtime/bundle administrator compilation."""
+
+    _fail(
+        "DEDICATED_BUILDER_AUTHORITY_REQUIRED",
+        f"{stage} admin launcher recipe is not authorized in native builder R1",
     )
-    _require_user_review_candidate(input_root, input_files, f"{stage} input candidate")
-    if os.path.lexists(final):
-        _fail("FINAL_NOT_FRESH", str(final))
-    if stage == "runtime":
-        input_document, input_file_pin = _load_runtime_input_pin(review_candidate=True)
-        _validate_runtime_input_against_live(input_document)
-        plan = _runtime_plan_from_input(input_document, input_file_pin)
-        python_value = input_document["tool_pins"]["python"]["pin"]
-    else:
-        input_document, input_file_pin = _load_bundle_input_pin(review_candidate=True)
-        _validate_bundle_input_against_live(input_document)
-        plan = _bundle_plan_from_input(input_document, input_file_pin)
-        python_value = input_document["runtime_executables"]["python"]["pin"]
-    expected_python = _parse_pin(python_value, f"{stage} Python")
-    _python_raw, live_python = _read_regular(PYTHON_PATH, f"{stage} Python")
-    if (live_python.sha256, live_python.size_bytes) != (
-        expected_python.sha256,
-        expected_python.size_bytes,
-    ):
-        _fail("ADMIN_LAUNCHER_BUILD_INPUT_DRIFT", "Python")
-    helper_relative = REVIEW_HELPER_SOURCE.relative_to(CHECKOUT_ROOT).as_posix()
-    admin_relative = ADMIN_LAUNCHER_SOURCE.relative_to(CHECKOUT_ROOT).as_posix()
-    helper_raw = committed_sources[helper_relative]
-    admin_source_raw = committed_sources[admin_relative]
-    helper_pin = FilePin(hashlib.sha256(helper_raw).hexdigest(), len(helper_raw))
-    staging = Path(tempfile.mkdtemp(prefix=f".{final.name}.staging-", dir=final.parent))
-    owner = (REVIEW_UID, REVIEW_GID)
-    try:
-        launcher_path = staging / ADMIN_LAUNCHER_NAME
-        launcher_pin, build_provenance = _compile_admin_launcher(
-            stage,
-            committed_source=admin_source_raw,
-            python_pin=expected_python.public(),
-            helper_pin=helper_pin.public(),
-            output=launcher_path,
-        )
-        os.chmod(launcher_path, 0o555, follow_symlinks=False)
-        _require_static_review_elf(launcher_path, f"{stage} admin launcher candidate")
-        reviewed_document = reviewed_plan_pin(plan, launcher_pin)
-        reviewed_file_pin = _write_new(
-            staging / "reviewed-plan-pin.json",
-            canonical_json(reviewed_document),
-            0o444,
-            owner,
-        )
-        _seal_private_tree(staging, owner=owner)
-        publish_staging(staging, final)
-        return {
-            "status": f"user_published_{stage}_plan_review_candidate",
-            "accepted": False,
-            "candidate_root": str(final),
-            "input_pin": input_file_pin.public(),
-            "input_content_digest": input_document["content_digest"],
-            "audit_plan": {
-                "sha256": reviewed_document["plan_sha256"],
-                "size_bytes": reviewed_document["plan_size_bytes"],
-                "content_digest": reviewed_document["plan_content_digest"],
-            },
-            "reviewed_plan_pin": reviewed_file_pin.public(),
-            "reviewed_plan_content_digest": reviewed_document["content_digest"],
-            "admin_launcher_pin": launcher_pin.public(),
-            "admin_launcher_build": build_provenance,
-            "root_execution_performed": False,
-        }
-    finally:
-        if os.path.lexists(staging):
-            _remove_private_staging(staging)
 
 
 def build_runtime_plan_review_candidate() -> dict[str, Any]:
@@ -6015,53 +10005,12 @@ def _stage_installer_build_inputs(
 
 
 def build_stage_installer_review_candidate(key: str) -> dict[str, Any]:
-    """Build and atomically freeze one exact user-owned one-shot installer."""
+    """Reject all four local stage-installer builds until recipes are frozen."""
 
-    if os.geteuid() != REVIEW_UID or os.getegid() != REVIEW_GID:
-        _fail("UNPRIVILEGED_REVIEW_REQUIRED", key)
-    committed_sources = _require_unprivileged_review_helper()
-    final = STAGE_INSTALLER_REVIEW_ROOTS.get(key)
-    if final is None:
-        _fail("STAGE_AUTHORITY_INVALID", key)
-    if os.path.lexists(final):
-        _fail("FINAL_NOT_FRESH", str(final))
-    primary_pin, secondary_pin, python_pin, candidate_binding = (
-        _stage_installer_build_inputs(key)
+    _fail(
+        "DEDICATED_BUILDER_AUTHORITY_REQUIRED",
+        f"{key} stage-installer recipe is not authorized in native builder R1",
     )
-    helper_relative = REVIEW_HELPER_SOURCE.relative_to(CHECKOUT_ROOT).as_posix()
-    source_relative = STAGE_INSTALLER_SOURCE.relative_to(CHECKOUT_ROOT).as_posix()
-    helper_raw = committed_sources[helper_relative]
-    source_raw = committed_sources[source_relative]
-    helper_pin = FilePin(hashlib.sha256(helper_raw).hexdigest(), len(helper_raw))
-    staging = Path(tempfile.mkdtemp(prefix=f".{final.name}.staging-", dir=final.parent))
-    owner = (REVIEW_UID, REVIEW_GID)
-    try:
-        installer_path = staging / STAGE_INSTALLER_NAME
-        installer_pin, build_provenance = _compile_stage_installer(
-            key,
-            committed_source=source_raw,
-            python_pin=python_pin.public(),
-            helper_pin=helper_pin.public(),
-            primary_pin=primary_pin.public(),
-            secondary_pin=(None if secondary_pin is None else secondary_pin.public()),
-            output=installer_path,
-        )
-        os.chmod(installer_path, 0o555, follow_symlinks=False)
-        _require_static_review_elf(installer_path, f"{key} stage installer candidate")
-        _seal_private_tree(staging, owner=owner)
-        publish_staging(staging, final)
-        return {
-            "status": f"user_published_{key}_stage_installer_review_candidate",
-            "accepted": False,
-            "candidate_root": str(final),
-            "installer_pin": installer_pin.public(),
-            "stage_candidate_binding": candidate_binding,
-            "build_provenance": build_provenance,
-            "root_execution_performed": False,
-        }
-    finally:
-        if os.path.lexists(staging):
-            _remove_private_staging(staging)
 
 
 def _stage_authority_paths(stage: str, *, plan: bool) -> tuple[Path, Path, Path | None]:
@@ -6564,10 +10513,12 @@ def _require_stage_transfer_invocation(descriptor: int) -> FilePin:
             or installed_pin != passed_pin
         ):
             _fail("STAGE_TRANSFER_INVOCATION_INVALID", "launcher identity")
-        return FilePin(installed_pin[0], installed_pin[1], True)
+        result = FilePin(installed_pin[0], installed_pin[1], True)
     finally:
         os.close(passed_fd)
         os.close(installed_fd)
+    _live_fsync_core_authority()
+    return result
 
 
 def install_stage_installer_authority(
@@ -7311,6 +11262,100 @@ def _require_core_installed() -> None:
             _fail("OPERATION_LOCK_INVALID", str(path))
 
 
+def _live_fsync_core_authority() -> None:
+    """Make the exact eight-file core root durable before downstream writes."""
+
+    _require_core_installed()
+    file_modes = {
+        INSTALLED_HELPER.name: 0o500,
+        INSTALLED_ENGINE_WRAPPER.name: 0o500,
+        INSTALLED_STAGE_TRANSFER_LAUNCHER.name: 0o555,
+        ENGINE_SOURCE_PIN_PATH.name: 0o444,
+        **{path.name: 0o600 for path in OPERATION_LOCKS.values()},
+    }
+    descriptors: list[int] = []
+    try:
+        parent_path = INSTALLED_ROOT.parent
+        parent_before = os.lstat(parent_path)
+        parent_fd = os.open(parent_path, _directory_flags())
+        descriptors.append(parent_fd)
+        parent_info = os.fstat(parent_fd)
+        if (
+            _identity(parent_before) != _identity(parent_info)
+            or not stat.S_ISDIR(parent_info.st_mode)
+            or parent_info.st_uid != ROOT_UID
+            or parent_info.st_gid != ROOT_GID
+            or stat.S_IMODE(parent_info.st_mode) != 0o700
+        ):
+            _fail("CORE_AUTHORITY_LIVE_FSYNC_REQUIRED", "held /root differs")
+        root_fd = os.open(INSTALLED_ROOT.name, _directory_flags(), dir_fd=parent_fd)
+        descriptors.append(root_fd)
+        root_info = os.fstat(root_fd)
+        if (
+            not stat.S_ISDIR(root_info.st_mode)
+            or root_info.st_nlink != 2
+            or root_info.st_uid != ROOT_UID
+            or root_info.st_gid != ROOT_GID
+            or stat.S_IMODE(root_info.st_mode) != 0o555
+            or set(os.listdir(root_fd)) != set(file_modes)
+        ):
+            _fail("CORE_AUTHORITY_LIVE_FSYNC_REQUIRED", "core root differs")
+        records: dict[str, tuple[int, tuple[int, ...], tuple[str, int]]] = {}
+        for name, mode in file_modes.items():
+            descriptor = os.open(name, _file_flags(), dir_fd=root_fd)
+            descriptors.append(descriptor)
+            info = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_nlink != 1
+                or info.st_uid != ROOT_UID
+                or info.st_gid != ROOT_GID
+                or stat.S_IMODE(info.st_mode) != mode
+                or (mode == 0o600 and info.st_size != 0)
+            ):
+                _fail("CORE_AUTHORITY_LIVE_FSYNC_REQUIRED", name)
+            records[name] = (descriptor, _identity(info), _hash_fd(descriptor))
+        for descriptor, _identity_before, _pin in records.values():
+            os.fsync(descriptor)
+        os.fsync(root_fd)
+        os.fsync(parent_fd)
+        if (
+            _identity(os.fstat(root_fd)) != _identity(root_info)
+            or set(os.listdir(root_fd)) != set(file_modes)
+            or _identity(os.lstat(INSTALLED_ROOT)) != _identity(root_info)
+            or _identity(os.fstat(parent_fd)) != _identity(parent_info)
+            or _identity(os.lstat(parent_path)) != _identity(parent_info)
+        ):
+            _fail(
+                "CORE_AUTHORITY_LIVE_FSYNC_REQUIRED",
+                "core namespace drifted during live fsync",
+            )
+        for name, (descriptor, identity_before, pin) in records.items():
+            if (
+                _identity(os.fstat(descriptor)) != identity_before
+                or _hash_fd(descriptor) != pin
+                or _identity(os.stat(name, dir_fd=root_fd, follow_symlinks=False))
+                != identity_before
+            ):
+                _fail(
+                    "CORE_AUTHORITY_LIVE_FSYNC_REQUIRED",
+                    f"{name} drifted during live fsync",
+                )
+    except AuthorityError:
+        raise
+    except OSError as exc:
+        raise AuthorityError(
+            "CORE_AUTHORITY_LIVE_FSYNC_REQUIRED",
+            f"core authority live fsync failed: {exc}",
+        ) from exc
+    finally:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
 def _require_installed(wrapper: Path) -> None:
     _require_core_installed()
     if wrapper != INSTALLED_ENGINE_WRAPPER:
@@ -7690,6 +11735,7 @@ def audit_existing_engine_authority(*, fsync: bool = False) -> dict[str, Any]:
 
 def publish_engine() -> dict[str, Any]:
     _require_installed(INSTALLED_ENGINE_WRAPPER)
+    _live_fsync_core_authority()
     _require_parent(AUTHORITY_PARENT)
     pin_document, _pin = load_sealed_document(
         ENGINE_SOURCE_PIN_PATH, ENGINE_SOURCE_PIN_SCHEMA, "engine source pin"
@@ -7708,6 +11754,7 @@ def publish_engine() -> dict[str, Any]:
 
 def reconcile_engine() -> dict[str, Any]:
     _require_installed(INSTALLED_ENGINE_WRAPPER)
+    _live_fsync_core_authority()
     with operation_lock("engine"):
         return audit_existing_engine_authority(fsync=True)
 
@@ -8375,6 +12422,12 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("build-stage-transfer-launcher-review-candidate")
     sub.add_parser("build-core-bootstrap-review-candidate")
     sub.add_parser("audit-core-bootstrap-review-inputs")
+    initial_bootstrap = sub.add_parser("build-initial-bootstrap-review-candidate")
+    initial_bootstrap.add_argument("--reviewed-core-audit-sha256", required=True)
+    initial_bootstrap.add_argument(
+        "--reviewed-core-audit-size", required=True, type=int
+    )
+    sub.add_parser("build-initial-bootstrap-installer-review-candidate")
     sub.add_parser("build-runtime-input-review-candidate")
     sub.add_parser("build-runtime-plan-review-candidate")
     for stage_key in STAGE_KEYS:
@@ -8436,6 +12489,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "build-stage-transfer-launcher-review-candidate",
             "build-core-bootstrap-review-candidate",
             "audit-core-bootstrap-review-inputs",
+            "build-initial-bootstrap-review-candidate",
             "build-runtime-input-review-candidate",
             "build-runtime-plan-review-candidate",
             "build-bundle-input-review-candidate",
@@ -8595,6 +12649,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             result = build_core_bootstrap_review_candidate()
         elif args.command == "audit-core-bootstrap-review-inputs":
             result = audit_core_bootstrap_review_inputs()
+        elif args.command == "build-initial-bootstrap-review-candidate":
+            result = build_initial_bootstrap_review_candidate(
+                {
+                    "sha256": args.reviewed_core_audit_sha256,
+                    "size_bytes": args.reviewed_core_audit_size,
+                }
+            )
+        elif args.command == "build-initial-bootstrap-installer-review-candidate":
+            result = build_initial_bootstrap_installer_review_candidate()
         elif args.command == "build-runtime-input-review-candidate":
             result = build_runtime_input_review_candidate()
         elif args.command == "build-runtime-plan-review-candidate":

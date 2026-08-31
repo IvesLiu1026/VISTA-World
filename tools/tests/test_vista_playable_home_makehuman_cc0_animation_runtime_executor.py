@@ -296,7 +296,7 @@ def _complete_fake_plan(
             "bootstrap_provenance": buildplugin_bootstrap_provenance,
             "claims": {
                 "fresh_no_replace": True,
-                "final_and_parent_fsynced": True,
+                "downstream_live_fsync_required": True,
                 "admin_launcher_fd_required": True,
                 "launcher_receipt_live_bound": True,
             },

@@ -9,8 +9,8 @@ The reviewed helper source has this exact record:
 
 ```text
 relative_path: tools/admin/vista_r8_buildplugin_authority.py
-sha256: e3a62276111da8f832d41145580f1dc79fe4c56ff04b44e8ba6ec2d4ee89b772
-size_bytes: 74019
+sha256: 1e699c84d025dfa73872b20eb035610b2dc85074fa28f716a48ae34f324cfca2
+size_bytes: 80566
 installed_path: /root/vista-r8-buildplugin-authority-r1/vista_r8_buildplugin_authority.py
 installed_owner: root:root
 installed_mode: 0500
@@ -119,10 +119,11 @@ republishes the authority.
 
 ## Claim boundary and remaining work
 
-This authority proves only that the exact reviewed BuildPlugin package was
-copied through the root-owned immutable publication boundary. It does not prove
-that UE loaded the plugin, imported the R8 animations, ran pickup/place, passed
-two-client testing, or reached human-motion, photoreal, or GTA quality.
+Once successfully published, this authority would prove only that the exact
+reviewed BuildPlugin package was copied through the root-owned immutable
+publication boundary. It would not prove that UE loaded the plugin, imported
+the R8 animations, ran pickup/place, passed two-client testing, or reached
+human-motion, photoreal, or GTA quality.
 
 After administrator publication, a separate reviewed change must pin the
 authority `payload/` projection into the R8 materializer. A separately sealed

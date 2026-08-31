@@ -25,8 +25,8 @@ PYTHON_PIN = (
     5_917_224,
 )
 PRODUCTION_HELPER_PIN = (
-    "93ad5dbf86cfe9d70536cf53d08ae68de632b701de1b41e69387319c406a91bb",
-    22_954,
+    "3c2f7f582a50da5bfa2adaece3e0e62443a7f00891f43f646f734e931a57bfd4",
+    28_146,
 )
 SEAL_ACK = (
     "I confirm no VISTA authority publisher is running and acknowledge one "
@@ -45,6 +45,15 @@ def _pin(raw: bytes) -> tuple[str, int]:
 def _quote(name: str, value: str) -> str:
     assert '"' not in value and "\\" not in value
     return f'-D{name}="{value}"'
+
+
+def _production_pin_flags() -> list[str]:
+    return [
+        _quote("EXPECTED_PYTHON_SHA256", PYTHON_PIN[0]),
+        f"-DEXPECTED_PYTHON_SIZE={PYTHON_PIN[1]}",
+        _quote("EXPECTED_HELPER_SHA256", PRODUCTION_HELPER_PIN[0]),
+        f"-DEXPECTED_HELPER_SIZE={PRODUCTION_HELPER_PIN[1]}",
+    ]
 
 
 def _helper_bytes() -> bytes:
@@ -67,6 +76,7 @@ def _helper_bytes() -> bytes:
 def _compile_test_launcher(root: Path, helper_pin: tuple[str, int]) -> Path:
     uid = os.getuid()
     gid = os.getgid()
+    python_pin = _pin(PYTHON.read_bytes())
     output = root / LAUNCHER_NAME
     subprocess.run(
         [
@@ -77,6 +87,8 @@ def _compile_test_launcher(root: Path, helper_pin: tuple[str, int]) -> Path:
             "-Wall",
             "-Wextra",
             "-Werror",
+            _quote("EXPECTED_PYTHON_SHA256", python_pin[0]),
+            f"-DEXPECTED_PYTHON_SIZE={python_pin[1]}",
             "-DVISTA_PARENT_SEAL_LAUNCHER_TESTING=1",
             _quote("VISTA_PARENT_SEAL_TEST_ROOT", str(root)),
             f"-DVISTA_PARENT_SEAL_TEST_REQUIRED_EUID={uid}",
@@ -129,10 +141,15 @@ def test_source_contract_is_fixed_native_and_matches_python_helper() -> None:
     assert "/root/vista-authority-parent-seal-r1" in source
     assert LAUNCHER_NAME in source
     assert HELPER_NAME in source
-    assert PYTHON_PIN[0] in source
-    assert str(PYTHON_PIN[1]) in source
-    assert PRODUCTION_HELPER_PIN[0] in source
-    assert str(PRODUCTION_HELPER_PIN[1]) in source
+    assert PYTHON_PIN[0] not in source
+    assert PRODUCTION_HELPER_PIN[0] not in source
+    for macro in (
+        "EXPECTED_PYTHON_SHA256",
+        "EXPECTED_PYTHON_SIZE",
+        "EXPECTED_HELPER_SHA256",
+        "EXPECTED_HELPER_SIZE",
+    ):
+        assert f'#error "{macro} is required"' in source
     assert SEAL_ACK in joined
     assert RECONCILE_ACK in joined
     assert "SYS_execveat" in source
@@ -269,6 +286,7 @@ def test_production_binary_rejects_nonroot_before_root_traversal(
             "-Wall",
             "-Wextra",
             "-Werror",
+            *_production_pin_flags(),
             str(SOURCE),
             "-o",
             str(output),
@@ -322,6 +340,7 @@ def test_internal_sha256_known_vectors(
             "-Wall",
             "-Wextra",
             "-Werror",
+            *_production_pin_flags(),
             str(harness_source),
             "-o",
             str(harness),
@@ -380,11 +399,14 @@ def test_testing_build_requires_all_test_contract_macros(
         ),
         "VISTA_PARENT_SEAL_TEST_HELPER_SIZE": "-DVISTA_PARENT_SEAL_TEST_HELPER_SIZE=1",
     }
+    python_pin = _pin(PYTHON.read_bytes())
     result = subprocess.run(
         [
             str(GCC),
             "-std=c11",
             "-DVISTA_PARENT_SEAL_LAUNCHER_TESTING=1",
+            _quote("EXPECTED_PYTHON_SHA256", python_pin[0]),
+            f"-DEXPECTED_PYTHON_SIZE={python_pin[1]}",
             *(value for key, value in values.items() if key != missing),
             "-c",
             str(SOURCE),
@@ -397,3 +419,47 @@ def test_testing_build_requires_all_test_contract_macros(
     )
     assert result.returncode != 0
     assert f"{missing} is required" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "EXPECTED_PYTHON_SHA256",
+        "EXPECTED_PYTHON_SIZE",
+        "EXPECTED_HELPER_SHA256",
+        "EXPECTED_HELPER_SIZE",
+    ],
+)
+def test_production_build_requires_all_active_pin_macros(
+    tmp_path: Path, missing: str
+) -> None:
+    values = {
+        "EXPECTED_PYTHON_SHA256": _quote("EXPECTED_PYTHON_SHA256", "1" * 64),
+        "EXPECTED_PYTHON_SIZE": "-DEXPECTED_PYTHON_SIZE=1",
+        "EXPECTED_HELPER_SHA256": _quote("EXPECTED_HELPER_SHA256", "2" * 64),
+        "EXPECTED_HELPER_SIZE": "-DEXPECTED_HELPER_SIZE=1",
+    }
+    result = subprocess.run(
+        [
+            str(GCC),
+            "-std=c11",
+            *(value for key, value in values.items() if key != missing),
+            "-c",
+            str(SOURCE),
+            "-o",
+            str(tmp_path / "missing-production.o"),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert f"{missing} is required" in result.stderr
+
+
+def test_production_source_has_no_hardcoded_pin_defaults() -> None:
+    text = SOURCE.read_text(encoding="utf-8")
+    assert "PYTHON_SHA256_DEFAULT" not in text
+    assert "HELPER_SHA256_DEFAULT" not in text
+    assert "#define PYTHON_SHA256 EXPECTED_PYTHON_SHA256" in text
+    assert "#define HELPER_SHA256 EXPECTED_HELPER_SHA256" in text

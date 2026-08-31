@@ -494,6 +494,139 @@ def _bind_parent_seal_launcher(descriptor: int) -> None:
         os.close(root_fd)
 
 
+def _full_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_uid,
+        metadata.st_gid,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _live_fsync_installed_authority(launcher_descriptor: int) -> None:
+    """Close bootstrap durability before the first shared-parent mutation."""
+
+    descriptors: list[int] = []
+    try:
+        parent_before = os.lstat(INSTALLED_ROOT.parent)
+        parent_fd = os.open(
+            INSTALLED_ROOT.parent,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+        )
+        descriptors.append(parent_fd)
+        parent_opened = os.fstat(parent_fd)
+        if (
+            _full_identity(parent_before) != _full_identity(parent_opened)
+            or not stat.S_ISDIR(parent_opened.st_mode)
+            or parent_opened.st_uid != ROOT_UID
+            or parent_opened.st_gid != ROOT_GID
+            or stat.S_IMODE(parent_opened.st_mode) != 0o700
+        ):
+            _fail("PARENT_SEAL_EXECUTION_INVALID", "held /root differs")
+        root_fd = os.open(
+            INSTALLED_ROOT.name,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=parent_fd,
+        )
+        descriptors.append(root_fd)
+        root_info = os.fstat(root_fd)
+        if (
+            not stat.S_ISDIR(root_info.st_mode)
+            or root_info.st_nlink != 2
+            or root_info.st_uid != ROOT_UID
+            or root_info.st_gid != ROOT_GID
+            or stat.S_IMODE(root_info.st_mode) != INSTALLED_ROOT_MODE
+            or set(os.listdir(root_fd))
+            != {INSTALLED_LAUNCHER.name, INSTALLED_HELPER.name}
+        ):
+            _fail("PARENT_SEAL_EXECUTION_INVALID", "installed root differs")
+        launcher_fd = os.open(
+            INSTALLED_LAUNCHER.name,
+            os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=root_fd,
+        )
+        helper_fd = os.open(
+            INSTALLED_HELPER.name,
+            os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=root_fd,
+        )
+        passed_fd = os.dup(launcher_descriptor)
+        descriptors.extend((launcher_fd, helper_fd, passed_fd))
+        file_records = (
+            (launcher_fd, LAUNCHER_MODE, "launcher"),
+            (helper_fd, HELPER_MODE, "helper"),
+        )
+        identities: dict[str, tuple[int, ...]] = {}
+        pins: dict[str, tuple[str, int]] = {}
+        for descriptor, mode, label in file_records:
+            info = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_nlink != 1
+                or info.st_uid != ROOT_UID
+                or info.st_gid != ROOT_GID
+                or stat.S_IMODE(info.st_mode) != mode
+            ):
+                _fail("PARENT_SEAL_EXECUTION_INVALID", f"{label} differs")
+            identities[label] = _full_identity(info)
+            pins[label] = _hash_fd(descriptor, max(info.st_size, 1))
+        if (
+            _full_identity(os.fstat(passed_fd)) != identities["launcher"]
+            or _hash_fd(passed_fd, max(os.fstat(passed_fd).st_size, 1))
+            != pins["launcher"]
+        ):
+            _fail("PARENT_SEAL_EXECUTION_INVALID", "held launcher differs")
+        for descriptor, _mode, _label in file_records:
+            os.fsync(descriptor)
+        os.fsync(root_fd)
+        os.fsync(parent_fd)
+        for descriptor, mode, label in file_records:
+            info = os.fstat(descriptor)
+            if (
+                _full_identity(info) != identities[label]
+                or stat.S_IMODE(info.st_mode) != mode
+                or _hash_fd(descriptor, max(info.st_size, 1)) != pins[label]
+            ):
+                _fail(
+                    "PARENT_SEAL_EXECUTION_INVALID",
+                    f"{label} drifted during live fsync",
+                )
+        reopened = os.open(
+            INSTALLED_ROOT.name,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=parent_fd,
+        )
+        descriptors.append(reopened)
+        if (
+            _full_identity(os.fstat(reopened)) != _full_identity(root_info)
+            or _full_identity(os.lstat(INSTALLED_ROOT.parent))
+            != _full_identity(parent_opened)
+            or _full_identity(os.lstat(INSTALLED_ROOT)) != _full_identity(root_info)
+        ):
+            _fail(
+                "PARENT_SEAL_EXECUTION_INVALID",
+                "installed authority drifted during live fsync",
+            )
+    except ParentSealError:
+        raise
+    except OSError as exc:
+        raise ParentSealError(
+            "PARENT_SEAL_EXECUTION_INVALID",
+            f"installed authority live fsync failed: {exc}",
+        ) from exc
+    finally:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
 def _bind_live_execution(parent_seal_launcher_fd: int) -> None:
     if os.geteuid() != ROOT_UID or os.getegid() != ROOT_GID:
         _fail("PARENT_SEAL_ROOT_REQUIRED", "effective root uid/gid are required")
@@ -570,6 +703,7 @@ def _bind_live_execution(parent_seal_launcher_fd: int) -> None:
         os.close(python_fd)
         if live_fd >= 0:
             os.close(live_fd)
+    _live_fsync_installed_authority(parent_seal_launcher_fd)
 
 
 def _open_regular(path: Path) -> int:

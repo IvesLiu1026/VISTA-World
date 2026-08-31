@@ -1,120 +1,187 @@
 # Tasks: VISTA R8 UE 5.7 Authority Bootstrap R2
 
-Status: In progress
-Updated: 2026-08-30
+Status: Dedicated-builder source milestone complete; privileged activation and T7 blocked
+Updated: 2026-08-31
 Depends on: requirements.md, design.md
 
 ## Safety Rules
 
 - Source work occurs only on `codex/vista-r9-six-room-finish-r1`.
-- Root, UE, engine copying, or authority publication is forbidden until T1-T5
-  pass and the exact installed scripts receive independent approval.
+- Root bootstrap, account/unit installation, systemd reload/enable/start, builder
+  execution, candidate execution, UE, engine copying, or authority publication
+  requires a separate explicit approval after source review.
 - Do not touch GPU0/GPU1, CAR, Sunshine, Xvfb `:118`, input relay, ports, R6
   service, production port `8000`, existing R8 publication, or candidate h.
 - Runtime artifacts are append-only and stay outside Git.
-- Stage only the named files for this logical change.
+- Stage only named files for one logical change. Wrapper pins may change only
+  in the separately reviewed final-repin substage after all pinned source bytes
+  are frozen; this change records that reviewed repin, not a silent placeholder
+  substitution.
 
 ## Task List
 
-- [ ] T1. Freeze revised R2 requirements and design
-  - Record separate Engine/Host Runtime/BuildPlugin authorities.
-  - Record fresh R2 root paths and live-interpreter contract.
-  - Preserve later human/runtime/GTA gates.
+- [x] T1. Freeze the dedicated-builder requirements and design (R1, R1a, R1b,
+  R9, R10)
+  - Replace the obsolete `yhliu + Bubblewrap/user-namespace` production native
+    build design with the fixed UID/GID 997 dedicated builder.
+  - Record root-owned Git bundle and Phase A/B requests, two inactive hardened
+    oneshots, fixed writable slots, deterministic double builds, closed
+    manifests, held-FD authority validation, and deferred late recipes.
+  - Preserve separate Engine/Host Runtime/BuildPlugin authorities, the R2
+    bundle/live-interpreter contract, append-only publication, and all later
+    human/runtime/GTA gates.
+  - Completion evidence: the three approved SDD documents describe the same
+    Phase A/B boundary and blocked rollout status.
 
-- [ ] T2. Align and harden executor authority contract
-  - Change fixed R2 bundle/policy, host-runtime, and BuildPlugin paths.
-  - Bind BuildPlugin manifest and closed receipt v2 admin-publication lineage;
-    reject v1, omitted, unknown, tampered, or rebound admin bindings.
-  - Add launcher to bundle/policy.
-  - Validate immutable live `/proc/self/exe`, Python prefix/path/import origins.
-  - Add full zero-write authority audit and exact attempt/ledger contract.
-  - Preserve renamed finals on durability uncertainty and add reconcile-only.
+- [ ] T2. Align and harden the executor authority contract (R4-R8)
+  - Keep the fixed R2 bundle/policy, host-runtime, and BuildPlugin paths.
+  - Bind BuildPlugin manifest and closed receipt-v2 admin-publication lineage;
+    reject omission, old schema, unknown keys, tamper, or rebinding.
+  - Validate immutable live `/proc/self/exe`, Python prefix/path/import
+    origins, zero-write authority audit, and exact attempt/ledger behavior.
+  - Preserve renamed finals on durability uncertainty and reconcile only.
+  - Completion evidence: focused executor policy, launcher, receipt, archive,
+    sandbox, and no-replace tests pass.
 
-- [ ] T3. Implement R8 engine and host-runtime authority tooling
-  - Add full immutable engine publisher with no-replace reconciliation.
-  - Add allowlisted ELF/runtime closure builder, manifest, receipt, and audit.
-  - Require externally reviewed engine and runtime audit-plan literals.
-  - Keep engine and runtime publications independent.
-  - Generate runtime input and plan candidates only as `yhliu`; bind the full
-    per-object ELF resolution ledger without `ldd`.
-  - Publish fresh runtime input/plan roots through separately reviewed one-shot
-    installers; never append to the sealed core.
+- [ ] T3. Close Engine and Host Runtime authority tooling (R1, R2, R3)
+  - Retain the complete externally reviewed engine projection, fixed source pin,
+    no-replace publisher, and candidate-free reconcile.
+  - Retain the allowlisted ELF/runtime closure, no-`ldd` resolution ledger,
+    generated non-secret `/etc`, manifest/receipt, and independent audit plan.
+  - Keep engine and runtime publications independent and require the
+    runtime-owner no-writer acknowledgement.
+  - Completion evidence: source-only fake-authority/ELF tests and independent
+    projection review pass before any root action.
 
-- [ ] T4. Implement root bundle/policy bootstrap tooling
-  - Generate atomic R2 root authority with four-file bundle, static native
-    held-fd launcher, and external policy.
-  - Pin all data/code/runtime authorities and publication receipts.
-  - Add zero-write audit and exact installed-root execution contract.
-  - Install and validate the four fixed root-owned operation locks.
-  - Build `launch-r8-ue57` and the plan administrator launchers only as
-    `yhliu`; privileged paths copy exact held binaries and run no toolchain.
-  - Seal reviewed-plan v2 with its native launcher pin, then use fresh
-    bundle-input/bundle-plan one-shot installers with external literal pins.
-  - Bind host-runtime receipt v2 and root-policy v3 publication provenance.
-  - Build/review the generic static stage-transfer launcher as `yhliu`; include
-    it in the exact initial core bootstrap and use it as the sole installer
-    transfer root entry.
+- [ ] T4. Close Root Bundle and deferred sequential-authority tooling (R1b,
+  R4-R7)
+  - Retain the atomic R2 bundle/policy publisher, four operation locks,
+    reviewed-plan schemas, four fresh input/plan roots, held-FD transfer,
+    immutable earlier-root snapshots, and no-future-root ordering.
+  - Add approved dedicated-builder recipes for `launch-r8-ue57`, runtime and
+    bundle administrator launchers, and all four stage installers.
+  - Until those recipes exist, require every production entry point to return
+    `DEDICATED_BUILDER_AUTHORITY_REQUIRED` before any write or compile.
+  - Completion evidence: each later artifact has two byte-identical builds,
+    static-ELF proof, a closed job manifest, aggregate inventory, and authority
+    administrator tests. This task is intentionally incomplete in the current
+    milestone.
 
-- [ ] T5. Close CPU-only tests and independent source review
-  - Commit review tooling with fail-closed wrapper placeholders as HEAD A.
-  - Run/review the full engine projection and freeze the externally pinned
-    engine-source-pin candidate before finalizing the wrapper.
-  - Substitute final helper/source-pin/Python pins, rerun review, and commit
-    the complete final source set as HEAD B, including the strict BuildPlugin
-    helper/admin contract that requires the shared parent already be `0555`.
-  - From HEAD B only, build/freeze the generic transfer, parent-seal,
-    BuildPlugin helper/admin, and exact core candidates; run the canonical
-    zero-write core-bootstrap audit.
-  - Run focused and related R8 tests, Ruff/format/compile/shell/diff checks.
-  - Obtain independent security review with no P0/P1 blockers.
-  - Record exact source/root helper hashes.
-  - Cover the four-stage sequence/no-future-root matrix, external pin mismatch,
-    exact inventory/link/mode/owner rejection, collision/reconcile/durability,
-    core/earlier-root identity preservation, root subprocess/toolchain bombs,
-    and user candidate generation with `/root` access bombed.
+- [x] T5a. Implement the dedicated-builder source milestone (R1a, R10)
+  - Add the fixed locked `vista-r8-builder:997:997` account contract with
+    `/nonexistent`, `/usr/sbin/nologin`, no supplementary groups, and no
+    subordinate-ID entry or range containing 997; reject every inactive
+    ceremony while any orphan/live process carries UID, GID, or group 997.
+  - Add the root-reviewed three-operation bootstrap, root-owned installed
+    builder/inputs, root:root `0555` state root, `997:997 0711` phase slots,
+    and `0600` phase locks without starting services.
+  - Add the two fixed `PrivateNetwork` oneshots with pinned Python, closed
+    environment, `UMask=0077`, strict protection, and phase-specific writable
+    paths.
+  - Add strict canonical requests, exact Git-bundle/blob extraction, symlink-safe
+    held tool validation, sealed source memfds, twice-built byte identity,
+    static-ELF checks, full durability, and closed job/phase manifests.
+  - Add the observation-only Phase A request planner and exhaustive trace-v2
+    contract: exact per-invocation event/search/scratch prestate, mapped-file
+    device/inode/path/byte closure, resolved two-path mutation endpoints, and
+    fail-closed replay against held host inputs. Reject scratch raw `..`
+    before normalization; require immutable pinned host chains plus resolved
+    targets for GCC host `..`; close exact procfs tokens and `/dev/null`
+    `O_RDWR[|O_CLOEXEC]`; and avoid production NSS lookups.
+  - Phase A emits the three launchers and exact
+    `parent-seal-candidate/{vista_authority_parent_seal.py:0444,launch-vista-authority-parent-seal:0555}`.
+  - Phase B consumes only closed Phase A plus its root-owned request embedding
+    canonical core audit and initial input, then emits the exact builder-owned
+    three-file initial candidate and sole twice-built installer.
+  - Phase B reuses the exact Phase A builder/bundle/commit/blob/tool/runtime/
+    trace contract and validates Phase A request-to-manifest lineage both at
+    zero-write derivation and later with both documents held during audit.
+  - The authority administrator validates builder authorities with
+    standard-library held-FD/hash/schema/static-ELF logic and performs no local
+    production compilation. Initial-helper provenance consumes Phase B, and
+    late native production entry points fail closed.
+  - Completion evidence: source, unit, bootstrap, helper, test, and runbook
+    changes exist. Two zero-publication planner/replay runs over one ephemeral
+    exact bundle produced byte-identical canonical request bytes; no root,
+    systemd, production builder phase, candidate publication, or UE action is
+    included in this completion.
 
-- [ ] T6a. Publish reviewed BuildPlugin and Engine authorities
-  - Verify the externally reviewed engine source-pin candidate, final HEAD B,
-    all frozen user candidates, and sealed zero-write core audit before any
-    privileged bootstrap step.
-  - Then use the separately reviewed
-    one-shot bootstrap to append only fresh core, parent-seal,
-    BuildPlugin-helper, and BuildPlugin-admin roots in that order. It copies
-    prebuilt bytes, never compiles as root, and preserves every rename; an
-    uncertain step reconciles before proceeding to the next absent root.
-  - Seal the exact initial shared-parent inventory with the separate reviewed
-    parent-seal one-shot; finish any reconcile before another child exists.
-  - Invoke only the already reviewed, root-owned BuildPlugin admin/helper pair;
-    it requires parent `0555` and never chmod/fchmods it. Re-audit and publish.
-  - Publish full UE engine against the committed source pins.
+- [ ] T5b. Freeze and independently review builder inputs (R1a, R10)
+  - Run the complete focused and related R8 source suite, Ruff/format/compile,
+    shell syntax, static systemd-unit verification, and `git diff --check`.
+  - Obtain an independent security review with no P0/P1 blocker.
+  - Freeze the final source commit, exact root-owned Git bundle candidate,
+    canonical Phase A request, bootstrap, builder, and unit hashes/sizes.
+  - Confirm wrapper pins in a separate final-repin substage. The current source
+    candidate pins the reviewed authority administrator, engine source pin, and
+    live Python bytes; any later source change invalidates that repin.
+  - Completion evidence: a reviewed hash ledger, exact committed source, and
+    the canonical bundle/request regenerated from that commit. Independent
+    source review and repin are complete, but this task remains open until the
+    commit exists and its exact bundle/request are frozen. This task does not
+    install or execute anything.
 
-- [ ] T6b. Freeze and publish host-runtime authority
-  - Freeze runtime-input and runtime-plan candidates; build and independently
-    review their two one-shot installers and exact embedded pins.
-  - Install the fresh runtime-input root, then runtime-plan root.
-  - Publish only an exact matching immutable runtime.
+- [ ] T6a. Install the inactive builder framework and close Phase A (R1a)
+  - Through the finite root ceremony, install or exactly reconcile only the
+    pinned framework and Phase A inputs.
+  - Confirm both units are inactive/empty and the bootstrap did not reload,
+    enable, start, or execute them.
+  - Under a separate activation approval, run Phase A exactly once and validate
+    its complete held-FD authority and parent-seal candidate.
+  - Completion evidence: closed Phase A manifest and independent audit. **Not
+    executed; blocked on T5b and privileged approval.**
 
-- [ ] T6c. Freeze and publish atomic R2 root authority
-  - Freeze bundle-input and bundle-plan candidates; build and independently
-    review their two one-shot installers and exact embedded pins.
-  - Install the fresh bundle-input root, then bundle-plan root.
-  - Publish one directory containing `bundle/` and sibling `policy.json`.
+- [ ] T6b. Close Phase B and install the initial four-root bootstrap (R1, R1a)
+  - Independently derive/review the Phase B request from closed Phase A, append
+    it through the inactive bootstrap, and separately approve one Phase B run.
+  - Validate the three-file candidate, sole installer, embedded documents,
+    job/candidate/aggregate manifests, and Phase A lineage with held FDs.
+  - Copy only the independently reviewed sole installer into its fixed root
+    authority, then install/reconcile the launcher/helper/input/lock and
+    publish/resume only the exact four-root prefix.
+  - Never execute a worktree or builder-owned candidate directly with sudo.
+  - Completion evidence: exact prefix audit and durability receipts. **Not
+    executed; blocked on T6a and separate privileged approvals.**
 
-- [ ] T7. Execute fresh NullRHI attempt
-  - Installed `--audit-authorities` has zero blockers/writes.
+- [ ] T6c. Publish BuildPlugin and Engine authorities (R1-R4)
+  - Seal the exact initial shared-parent inventory through the root-owned
+    parent-seal chain and reconcile before adding a child.
+  - Publish BuildPlugin only through the reviewed root helper/admin pair, then
+    publish the engine only against the external source pin.
+  - Completion evidence: immutable authority manifests/receipts and live-fsync
+    audits. **Not executed; blocked on T6b.**
+
+- [ ] T6d. Publish Host Runtime and atomic R2 executor authorities (R1b, R3-R7)
+  - Complete T4's missing dedicated-builder recipes first.
+  - Freeze/install runtime input and plan, publish the exact runtime, then
+    freeze/install bundle input and plan and publish the atomic R2 root.
+  - Completion evidence: all four immutable stage roots, runtime receipt, R2
+    bundle/policy receipt, and zero-write installed audit. **Blocked by design
+    on T4 and T6c.**
+
+- [ ] T7. Execute one fresh NullRHI attempt (R7-R10)
+  - Require installed `--audit-authorities` with zero blockers/writes.
   - Create and seal the one-invocation ledger before child launch.
-  - Execute only the fixed fresh attempt and exact acknowledgement.
-  - Do not consume GPU/network/display/service resources.
+  - Execute only the policy-fixed fresh attempt and acknowledgement without
+    GPU/network/display/service resources.
   - Record CPU/RAM/disk budget and runtime-owner no-writer acknowledgement.
+  - Completion evidence: append-only invocation and attempt evidence with all
+    later acceptance claims still false. **Unexecuted and blocked on T6d plus
+    separate execution approval.**
 
-- [ ] T8. Audit, document, commit, and push
+- [ ] T8. Audit, document, commit, and push (R9, R10)
   - Verify nine UAssets, typed notifies, manifests, receipts, modes, ownership,
-    final negative claims, and append-only final name.
-  - Update runbook/task evidence.
+    final negative claims, and append-only final name after T7.
+  - Update the runbook and task evidence with exact source/root hashes and
+    approved deviations.
   - Commit one reviewed logical change and push the collaboration branch.
 
 ## Phase Gates
 
+- The completed source milestone authorizes no root/bootstrap/systemd/builder/
+  candidate/UE execution.
+- Every activation, finite root trust ceremony, authority publication, and T7
+  remains a separate explicit gate.
 - Human visual/motion acceptance remains a separate explicit gate.
 - Dedicated-server/two-client interaction remains a separate explicit gate.
 - R10 T7 remains a separate explicit gate.

@@ -22,12 +22,13 @@
 #define LAUNCHER_NAME "launch-vista-authority-parent-seal"
 #define HELPER_NAME "vista_authority_parent_seal.py"
 #define PYTHON_PATH "/usr/bin/python3.10"
-#define PYTHON_SHA256_DEFAULT                                                \
-  "7d51cd6b48b521277f5caa4610a82126e315fa2be4df069823a8b1eeb5bd4a86"
-#define PYTHON_SIZE_DEFAULT 5917224
-#define HELPER_SHA256_DEFAULT                                                \
-  "93ad5dbf86cfe9d70536cf53d08ae68de632b701de1b41e69387319c406a91bb"
-#define HELPER_SIZE_DEFAULT 22954
+
+#ifndef EXPECTED_PYTHON_SHA256
+#error "EXPECTED_PYTHON_SHA256 is required"
+#endif
+#ifndef EXPECTED_PYTHON_SIZE
+#error "EXPECTED_PYTHON_SIZE is required"
+#endif
 
 #define AUDIT_OPERATION "audit"
 #define SEAL_OPERATION "seal"
@@ -69,19 +70,25 @@
 #define HELPER_SHA256 VISTA_PARENT_SEAL_TEST_HELPER_SHA256
 #define HELPER_SIZE VISTA_PARENT_SEAL_TEST_HELPER_SIZE
 #else
+#ifndef EXPECTED_HELPER_SHA256
+#error "EXPECTED_HELPER_SHA256 is required"
+#endif
+#ifndef EXPECTED_HELPER_SIZE
+#error "EXPECTED_HELPER_SIZE is required"
+#endif
 #define INSTALLED_ROOT INSTALLED_ROOT_DEFAULT
 #define REQUIRED_EUID ((uid_t)0)
 #define REQUIRED_EGID ((gid_t)0)
 #define AUTHORITY_UID ((uid_t)0)
 #define AUTHORITY_GID ((gid_t)0)
-#define HELPER_SHA256 HELPER_SHA256_DEFAULT
-#define HELPER_SIZE HELPER_SIZE_DEFAULT
+#define HELPER_SHA256 EXPECTED_HELPER_SHA256
+#define HELPER_SIZE EXPECTED_HELPER_SIZE
 #endif
 
 #define SELF_PATH INSTALLED_ROOT "/" LAUNCHER_NAME
 #define HELPER_PATH INSTALLED_ROOT "/" HELPER_NAME
-#define PYTHON_SHA256 PYTHON_SHA256_DEFAULT
-#define PYTHON_SIZE PYTHON_SIZE_DEFAULT
+#define PYTHON_SHA256 EXPECTED_PYTHON_SHA256
+#define PYTHON_SIZE EXPECTED_PYTHON_SIZE
 
 _Static_assert(sizeof(PYTHON_SHA256) == 65,
                "Python SHA-256 must contain 64 bytes");
