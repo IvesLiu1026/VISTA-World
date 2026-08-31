@@ -226,7 +226,6 @@ def test_commandlet_is_syntax_valid_and_has_no_caller_selected_asset_surface() -
         "R3 Content changed outside the exact nine-package allowlist",
         'source_blender_animation_roundtrip_verified": False',
         "path == EXECUTION_PATH",
-        "loaded_project == PROJECT_FILE",
         "os.path.realpath(loaded_project) == PROJECT_FILE",
         "VistaPlayableHomeCc0AnimationLibrary",
     ):
@@ -239,7 +238,7 @@ def test_commandlet_is_syntax_valid_and_has_no_caller_selected_asset_surface() -
     assert "/Game/CitySample" not in source
     assert "/Game/Human_Avatar/" not in source
     assert "/Game/MetaHumans/" not in source
-    project_gate = source.index("loaded_project == PROJECT_FILE")
+    project_gate = source.index("os.path.realpath(loaded_project) == PROJECT_FILE")
     first_asset_mutation = source.index(
         "unreal.EditorAssetLibrary.make_directory(SEQUENCE_NAMESPACE)"
     )

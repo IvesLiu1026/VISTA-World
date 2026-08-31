@@ -957,10 +957,12 @@ def run() -> None:
             "UE engine identity differs",
         )
         loaded_project = str(unreal.Paths.get_project_file_path())
+        # UE 5.7 may report the already-loaded project as an engine-relative
+        # path even when it was launched with the absolute sandbox path.  The
+        # canonical path is the security boundary; rejecting the spelling
+        # would quarantine the correct project before any asset mutation.
         require(
-            loaded_project == PROJECT_FILE
-            and os.path.isabs(loaded_project)
-            and os.path.realpath(loaded_project) == PROJECT_FILE
+            os.path.realpath(loaded_project) == PROJECT_FILE
             and execution["project_file"] == PROJECT_FILE,
             "loaded UE project differs from the sealed sandbox project",
         )
