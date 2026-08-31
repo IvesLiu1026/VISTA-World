@@ -291,6 +291,8 @@ private:
     FVistaPlayerActionFeedback ActionFeedback;
 
     TWeakObjectPtr<AActor> InspectedTarget;
+    /** Target whose Inspect presentation waits for the typed montage to finish. */
+    TWeakObjectPtr<AActor> PendingInspectionTarget;
     FRotator PreInspectionControlRotation = FRotator::ZeroRotator;
     double InspectionStartedAtSeconds = 0.0;
     double ActionFeedbackExpiresAtSeconds = 0.0;
@@ -335,6 +337,8 @@ private:
         bool bTerminal = true);
     void PublishTransactionFeedback(const FVistaActionTransactionRecord& Record);
     void UpdatePendingActionFeedback();
+    FVistaInteractionResult BeginAnimatedInspectInteraction();
+    void PresentCompletedInspection(AActor* Target);
     FVistaInteractionResult BeginPhysicalInteraction(
         AActor* PhysicalTarget,
         EVistaAffordance Affordance,
