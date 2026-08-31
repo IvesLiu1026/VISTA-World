@@ -1177,5 +1177,7 @@ def test_project_persists_fixed_gameplay_input_contract() -> None:
         'AxisName="Turn",Scale=1.000000,Key=MouseX',
         'ActionName="Interact",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=E',
         'ActionName="Drop",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=Q',
+        'ActionName="Inspect",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=I',
+        'ActionName="ExitInspect",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=Escape',
     ):
         assert value in raw

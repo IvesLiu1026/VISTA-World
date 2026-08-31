@@ -794,6 +794,8 @@ LEGACY_ACTION_MAPPINGS = {
     ("Crouch", "C"),
     ("Interact", "E"),
     ("Drop", "Q"),
+    ("Inspect", "I"),
+    ("ExitInspect", "Escape"),
 }
 
 

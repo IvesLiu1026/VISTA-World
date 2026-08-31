@@ -20,6 +20,64 @@ class UVistaInteractionComponent;
 struct FMinimalViewInfo;
 struct FInputActionValue;
 
+/** Bounded player-facing projection of one interaction result. */
+USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaPlayerActionFeedback
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Presentation")
+    bool bVisible = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Presentation")
+    bool bTerminal = true;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Presentation")
+    EVistaInteractionStatus Status = EVistaInteractionStatus::Rejected;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Presentation")
+    EVistaActionPhase Phase = EVistaActionPhase::Idle;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Presentation")
+    FName Code = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Presentation")
+    FString SemanticId;
+};
+
+/** Safe, read-only information exposed while the local player inspects a target. */
+USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaInspectionStateRow
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Inspection")
+    FName Key = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Inspection")
+    FString Value;
+};
+
+/** Safe, read-only information exposed while the local player inspects a target. */
+USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaInspectionPresentation
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Inspection")
+    bool bActive = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Inspection")
+    FString SemanticId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Inspection")
+    TArray<EVistaAffordance> Affordances;
+
+    /** Closed allow-list projection; arbitrary actor state is never copied here. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Inspection")
+    TArray<FVistaInspectionStateRow> PublicState;
+};
+
 /** Closed, measured settings for the realistic-interior gameplay camera. */
 USTRUCT(BlueprintType)
 struct VISTAPLAYABLEHOME_API FVistaIndoorCameraProfile
@@ -134,6 +192,12 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Input")
     TObjectPtr<UInputAction> DropAction;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Input")
+    TObjectPtr<UInputAction> InspectAction;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Input")
+    TObjectPtr<UInputAction> ExitInspectAction;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Movement")
     float WalkSpeed = 350.0f;
 
@@ -158,6 +222,31 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VISTA|Carry")
     FVistaInteractionResult DropHeldItem();
 
+    /** Explicit secondary action; it never substitutes for the E-key resolver. */
+    UFUNCTION(BlueprintCallable, Category = "VISTA|Inspection")
+    FVistaInteractionResult PerformInspectInteraction();
+
+    UFUNCTION(BlueprintCallable, Category = "VISTA|Inspection")
+    void ExitInspection();
+
+    UFUNCTION(BlueprintPure, Category = "VISTA|Inspection")
+    bool IsInspectionActive() const { return InspectionPresentation.bActive; }
+
+    const FVistaInspectionPresentation& GetInspectionPresentation() const
+    {
+        return InspectionPresentation;
+    }
+
+    const FVistaPlayerActionFeedback& GetActionFeedback() const
+    {
+        return ActionFeedback;
+    }
+
+    bool IsActionFeedbackVisible() const;
+
+    /** True only when the focused actor explicitly advertises Inspect. */
+    bool CanInspectFocusedActor() const;
+
     /** Applies all camera settings atomically after closed-range validation. */
     UFUNCTION(BlueprintCallable, Category = "VISTA|Camera")
     bool ApplyIndoorCameraProfile(const FVistaIndoorCameraProfile& Profile);
@@ -172,6 +261,7 @@ public:
 
 protected:
     virtual void BeginPlay() override;
+    virtual void Tick(float DeltaSeconds) override;
     virtual void CalcCamera(
         float DeltaTime,
         FMinimalViewInfo& OutResult) override;
@@ -194,6 +284,22 @@ private:
     float NearCameraShowDistanceCm = 0.0f;
     bool bNearCameraVisualHidden = false;
 
+    UPROPERTY(Transient)
+    FVistaInspectionPresentation InspectionPresentation;
+
+    UPROPERTY(Transient)
+    FVistaPlayerActionFeedback ActionFeedback;
+
+    TWeakObjectPtr<AActor> InspectedTarget;
+    FRotator PreInspectionControlRotation = FRotator::ZeroRotator;
+    double InspectionStartedAtSeconds = 0.0;
+    double ActionFeedbackExpiresAtSeconds = 0.0;
+    FName PendingPresentationCommandId = NAME_None;
+    EVistaActionPhase LastPresentedActionPhase = EVistaActionPhase::Idle;
+    EVistaActionTransactionStatus LastPresentedTransactionStatus =
+        EVistaActionTransactionStatus::Idle;
+    FName LastPresentedTransactionCode = NAME_None;
+
     void Move(const FInputActionValue& Value);
     void Look(const FInputActionValue& Value);
     void SetSprinting(bool bEnabled);
@@ -203,6 +309,8 @@ private:
     void EndCrouch();
     void InteractPressed();
     void DropPressed();
+    void InspectPressed();
+    void ExitInspectPressed();
     void MoveForwardLegacy(float Value);
     void MoveRightLegacy(float Value);
     void LookYawLegacy(float Value);
@@ -213,17 +321,46 @@ private:
     void UpdateNearCameraVisualOcclusion(const FVector& CameraLocation);
     void SetNearCameraVisualHidden(bool bHidden);
     void RestoreNearCameraVisualOcclusion();
+    FVistaInteractionResult EvaluateInspectInteraction(
+        FVistaInspectionPresentation& OutPresentation,
+        AActor*& OutTarget);
+    void BeginInspectionPresentation(
+        AActor* Target,
+        const FVistaInspectionPresentation& Presentation);
+    void UpdateInspectionFocus();
+    void SetActionFeedbackLocal(const FVistaPlayerActionFeedback& Feedback);
+    void PublishInteractionResult(
+        const FVistaInteractionResult& Result,
+        EVistaActionPhase Phase = EVistaActionPhase::Complete,
+        bool bTerminal = true);
+    void PublishTransactionFeedback(const FVistaActionTransactionRecord& Record);
+    void UpdatePendingActionFeedback();
     FVistaInteractionResult BeginPhysicalInteraction(
         AActor* PhysicalTarget,
         EVistaAffordance Affordance,
         AActor* PlacementOwner = nullptr,
         const FVector& ReleaseVelocity = FVector::ZeroVector);
+    FVistaInteractionResult BeginSemanticInteraction(
+        AActor* Target,
+        EVistaAffordance Affordance);
 
     UFUNCTION(Server, Reliable)
     void ServerPerformDefaultInteraction();
 
     UFUNCTION(Server, Reliable)
     void ServerDropHeldItem();
+
+    UFUNCTION(Server, Reliable)
+    void ServerPerformInspectInteraction();
+
+    UFUNCTION(Client, Reliable)
+    void ClientBeginInspectionPresentation(
+        AActor* Target,
+        const FVistaInspectionPresentation& Presentation);
+
+    UFUNCTION(Client, Reliable)
+    void ClientPresentInteractionFeedback(
+        const FVistaPlayerActionFeedback& Feedback);
 
     UFUNCTION(Server, Reliable)
     void ServerSetSprinting(bool bEnabled);

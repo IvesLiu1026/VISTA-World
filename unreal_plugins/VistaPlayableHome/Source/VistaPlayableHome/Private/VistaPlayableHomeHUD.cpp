@@ -183,6 +183,93 @@ FLinearColor ScenarioStatusColor(EVistaEventStatus Status)
             return FLinearColor(0.78f, 0.61f, 0.32f, 1.0f);
     }
 }
+
+bool SupportsInspect(AActor* Actor)
+{
+    return IsValid(Actor) &&
+        Actor->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()) &&
+        IVistaInteractable::Execute_VistaGetAffordances(Actor).Contains(
+            EVistaAffordance::Inspect);
+}
+
+FString AffordanceLabel(EVistaAffordance Affordance)
+{
+    switch (Affordance)
+    {
+        case EVistaAffordance::Open: return TEXT("Open");
+        case EVistaAffordance::Close: return TEXT("Close");
+        case EVistaAffordance::PickUp: return TEXT("Pick up");
+        case EVistaAffordance::Drop: return TEXT("Drop");
+        case EVistaAffordance::Place: return TEXT("Place");
+        case EVistaAffordance::Toggle: return TEXT("Toggle");
+        case EVistaAffordance::Sit: return TEXT("Sit");
+        case EVistaAffordance::Inspect: return TEXT("Inspect");
+        default: return TEXT("Unknown");
+    }
+}
+
+FString PhaseLabel(EVistaActionPhase Phase)
+{
+    switch (Phase)
+    {
+        case EVistaActionPhase::Approach: return TEXT("APPROACHING");
+        case EVistaActionPhase::Align: return TEXT("ALIGNING");
+        case EVistaActionPhase::Animate: return TEXT("ANIMATING");
+        case EVistaActionPhase::ContactCommit: return TEXT("CONTACT");
+        case EVistaActionPhase::Complete: return TEXT("COMPLETE");
+        case EVistaActionPhase::RollingBack: return TEXT("ROLLING BACK");
+        case EVistaActionPhase::Failed: return TEXT("FAILED");
+        case EVistaActionPhase::Idle:
+        default:
+            return TEXT("READY");
+    }
+}
+
+FString ResultStatusLabel(const FVistaPlayerActionFeedback& Feedback)
+{
+    if (!Feedback.bTerminal)
+    {
+        return PhaseLabel(Feedback.Phase);
+    }
+    switch (Feedback.Status)
+    {
+        case EVistaInteractionStatus::Succeeded: return TEXT("COMPLETE");
+        case EVistaInteractionStatus::Unsupported: return TEXT("UNSUPPORTED");
+        case EVistaInteractionStatus::InvalidRequester: return TEXT("INVALID REQUESTER");
+        case EVistaInteractionStatus::InvalidState: return TEXT("INVALID STATE");
+        case EVistaInteractionStatus::Busy: return TEXT("BUSY");
+        case EVistaInteractionStatus::Blocked: return TEXT("BLOCKED");
+        case EVistaInteractionStatus::NotFound: return TEXT("NOT FOUND");
+        case EVistaInteractionStatus::TimedOut: return TEXT("TIMED OUT");
+        case EVistaInteractionStatus::RevisionMismatch: return TEXT("REVISION CHANGED");
+        case EVistaInteractionStatus::Rejected:
+        default:
+            return TEXT("REJECTED");
+    }
+}
+
+FLinearColor ResultStatusColor(const FVistaPlayerActionFeedback& Feedback)
+{
+    if (!Feedback.bTerminal)
+    {
+        return FLinearColor(0.78f, 0.61f, 0.32f, 1.0f);
+    }
+    return Feedback.Status == EVistaInteractionStatus::Succeeded
+        ? FLinearColor(0.43f, 0.70f, 0.52f, 1.0f)
+        : FLinearColor(0.82f, 0.35f, 0.30f, 1.0f);
+}
+
+FString PublicStateLabel(FName Key)
+{
+    FString Label = Key.ToString();
+    Label.ReplaceInline(TEXT("_"), TEXT(" "));
+    Label.ToLowerInline();
+    if (!Label.IsEmpty())
+    {
+        Label[0] = FChar::ToUpper(Label[0]);
+    }
+    return Label;
+}
 } // namespace
 
 void AVistaPlayableHomeHUD::DrawHUD()
@@ -214,10 +301,36 @@ void AVistaPlayableHomeHUD::DrawHUD()
     // A restrained reticle keeps the interaction surface game-like without
     // competing with the world or exposing implementation details.
     const float ReticleSize = 4.0f * UiScale;
+    const float ReticleX = Canvas->ClipX * 0.5f;
+    const float ReticleY = Canvas->ClipY * 0.5f;
     DrawRect(FLinearColor(0.92f, 0.90f, 0.85f, 0.78f),
-             (Canvas->ClipX - ReticleSize) * 0.5f,
-             (Canvas->ClipY - ReticleSize) * 0.5f,
+             ReticleX - ReticleSize * 0.5f,
+             ReticleY - ReticleSize * 0.5f,
              ReticleSize, ReticleSize);
+    if (Character->IsInspectionActive())
+    {
+        const float FocusRadius = 34.0f * UiScale;
+        const float CornerLength = 11.0f * UiScale;
+        const float Stroke = 2.0f * UiScale;
+        for (const float XSign : {-1.0f, 1.0f})
+        {
+            for (const float YSign : {-1.0f, 1.0f})
+            {
+                const float CornerX = ReticleX + XSign * FocusRadius;
+                const float CornerY = ReticleY + YSign * FocusRadius;
+                DrawRect(Accent,
+                         CornerX - (XSign < 0.0f ? 0.0f : CornerLength),
+                         CornerY,
+                         CornerLength,
+                         Stroke);
+                DrawRect(Accent,
+                         CornerX,
+                         CornerY - (YSign < 0.0f ? 0.0f : CornerLength),
+                         Stroke,
+                         CornerLength);
+            }
+        }
+    }
 
     if (GetWorld())
     {
@@ -256,14 +369,26 @@ void AVistaPlayableHomeHUD::DrawHUD()
         : nullptr;
     const FString InteractionLabel = BuildInteractionLabel(
         *Character, FocusedActor);
-    if (!InteractionLabel.IsEmpty())
+    FString Prompt;
+    if (Character->IsInspectionActive())
     {
-        const FString Prompt = FString::Printf(TEXT("[E]  %s"), *InteractionLabel);
+        Prompt = TEXT("[I / ESC]  Exit inspection");
+    }
+    else if (!InteractionLabel.IsEmpty())
+    {
+        Prompt = FString::Printf(TEXT("[E]  %s"), *InteractionLabel);
+        if (SupportsInspect(FocusedActor))
+        {
+            Prompt += TEXT("      [I]  Inspect");
+        }
+    }
+    if (!Prompt.IsEmpty())
+    {
         float TextWidth = 0.0f;
         float TextHeight = 0.0f;
         GetTextSize(Prompt, TextWidth, TextHeight, Font, UiScale);
         const float PanelWidth = FMath::Clamp(
-            TextWidth + 46.0f * UiScale, 220.0f * UiScale, 560.0f * UiScale);
+            TextWidth + 46.0f * UiScale, 220.0f * UiScale, 760.0f * UiScale);
         const float PanelHeight = 44.0f * UiScale;
         const float PanelX = (Canvas->ClipX - PanelWidth) * 0.5f;
         const float PanelY = Canvas->ClipY - 76.0f * UiScale;
@@ -274,6 +399,87 @@ void AVistaPlayableHomeHUD::DrawHUD()
                  PanelX + (PanelWidth - TextWidth) * 0.5f,
                  PanelY + (PanelHeight - TextHeight) * 0.5f,
                  Font, UiScale, false);
+    }
+
+    const FVistaInspectionPresentation& Inspection =
+        Character->GetInspectionPresentation();
+    if (Inspection.bActive)
+    {
+        const float Margin = 32.0f * UiScale;
+        const float CardWidth = FMath::Min(
+            390.0f * UiScale,
+            FMath::Max(260.0f * UiScale, Canvas->ClipX - Margin * 2.0f));
+        const int32 StateRowCount = FMath::Min(
+            Inspection.PublicState.Num(), 8);
+        const float CardHeight = (150.0f + StateRowCount * 21.0f) * UiScale;
+        const float CardX = Canvas->ClipX - Margin - CardWidth;
+        const float CardY = 128.0f * UiScale;
+        DrawRect(Panel, CardX, CardY, CardWidth, CardHeight);
+        DrawRect(Accent, CardX, CardY, 3.0f * UiScale, CardHeight);
+
+        const FString FriendlyTarget =
+            FriendlyNameFromSemanticId(Inspection.SemanticId);
+        DrawText(TEXT("INSPECTION"), Muted,
+                 CardX + 18.0f * UiScale, CardY + 14.0f * UiScale,
+                 Font, 0.76f * UiScale, false);
+        DrawText(FriendlyTarget, Primary,
+                 CardX + 18.0f * UiScale, CardY + 38.0f * UiScale,
+                 Font, 1.12f * UiScale, false);
+        DrawText(TEXT("SEMANTIC ID"), Muted,
+                 CardX + 18.0f * UiScale, CardY + 69.0f * UiScale,
+                 Font, 0.70f * UiScale, false);
+        DrawText(Inspection.SemanticId, Primary,
+                 CardX + 112.0f * UiScale, CardY + 69.0f * UiScale,
+                 Font, 0.70f * UiScale, false);
+
+        TArray<FString> AffordanceLabels;
+        for (const EVistaAffordance Affordance : Inspection.Affordances)
+        {
+            AffordanceLabels.Add(AffordanceLabel(Affordance));
+        }
+        DrawText(TEXT("ACTIONS"), Muted,
+                 CardX + 18.0f * UiScale, CardY + 94.0f * UiScale,
+                 Font, 0.70f * UiScale, false);
+        DrawText(FString::Join(AffordanceLabels, TEXT("  /  ")), Primary,
+                 CardX + 86.0f * UiScale, CardY + 94.0f * UiScale,
+                 Font, 0.70f * UiScale, false);
+        DrawRect(Muted.CopyWithNewOpacity(0.28f),
+                 CardX + 18.0f * UiScale, CardY + 120.0f * UiScale,
+                 CardWidth - 36.0f * UiScale, 1.0f * UiScale);
+
+        for (int32 Index = 0; Index < StateRowCount; ++Index)
+        {
+            const FVistaInspectionStateRow& StateRow =
+                Inspection.PublicState[Index];
+            const float RowY = CardY + (132.0f + Index * 21.0f) * UiScale;
+            DrawText(PublicStateLabel(StateRow.Key), Muted,
+                     CardX + 18.0f * UiScale, RowY,
+                     Font, 0.74f * UiScale, false);
+            DrawText(StateRow.Value, Primary,
+                     CardX + 190.0f * UiScale, RowY,
+                     Font, 0.74f * UiScale, false);
+        }
+    }
+
+    if (Character->IsActionFeedbackVisible())
+    {
+        const FVistaPlayerActionFeedback& Feedback = Character->GetActionFeedback();
+        const FString StatusLabel = ResultStatusLabel(Feedback);
+        const FString CodeLabel = Feedback.Code.ToString().Left(56);
+        const float Margin = 32.0f * UiScale;
+        const float FeedbackWidth = 330.0f * UiScale;
+        const float FeedbackHeight = 56.0f * UiScale;
+        const float FeedbackX = Canvas->ClipX - Margin - FeedbackWidth;
+        const float FeedbackY = Canvas->ClipY - 154.0f * UiScale;
+        DrawRect(Panel, FeedbackX, FeedbackY, FeedbackWidth, FeedbackHeight);
+        DrawRect(ResultStatusColor(Feedback), FeedbackX, FeedbackY,
+                 3.0f * UiScale, FeedbackHeight);
+        DrawText(StatusLabel, ResultStatusColor(Feedback),
+                 FeedbackX + 16.0f * UiScale, FeedbackY + 9.0f * UiScale,
+                 Font, 0.78f * UiScale, false);
+        DrawText(CodeLabel, Primary,
+                 FeedbackX + 16.0f * UiScale, FeedbackY + 31.0f * UiScale,
+                 Font, 0.72f * UiScale, false);
     }
 
     const AVistaPickupActor* Held = Character->GetHeldPickup();

@@ -29,6 +29,21 @@ struct VISTAPLAYABLEHOME_API FVistaPhysicalActionRequest final
     bool bCommitSessionGenerationOnSuccess = false;
 };
 
+/** Closed C++ input for animation-gated semantic target interactions. */
+struct VISTAPLAYABLEHOME_API FVistaSemanticActionRequest final
+{
+    FName CommandId = NAME_None;
+    AActor* Requester = nullptr;
+    AActor* Target = nullptr;
+    FString RequesterSemanticId;
+    FString TargetSemanticId;
+    EVistaAffordance Affordance = EVistaAffordance::Inspect;
+    FName ExpectedRevision = NAME_None;
+    int32 SessionGeneration = 0;
+    float TimeoutSeconds = 10.0f;
+    bool bCommitSessionGenerationOnSuccess = false;
+};
+
 /**
  * One authority for player, NPC, and typed-live pickup/place/drop mutations.
  *
@@ -47,6 +62,15 @@ public:
 
     bool BeginPhysicalInteraction(
         const FVistaPhysicalActionRequest& Request,
+        FVistaActionTransactionRecord& OutRecord);
+
+    /**
+     * Run open/close/inspect through the same animation/contact/receipt owner
+     * as pickup/place/drop. Open and close mutate only at the typed handle
+     * contact signal; Inspect commits only after its read-only postcondition.
+     */
+    bool BeginSemanticInteraction(
+        const FVistaSemanticActionRequest& Request,
         FVistaActionTransactionRecord& OutRecord);
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -82,11 +106,17 @@ public:
     bool CancelActiveAction(FName Reason = TEXT("ACTION_CANCELED"));
 
     UFUNCTION(BlueprintPure, Category = "VISTA|Action")
-    bool HasActiveAction() const { return ActiveAction.IsSet(); }
+    bool HasActiveAction() const
+    {
+        return ActiveAction.IsSet() || ActiveSemanticAction.IsSet();
+    }
 
     static bool IsPhysicalAffordance(EVistaAffordance Affordance);
+    static bool IsAnimatedSemanticAffordance(EVistaAffordance Affordance);
     /** Length-framed binary identity rendered as lowercase hex, never delimiter text. */
     static FString CanonicalRequestHex(const FVistaPhysicalActionRequest& Request);
+    static FString CanonicalSemanticRequestHex(
+        const FVistaSemanticActionRequest& Request);
     static FVistaInteractionResult InteractionResultFromTransaction(
         const FVistaActionTransactionRecord& Record);
 
@@ -130,7 +160,22 @@ private:
         bool bAlignmentApplied = false;
     };
 
+    struct FActiveSemanticAction final
+    {
+        FVistaSemanticActionRequest Request;
+        FString CanonicalRequest;
+        TWeakObjectPtr<AActor> Requester;
+        TWeakObjectPtr<AActor> Target;
+        TWeakObjectPtr<UVistaAnimationComponent> Animation;
+        FVistaActionTransactionRecord Record;
+        FName ContactResultCode = NAME_None;
+        double StartedAtSeconds = 0.0;
+        bool bAnimationStarted = false;
+        bool bAlignmentApplied = false;
+    };
+
     TOptional<FActivePhysicalAction> ActiveAction;
+    TOptional<FActiveSemanticAction> ActiveSemanticAction;
 
     bool BeginPhysicalInteractionImpl(
         const FVistaPhysicalActionRequest& Request,
@@ -172,4 +217,28 @@ private:
     bool FinalizeActive(FVistaActionTransactionRecord* OutFinalRecord = nullptr);
     void AbandonActiveAfterPublishFailure();
     bool PublishRecord(bool bTerminal = false);
+
+    static void SetRejectedSemanticRecord(
+        const FVistaSemanticActionRequest& Request,
+        FName Code,
+        FVistaActionTransactionRecord& OutRecord);
+    bool RejectSemanticRequest(
+        const FVistaSemanticActionRequest& Request,
+        const FString& CanonicalRequest,
+        FName Code,
+        FVistaActionTransactionRecord& OutRecord);
+    void TickSemanticAction();
+    void AdvanceSemanticApproach();
+    void AdvanceSemanticAlign();
+    void AdvanceSemanticAnimation();
+    bool StartSemanticAnimation(FName& OutCode);
+    bool CommitSemanticContact(FName& OutCode);
+    void CompleteSemanticSuccess();
+    void FinishSemanticFailure(
+        EVistaActionTransactionStatus Status,
+        FName Code);
+    bool TransitionSemantic(EVistaActionPhase Phase, FName Code);
+    bool PublishSemanticRecord(bool bTerminal = false);
+    bool FinalizeSemantic(
+        FVistaActionTransactionRecord* OutFinalRecord = nullptr);
 };

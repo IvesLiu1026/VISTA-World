@@ -5,6 +5,7 @@
 #include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -40,6 +41,118 @@ const FName RealisticInteriorR2CameraProfileId(TEXT("realistic_interior_r2"));
 const TCHAR* CameraProfileCommandLineKey = TEXT("VistaCameraProfile=");
 constexpr float IndoorViewPitchMinDegrees = -60.0f;
 constexpr float IndoorViewPitchMaxDegrees = 45.0f;
+constexpr double InspectionMaximumSeconds = 20.0;
+constexpr float InspectionMaximumDistanceCm = 500.0f;
+constexpr double TerminalFeedbackSeconds = 4.0;
+constexpr int32 MaximumPresentationTextCharacters = 128;
+
+FString BoundedPresentationText(const FString& Source, int32 MaximumCharacters)
+{
+    FString Result;
+    Result.Reserve(FMath::Min(Source.Len(), MaximumCharacters));
+    bool bPreviousWasSpace = false;
+    for (const TCHAR Character : Source)
+    {
+        const bool bSpace = FChar::IsWhitespace(Character);
+        if (bSpace)
+        {
+            if (!bPreviousWasSpace && !Result.IsEmpty())
+            {
+                Result.AppendChar(TEXT(' '));
+            }
+            bPreviousWasSpace = true;
+        }
+        else if (!FChar::IsControl(Character))
+        {
+            Result.AppendChar(Character);
+            bPreviousWasSpace = false;
+        }
+        if (Result.Len() >= MaximumCharacters)
+        {
+            break;
+        }
+    }
+    Result.TrimStartAndEndInline();
+    return Result;
+}
+
+bool RuntimeStatesEquivalent(
+    const FVistaEntityRuntimeState& Left,
+    const FVistaEntityRuntimeState& Right)
+{
+    if (Left.SemanticId != Right.SemanticId ||
+        !Left.Transform.Equals(Right.Transform, 0.01f) ||
+        Left.bHidden != Right.bHidden ||
+        Left.bPortable != Right.bPortable ||
+        Left.Values.Num() != Right.Values.Num())
+    {
+        return false;
+    }
+    for (const TPair<FName, FString>& Pair : Left.Values)
+    {
+        const FString* OtherValue = Right.Values.Find(Pair.Key);
+        if (!OtherValue || *OtherValue != Pair.Value)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+FVistaInspectionPresentation BuildInspectionPresentation(
+    AActor* Target,
+    const FVistaEntityRuntimeState& State)
+{
+    FVistaInspectionPresentation Presentation;
+    Presentation.bActive = true;
+    Presentation.SemanticId = BoundedPresentationText(
+        State.SemanticId,
+        MaximumPresentationTextCharacters);
+    Presentation.Affordances =
+        IVistaInteractable::Execute_VistaGetAffordances(Target);
+    Presentation.Affordances.Sort(
+        [](EVistaAffordance Left, EVistaAffordance Right)
+        {
+            return static_cast<uint8>(Left) < static_cast<uint8>(Right);
+        });
+
+    // Only this closed set may cross into the public inspection card. Values
+    // such as private event conditions, review labels and arbitrary actor
+    // metadata are intentionally excluded.
+    static const FName PublicValueKeys[] = {
+        TEXT("open"),
+        TEXT("active"),
+        TEXT("powered"),
+        TEXT("on"),
+        TEXT("held"),
+        TEXT("placed_at"),
+    };
+    for (const FName Key : PublicValueKeys)
+    {
+        if (const FString* Value = State.Values.Find(Key))
+        {
+            FVistaInspectionStateRow Row;
+            Row.Key = Key;
+            Row.Value = BoundedPresentationText(*Value, 64);
+            Presentation.PublicState.Add(MoveTemp(Row));
+        }
+    }
+    FVistaInspectionStateRow PortableRow;
+    PortableRow.Key = TEXT("portable");
+    PortableRow.Value = State.bPortable ? TEXT("true") : TEXT("false");
+    Presentation.PublicState.Add(MoveTemp(PortableRow));
+    FVistaInspectionStateRow VisibleRow;
+    VisibleRow.Key = TEXT("visible");
+    VisibleRow.Value = State.bHidden ? TEXT("false") : TEXT("true");
+    Presentation.PublicState.Add(MoveTemp(VisibleRow));
+    Presentation.PublicState.Sort(
+        [](const FVistaInspectionStateRow& Left,
+           const FVistaInspectionStateRow& Right)
+        {
+            return Left.Key.ToString() < Right.Key.ToString();
+        });
+    return Presentation;
+}
 }
 
 FVistaIndoorCameraProfile FVistaIndoorCameraProfile::RealisticInteriorR2()
@@ -223,6 +336,58 @@ void AVistaPlayableHomeCharacter::BeginPlay()
             }
         }
     }
+}
+
+void AVistaPlayableHomeCharacter::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+    if (HasAuthority())
+    {
+        UpdatePendingActionFeedback();
+    }
+    if (!InspectionPresentation.bActive || !IsLocallyControlled())
+    {
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    AActor* Target = InspectedTarget.Get();
+    if (!IsValid(World) || !IsValid(Target))
+    {
+        const FString LostSemanticId = InspectionPresentation.SemanticId;
+        ExitInspection();
+        PublishInteractionResult(
+            FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::NotFound,
+                TEXT("INSPECTION_TARGET_LOST"),
+                LostSemanticId));
+        return;
+    }
+    if (World->GetTimeSeconds() - InspectionStartedAtSeconds >=
+        InspectionMaximumSeconds)
+    {
+        const FString TimedOutSemanticId = InspectionPresentation.SemanticId;
+        ExitInspection();
+        PublishInteractionResult(
+            FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::TimedOut,
+                TEXT("INSPECTION_TIMED_OUT"),
+                TimedOutSemanticId));
+        return;
+    }
+    if (FVector::Distance(GetActorLocation(), Target->GetActorLocation()) >
+        InspectionMaximumDistanceCm)
+    {
+        const FString DistantSemanticId = InspectionPresentation.SemanticId;
+        ExitInspection();
+        PublishInteractionResult(
+            FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::Blocked,
+                TEXT("INSPECTION_RANGE_EXCEEDED"),
+                DistantSemanticId));
+        return;
+    }
+    UpdateInspectionFocus();
 }
 
 void AVistaPlayableHomeCharacter::CalcCamera(
@@ -429,6 +594,7 @@ bool AVistaPlayableHomeCharacter::ApplyIndoorCameraProfile(
 
 void AVistaPlayableHomeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    ExitInspection();
     RestoreNearCameraVisualOcclusion();
     RestoreIndoorViewLimits();
     SetSprinting(false);
@@ -449,6 +615,7 @@ void AVistaPlayableHomeCharacter::UnPossessed()
     // Restore the shared camera manager before APawn clears Controller. This
     // also covers ordinary controller switches where the pawn stays alive and
     // EndPlay is never called.
+    ExitInspection();
     RestoreIndoorViewLimits();
     RestoreNearCameraVisualOcclusion();
     Super::UnPossessed();
@@ -494,6 +661,22 @@ void AVistaPlayableHomeCharacter::SetupPlayerInputComponent(UInputComponent* Pla
         {
             Enhanced->BindAction(DropAction, ETriggerEvent::Started, this, &ThisClass::DropPressed);
         }
+        if (IsValid(InspectAction))
+        {
+            Enhanced->BindAction(
+                InspectAction,
+                ETriggerEvent::Started,
+                this,
+                &ThisClass::InspectPressed);
+        }
+        if (IsValid(ExitInspectAction))
+        {
+            Enhanced->BindAction(
+                ExitInspectAction,
+                ETriggerEvent::Started,
+                this,
+                &ThisClass::ExitInspectPressed);
+        }
     }
 
     // Legacy bindings keep the C++ pawn usable in a disposable project before
@@ -510,10 +693,16 @@ void AVistaPlayableHomeCharacter::SetupPlayerInputComponent(UInputComponent* Pla
     PlayerInputComponent->BindAction(TEXT("Crouch"), IE_Released, this, &ThisClass::EndCrouch);
     PlayerInputComponent->BindAction(TEXT("Interact"), IE_Pressed, this, &ThisClass::InteractPressed);
     PlayerInputComponent->BindAction(TEXT("Drop"), IE_Pressed, this, &ThisClass::DropPressed);
+    PlayerInputComponent->BindAction(TEXT("Inspect"), IE_Pressed, this, &ThisClass::InspectPressed);
+    PlayerInputComponent->BindAction(TEXT("ExitInspect"), IE_Pressed, this, &ThisClass::ExitInspectPressed);
 }
 
 void AVistaPlayableHomeCharacter::Move(const FInputActionValue& Value)
 {
+    if (InspectionPresentation.bActive)
+    {
+        return;
+    }
     const FVector2D MovementVector = Value.Get<FVector2D>();
     const FRotator ControlRotation = Controller ? Controller->GetControlRotation() : FRotator::ZeroRotator;
     const FRotator YawRotation(0.0f, ControlRotation.Yaw, 0.0f);
@@ -523,6 +712,10 @@ void AVistaPlayableHomeCharacter::Move(const FInputActionValue& Value)
 
 void AVistaPlayableHomeCharacter::Look(const FInputActionValue& Value)
 {
+    if (InspectionPresentation.bActive)
+    {
+        return;
+    }
     const FVector2D LookAxis = Value.Get<FVector2D>();
     AddControllerYawInput(LookAxis.X);
     AddControllerPitchInput(LookAxis.Y);
@@ -530,7 +723,7 @@ void AVistaPlayableHomeCharacter::Look(const FInputActionValue& Value)
 
 void AVistaPlayableHomeCharacter::MoveForwardLegacy(float Value)
 {
-    if (Controller && !FMath::IsNearlyZero(Value))
+    if (!InspectionPresentation.bActive && Controller && !FMath::IsNearlyZero(Value))
     {
         const FRotator Yaw(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
         AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::X), Value);
@@ -539,15 +732,28 @@ void AVistaPlayableHomeCharacter::MoveForwardLegacy(float Value)
 
 void AVistaPlayableHomeCharacter::MoveRightLegacy(float Value)
 {
-    if (Controller && !FMath::IsNearlyZero(Value))
+    if (!InspectionPresentation.bActive && Controller && !FMath::IsNearlyZero(Value))
     {
         const FRotator Yaw(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
         AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y), Value);
     }
 }
 
-void AVistaPlayableHomeCharacter::LookYawLegacy(float Value) { AddControllerYawInput(Value); }
-void AVistaPlayableHomeCharacter::LookPitchLegacy(float Value) { AddControllerPitchInput(Value); }
+void AVistaPlayableHomeCharacter::LookYawLegacy(float Value)
+{
+    if (!InspectionPresentation.bActive)
+    {
+        AddControllerYawInput(Value);
+    }
+}
+
+void AVistaPlayableHomeCharacter::LookPitchLegacy(float Value)
+{
+    if (!InspectionPresentation.bActive)
+    {
+        AddControllerPitchInput(Value);
+    }
+}
 
 void AVistaPlayableHomeCharacter::SetSprinting(bool bEnabled)
 {
@@ -557,6 +763,10 @@ void AVistaPlayableHomeCharacter::SetSprinting(bool bEnabled)
 
 void AVistaPlayableHomeCharacter::BeginSprint()
 {
+    if (InspectionPresentation.bActive)
+    {
+        return;
+    }
     SetSprinting(true);
     if (!HasAuthority())
     {
@@ -578,14 +788,38 @@ void AVistaPlayableHomeCharacter::ServerSetSprinting_Implementation(bool bEnable
     SetSprinting(bEnabled);
 }
 
-void AVistaPlayableHomeCharacter::BeginCrouch() { Crouch(); }
+void AVistaPlayableHomeCharacter::BeginCrouch()
+{
+    if (!InspectionPresentation.bActive)
+    {
+        Crouch();
+    }
+}
 void AVistaPlayableHomeCharacter::EndCrouch() { UnCrouch(); }
 
 void AVistaPlayableHomeCharacter::InteractPressed()
 {
+    if (InspectionPresentation.bActive)
+    {
+        PublishInteractionResult(
+            FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::Busy,
+                TEXT("INSPECTION_ACTIVE"),
+                InspectionPresentation.SemanticId));
+        return;
+    }
     if (HasAuthority())
     {
-        PerformDefaultInteraction();
+        const FVistaInteractionResult Result = PerformDefaultInteraction();
+        if (Result.Code == FName(TEXT("ACTION_ACCEPTED")) &&
+            !PendingPresentationCommandId.IsNone())
+        {
+            UpdatePendingActionFeedback();
+        }
+        else
+        {
+            PublishInteractionResult(Result);
+        }
     }
     else
     {
@@ -595,9 +829,27 @@ void AVistaPlayableHomeCharacter::InteractPressed()
 
 void AVistaPlayableHomeCharacter::DropPressed()
 {
+    if (InspectionPresentation.bActive)
+    {
+        PublishInteractionResult(
+            FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::Busy,
+                TEXT("INSPECTION_ACTIVE"),
+                InspectionPresentation.SemanticId));
+        return;
+    }
     if (HasAuthority())
     {
-        DropHeldItem();
+        const FVistaInteractionResult Result = DropHeldItem();
+        if (Result.Code == FName(TEXT("ACTION_ACCEPTED")) &&
+            !PendingPresentationCommandId.IsNone())
+        {
+            UpdatePendingActionFeedback();
+        }
+        else
+        {
+            PublishInteractionResult(Result);
+        }
     }
     else
     {
@@ -605,14 +857,359 @@ void AVistaPlayableHomeCharacter::DropPressed()
     }
 }
 
+void AVistaPlayableHomeCharacter::InspectPressed()
+{
+    if (InspectionPresentation.bActive)
+    {
+        ExitInspection();
+        return;
+    }
+    if (HasAuthority())
+    {
+        PublishInteractionResult(PerformInspectInteraction());
+    }
+    else
+    {
+        ServerPerformInspectInteraction();
+    }
+}
+
+void AVistaPlayableHomeCharacter::ExitInspectPressed()
+{
+    if (InspectionPresentation.bActive)
+    {
+        ExitInspection();
+    }
+}
+
 void AVistaPlayableHomeCharacter::ServerPerformDefaultInteraction_Implementation()
 {
-    PerformDefaultInteraction();
+    const FVistaInteractionResult Result = PerformDefaultInteraction();
+    if (Result.Code == FName(TEXT("ACTION_ACCEPTED")) &&
+        !PendingPresentationCommandId.IsNone())
+    {
+        UpdatePendingActionFeedback();
+    }
+    else
+    {
+        PublishInteractionResult(Result);
+    }
 }
 
 void AVistaPlayableHomeCharacter::ServerDropHeldItem_Implementation()
 {
-    DropHeldItem();
+    const FVistaInteractionResult Result = DropHeldItem();
+    if (Result.Code == FName(TEXT("ACTION_ACCEPTED")) &&
+        !PendingPresentationCommandId.IsNone())
+    {
+        UpdatePendingActionFeedback();
+    }
+    else
+    {
+        PublishInteractionResult(Result);
+    }
+}
+
+void AVistaPlayableHomeCharacter::ServerPerformInspectInteraction_Implementation()
+{
+    FVistaInspectionPresentation Presentation;
+    AActor* Target = nullptr;
+    const FVistaInteractionResult Result =
+        EvaluateInspectInteraction(Presentation, Target);
+    PublishInteractionResult(Result);
+    if (Result.IsSuccess())
+    {
+        ClientBeginInspectionPresentation(Target, Presentation);
+    }
+}
+
+void AVistaPlayableHomeCharacter::ClientBeginInspectionPresentation_Implementation(
+    AActor* Target,
+    const FVistaInspectionPresentation& Presentation)
+{
+    if (!IsValid(Target) || !Presentation.bActive)
+    {
+        PublishInteractionResult(
+            FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::NotFound,
+                TEXT("INSPECTION_TARGET_UNAVAILABLE"),
+                Presentation.SemanticId));
+        return;
+    }
+    BeginInspectionPresentation(Target, Presentation);
+}
+
+void AVistaPlayableHomeCharacter::ClientPresentInteractionFeedback_Implementation(
+    const FVistaPlayerActionFeedback& Feedback)
+{
+    SetActionFeedbackLocal(Feedback);
+}
+
+bool AVistaPlayableHomeCharacter::CanInspectFocusedActor() const
+{
+    const AActor* Target = IsValid(InteractionComponent)
+        ? InteractionComponent->GetFocusedActor()
+        : nullptr;
+    if (!IsValid(Target) ||
+        !Target->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()))
+    {
+        return false;
+    }
+    return IVistaInteractable::Execute_VistaGetAffordances(
+        const_cast<AActor*>(Target)).Contains(EVistaAffordance::Inspect);
+}
+
+FVistaInteractionResult AVistaPlayableHomeCharacter::EvaluateInspectInteraction(
+    FVistaInspectionPresentation& OutPresentation,
+    AActor*& OutTarget)
+{
+    OutPresentation = FVistaInspectionPresentation();
+    OutTarget = nullptr;
+    if (!HasAuthority())
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("INSPECT_AUTHORITY_REQUIRED"));
+    }
+    if (!IsValid(InteractionComponent))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("INTERACTION_COMPONENT_UNAVAILABLE"));
+    }
+
+    AActor* Target = InteractionComponent->GetFocusedActor();
+    if (!IsValid(Target) ||
+        !Target->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::NotFound,
+            TEXT("NO_INTERACTABLE_TARGET"));
+    }
+    const TArray<EVistaAffordance> Affordances =
+        IVistaInteractable::Execute_VistaGetAffordances(Target);
+    const FString TargetSemanticId =
+        IVistaInteractable::Execute_VistaGetSemanticId(Target);
+    if (!Affordances.Contains(EVistaAffordance::Inspect))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Unsupported,
+            TEXT("INSPECT_UNSUPPORTED"),
+            TargetSemanticId);
+    }
+
+    const FVistaEntityRuntimeState BeforeState =
+        IVistaInteractable::Execute_VistaGetRuntimeState(Target);
+    const FVistaInteractionResult Result =
+        InteractionComponent->TryInteractDeferredObservation(
+            EVistaAffordance::Inspect);
+    if (!Result.IsSuccess())
+    {
+        return Result;
+    }
+
+    const FVistaEntityRuntimeState AfterState =
+        IVistaInteractable::Execute_VistaGetRuntimeState(Target);
+    if (!RuntimeStatesEquivalent(BeforeState, AfterState))
+    {
+        const FVistaInteractionResult RestoreResult =
+            IVistaInteractable::Execute_VistaApplyRuntimeState(
+                Target,
+                BeforeState);
+        const FVistaEntityRuntimeState RestoredState =
+            IVistaInteractable::Execute_VistaGetRuntimeState(Target);
+        const bool bRestored =
+            RestoreResult.IsSuccess() &&
+            RuntimeStatesEquivalent(BeforeState, RestoredState);
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            bRestored
+                ? FName(TEXT("INSPECT_MUTATION_REJECTED"))
+                : FName(TEXT("INSPECT_MUTATION_ROLLBACK_FAILED")),
+            TargetSemanticId);
+    }
+
+    if (UVistaEventSubsystem* Events = GetWorld()
+            ? GetWorld()->GetSubsystem<UVistaEventSubsystem>()
+            : nullptr)
+    {
+        // Publish only after read-only postcondition validation.  Failed or
+        // mutating Inspect implementations therefore produce no VISTA event.
+        Events->RecordSuccessfulInteraction(
+            TargetSemanticId,
+            EVistaAffordance::Inspect);
+    }
+    OutTarget = Target;
+    OutPresentation = BuildInspectionPresentation(Target, AfterState);
+    return Result;
+}
+
+FVistaInteractionResult AVistaPlayableHomeCharacter::PerformInspectInteraction()
+{
+    FVistaInspectionPresentation Presentation;
+    AActor* Target = nullptr;
+    const FVistaInteractionResult Result =
+        EvaluateInspectInteraction(Presentation, Target);
+    if (Result.IsSuccess() && IsLocallyControlled())
+    {
+        BeginInspectionPresentation(Target, Presentation);
+    }
+    return Result;
+}
+
+void AVistaPlayableHomeCharacter::BeginInspectionPresentation(
+    AActor* Target,
+    const FVistaInspectionPresentation& Presentation)
+{
+    if (!IsLocallyControlled() || !IsValid(Target) || !Presentation.bActive)
+    {
+        return;
+    }
+    if (InspectionPresentation.bActive)
+    {
+        ExitInspection();
+    }
+    InspectionPresentation = Presentation;
+    InspectedTarget = Target;
+    InspectionStartedAtSeconds = IsValid(GetWorld())
+        ? GetWorld()->GetTimeSeconds()
+        : 0.0;
+    if (IsValid(Controller))
+    {
+        PreInspectionControlRotation = Controller->GetControlRotation();
+    }
+    GetCharacterMovement()->StopMovementImmediately();
+    EndSprint();
+    EndCrouch();
+    UpdateInspectionFocus();
+}
+
+void AVistaPlayableHomeCharacter::ExitInspection()
+{
+    if (!InspectionPresentation.bActive)
+    {
+        return;
+    }
+    const FString ClosedSemanticId = InspectionPresentation.SemanticId;
+    InspectionPresentation = FVistaInspectionPresentation();
+    InspectedTarget.Reset();
+    InspectionStartedAtSeconds = 0.0;
+    if (IsValid(Controller))
+    {
+        Controller->SetControlRotation(PreInspectionControlRotation);
+    }
+    FVistaEntityRuntimeState EmptyState;
+    PublishInteractionResult(
+        FVistaInteractionResult::Success(
+            ClosedSemanticId,
+            EmptyState,
+            TEXT("INSPECTION_CLOSED")));
+}
+
+void AVistaPlayableHomeCharacter::UpdateInspectionFocus()
+{
+    AActor* Target = InspectedTarget.Get();
+    if (!InspectionPresentation.bActive || !IsValid(Target) || !IsValid(Controller))
+    {
+        return;
+    }
+    FVector ViewLocation;
+    FRotator IgnoredViewRotation;
+    Controller->GetPlayerViewPoint(ViewLocation, IgnoredViewRotation);
+    FVector TargetOrigin;
+    FVector TargetExtent;
+    Target->GetActorBounds(true, TargetOrigin, TargetExtent);
+    if (!TargetOrigin.ContainsNaN() &&
+        FVector::DistSquared(ViewLocation, TargetOrigin) > KINDA_SMALL_NUMBER)
+    {
+        Controller->SetControlRotation((TargetOrigin - ViewLocation).Rotation());
+    }
+}
+
+bool AVistaPlayableHomeCharacter::IsActionFeedbackVisible() const
+{
+    if (!ActionFeedback.bVisible)
+    {
+        return false;
+    }
+    if (!ActionFeedback.bTerminal)
+    {
+        return true;
+    }
+    return !IsValid(GetWorld()) ||
+        GetWorld()->GetTimeSeconds() <= ActionFeedbackExpiresAtSeconds;
+}
+
+void AVistaPlayableHomeCharacter::SetActionFeedbackLocal(
+    const FVistaPlayerActionFeedback& Feedback)
+{
+    ActionFeedback = Feedback;
+    ActionFeedbackExpiresAtSeconds =
+        Feedback.bTerminal && IsValid(GetWorld())
+            ? GetWorld()->GetTimeSeconds() + TerminalFeedbackSeconds
+            : 0.0;
+}
+
+void AVistaPlayableHomeCharacter::PublishInteractionResult(
+    const FVistaInteractionResult& Result,
+    EVistaActionPhase Phase,
+    bool bTerminal)
+{
+    FVistaPlayerActionFeedback Feedback;
+    Feedback.bVisible = true;
+    Feedback.bTerminal = bTerminal;
+    Feedback.Status = Result.Status;
+    Feedback.Phase = Phase;
+    Feedback.Code = Result.Code.IsNone() ? FName(TEXT("UNKNOWN_RESULT")) : Result.Code;
+    Feedback.SemanticId = BoundedPresentationText(
+        Result.SemanticId,
+        MaximumPresentationTextCharacters);
+    SetActionFeedbackLocal(Feedback);
+    if (HasAuthority() && !IsLocallyControlled())
+    {
+        ClientPresentInteractionFeedback(Feedback);
+    }
+}
+
+void AVistaPlayableHomeCharacter::PublishTransactionFeedback(
+    const FVistaActionTransactionRecord& Record)
+{
+    LastPresentedActionPhase = Record.Phase;
+    LastPresentedTransactionStatus = Record.Status;
+    LastPresentedTransactionCode = Record.Code;
+    PublishInteractionResult(
+        UVistaActionExecutorComponent::InteractionResultFromTransaction(Record),
+        Record.Phase,
+        Record.IsTerminal());
+}
+
+void AVistaPlayableHomeCharacter::UpdatePendingActionFeedback()
+{
+    if (!HasAuthority() || PendingPresentationCommandId.IsNone() ||
+        !IsValid(ActionExecutorComponent))
+    {
+        return;
+    }
+    FVistaActionTransactionRecord Record;
+    if (!ActionExecutorComponent->GetTransaction(
+            PendingPresentationCommandId,
+            Record))
+    {
+        return;
+    }
+    if (Record.Phase != LastPresentedActionPhase ||
+        Record.Status != LastPresentedTransactionStatus ||
+        Record.Code != LastPresentedTransactionCode)
+    {
+        PublishTransactionFeedback(Record);
+    }
+    if (Record.IsTerminal())
+    {
+        PendingPresentationCommandId = NAME_None;
+        LastPresentedActionPhase = EVistaActionPhase::Idle;
+        LastPresentedTransactionStatus = EVistaActionTransactionStatus::Idle;
+        LastPresentedTransactionCode = NAME_None;
+    }
 }
 
 FVistaInteractionResult AVistaPlayableHomeCharacter::PerformDefaultInteraction()
@@ -634,7 +1231,12 @@ FVistaInteractionResult AVistaPlayableHomeCharacter::PerformDefaultInteraction()
     {
         return BeginPhysicalInteraction(Target, Affordance);
     }
-    return InteractionComponent->TryInteract(GetDefaultInteractionAffordance(Target));
+    if (Affordance == EVistaAffordance::Open ||
+        Affordance == EVistaAffordance::Close)
+    {
+        return BeginSemanticInteraction(Target, Affordance);
+    }
+    return InteractionComponent->TryInteract(Affordance);
 }
 
 EVistaAffordance AVistaPlayableHomeCharacter::GetDefaultInteractionAffordance(
@@ -720,9 +1322,60 @@ FVistaInteractionResult AVistaPlayableHomeCharacter::BeginPhysicalInteraction(
     {
         return Result;
     }
+    if (!Record.IsTerminal())
+    {
+        PendingPresentationCommandId = CommandId;
+        LastPresentedActionPhase = EVistaActionPhase::Idle;
+        LastPresentedTransactionStatus = EVistaActionTransactionStatus::Idle;
+        LastPresentedTransactionCode = NAME_None;
+    }
     // UVistaActionExecutorComponent owns RecordSuccessfulInteraction and emits
     // it only after the animation completion phase; this player entry returns
     // the accepted ticket without duplicating that terminal event.
+    return Result;
+}
+
+FVistaInteractionResult AVistaPlayableHomeCharacter::BeginSemanticInteraction(
+    AActor* Target,
+    const EVistaAffordance Affordance)
+{
+    if (!IsValid(ActionExecutorComponent) || !IsValid(Target) ||
+        !UVistaActionExecutorComponent::IsAnimatedSemanticAffordance(Affordance))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("SEMANTIC_ACTION_EXECUTOR_UNAVAILABLE"));
+    }
+    UVistaPlayableHomeRuntimeSubsystem* Runtime = IsValid(GetWorld())
+        ? GetWorld()->GetSubsystem<UVistaPlayableHomeRuntimeSubsystem>()
+        : nullptr;
+    const FName CommandId = IsValid(Runtime)
+        ? Runtime->AllocatePhysicalActionCommandId()
+        : NAME_None;
+    if (CommandId.IsNone())
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("ACTION_TICKET_UNAVAILABLE"));
+    }
+    FVistaSemanticActionRequest Request;
+    Request.CommandId = CommandId;
+    Request.Requester = this;
+    Request.Target = Target;
+    Request.Affordance = Affordance;
+    Request.TimeoutSeconds = 10.0f;
+    FVistaActionTransactionRecord Record;
+    ActionExecutorComponent->BeginSemanticInteraction(Request, Record);
+    const FVistaInteractionResult Result =
+        UVistaActionExecutorComponent::InteractionResultFromTransaction(Record);
+    if (Result.IsSuccess() && !Record.IsTerminal())
+    {
+        PendingPresentationCommandId = CommandId;
+        LastPresentedActionPhase = EVistaActionPhase::Idle;
+        LastPresentedTransactionStatus =
+            EVistaActionTransactionStatus::Idle;
+        LastPresentedTransactionCode = NAME_None;
+    }
     return Result;
 }
 

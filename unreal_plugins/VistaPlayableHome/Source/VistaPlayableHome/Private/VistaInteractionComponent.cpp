@@ -45,6 +45,22 @@ FVistaInteractionResult UVistaInteractionComponent::TryInteract(
     EVistaAffordance Affordance,
     USceneComponent* PlacementAnchor)
 {
+    return TryInteractInternal(Affordance, PlacementAnchor, true);
+}
+
+FVistaInteractionResult
+UVistaInteractionComponent::TryInteractDeferredObservation(
+    EVistaAffordance Affordance,
+    USceneComponent* PlacementAnchor)
+{
+    return TryInteractInternal(Affordance, PlacementAnchor, false);
+}
+
+FVistaInteractionResult UVistaInteractionComponent::TryInteractInternal(
+    EVistaAffordance Affordance,
+    USceneComponent* PlacementAnchor,
+    const bool bPublishSuccessfulObservation)
+{
     AActor* Target = FocusedActor.Get();
     if (!IsValid(Target))
     {
@@ -65,7 +81,7 @@ FVistaInteractionResult UVistaInteractionComponent::TryInteract(
     Request.SessionGeneration = SessionGeneration;
     const FVistaInteractionResult Result =
         IVistaInteractable::Execute_VistaInteract(Target, Request);
-    if (Result.IsSuccess())
+    if (Result.IsSuccess() && bPublishSuccessfulObservation)
     {
         if (UVistaEventSubsystem* Events = GetWorld()->GetSubsystem<UVistaEventSubsystem>())
         {
