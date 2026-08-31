@@ -124,6 +124,27 @@ def test_semantic_profile_mutations_fail_closed(mutation, code: str) -> None:
     assert error.value.code == code
 
 
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("action_name", "VISTA_CC0_WrongButValid_R15"),
+        ("ue_sequence_name", "AS_VistaCC0WrongButValid_R15"),
+        ("ue_montage_name", "AM_VistaCC0WrongButValid_R15"),
+        ("recipe_id", "cc0_numeric_wrong_but_valid_r15"),
+    ],
+)
+def test_profile_rejects_resealed_valid_pattern_identity_drift(
+    field: str, value: str
+) -> None:
+    profile = copy.deepcopy(r15.load_profile())
+    profile["clips"][0][field] = value
+    _reseal(profile)
+
+    with pytest.raises(r15.DetailActionR15Error) as error:
+        r15.validate_profile(profile)
+    assert error.value.code == "CLIP_IDENTITY_INVALID"
+
+
 def test_exact_nine_action_target_and_backend_partition() -> None:
     clips = {clip["clip_id"]: clip for clip in r15.load_profile()["clips"]}
 
@@ -305,6 +326,53 @@ def test_execute_plan_only_allows_fresh_external_destination(tmp_path: Path) -> 
     with pytest.raises(r15.DetailActionR15Error) as error:
         r15.validate_plan(plan)
     assert error.value.code == "PLAN_OUTPUT_INVALID"
+    r15.validate_plan(plan, destination_must_be_fresh=False)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("relative_path", "world_packs/not-the-r15-profile.json"),
+        ("sha256", "a" * 64),
+        ("size_bytes", 1),
+        ("content_digest", "b" * 64),
+    ],
+)
+def test_plan_rejects_resealed_profile_record_drift(field: str, value: object) -> None:
+    plan = r15.build_plan()
+    plan["profile_record"][field] = value
+    _reseal(plan)
+
+    with pytest.raises(r15.DetailActionR15Error) as error:
+        r15.validate_plan(plan)
+    assert error.value.code == "PLAN_PROFILE_RECORD_INVALID"
+
+
+def test_plan_rejects_resealed_status_drift() -> None:
+    plan = r15.build_plan()
+    plan["status"] = "execution_plan_only_not_run"
+    _reseal(plan)
+
+    with pytest.raises(r15.DetailActionR15Error) as error:
+        r15.validate_plan(plan)
+    assert error.value.code == "PLAN_STATUS_INVALID"
+
+
+def test_execute_destination_rejects_current_and_unrelated_git_worktrees(
+    tmp_path: Path,
+) -> None:
+    current_repo_destination = r15.REPOSITORY_ROOT / "uncreated-r15-output"
+    assert not current_repo_destination.exists()
+    with pytest.raises(r15.DetailActionR15Error) as error:
+        r15.build_plan(mode="execute", destination_root=current_repo_destination)
+    assert error.value.code == "PLAN_OUTPUT_INSIDE_GIT"
+
+    unrelated_repo = tmp_path / "unrelated-repo"
+    (unrelated_repo / ".git").mkdir(parents=True)
+    unrelated_destination = unrelated_repo / "nested" / "r15-output"
+    with pytest.raises(r15.DetailActionR15Error) as error:
+        r15.build_plan(mode="execute", destination_root=unrelated_destination)
+    assert error.value.code == "PLAN_OUTPUT_INSIDE_GIT"
 
 
 def test_worker_is_standalone_headless_source_with_roundtrip_and_cpu_preview() -> None:
