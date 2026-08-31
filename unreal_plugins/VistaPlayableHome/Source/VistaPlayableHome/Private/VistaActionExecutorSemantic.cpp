@@ -5,6 +5,7 @@
 #include "Engine/World.h"
 #include "HAL/PlatformMemory.h"
 #include "VistaAnimationComponent.h"
+#include "VistaContainerActor.h"
 #include "VistaEventSubsystem.h"
 #include "VistaInteractable.h"
 #include "VistaPlayableHomeRuntimeSubsystem.h"
@@ -121,8 +122,10 @@ bool ResolveContactLocation(const AActor* Target, FVector& OutLocation)
     for (USceneComponent* Component : Components)
     {
         if (!IsValid(Component) ||
-            !Component->ComponentHasTag(
-                FName(TEXT("VistaDoorHandleTarget"))))
+            (!Component->ComponentHasTag(
+                 FName(TEXT("VistaDoorHandleTarget"))) &&
+             !Component->ComponentHasTag(
+                 FName(TEXT("VistaInteractionTarget")))))
         {
             continue;
         }
@@ -312,6 +315,10 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
     const bool bApplianceMutation =
         AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
             InputRequest.Affordance);
+    const bool bContainerMutation =
+        (InputRequest.Affordance == EVistaAffordance::Open ||
+         InputRequest.Affordance == EVistaAffordance::Close) &&
+        IsValid(Cast<AVistaContainerActor>(Target));
     AVistaStatefulApplianceActor* Appliance =
         Cast<AVistaStatefulApplianceActor>(Target);
     if (bApplianceMutation && !IsValid(Appliance))
@@ -385,7 +392,8 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
     const EVistaNpcActionType AnimationType =
         AnimationTypeFor(Request.Affordance);
     bool bAnimationReady = IsValid(Animation) &&
-        Animation->HasApprovedMutationAnimation(AnimationType, AnimationCode);
+        Animation->HasApprovedMutationAnimation(
+            AnimationType, Target, AnimationCode);
 #if WITH_DEV_AUTOMATION_TESTS
     bAnimationReady = bAnimationReady ||
         bDevAutomationBypassesAnimationReadiness;
@@ -433,6 +441,21 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
                 InputRequest,
                 CanonicalRequest,
                 TEXT("APPLIANCE_TARGET_BUSY"),
+                OutRecord);
+        }
+        Active.bTargetReserved = true;
+        Active.Record.bTargetReservationAcquired = true;
+    }
+    else if (bContainerMutation)
+    {
+        AVistaContainerActor* Container = Cast<AVistaContainerActor>(Target);
+        if (!IsValid(Container) ||
+            !Container->TryReserveTransaction(this, Request.CommandId))
+        {
+            return RejectSemanticRequest(
+                InputRequest,
+                CanonicalRequest,
+                TEXT("CONTAINER_TARGET_BUSY"),
                 OutRecord);
         }
         Active.bTargetReserved = true;
@@ -793,13 +816,23 @@ bool UVistaActionExecutorComponent::CommitSemanticContact(FName& OutCode)
             ActiveSemanticAction->Request.Affordance);
     AVistaStatefulApplianceActor* Appliance =
         Cast<AVistaStatefulApplianceActor>(Target);
+    const bool bContainerMutation =
+        (ActiveSemanticAction->Request.Affordance == EVistaAffordance::Open ||
+         ActiveSemanticAction->Request.Affordance == EVistaAffordance::Close) &&
+        IsValid(Cast<AVistaContainerActor>(Target));
+    AVistaContainerActor* Container = Cast<AVistaContainerActor>(Target);
     const FVistaInteractionResult Result =
         bApplianceMutation && IsValid(Appliance)
         ? Appliance->CommitTransactionalInteraction(
             this,
             Interaction,
             ActiveSemanticAction->Record.CommandId)
-        : IVistaInteractable::Execute_VistaInteract(Target, Interaction);
+        : bContainerMutation && IsValid(Container)
+            ? Container->CommitTransactionalInteraction(
+                this,
+                Interaction,
+                ActiveSemanticAction->Record.CommandId)
+            : IVistaInteractable::Execute_VistaInteract(Target, Interaction);
     if (!Result.IsSuccess())
     {
         OutCode = Result.Code.IsNone()
@@ -972,9 +1005,15 @@ void UVistaActionExecutorComponent::FinishSemanticFailure(
         AActor* Target = ActiveSemanticAction->Target.Get();
         AVistaStatefulApplianceActor* Appliance =
             Cast<AVistaStatefulApplianceActor>(Target);
+        AVistaContainerActor* Container =
+            Cast<AVistaContainerActor>(Target);
         const bool bApplianceMutation =
             AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
                 ActiveSemanticAction->Request.Affordance);
+        const bool bContainerMutation =
+            (ActiveSemanticAction->Request.Affordance == EVistaAffordance::Open ||
+             ActiveSemanticAction->Request.Affordance == EVistaAffordance::Close) &&
+            IsValid(Container);
         const FVistaInteractionResult Restore = !IsValid(Target)
             ? FVistaInteractionResult::Failure(
                 EVistaInteractionStatus::NotFound,
@@ -984,9 +1023,14 @@ void UVistaActionExecutorComponent::FinishSemanticFailure(
                     this,
                     ActiveSemanticAction->Record.CommandId,
                     ActiveSemanticAction->Record.BeforeState)
-                : IVistaInteractable::Execute_VistaApplyRuntimeState(
-                    Target,
-                    ActiveSemanticAction->Record.BeforeState);
+                : bContainerMutation
+                    ? Container->RestoreTransactionalState(
+                        this,
+                        ActiveSemanticAction->Record.CommandId,
+                        ActiveSemanticAction->Record.BeforeState)
+                    : IVistaInteractable::Execute_VistaApplyRuntimeState(
+                        Target,
+                        ActiveSemanticAction->Record.BeforeState);
         const FVistaEntityRuntimeState RestoredState = IsValid(Target)
             ? IVistaInteractable::Execute_VistaGetRuntimeState(Target)
             : FVistaEntityRuntimeState();
@@ -1064,7 +1108,7 @@ bool UVistaActionExecutorComponent::FinalizeSemantic(
         ActiveSemanticAction->Record.Status =
             EVistaActionTransactionStatus::Failed;
         ActiveSemanticAction->Record.Code =
-            TEXT("APPLIANCE_RESERVATION_RELEASE_FAILED");
+            TEXT("TARGET_RESERVATION_RELEASE_FAILED");
         PublishSemanticRecord(true);
         if (OutFinalRecord != nullptr)
         {
@@ -1094,10 +1138,17 @@ bool UVistaActionExecutorComponent::ReleaseSemanticTargetReservation()
     AVistaStatefulApplianceActor* Appliance =
         Cast<AVistaStatefulApplianceActor>(
             ActiveSemanticAction->Target.Get());
-    const bool bReleased = !IsValid(Appliance) ||
-        Appliance->ReleaseTransaction(
+    AVistaContainerActor* Container = Cast<AVistaContainerActor>(
+        ActiveSemanticAction->Target.Get());
+    const bool bReleased = IsValid(Appliance)
+        ? Appliance->ReleaseTransaction(
             this,
-            ActiveSemanticAction->Record.CommandId);
+            ActiveSemanticAction->Record.CommandId)
+        : IsValid(Container)
+            ? Container->ReleaseTransaction(
+                this,
+                ActiveSemanticAction->Record.CommandId)
+            : true;
     if (!bReleased)
     {
         return false;

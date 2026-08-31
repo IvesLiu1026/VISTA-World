@@ -47,18 +47,24 @@ APPLIANCE_RUNTIME_PROFILES = {
     "stove": {
         "active_status": "heating",
         "inactive_status": "idle",
+        "control_style": "rotary",
+        "control_target_local_cm": [0.0, -31.0, 90.0],
         "extra_affordances": ("turn_on", "turn_off"),
         "press": None,
     },
     "faucet": {
         "active_status": "flowing",
         "inactive_status": "idle",
+        "control_style": "rotary",
+        "control_target_local_cm": [0.0, -5.0, 24.0],
         "extra_affordances": ("turn_on", "turn_off"),
         "press": None,
     },
     "washer": {
         "active_status": "running",
         "inactive_status": "idle",
+        "control_style": "button",
+        "control_target_local_cm": [0.0, -38.0, 82.0],
         "extra_affordances": ("press", "turn_on", "turn_off"),
         "press": {
             "control_id": "start",
@@ -759,6 +765,12 @@ def apply_entity_properties(actor, operation, asset_entry):
     actor.set_actor_hidden_in_game(not bool(baseline.get("visible", True)))
     if operation["component_role"] in {"door", "container"}:
         set_if_present(actor, "initially_open", bool(baseline.get("open", False)))
+    if operation["component_role"] == "container":
+        handle_target = actor.get_editor_property("handle_target")
+        require(handle_target is not None, "container handle target is unavailable")
+        handle_target.set_editor_property(
+            "relative_location", vector([0.0, -31.0, 110.0])
+        )
     runtime_affordances = list(operation["affordances"])
     if operation["component_role"] == "appliance":
         category = operation["category"]
@@ -773,6 +785,23 @@ def apply_entity_properties(actor, operation, asset_entry):
         set_if_present(actor, "initially_powered", initially_powered)
         set_if_present(actor, "appliance_kind", unreal.Name(category))
         if runtime_profile is not None:
+            control_style = getattr(
+                unreal.VistaApplianceControlStyle,
+                runtime_profile["control_style"].upper(),
+            )
+            require(
+                set_if_present(actor, "control_style", control_style),
+                "known appliance category lacks the R15 control style property",
+            )
+            control_target = actor.get_editor_property("control_target")
+            require(
+                control_target is not None,
+                "known appliance category lacks the R15 control target",
+            )
+            control_target.set_editor_property(
+                "relative_location",
+                vector(runtime_profile["control_target_local_cm"]),
+            )
             initial_status = baseline.get(
                 "status",
                 runtime_profile[

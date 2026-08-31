@@ -42,6 +42,16 @@ public:
         EVistaNpcActionType Type,
         FName& OutCode) const;
 
+    /**
+     * Target-aware gate for gestures whose exact montage is selected from the
+     * authoritative target class/profile.  The legacy overload remains for
+     * pickup/place/drop callers that do not need target-dependent routing.
+     */
+    bool HasApprovedMutationAnimation(
+        EVistaNpcActionType Type,
+        const AActor* Target,
+        FName& OutCode) const;
+
     virtual void TickComponent(
         float DeltaTime,
         ELevelTick TickType,
@@ -67,6 +77,7 @@ private:
     static bool RequiresTarget(EVistaNpcActionType Type);
     bool ResolveMontage(
         EVistaNpcActionType Type,
+        const AActor* Target,
         TSoftObjectPtr<UAnimMontage>& OutMontage,
         FName& OutCode) const;
 };

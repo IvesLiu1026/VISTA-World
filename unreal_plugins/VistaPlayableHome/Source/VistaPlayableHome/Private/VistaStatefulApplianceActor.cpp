@@ -1,5 +1,6 @@
 #include "VistaStatefulApplianceActor.h"
 
+#include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "VistaActionExecutorComponent.h"
@@ -56,6 +57,11 @@ AVistaStatefulApplianceActor::AVistaStatefulApplianceActor()
     Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ApplianceMesh"));
     SetRootComponent(Mesh);
     Mesh->SetCollisionProfileName(TEXT("BlockAllDynamic"));
+
+    ControlTarget =
+        CreateDefaultSubobject<USceneComponent>(TEXT("ControlTarget"));
+    ControlTarget->SetupAttachment(Mesh);
+    ControlTarget->ComponentTags.Add(TEXT("VistaInteractionTarget"));
     AllowedAffordances = {
         EVistaAffordance::Inspect,
         EVistaAffordance::Toggle,
@@ -222,6 +228,10 @@ AVistaStatefulApplianceActor::VistaGetRuntimeState_Implementation() const
     State.Values.Add(StatusKey, Status.ToString());
     State.Values.Add(TEXT("appliance_kind"), ApplianceKind.ToString());
     State.Values.Add(TEXT("press_control"), PressProfile.ControlId.ToString());
+    State.Values.Add(
+        TEXT("control_style"),
+        ControlStyle == EVistaApplianceControlStyle::Button
+            ? TEXT("button") : TEXT("rotary"));
     return State;
 }
 
