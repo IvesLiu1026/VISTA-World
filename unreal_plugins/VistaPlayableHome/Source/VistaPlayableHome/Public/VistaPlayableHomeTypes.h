@@ -25,7 +25,9 @@ enum class EVistaAffordance : uint8
     /** Idempotently activate an externally powered appliance. */
     TurnOn,
     /** Idempotently deactivate an appliance without changing external power. */
-    TurnOff
+    TurnOff,
+    /** Transfer liquid from one held pourable pickup into one typed receiver. */
+    Pour
 };
 
 UENUM(BlueprintType)
@@ -74,6 +76,10 @@ struct VISTAPLAYABLEHOME_API FVistaInteractionRequest
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
     TObjectPtr<AActor> Requester = nullptr;
+
+    /** Closed second actor for two-target actions such as Pour. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
+    TObjectPtr<AActor> SecondaryTarget = nullptr;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
     TObjectPtr<USceneComponent> PlacementAnchor = nullptr;
@@ -144,6 +150,33 @@ enum class EVistaPickupDisposition : uint8
     Free,
     Held,
     Placed
+};
+
+/** Closed rollback snapshot shared by pourable sources and liquid receivers. */
+USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaLiquidStateSnapshot
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Liquid")
+    bool bPourable = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Liquid")
+    FName LiquidType = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Liquid")
+    float CapacityMilliliters = 0.0f;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Liquid")
+    float AmountMilliliters = 0.0f;
+
+    float GetLiquidLevel() const
+    {
+        return CapacityMilliliters > 0.0f
+            ? AmountMilliliters / CapacityMilliliters : 0.0f;
+    }
+
+    bool IsFilled() const { return AmountMilliliters > KINDA_SMALL_NUMBER; }
 };
 
 /** Complete rollback-relevant state of the authoritative pickup root/body. */
@@ -239,6 +272,9 @@ struct VISTAPLAYABLEHOME_API FVistaActionTransactionRecord
     FString TargetSemanticId;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FString SecondaryTargetSemanticId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     FString PlacementAnchorSemanticId;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
@@ -252,6 +288,15 @@ struct VISTAPLAYABLEHOME_API FVistaActionTransactionRecord
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     FVistaEntityRuntimeState AfterState;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVistaEntityRuntimeState BeforeSecondaryState;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVistaEntityRuntimeState ContactSecondaryState;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FVistaEntityRuntimeState AfterSecondaryState;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     FVistaPickupPhysicalStateSnapshot BeforePhysicalState;
@@ -279,6 +324,15 @@ struct VISTAPLAYABLEHOME_API FVistaActionTransactionRecord
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     bool bHasAfterState = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHasBeforeSecondaryState = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHasContactSecondaryState = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bHasAfterSecondaryState = false;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     bool bHasBeforePhysicalState = false;
@@ -325,6 +379,12 @@ struct VISTAPLAYABLEHOME_API FVistaActionTransactionRecord
     bool bTargetReservationReleased = false;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bSecondaryTargetReservationAcquired = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bSecondaryTargetReservationReleased = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     int32 SessionGeneration = 0;
 
     bool IsTerminal() const
@@ -365,7 +425,9 @@ enum class EVistaNpcActionType : uint8
     /** Transactional idempotent appliance activation. */
     TurnOn,
     /** Transactional idempotent appliance deactivation. */
-    TurnOff
+    TurnOff,
+    /** Two-target liquid transfer from a held pickup into a receiver. */
+    Pour
 };
 
 UENUM(BlueprintType)
@@ -418,6 +480,10 @@ struct VISTAPLAYABLEHOME_API FVistaNpcAction
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
     FString TargetSemanticId;
+
+    /** Required receiver identity for two-target actions such as Pour. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
+    FString SecondaryTargetSemanticId;
 
     /**
      * Owner-local HouseSpec placement anchor id (for example
