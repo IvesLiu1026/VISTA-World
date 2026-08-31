@@ -309,6 +309,95 @@ def test_mobility_normalizer_bounds_diagnostic_repr(
     assert "sensitive-tail" not in message
 
 
+def test_actor_root_component_supports_exact_ue57_reflected_property(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commandlet = _load_helpers(monkeypatch)
+
+    class FakeRoot:
+        def __init__(self, path: str) -> None:
+            self.path = path
+
+        def get_path_name(self) -> str:
+            return self.path
+
+    root = FakeRoot("/Game/Fixture.Map:PersistentLevel.Shell.StaticMeshComponent0")
+
+    class ReflectedOnlyActor:
+        def get_editor_property(self, name: str):
+            assert name == "root_component"
+            return root
+
+    assert commandlet.actor_root_component(ReflectedOnlyActor(), "shell") is root
+
+
+def test_actor_root_component_rejects_missing_failed_or_ambiguous_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commandlet = _load_helpers(monkeypatch)
+
+    class FakeRoot:
+        def __init__(self, path: str) -> None:
+            self.path = path
+
+        def get_path_name(self) -> str:
+            return self.path
+
+    method_root = FakeRoot("/Game/Fixture.Map:PersistentLevel.Actor.RootA")
+    reflected_root = FakeRoot("/Game/Fixture.Map:PersistentLevel.Actor.RootB")
+
+    class MatchingActor:
+        def get_root_component(self):
+            return method_root
+
+        def get_editor_property(self, name: str):
+            assert name == "root_component"
+            return method_root
+
+    assert commandlet.actor_root_component(MatchingActor(), "actor") is method_root
+
+    class AmbiguousActor(MatchingActor):
+        def get_editor_property(self, name: str):
+            assert name == "root_component"
+            return reflected_root
+
+    with pytest.raises(RuntimeError, match="sources differ"):
+        commandlet.actor_root_component(AmbiguousActor(), "actor")
+
+    class FailedMethodActor(MatchingActor):
+        def get_root_component(self):
+            raise AttributeError("unavailable")
+
+    with pytest.raises(RuntimeError, match="method failed"):
+        commandlet.actor_root_component(FailedMethodActor(), "actor")
+
+    class MissingActor:
+        def get_editor_property(self, name: str):
+            raise AttributeError(name)
+
+    with pytest.raises(RuntimeError, match="property unavailable"):
+        commandlet.actor_root_component(MissingActor(), "actor")
+
+    class NullRootActor:
+        def get_editor_property(self, name: str):
+            assert name == "root_component"
+            return None
+
+    with pytest.raises(RuntimeError, match="root component is missing"):
+        commandlet.actor_root_component(NullRootActor(), "actor")
+
+    class PathlessRoot:
+        pass
+
+    class PathlessActor:
+        def get_editor_property(self, name: str):
+            assert name == "root_component"
+            return PathlessRoot()
+
+    with pytest.raises(RuntimeError, match="path is unavailable"):
+        commandlet.actor_root_component(PathlessActor(), "actor")
+
+
 def test_source_presentation_accepts_only_exact_closed_dispositions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -420,6 +509,9 @@ def test_exact_shell_tags_reject_conflicting_safety_authority(
 
 def test_only_shells_are_deleted_and_presentations_are_bound_to_pickups() -> None:
     source = _source()
+    assert source.count("actor.get_root_component()") == 0
+    assert 'actor_root_component(actor, "HSSD shell")' in source
+    assert 'actor_root_component(actor, "pickup")' in source
     assert source.count("actor_subsystem.destroy_actor(") == 1
     assert "all(actor_subsystem.destroy_actor" not in source
     assert "len(shells_to_delete) == 1" in source

@@ -449,6 +449,33 @@ def property_value(value, name, label):
         raise RuntimeError(label + " property unavailable: " + name) from exc
 
 
+def actor_root_component(actor, label):
+    method = getattr(actor, "get_root_component", None)
+    if callable(method):
+        try:
+            root = method()
+        except Exception as exc:
+            raise RuntimeError(label + " root component method failed") from exc
+        reflected = property_or_none(actor, "root_component")
+        if reflected is not None:
+            try:
+                same_path = str(root.get_path_name()) == str(
+                    reflected.get_path_name()
+                )
+            except Exception as exc:
+                raise RuntimeError(label + " root component sources are ambiguous") from exc
+            require(same_path, label + " root component sources differ")
+    else:
+        root = property_value(actor, "root_component", label)
+    require(root is not None, label + " root component is missing")
+    try:
+        path = str(root.get_path_name())
+    except Exception as exc:
+        raise RuntimeError(label + " root component path is unavailable") from exc
+    require(bool(path), label + " root component path is empty")
+    return root
+
+
 def class_path(value):
     reflected = value.get_class() if value is not None else None
     return str(reflected.get_path_name()) if reflected is not None else ""
@@ -793,7 +820,7 @@ def validate_shell(actor, binding):
     semantic_prefix = "VistaHssdSemanticTargetId="
     semantic_tags = [tag for tag in tags if tag.startswith(semantic_prefix)]
     expected_semantic = binding["shell_semantic_target_tag"]
-    root = actor.get_root_component()
+    root = actor_root_component(actor, "HSSD shell")
     require(
         class_path(actor) == binding["shell_actor_class_path"]
         and str(actor.get_actor_label()) == binding["shell_actor_label"]
@@ -831,10 +858,7 @@ def validate_shell(actor, binding):
 def pickup_observation(actor):
     root = property_value(actor, "mesh", "pickup")
     presentation = property_value(actor, "presentation_mesh", "pickup")
-    try:
-        root_component = actor.get_root_component()
-    except Exception:
-        root_component = property_or_none(actor, "root_component")
+    root_component = actor_root_component(actor, "pickup")
     require(
         isinstance(root, unreal.StaticMeshComponent)
         and isinstance(presentation, unreal.StaticMeshComponent)
