@@ -78,7 +78,10 @@ The commandlet will:
 2. Import the three links into a fresh dev namespace with `replace_existing=false`.
 3. Duplicate the base map to a fresh dev map and load only the derivative.
 4. Require one exact legacy visual shell and one exact hidden container proxy, including
-   label, persistent object name, class, tags, transform, mesh and collision state.
+   fresh derivative-map scope, label, class, tags, transform, mesh and collision state.
+   Unreal assigns fresh persistent object names when cloning a level template, so the
+   source receipt pins the original object path while the derivative gate pins the new
+   map scope plus all observable identity fields.
 5. Delete those two actors only from the derivative, spawn
    `/Script/VistaPlayableHome.VistaArticulatedFridgeActor`, and bind body, both hinges,
    both doors and the handle target.
