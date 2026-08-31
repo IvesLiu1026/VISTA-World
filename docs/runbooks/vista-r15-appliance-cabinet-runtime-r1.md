@@ -67,3 +67,53 @@ runtime authority.
 - Sit, seated idle, stand, and pour remain source motions pending their own
   posture and two-object transaction implementations.
 - This milestone does not claim GTA quality or production readiness.
+
+## Integrated R20 evidence
+
+After the import bridge and EventSpec v3 preflight were merged, commit
+`9b860626bbdfbfa9b9838e6a23dd70c4d81a6759` produced a fresh plugin:
+
+```text
+root=/data/sysx/vista-world/runs/vista-action-world-r1/
+     playable-actions-r2-plugin-build-r20-20260901a
+tree_sha256=7f6bc56e078ab50f18ce699b73762630aead69a45219e82572544912bbfea94b
+file_count=266
+total_bytes=59666177
+result=BUILD SUCCESSFUL
+```
+
+The pinned CPU-only import completed at:
+
+```text
+/data/sysx/vista-world/runs/vista-action-world-r1/
+makehuman-cc0-detail-actions-r15-ue57-dev-r1-20260901b
+status=r15_detail_action_dev_import_complete_unaccepted_nonpromotable
+host_content_digest=4cf524c0123b3567aaed24c3e6e0e351a0b6fcdc55623fd337244469a565c30b
+commandlet_receipt_sha256=edd4c1fb700dc65eb4b06f471cf4d18d4afc3630f09cf9051d4816751553df07
+package_count=18
+gpu_used=false
+network_available=false
+```
+
+The first EventSpec preflight automation attempt used the minimal import
+project and passed the test with three missing-skeletal-mesh warnings; it is
+retained as rejected evidence. Fresh attempt B used the complete prior proof
+project with the exact R20 plugin:
+
+```text
+/data/sysx/vista-world/runs/vista-action-world-r1/
+event-v3-queue-preflight-ue-automation-r20-20260901b
+test=VISTA.PlayableHome.EventV3.QueuePreflightReadOnly
+state=Success
+succeeded=1
+succeeded_with_warnings=0
+failed=0
+warnings=0
+errors=0
+```
+
+The installed UE launcher still exits status 1 after the automation report is
+written and prints its known missing project game-binary-directory message;
+the same launcher behavior is present in the earlier R18 accepted proof. This
+milestone claims the exact Automation report only, not a clean host-process
+exit or runtime acceptance.
