@@ -323,9 +323,6 @@ private:
     void UpdateNearCameraVisualOcclusion(const FVector& CameraLocation);
     void SetNearCameraVisualHidden(bool bHidden);
     void RestoreNearCameraVisualOcclusion();
-    FVistaInteractionResult EvaluateInspectInteraction(
-        FVistaInspectionPresentation& OutPresentation,
-        AActor*& OutTarget);
     void BeginInspectionPresentation(
         AActor* Target,
         const FVistaInspectionPresentation& Presentation);
@@ -338,7 +335,10 @@ private:
     void PublishTransactionFeedback(const FVistaActionTransactionRecord& Record);
     void UpdatePendingActionFeedback();
     FVistaInteractionResult BeginAnimatedInspectInteraction();
-    void PresentCompletedInspection(AActor* Target);
+    bool CancelPendingAnimatedInspection(FName Reason);
+    void PresentCompletedInspection(
+        AActor* Target,
+        const FVistaEntityRuntimeState& InspectedState);
     FVistaInteractionResult BeginPhysicalInteraction(
         AActor* PhysicalTarget,
         EVistaAffordance Affordance,
@@ -356,6 +356,9 @@ private:
 
     UFUNCTION(Server, Reliable)
     void ServerPerformInspectInteraction();
+
+    UFUNCTION(Server, Reliable)
+    void ServerCancelPendingInspection();
 
     UFUNCTION(Client, Reliable)
     void ClientBeginInspectionPresentation(
