@@ -302,6 +302,24 @@ const TCHAR* ActionPhaseText(EVistaActionPhase Phase)
     }
 }
 
+const TCHAR* AffordanceText(const EVistaAffordance Affordance)
+{
+    switch (Affordance)
+    {
+    case EVistaAffordance::Open: return TEXT("open");
+    case EVistaAffordance::Close: return TEXT("close");
+    case EVistaAffordance::PickUp: return TEXT("pick_up");
+    case EVistaAffordance::Drop: return TEXT("drop");
+    case EVistaAffordance::Place: return TEXT("place");
+    case EVistaAffordance::Toggle: return TEXT("toggle");
+    case EVistaAffordance::Sit: return TEXT("sit");
+    case EVistaAffordance::Press: return TEXT("press");
+    case EVistaAffordance::TurnOn: return TEXT("turn_on");
+    case EVistaAffordance::TurnOff: return TEXT("turn_off");
+    default: return TEXT("inspect");
+    }
+}
+
 const TCHAR* ActionTransactionStatusText(EVistaActionTransactionStatus Status)
 {
     switch (Status)
@@ -324,6 +342,8 @@ TSharedRef<FJsonObject> ActionTransactionJson(
         TEXT("transaction_status"),
         ActionTransactionStatusText(Transaction.Status));
     Output->SetStringField(TEXT("code"), Transaction.Code.ToString());
+    Output->SetStringField(
+        TEXT("affordance"), AffordanceText(Transaction.Affordance));
     Output->SetStringField(
         TEXT("requester_semantic_id"), Transaction.RequesterSemanticId);
     Output->SetStringField(TEXT("target_semantic_id"), Transaction.TargetSemanticId);
@@ -350,6 +370,14 @@ TSharedRef<FJsonObject> ActionTransactionJson(
     Output->SetBoolField(TEXT("contact_committed"), Transaction.bContactCommitted);
     Output->SetNumberField(
         TEXT("physical_mutation_count"), Transaction.PhysicalMutationCount);
+    Output->SetNumberField(
+        TEXT("state_mutation_count"), Transaction.StateMutationCount);
+    Output->SetBoolField(
+        TEXT("target_reservation_acquired"),
+        Transaction.bTargetReservationAcquired);
+    Output->SetBoolField(
+        TEXT("target_reservation_released"),
+        Transaction.bTargetReservationReleased);
     Output->SetBoolField(TEXT("rollback_attempted"), Transaction.bRollbackAttempted);
     Output->SetBoolField(TEXT("rolled_back"), Transaction.bRolledBack);
     Output->SetBoolField(
@@ -640,6 +668,9 @@ TOptional<EVistaAffordance> ParseAffordance(const FString& Value)
     if (Value == TEXT("toggle")) return EVistaAffordance::Toggle;
     if (Value == TEXT("sit")) return EVistaAffordance::Sit;
     if (Value == TEXT("inspect")) return EVistaAffordance::Inspect;
+    if (Value == TEXT("press")) return EVistaAffordance::Press;
+    if (Value == TEXT("turn_on")) return EVistaAffordance::TurnOn;
+    if (Value == TEXT("turn_off")) return EVistaAffordance::TurnOff;
     return {};
 }
 
@@ -653,6 +684,10 @@ TOptional<EVistaNpcActionType> ParseNpcAction(const FString& Value)
     if (Value == TEXT("open_door")) return EVistaNpcActionType::OpenDoor;
     if (Value == TEXT("close_door")) return EVistaNpcActionType::CloseDoor;
     if (Value == TEXT("inspect")) return EVistaNpcActionType::Inspect;
+    if (Value == TEXT("toggle")) return EVistaNpcActionType::Toggle;
+    if (Value == TEXT("press")) return EVistaNpcActionType::Press;
+    if (Value == TEXT("turn_on")) return EVistaNpcActionType::TurnOn;
+    if (Value == TEXT("turn_off")) return EVistaNpcActionType::TurnOff;
     if (Value == TEXT("sit")) return EVistaNpcActionType::Sit;
     if (Value == TEXT("wait")) return EVistaNpcActionType::Wait;
     if (Value == TEXT("speak")) return EVistaNpcActionType::Speak;
