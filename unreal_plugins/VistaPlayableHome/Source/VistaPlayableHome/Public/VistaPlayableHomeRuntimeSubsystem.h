@@ -79,6 +79,69 @@ struct VISTAPLAYABLEHOME_API FVistaLiveNpcQueueCommand
     TArray<FVistaNpcAction> Actions;
 };
 
+/**
+ * Closed EventSpec v3 queue validation request. Content digests bind the
+ * caller's event/sidecar identity, but are not runtime authorization unless
+ * the loaded map can independently verify them.
+ */
+USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaLiveNpcQueuePreflightCommand
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    FVistaLiveCommandEnvelope Envelope;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    FName EventId = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    FString EventContentDigest;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    FString SidecarContentDigest;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    FString QueueId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    FString NpcSemanticId;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    bool bReplace = true;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    TArray<FVistaNpcAction> Actions;
+};
+
+/** Exact, deliberately narrow receipt returned by npc_queue_preflight. */
+USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaLiveNpcQueuePreflightResult
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    FName CommandId = NAME_None;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    bool bSucceeded = false;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    FName Code = TEXT("QUEUE_PREFLIGHT_REJECTED");
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    int32 SessionGeneration = 0;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    FString QueueId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    FString TargetSemanticId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Runtime")
+    TArray<FName> ActionIds;
+};
+
 USTRUCT(BlueprintType)
 struct VISTAPLAYABLEHOME_API FVistaLiveNpcCancelCommand
 {
@@ -244,6 +307,11 @@ public:
     FVistaLiveCommandResult ExecuteNpcQueue(
         const FVistaLiveNpcQueueCommand& Command);
 
+    /** Validate an EventSpec v3 NPC queue without claiming or mutating state. */
+    UFUNCTION(BlueprintPure, Category = "VISTA|Runtime")
+    FVistaLiveNpcQueuePreflightResult PreflightNpcQueue(
+        const FVistaLiveNpcQueuePreflightCommand& Command) const;
+
     UFUNCTION(BlueprintCallable, Category = "VISTA|Runtime")
     FVistaLiveCommandResult ExecuteNpcCancel(
         const FVistaLiveNpcCancelCommand& Command);
@@ -271,6 +339,8 @@ private:
 
     bool ValidateEnvelope(const FVistaLiveCommandEnvelope& Envelope,
                           FVistaLiveCommandResult& OutResult) const;
+    bool IsKnownEventForRevision(FName EventId, FName Revision,
+                                 FName& OutCode) const;
     AActor* ResolveSemanticActor(const FString& SemanticId) const;
     UVistaActionExecutorComponent* ResolveActionExecutor(AActor* Requester) const;
     static void ApplyTransactionResult(

@@ -589,6 +589,43 @@ FString ResultResponse(const FVistaLiveCommandResult& Result,
     return SerializeObject(Response);
 }
 
+FString NpcQueuePreflightResponse(
+    const FVistaLiveNpcQueuePreflightResult& Result)
+{
+    const TSharedRef<FJsonObject> Response = MakeShared<FJsonObject>();
+    Response->SetStringField(TEXT("command_id"), Result.CommandId.ToString());
+    Response->SetStringField(
+        TEXT("status"), Result.bSucceeded ? TEXT("success") : TEXT("error"));
+    Response->SetStringField(TEXT("code"), Result.Code.ToString());
+    Response->SetNumberField(
+        TEXT("session_generation"), Result.SessionGeneration);
+    Response->SetStringField(TEXT("queue_id"), Result.QueueId);
+    Response->SetStringField(
+        TEXT("target_semantic_id"), Result.TargetSemanticId);
+    TArray<TSharedPtr<FJsonValue>> ActionIds;
+    for (const FName ActionId : Result.ActionIds)
+    {
+        ActionIds.Add(MakeShared<FJsonValueString>(ActionId.ToString()));
+    }
+    Response->SetArrayField(TEXT("action_ids"), ActionIds);
+    return SerializeObject(Response);
+}
+
+FString NpcQueuePreflightParseErrorResponse(
+    UVistaPlayableHomeRuntimeSubsystem* Runtime,
+    const FString& CommandId,
+    FName Code)
+{
+    const TSharedRef<FJsonObject> Response = MakeShared<FJsonObject>();
+    Response->SetStringField(TEXT("command_id"), CommandId);
+    Response->SetStringField(TEXT("status"), TEXT("error"));
+    Response->SetStringField(TEXT("code"), Code.ToString());
+    const FVistaLiveCommandResult Status = IsValid(Runtime)
+        ? Runtime->GetStatus(FName(*CommandId)) : FVistaLiveCommandResult();
+    Response->SetNumberField(TEXT("session_generation"), Status.SessionGeneration);
+    return SerializeObject(Response);
+}
+
 FString RendererStatusResponse(const FVistaRendererStatusResult& Result)
 {
     if (!Result.bSucceeded)
@@ -698,6 +735,354 @@ TOptional<EVistaNpcActionType> ParseNpcAction(const FString& Value)
     if (Value == TEXT("fall")) return EVistaNpcActionType::Fall;
     if (Value == TEXT("recover")) return EVistaNpcActionType::Recover;
     return {};
+}
+
+bool IsLowerHexDigest(const FString& Value)
+{
+    if (Value.Len() != 64)
+    {
+        return false;
+    }
+    for (const TCHAR Character : Value)
+    {
+        if (!((Character >= TEXT('0') && Character <= TEXT('9')) ||
+              (Character >= TEXT('a') && Character <= TEXT('f'))))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool IsEventV3RuntimeAction(EVistaNpcActionType Type)
+{
+    return Type == EVistaNpcActionType::NavigateTo ||
+        Type == EVistaNpcActionType::Inspect ||
+        Type == EVistaNpcActionType::PickUp ||
+        Type == EVistaNpcActionType::Place ||
+        Type == EVistaNpcActionType::Drop ||
+        Type == EVistaNpcActionType::OpenDoor ||
+        Type == EVistaNpcActionType::CloseDoor ||
+        Type == EVistaNpcActionType::Toggle ||
+        Type == EVistaNpcActionType::Press ||
+        Type == EVistaNpcActionType::TurnOn ||
+        Type == EVistaNpcActionType::TurnOff;
+}
+
+struct FParsedNpcQueueRequest final
+{
+    FVistaLiveNpcQueueCommand Command;
+    FName EventId = NAME_None;
+    FString EventContentDigest;
+    FString SidecarContentDigest;
+    FString QueueId;
+};
+
+bool ReadNpcQueueAction(
+    const TSharedPtr<FJsonObject>& Object,
+    bool bEventV3Preflight,
+    FVistaNpcAction& OutAction,
+    FName& OutCode)
+{
+    FString ActionId;
+    FString Type;
+    if (!Object.IsValid() ||
+        !ReadString(Object, TEXT("action_id"), ActionId) ||
+        !IsActionId(ActionId) || !ReadString(Object, TEXT("type"), Type))
+    {
+        OutCode = TEXT("NPC_ACTION_VALUE_INVALID");
+        return false;
+    }
+    const TOptional<EVistaNpcActionType> Parsed = ParseNpcAction(Type);
+    if (!Parsed.IsSet() ||
+        (bEventV3Preflight && !IsEventV3RuntimeAction(Parsed.GetValue())))
+    {
+        OutCode = TEXT("NPC_ACTION_UNSUPPORTED");
+        return false;
+    }
+
+    if (bEventV3Preflight)
+    {
+        TSet<FString> Required =
+            KeySet({TEXT("action_id"), TEXT("type"), TEXT("timeout_sec")});
+        if (Parsed.GetValue() != EVistaNpcActionType::Drop)
+        {
+            Required.Add(TEXT("target_semantic_id"));
+        }
+        if (Parsed.GetValue() == EVistaNpcActionType::Place)
+        {
+            Required.Add(TEXT("placement_anchor_id"));
+        }
+        if (!ExactKeys(Object, Required, TSet<FString>()))
+        {
+            OutCode = TEXT("NPC_ACTION_SHAPE_INVALID");
+            return false;
+        }
+    }
+    else if (!ExactKeys(
+        Object,
+        KeySet({TEXT("action_id"), TEXT("type")}),
+        KeySet({TEXT("target_semantic_id"), TEXT("target_location_cm"),
+                TEXT("placement_anchor_id"), TEXT("duration_sec"),
+                TEXT("timeout_sec"), TEXT("speech"), TEXT("distance_cm"),
+                TEXT("height_cm"), TEXT("hand"), TEXT("foot"),
+                TEXT("direction")})))
+    {
+        OutCode = TEXT("NPC_ACTION_SHAPE_INVALID");
+        return false;
+    }
+
+    OutAction = FVistaNpcAction();
+    OutAction.ActionId = FName(*ActionId);
+    OutAction.Type = Parsed.GetValue();
+    if (Object->HasField(TEXT("target_semantic_id")) &&
+        (!ReadString(
+             Object, TEXT("target_semantic_id"), OutAction.TargetSemanticId) ||
+         !IsSemanticId(OutAction.TargetSemanticId)))
+    {
+        OutCode = TEXT("NPC_TARGET_INVALID");
+        return false;
+    }
+    if (Object->HasField(TEXT("placement_anchor_id")) &&
+        (!ReadString(
+             Object, TEXT("placement_anchor_id"), OutAction.PlacementAnchorId) ||
+         !IsPlacementAnchorId(OutAction.PlacementAnchorId)))
+    {
+        OutCode = TEXT("NPC_PLACEMENT_ANCHOR_INVALID");
+        return false;
+    }
+    if (OutAction.Type == EVistaNpcActionType::Place &&
+        OutAction.PlacementAnchorId.IsEmpty())
+    {
+        OutCode = TEXT("NPC_PLACEMENT_ANCHOR_REQUIRED");
+        return false;
+    }
+    if (OutAction.Type != EVistaNpcActionType::Place &&
+        !OutAction.PlacementAnchorId.IsEmpty())
+    {
+        OutCode = TEXT("NPC_PLACEMENT_ANCHOR_UNEXPECTED");
+        return false;
+    }
+    if (OutAction.Type == EVistaNpcActionType::Drop &&
+        (!OutAction.TargetSemanticId.IsEmpty() ||
+         Object->HasField(TEXT("target_location_cm"))))
+    {
+        OutCode = TEXT("NPC_DROP_TARGET_UNEXPECTED");
+        return false;
+    }
+
+    const TArray<TSharedPtr<FJsonValue>>* Location = nullptr;
+    if (Object->HasField(TEXT("target_location_cm")))
+    {
+        if (!Object->TryGetArrayField(TEXT("target_location_cm"), Location) ||
+            Location == nullptr || Location->Num() != 3)
+        {
+            OutCode = TEXT("NPC_LOCATION_INVALID");
+            return false;
+        }
+        double Components[3];
+        for (int32 Index = 0; Index < 3; ++Index)
+        {
+            if (!(*Location)[Index]->TryGetNumber(Components[Index]) ||
+                !FMath::IsFinite(Components[Index]) ||
+                FMath::Abs(Components[Index]) > 10000000.0)
+            {
+                OutCode = TEXT("NPC_LOCATION_INVALID");
+                return false;
+            }
+        }
+        OutAction.TargetLocation =
+            FVector(Components[0], Components[1], Components[2]);
+    }
+
+    double Number = 0.0;
+    if (Object->HasField(TEXT("duration_sec")))
+    {
+        if (!Object->TryGetNumberField(TEXT("duration_sec"), Number) ||
+            !FMath::IsFinite(Number) || Number < 0.0 || Number > 300.0)
+        {
+            OutCode = TEXT("NPC_DURATION_INVALID");
+            return false;
+        }
+        OutAction.DurationSeconds = static_cast<float>(Number);
+    }
+    if (Object->HasField(TEXT("timeout_sec")))
+    {
+        if (!Object->TryGetNumberField(TEXT("timeout_sec"), Number) ||
+            !FMath::IsFinite(Number) ||
+            (bEventV3Preflight ? Number <= 0.0 : Number < 0.0) ||
+            Number > 300.0)
+        {
+            OutCode = TEXT("NPC_TIMEOUT_INVALID");
+            return false;
+        }
+        OutAction.TimeoutSeconds = static_cast<float>(Number);
+    }
+    if (Object->HasField(TEXT("distance_cm")))
+    {
+        if (!Object->TryGetNumberField(TEXT("distance_cm"), Number) ||
+            !FMath::IsFinite(Number) || Number < 0.0 || Number > 1000.0)
+        {
+            OutCode = TEXT("NPC_DISTANCE_INVALID");
+            return false;
+        }
+        OutAction.DistanceCm = static_cast<float>(Number);
+    }
+    if (Object->HasField(TEXT("height_cm")))
+    {
+        if (!Object->TryGetNumberField(TEXT("height_cm"), Number) ||
+            !FMath::IsFinite(Number) || Number < 0.0 || Number > 300.0)
+        {
+            OutCode = TEXT("NPC_HEIGHT_INVALID");
+            return false;
+        }
+        OutAction.HeightCm = static_cast<float>(Number);
+    }
+
+    FString EnumValue;
+    if (Object->HasField(TEXT("hand")))
+    {
+        if (!ReadString(Object, TEXT("hand"), EnumValue))
+        {
+            OutCode = TEXT("NPC_HAND_INVALID");
+            return false;
+        }
+        if (EnumValue == TEXT("left")) OutAction.Hand = EVistaAnimationHand::Left;
+        else if (EnumValue == TEXT("right")) OutAction.Hand = EVistaAnimationHand::Right;
+        else if (EnumValue == TEXT("both")) OutAction.Hand = EVistaAnimationHand::Both;
+        else
+        {
+            OutCode = TEXT("NPC_HAND_INVALID");
+            return false;
+        }
+    }
+    if (Object->HasField(TEXT("foot")))
+    {
+        if (!ReadString(Object, TEXT("foot"), EnumValue))
+        {
+            OutCode = TEXT("NPC_FOOT_INVALID");
+            return false;
+        }
+        if (EnumValue == TEXT("left")) OutAction.Foot = EVistaAnimationFoot::Left;
+        else if (EnumValue == TEXT("right")) OutAction.Foot = EVistaAnimationFoot::Right;
+        else
+        {
+            OutCode = TEXT("NPC_FOOT_INVALID");
+            return false;
+        }
+    }
+    if (Object->HasField(TEXT("direction")))
+    {
+        if (!ReadString(Object, TEXT("direction"), EnumValue) ||
+            EnumValue != TEXT("forward"))
+        {
+            OutCode = TEXT("NPC_DIRECTION_INVALID");
+            return false;
+        }
+        OutAction.Direction = EVistaAnimationDirection::Forward;
+    }
+    if (Object->HasField(TEXT("speech")) &&
+        (!ReadString(Object, TEXT("speech"), OutAction.Speech) ||
+         OutAction.Speech.Len() > 500))
+    {
+        OutCode = TEXT("NPC_SPEECH_INVALID");
+        return false;
+    }
+    OutCode = TEXT("NPC_ACTION_PARSED");
+    return true;
+}
+
+bool ReadNpcQueueRequest(
+    const TSharedPtr<FJsonObject>& Params,
+    bool bEventV3Preflight,
+    FParsedNpcQueueRequest& OutRequest,
+    FString& OutCommandId,
+    FName& OutCode)
+{
+    TSet<FString> Required = KeySet({
+        TEXT("operation"), TEXT("command_id"), TEXT("expected_revision"),
+        TEXT("session_generation"), TEXT("npc_semantic_id"), TEXT("replace"),
+        TEXT("actions")});
+    if (bEventV3Preflight)
+    {
+        Required.Add(TEXT("event_id"));
+        Required.Add(TEXT("event_content_digest"));
+        Required.Add(TEXT("sidecar_content_digest"));
+        Required.Add(TEXT("queue_id"));
+    }
+    if (!ExactKeys(Params, Required, TSet<FString>()))
+    {
+        ReadString(Params, TEXT("command_id"), OutCommandId);
+        OutCode = bEventV3Preflight
+            ? FName(TEXT("NPC_QUEUE_PREFLIGHT_SHAPE_INVALID"))
+            : FName(TEXT("NPC_QUEUE_SHAPE_INVALID"));
+        return false;
+    }
+
+    OutRequest = FParsedNpcQueueRequest();
+    if (!ReadEnvelope(Params, OutRequest.Command.Envelope, OutCommandId) ||
+        !ReadString(
+            Params, TEXT("npc_semantic_id"), OutRequest.Command.NpcSemanticId) ||
+        !IsSemanticId(OutRequest.Command.NpcSemanticId) ||
+        !Params->TryGetBoolField(TEXT("replace"), OutRequest.Command.bReplace) ||
+        !OutRequest.Command.bReplace)
+    {
+        OutCode = bEventV3Preflight
+            ? FName(TEXT("NPC_QUEUE_PREFLIGHT_VALUE_INVALID"))
+            : FName(TEXT("NPC_QUEUE_VALUE_INVALID"));
+        return false;
+    }
+    if (bEventV3Preflight)
+    {
+        FString EventId;
+        if (!ReadString(Params, TEXT("event_id"), EventId) ||
+            !IsRevision(EventId) ||
+            !ReadString(Params, TEXT("event_content_digest"),
+                        OutRequest.EventContentDigest) ||
+            !IsLowerHexDigest(OutRequest.EventContentDigest) ||
+            !ReadString(Params, TEXT("sidecar_content_digest"),
+                        OutRequest.SidecarContentDigest) ||
+            !IsLowerHexDigest(OutRequest.SidecarContentDigest) ||
+            !ReadString(Params, TEXT("queue_id"), OutRequest.QueueId) ||
+            !IsActionId(OutRequest.QueueId))
+        {
+            OutCode = TEXT("NPC_QUEUE_PREFLIGHT_IDENTITY_INVALID");
+            return false;
+        }
+        OutRequest.EventId = FName(*EventId);
+    }
+
+    const TArray<TSharedPtr<FJsonValue>>* Actions = nullptr;
+    if (!Params->TryGetArrayField(TEXT("actions"), Actions) ||
+        Actions == nullptr || Actions->IsEmpty() || Actions->Num() > 32)
+    {
+        OutCode = TEXT("NPC_ACTIONS_INVALID");
+        return false;
+    }
+    TSet<FName> ActionIds;
+    for (const TSharedPtr<FJsonValue>& Value : *Actions)
+    {
+        const TSharedPtr<FJsonObject>* Object = nullptr;
+        if (!Value.IsValid() || !Value->TryGetObject(Object) || Object == nullptr)
+        {
+            OutCode = TEXT("NPC_ACTION_SHAPE_INVALID");
+            return false;
+        }
+        FVistaNpcAction Action;
+        if (!ReadNpcQueueAction(*Object, bEventV3Preflight, Action, OutCode))
+        {
+            return false;
+        }
+        if (ActionIds.Contains(Action.ActionId))
+        {
+            OutCode = TEXT("NPC_ACTION_DUPLICATE");
+            return false;
+        }
+        ActionIds.Add(Action.ActionId);
+        OutRequest.Command.Actions.Add(MoveTemp(Action));
+    }
+    OutCode = TEXT("NPC_QUEUE_PARSED");
+    return true;
 }
 
 FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
@@ -830,194 +1215,35 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
         return ResultResponse(Runtime->ExecuteNpcCancel(Command));
     }
 
-    if (Operation == TEXT("npc_queue"))
+    if (Operation == TEXT("npc_queue_preflight") ||
+        Operation == TEXT("npc_queue"))
     {
-        const TSet<FString> Required = KeySet({
-            TEXT("operation"), TEXT("command_id"), TEXT("expected_revision"),
-            TEXT("session_generation"), TEXT("npc_semantic_id"), TEXT("replace"),
-            TEXT("actions")});
-        if (!ExactKeys(Params, Required, TSet<FString>()))
+        const bool bPreflight = Operation == TEXT("npc_queue_preflight");
+        FParsedNpcQueueRequest Parsed;
+        FName ParseCode;
+        if (!ReadNpcQueueRequest(
+                Params, bPreflight, Parsed, CommandId, ParseCode))
         {
-            return ErrorResponse(TEXT(""), TEXT("NPC_QUEUE_SHAPE_INVALID"));
+            return bPreflight
+                ? NpcQueuePreflightParseErrorResponse(
+                      Runtime, CommandId, ParseCode)
+                : ErrorResponse(CommandId, *ParseCode.ToString());
         }
-        FVistaLiveNpcQueueCommand Command;
-        if (!ReadEnvelope(Params, Command.Envelope, CommandId) ||
-            !ReadString(Params, TEXT("npc_semantic_id"), Command.NpcSemanticId) ||
-            !IsSemanticId(Command.NpcSemanticId) ||
-            !Params->TryGetBoolField(TEXT("replace"), Command.bReplace) || !Command.bReplace)
+        if (!bPreflight)
         {
-            return ErrorResponse(CommandId, TEXT("NPC_QUEUE_VALUE_INVALID"));
+            return ResultResponse(Runtime->ExecuteNpcQueue(Parsed.Command));
         }
-        const TArray<TSharedPtr<FJsonValue>>* Actions = nullptr;
-        if (!Params->TryGetArrayField(TEXT("actions"), Actions) ||
-            Actions == nullptr || Actions->IsEmpty() || Actions->Num() > 32)
-        {
-            return ErrorResponse(CommandId, TEXT("NPC_ACTIONS_INVALID"));
-        }
-        TSet<FName> ActionIds;
-        for (const TSharedPtr<FJsonValue>& Value : *Actions)
-        {
-            const TSharedPtr<FJsonObject>* ActionObject = nullptr;
-            if (!Value.IsValid() || !Value->TryGetObject(ActionObject) || ActionObject == nullptr ||
-                !ExactKeys(*ActionObject,
-                    KeySet({TEXT("action_id"), TEXT("type")}),
-                    KeySet({TEXT("target_semantic_id"), TEXT("target_location_cm"),
-                            TEXT("placement_anchor_id"),
-                            TEXT("duration_sec"), TEXT("timeout_sec"), TEXT("speech"),
-                            TEXT("distance_cm"), TEXT("height_cm"), TEXT("hand"),
-                            TEXT("foot"), TEXT("direction")})))
-            {
-                return ErrorResponse(CommandId, TEXT("NPC_ACTION_SHAPE_INVALID"));
-            }
-            FVistaNpcAction Action;
-            FString ActionId;
-            FString Type;
-            if (!ReadString(*ActionObject, TEXT("action_id"), ActionId) ||
-                !IsActionId(ActionId) ||
-                !ReadString(*ActionObject, TEXT("type"), Type))
-            {
-                return ErrorResponse(CommandId, TEXT("NPC_ACTION_VALUE_INVALID"));
-            }
-            const TOptional<EVistaNpcActionType> Parsed = ParseNpcAction(Type);
-            if (!Parsed.IsSet() || ActionIds.Contains(FName(*ActionId)))
-            {
-                return ErrorResponse(CommandId, TEXT("NPC_ACTION_UNSUPPORTED_OR_DUPLICATE"));
-            }
-            Action.ActionId = FName(*ActionId);
-            Action.Type = Parsed.GetValue();
-            ActionIds.Add(Action.ActionId);
-            if ((*ActionObject)->HasField(TEXT("target_semantic_id")) &&
-                (!ReadString(*ActionObject, TEXT("target_semantic_id"), Action.TargetSemanticId) ||
-                 !IsSemanticId(Action.TargetSemanticId)))
-            {
-                return ErrorResponse(CommandId, TEXT("NPC_TARGET_INVALID"));
-            }
-            if ((*ActionObject)->HasField(TEXT("placement_anchor_id")) &&
-                (!ReadString(*ActionObject, TEXT("placement_anchor_id"),
-                             Action.PlacementAnchorId) ||
-                 !IsPlacementAnchorId(Action.PlacementAnchorId)))
-            {
-                return ErrorResponse(
-                    CommandId,
-                    TEXT("NPC_PLACEMENT_ANCHOR_INVALID"));
-            }
-            if (Action.Type == EVistaNpcActionType::Place &&
-                Action.PlacementAnchorId.IsEmpty())
-            {
-                return ErrorResponse(
-                    CommandId,
-                    TEXT("NPC_PLACEMENT_ANCHOR_REQUIRED"));
-            }
-            if (Action.Type != EVistaNpcActionType::Place &&
-                !Action.PlacementAnchorId.IsEmpty())
-            {
-                return ErrorResponse(
-                    CommandId,
-                    TEXT("NPC_PLACEMENT_ANCHOR_UNEXPECTED"));
-            }
-            if (Action.Type == EVistaNpcActionType::Drop &&
-                (!Action.TargetSemanticId.IsEmpty() ||
-                 (*ActionObject)->HasField(TEXT("target_location_cm"))))
-            {
-                return ErrorResponse(
-                    CommandId,
-                    TEXT("NPC_DROP_TARGET_UNEXPECTED"));
-            }
-            const TArray<TSharedPtr<FJsonValue>>* Location = nullptr;
-            if ((*ActionObject)->HasField(TEXT("target_location_cm")))
-            {
-                if (!(*ActionObject)->TryGetArrayField(TEXT("target_location_cm"), Location) ||
-                    Location == nullptr || Location->Num() != 3)
-                {
-                    return ErrorResponse(CommandId, TEXT("NPC_LOCATION_INVALID"));
-                }
-                double Components[3];
-                for (int32 Index = 0; Index < 3; ++Index)
-                {
-                    if (!(*Location)[Index]->TryGetNumber(Components[Index]) ||
-                        !FMath::IsFinite(Components[Index]) || FMath::Abs(Components[Index]) > 10000000.0)
-                    {
-                        return ErrorResponse(CommandId, TEXT("NPC_LOCATION_INVALID"));
-                    }
-                }
-                Action.TargetLocation = FVector(Components[0], Components[1], Components[2]);
-            }
-            double Number = 0.0;
-            if ((*ActionObject)->HasField(TEXT("duration_sec")))
-            {
-                if (!(*ActionObject)->TryGetNumberField(TEXT("duration_sec"), Number) ||
-                    !FMath::IsFinite(Number) || Number < 0.0 || Number > 300.0)
-                {
-                    return ErrorResponse(CommandId, TEXT("NPC_DURATION_INVALID"));
-                }
-                Action.DurationSeconds = Number;
-            }
-            if ((*ActionObject)->HasField(TEXT("timeout_sec")))
-            {
-                if (!(*ActionObject)->TryGetNumberField(TEXT("timeout_sec"), Number) ||
-                    !FMath::IsFinite(Number) || Number < 0.0 || Number > 300.0)
-                {
-                    return ErrorResponse(CommandId, TEXT("NPC_TIMEOUT_INVALID"));
-                }
-                Action.TimeoutSeconds = Number;
-            }
-            if ((*ActionObject)->HasField(TEXT("distance_cm")))
-            {
-                if (!(*ActionObject)->TryGetNumberField(TEXT("distance_cm"), Number) ||
-                    !FMath::IsFinite(Number) || Number < 0.0 || Number > 1000.0)
-                {
-                    return ErrorResponse(CommandId, TEXT("NPC_DISTANCE_INVALID"));
-                }
-                Action.DistanceCm = Number;
-            }
-            if ((*ActionObject)->HasField(TEXT("height_cm")))
-            {
-                if (!(*ActionObject)->TryGetNumberField(TEXT("height_cm"), Number) ||
-                    !FMath::IsFinite(Number) || Number < 0.0 || Number > 300.0)
-                {
-                    return ErrorResponse(CommandId, TEXT("NPC_HEIGHT_INVALID"));
-                }
-                Action.HeightCm = Number;
-            }
-            FString EnumValue;
-            if ((*ActionObject)->HasField(TEXT("hand")))
-            {
-                if (!ReadString(*ActionObject, TEXT("hand"), EnumValue))
-                {
-                    return ErrorResponse(CommandId, TEXT("NPC_HAND_INVALID"));
-                }
-                if (EnumValue == TEXT("left")) Action.Hand = EVistaAnimationHand::Left;
-                else if (EnumValue == TEXT("right")) Action.Hand = EVistaAnimationHand::Right;
-                else if (EnumValue == TEXT("both")) Action.Hand = EVistaAnimationHand::Both;
-                else return ErrorResponse(CommandId, TEXT("NPC_HAND_INVALID"));
-            }
-            if ((*ActionObject)->HasField(TEXT("foot")))
-            {
-                if (!ReadString(*ActionObject, TEXT("foot"), EnumValue))
-                {
-                    return ErrorResponse(CommandId, TEXT("NPC_FOOT_INVALID"));
-                }
-                if (EnumValue == TEXT("left")) Action.Foot = EVistaAnimationFoot::Left;
-                else if (EnumValue == TEXT("right")) Action.Foot = EVistaAnimationFoot::Right;
-                else return ErrorResponse(CommandId, TEXT("NPC_FOOT_INVALID"));
-            }
-            if ((*ActionObject)->HasField(TEXT("direction")))
-            {
-                if (!ReadString(*ActionObject, TEXT("direction"), EnumValue) ||
-                    EnumValue != TEXT("forward"))
-                {
-                    return ErrorResponse(CommandId, TEXT("NPC_DIRECTION_INVALID"));
-                }
-                Action.Direction = EVistaAnimationDirection::Forward;
-            }
-            if ((*ActionObject)->HasField(TEXT("speech")) &&
-                (!ReadString(*ActionObject, TEXT("speech"), Action.Speech) || Action.Speech.Len() > 500))
-            {
-                return ErrorResponse(CommandId, TEXT("NPC_SPEECH_INVALID"));
-            }
-            Command.Actions.Add(Action);
-        }
-        return ResultResponse(Runtime->ExecuteNpcQueue(Command));
+
+        FVistaLiveNpcQueuePreflightCommand Command;
+        Command.Envelope = Parsed.Command.Envelope;
+        Command.EventId = Parsed.EventId;
+        Command.EventContentDigest = Parsed.EventContentDigest;
+        Command.SidecarContentDigest = Parsed.SidecarContentDigest;
+        Command.QueueId = Parsed.QueueId;
+        Command.NpcSemanticId = Parsed.Command.NpcSemanticId;
+        Command.bReplace = Parsed.Command.bReplace;
+        Command.Actions = MoveTemp(Parsed.Command.Actions);
+        return NpcQueuePreflightResponse(Runtime->PreflightNpcQueue(Command));
     }
 
     if (Operation == TEXT("event"))
