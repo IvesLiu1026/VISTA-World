@@ -193,6 +193,7 @@ def test_import_sandbox_is_cpu_nullrhi_offline_and_uses_configured_authorities(
     assert ue_argv[0] == "/vista/engine/Engine/Binaries/Linux/UnrealEditor-Cmd"
     assert "-nullrhi" in ue_argv
     assert "-unattended" in ue_argv
+    assert "-DDC-ForceMemoryCache" in ue_argv
     assert not any("graphicsadapter" in token.casefold() for token in argv)
     assert not any("/dev/dri" in token for token in argv)
     assert not any("sunshine" in token.casefold() for token in argv)

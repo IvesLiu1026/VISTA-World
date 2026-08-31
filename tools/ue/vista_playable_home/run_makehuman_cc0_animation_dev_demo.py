@@ -988,6 +988,10 @@ def _bwrap_command(
         "-NoAssetRegistryCache",
         "-NoHotReloadFromIDE",
         "-NoEngineChanges",
+        # The installed UE 5.7 cache graph can mark the isolated home cache as
+        # DeleteOnly before Zen is available.  A commandlet import must not
+        # depend on a host Zen daemon, so keep DDC process-local and writable.
+        "-DDC-ForceMemoryCache",
         "-EnablePlugins=VistaPlayableHome",
         "-ExecutePythonScript=/vista/input/commandlet.py",
         f"-AbsLog=/vista/work/{IMPORT_ENGINE_LOG_NAME}",
