@@ -87,7 +87,6 @@ private:
     bool bActionStarted = false;
     TOptional<FVector> ActiveNavigationGoal;
     FAIRequestID ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
-    bool bAnimationInteractionCommitted = false;
 
     bool ValidateAction(const FVistaNpcAction& Action, FName& OutCode) const;
     void StopControlledMotion();
@@ -103,7 +102,4 @@ private:
     bool PollAnimationAction();
     bool PollPhysicalAction();
     bool StartPhysicalAction(const FVistaNpcAction& Action, AActor* Target);
-    FVistaInteractionResult ExecuteAnimatedInteraction(
-        const FVistaNpcAction& Action,
-        AActor* Target) const;
 };
