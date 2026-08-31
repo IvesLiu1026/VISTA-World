@@ -1,7 +1,7 @@
 # Tasks: VISTA Action World R1
 
 Status: In progress
-Updated: 2026-08-28
+Updated: 2026-09-01
 Depends on: requirements.md, design.md
 
 ## Rules
@@ -155,6 +155,20 @@ Depends on: requirements.md, design.md
   - Validation: offline/full tests, UE compile/cook/package, no-motion baseline,
     action receipts, six-room visual review, 1080p performance, Moonlight input
 
+- [ ] T15. Deliver the first player/agent action-event vertical slice
+  - Files: player character/HUD/input, shared executor and event bridge, action
+    catalog/EventSpec/TCP parity, articulated fridge actor/composer, focused tests
+  - Depends on: T3-T5, T9, T11, T13 as narrowed to the selected slice
+  - Requirements: R2-R5, R9, R11-R13
+  - Selected actions: pickup, place, drop, open, close and inspect
+  - Validation: a YCB mug reaches the hand only at pickup contact and reaches a
+    support only at place release; the visible fridge leaf moves only after the
+    handle contact signal; Inspect has an explicit key, camera/card feedback and
+    exit; every success records one matching VISTA interaction while failures and
+    rollbacks record zero; Sunshine human playtest passes in a fresh run
+  - Rollout: preserve the current City Sample R6 service as rollback and launch a
+    separately named candidate service only after offline and UE gates pass
+
 ## Current Iteration
 
 - Completed: T2 commanded-idle baseline; the current 698-test tool suite plus
@@ -168,10 +182,12 @@ Depends on: requirements.md, design.md
 - Completed in source: T8 now has a 2K production default, honest effective vs
   design-minimum texel-density receipts, metric UV generation and GLB-level UV
   evidence gates. Full-scene 2K and UE observation remain acceptance work.
-- Active next slices: complete Epic device authorization and the first private
-  assembled Vivian candidate; complete the receipt-bound HSSD UE 5.7 material
-  compatibility/import slice; then combine both in an eye-level UE candidate
-  before T5/T6 contact actions.
+- Active next slice (2026-09-01 user priority): T15 closes player-visible
+  pickup/place/drop, articulated fridge open/close and explicit Inspect before
+  further presentation-only character or material work. The functional CC0
+  action authority and the Epic/City Sample human-operated visual lane remain
+  separately labeled; neither is promoted as dataset/VLM evidence without its
+  own acceptance receipt.
 - Golden Room R2 smoke evidence: append-only accepted forge
   `golden-room-r2-smoke-20260827T212250Z` contains 45 placements, 40 external
   dressing instances, 211 components and seven GLBs. All 424 vertical-slice
