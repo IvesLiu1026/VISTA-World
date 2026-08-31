@@ -39,9 +39,16 @@ EXPECTED_SEMANTIC_IDS = (
     "home.r1/room.kitchen_dining/entity.coffee_cup.01",
     "home.r1/room.living_room/entity.slipper.01",
 )
+ABSENT_SHELL_DISPOSITION = "already_absent_source_shell"
+DELETE_SHELL_DISPOSITION = "exact_visual_shell_to_delete"
+EXPECTED_SHELL_DISPOSITIONS = (
+    ABSENT_SHELL_DISPOSITION,
+    DELETE_SHELL_DISPOSITION,
+)
 EXPECTED_BINDINGS = {
     EXPECTED_SEMANTIC_IDS[0]: {
         "instance_id": "hssd.r1/kitchen_dining.coffee_cup.01",
+        "shell_disposition": ABSENT_SHELL_DISPOSITION,
         "source_asset_id": "hssd.static.coffee_cup",
         "root_asset_ref": "asset.prop.coffee_cup",
         "root_mesh": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_prop_coffee_cup/asset_prop_coffee_cup.asset_prop_coffee_cup",
@@ -58,6 +65,7 @@ EXPECTED_BINDINGS = {
     },
     EXPECTED_SEMANTIC_IDS[1]: {
         "instance_id": "hssd.r1/living_room.slipper.01",
+        "shell_disposition": DELETE_SHELL_DISPOSITION,
         "source_asset_id": "hssd.static.flip_flops",
         "root_asset_ref": "asset.prop.slipper",
         "root_mesh": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_prop_slipper/asset_prop_slipper.asset_prop_slipper",
@@ -303,6 +311,11 @@ def validate_contract(
         tuple(row["semantic_id"] for row in bindings) == EXPECTED_SEMANTIC_IDS,
         "portable binding semantic order differs",
     )
+    _require(
+        tuple(row["shell_disposition"] for row in bindings)
+        == EXPECTED_SHELL_DISPOSITIONS,
+        "portable binding shell-disposition order differs",
+    )
     for binding in bindings:
         semantic = binding["semantic_id"]
         expected = EXPECTED_BINDINGS[semantic]
@@ -334,6 +347,7 @@ def validate_contract(
         _require(
             binding["room_id"] == entity["room_id"] == placement["room_id"]
             and binding["hssd_instance_id"] == expected["instance_id"]
+            and binding["shell_disposition"] == expected["shell_disposition"]
             and binding["source_asset_id"] == expected["source_asset_id"]
             and placement["source_asset_id"] == expected["source_asset_id"]
             and placement["semantic_target_id"] == expected["profile_semantic_target"],

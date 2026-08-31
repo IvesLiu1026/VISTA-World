@@ -2,10 +2,11 @@
 
 This fixed UE Python commandlet accepts only the hash-pinned execution emitted
 by ``plan_hssd_portable_visual_binding_dev.py``.  It creates a new map from the
-completed articulated-fridge derivative, proves both visual shells and both
-``AVistaPickupActor`` authorities before mutating anything, deletes only the
-two redundant shells, and binds their existing StaticMeshes to each pickup's
-render-only ``PresentationMesh`` child.  Failures stay quarantined.
+completed articulated-fridge derivative, proves the contract-declared coffee
+shell is already absent and the exact slipper visual shell is present before
+mutating anything, deletes only that one redundant shell, and binds both
+existing StaticMeshes to each ``AVistaPickupActor`` authority's render-only
+``PresentationMesh`` child.  Failures stay quarantined.
 """
 
 from __future__ import annotations
@@ -34,15 +35,21 @@ PICKUP_CLASS = "/Script/VistaPlayableHome.VistaPickupActor"
 SHELL_CLASS = "/Script/Engine.StaticMeshActor"
 CONTRACT_SCHEMA = "vista.playable-hssd-portable-visual-binding/v1"
 CONTRACT_ID = "hssd_portable_pickups_r1"
-CONTRACT_SHA256 = "fd6477f2f4eccae77041fad1ced94149e32d58985ea20a22bae270a2c11abe20"
+CONTRACT_SHA256 = "a39d49235b7fec3cbf0c3dd2cebd9424b97a3f3868272e56786f327e0a4f1cb5"
 CONTRACT_CONTENT_DIGEST = (
-    "924bedcfbea04f6ec7f8fdbdf2871157c3b64c66b4874f68466ebb4d42bda185"
+    "ac3f53d70481e4565e777e50757006a70a105e3b3c7c1fb3a27725c39453e1bd"
 )
 SOURCE_RECEIPT_SCHEMA = "vista.playable-articulated-fridge-dev-scene-receipt/v1"
 SOURCE_SUCCESS_STATUS = "dev_derivative_composed_pending_runtime_and_human_review"
 SEMANTIC_IDS = (
     "home.r1/room.kitchen_dining/entity.coffee_cup.01",
     "home.r1/room.living_room/entity.slipper.01",
+)
+ABSENT_SHELL_DISPOSITION = "already_absent_source_shell"
+DELETE_SHELL_DISPOSITION = "exact_visual_shell_to_delete"
+SHELL_DISPOSITIONS = (
+    ABSENT_SHELL_DISPOSITION,
+    DELETE_SHELL_DISPOSITION,
 )
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -240,6 +247,8 @@ def load_execution():
             "asset_import_or_replacement_forbidden": True,
             "exact_identity_before_delete_required": True,
             "only_visual_shells_may_be_deleted": True,
+            "declared_absent_shell_must_be_proved": True,
+            "exact_one_visual_shell_may_be_deleted": True,
             "pickup_authority_must_be_preserved": True,
             "save_reload_required": True,
             "quarantine_on_failure": True,
@@ -406,6 +415,8 @@ def load_execution():
     require(
         isinstance(bindings, list)
         and [row.get("semantic_id") for row in bindings] == list(SEMANTIC_IDS)
+        and tuple(row.get("shell_disposition") for row in bindings)
+        == SHELL_DISPOSITIONS
         and len({row.get("hssd_instance_id") for row in bindings}) == 2
         and all(row.get("shell_actor_class_path") == SHELL_CLASS for row in bindings),
         "closed portable binding inventory differs",
@@ -621,15 +632,112 @@ def pickup_for(actors, binding, *, bound=False):
     return matches[0]
 
 
-def shell_for(actors, binding):
+def shell_identity_inventory(actors, binding):
     instance_tag = "VistaHssdInstanceId=" + binding["hssd_instance_id"]
+    actor_label = binding["shell_actor_label"]
+    semantic_target_tag = binding["shell_semantic_target_tag"]
+    return {
+        "instance_tag_actor_paths": sorted(
+            str(actor.get_path_name())
+            for actor in actors
+            if instance_tag in sorted_tags(actor)
+        ),
+        "actor_label_actor_paths": sorted(
+            str(actor.get_path_name())
+            for actor in actors
+            if str(actor.get_actor_label()) == actor_label
+        ),
+        "semantic_target_tag_actor_paths": (
+            sorted(
+                str(actor.get_path_name())
+                for actor in actors
+                if semantic_target_tag in sorted_tags(actor)
+            )
+            if semantic_target_tag is not None
+            else []
+        ),
+    }
+
+
+def require_shell_identity_absent(
+    actors, binding, context, *, allowed_instance_tag_actor_paths=()
+):
+    inventory = shell_identity_inventory(actors, binding)
+    allowed_paths = set(allowed_instance_tag_actor_paths)
+    observed_instance_paths = set(inventory["instance_tag_actor_paths"])
+    require(
+        allowed_paths.issubset(observed_instance_paths),
+        context + " allowed pickup instance-tag path is absent",
+    )
+    unexpected_inventory = copy.deepcopy(inventory)
+    unexpected_inventory["instance_tag_actor_paths"] = sorted(
+        observed_instance_paths - allowed_paths
+    )
+    counts = {key: len(paths) for key, paths in unexpected_inventory.items()}
+    require(
+        all(count == 0 for count in counts.values()),
+        context
+        + " identity is not absent: "
+        + ", ".join(
+            (
+                "instance_tag=" + str(counts["instance_tag_actor_paths"]),
+                "actor_label=" + str(counts["actor_label_actor_paths"]),
+                "semantic_target_tag="
+                + str(counts["semantic_target_tag_actor_paths"]),
+            )
+        ),
+    )
+    return {
+        "identity_match_counts": counts,
+        "identity_match_actor_paths": unexpected_inventory,
+        "allowed_instance_tag_actor_paths": sorted(allowed_paths),
+    }
+
+
+def verify_declared_absent_shell(actors, binding):
+    require(
+        binding["shell_disposition"] == ABSENT_SHELL_DISPOSITION
+        and isinstance(binding["shell_semantic_target_tag"], str)
+        and bool(binding["shell_semantic_target_tag"]),
+        "declared absent shell contract differs: " + binding["semantic_id"],
+    )
+    evidence = require_shell_identity_absent(
+        actors, binding, "declared absent HSSD shell"
+    )
+    return {
+        "semantic_id": binding["semantic_id"],
+        "hssd_instance_id": binding["hssd_instance_id"],
+        "declared_disposition": binding["shell_disposition"],
+        "observed_disposition": "absent",
+        "deleted": False,
+        **evidence,
+        "cold_reload_absence_evidence": None,
+    }
+
+
+def exact_shell_for(actors, binding):
+    require(
+        binding["shell_disposition"] == DELETE_SHELL_DISPOSITION,
+        "deletable shell contract disposition differs: " + binding["semantic_id"],
+    )
+    inventory = shell_identity_inventory(actors, binding)
+    instance_paths = inventory["instance_tag_actor_paths"]
+    label_paths = inventory["actor_label_actor_paths"]
+    require(
+        len(instance_paths) == 1
+        and len(label_paths) == 1
+        and instance_paths == label_paths,
+        "deletable HSSD shell identity is not exact and unique: "
+        + binding["hssd_instance_id"],
+    )
     matches = [
-        actor
-        for actor in actors
-        if class_path(actor) == SHELL_CLASS and instance_tag in sorted_tags(actor)
+        actor for actor in actors if str(actor.get_path_name()) == instance_paths[0]
     ]
-    require(len(matches) == 1, "HSSD shell identity is not unique: " + instance_tag)
-    return matches[0]
+    require(
+        len(matches) == 1,
+        "deletable HSSD shell actor path is not unique: " + instance_paths[0],
+    )
+    return matches[0], inventory
 
 
 def require_single_identity_tag(tags, prefix, expected):
@@ -863,10 +971,12 @@ def run():
     map_created = False
     map_saved = False
     map_reloaded = False
-    all_identities_validated = False
-    only_shells_deleted = False
+    all_binding_identities_validated = False
+    declared_absent_shell_verified = False
+    exact_one_shell_deleted = False
+    only_declared_shell_deleted = False
     authority_preserved = False
-    shells_before = []
+    shell_disposition_observations = []
     pickups_before = []
     pickups_after = []
     pickups_reloaded = []
@@ -900,17 +1010,43 @@ def run():
         inventory_before = actor_inventory(actors)
 
         stage = {"phase": "prove_all_identities_before_delete", "detail": None}
-        shells = []
+        shells_to_delete = []
         pickups = []
         meshes = []
         for binding in execution["bindings"]:
             stage["detail"] = binding["semantic_id"]
-            shell = shell_for(actors, binding)
+            disposition = binding["shell_disposition"]
+            shell = None
+            if disposition == ABSENT_SHELL_DISPOSITION:
+                shell_disposition_observations.append(
+                    verify_declared_absent_shell(actors, binding)
+                )
+            elif disposition == DELETE_SHELL_DISPOSITION:
+                shell, identity_inventory = exact_shell_for(actors, binding)
+                shell_disposition_observations.append(
+                    {
+                        "semantic_id": binding["semantic_id"],
+                        "hssd_instance_id": binding["hssd_instance_id"],
+                        "declared_disposition": disposition,
+                        "observed_disposition": "present",
+                        "deleted": False,
+                        "identity_match_counts": {
+                            key: len(paths)
+                            for key, paths in identity_inventory.items()
+                        },
+                        "identity_match_actor_paths": identity_inventory,
+                        "shell_observation_before_delete": validate_shell(
+                            shell, binding
+                        ),
+                        "cold_reload_absence_evidence": None,
+                    }
+                )
+                shells_to_delete.append(shell)
+            else:
+                require(False, "shell disposition is outside the closed enum")
             pickup = pickup_for(actors, binding)
-            require(shell != pickup, "visual shell unexpectedly aliases pickup")
-            shells.append(shell)
+            require(shell is None or shell != pickup, "visual shell aliases pickup")
             pickups.append(pickup)
-            shells_before.append(validate_shell(shell, binding))
             pickups_before.append(validate_unbound_pickup(pickup, binding))
             mesh = unreal.load_asset(binding["hssd_mesh_object_path"])
             require(
@@ -928,26 +1064,76 @@ def run():
             )
             meshes.append(mesh)
         require(
-            len({str(value.get_path_name()) for value in [*shells, *pickups]}) == 4,
+            len(shell_disposition_observations) == 2
+            and len(shells_to_delete) == 1
+            and len(pickups) == 2
+            and len(meshes) == 2
+            and len(
+                {
+                    str(value.get_path_name())
+                    for value in [*shells_to_delete, *pickups]
+                }
+            )
+            == 3,
             "portable shell/pickup identity closure overlaps",
         )
-        all_identities_validated = True
+        declared_absent_shell_verified = (
+            sum(
+                row["declared_disposition"] == ABSENT_SHELL_DISPOSITION
+                and row["observed_disposition"] == "absent"
+                for row in shell_disposition_observations
+            )
+            == 1
+        )
+        exact_deletable_shell_verified = (
+            sum(
+                row["declared_disposition"] == DELETE_SHELL_DISPOSITION
+                and row["observed_disposition"] == "present"
+                and "shell_observation_before_delete" in row
+                for row in shell_disposition_observations
+            )
+            == 1
+        )
+        all_binding_identities_validated = (
+            declared_absent_shell_verified and exact_deletable_shell_verified
+        )
 
-        stage = {"phase": "delete_exact_visual_shells", "detail": None}
-        deleted_paths = {str(shell.get_path_name()) for shell in shells}
+        stage = {"phase": "delete_exact_visual_shell", "detail": None}
         require(
-            all(actor_subsystem.destroy_actor(shell) for shell in shells),
-            "failed to delete both exact visual-only shells",
+            len(shells_to_delete) == 1,
+            "exactly one declared visual shell must be deleted",
+        )
+        shell_to_delete = shells_to_delete[0]
+        deleted_path = str(shell_to_delete.get_path_name())
+        require(
+            actor_subsystem.destroy_actor(shell_to_delete),
+            "failed to delete the exact declared visual-only shell",
         )
         remaining = list(actor_subsystem.get_all_level_actors())
         expected_inventory = [
-            row for row in inventory_before if row["actor_path"] not in deleted_paths
+            row for row in inventory_before if row["actor_path"] != deleted_path
         ]
         require(
-            actor_inventory(remaining) == expected_inventory,
-            "an actor other than the two exact visual shells changed during deletion",
+            len(inventory_before) - len(expected_inventory) == 1
+            and actor_inventory(remaining) == expected_inventory,
+            "actor inventory changed beyond the one declared visual shell deletion",
         )
-        only_shells_deleted = True
+        deletion_records = [
+            row
+            for row in shell_disposition_observations
+            if row["declared_disposition"] == DELETE_SHELL_DISPOSITION
+        ]
+        require(
+            len(deletion_records) == 1
+            and deletion_records[0]["shell_observation_before_delete"]["actor_path"]
+            == deleted_path,
+            "deleted shell receipt linkage differs",
+        )
+        deletion_records[0]["observed_disposition"] = "deleted"
+        deletion_records[0]["deleted"] = True
+        deletion_records[0]["deleted_actor_path"] = deleted_path
+        exact_one_shell_deleted = True
+        only_declared_shell_deleted = True
 
         stage = {"phase": "bind_hssd_presentations", "detail": None}
         for binding, actor, mesh, before in zip(
@@ -989,12 +1175,13 @@ def run():
 
         actors = None
         inventory_before = None
-        shells = None
+        shells_to_delete = None
         pickups = None
         meshes = None
         remaining = None
         world = None
         shell = None
+        shell_to_delete = None
         pickup = None
         mesh = None
         actor = None
@@ -1024,16 +1211,24 @@ def run():
                 + binding["semantic_id"],
             )
             pickups_reloaded.append(reloaded_observation)
-            require(
-                not any(
-                    class_path(candidate) == SHELL_CLASS
-                    and "VistaHssdInstanceId=" + binding["hssd_instance_id"]
-                    in sorted_tags(candidate)
-                    for candidate in reloaded_actors
+            absence_evidence = require_shell_identity_absent(
+                reloaded_actors,
+                binding,
+                "portable shell after cold reload",
+                allowed_instance_tag_actor_paths=(
+                    str(reloaded_actor.get_path_name()),
                 ),
-                "deleted visual shell reappeared after cold reload: "
-                + binding["hssd_instance_id"],
             )
+            disposition_records = [
+                row
+                for row in shell_disposition_observations
+                if row["semantic_id"] == binding["semantic_id"]
+            ]
+            require(
+                len(disposition_records) == 1,
+                "shell disposition receipt linkage differs after cold reload",
+            )
+            disposition_records[0]["cold_reload_absence_evidence"] = absence_evidence
         require(
             sha256_file(source["package_file"]) == source["package_sha256"]
             and os.path.getsize(source["package_file"]) == source["package_size_bytes"],
@@ -1089,7 +1284,7 @@ def run():
                 os.path.getsize(derivative_package) if succeeded else None
             ),
         },
-        "shell_observations_before_delete": shells_before,
+        "shell_disposition_observations": shell_disposition_observations,
         "mesh_records": mesh_records,
         "pickup_observations_before": pickups_before,
         "pickup_observations_after": pickups_after,
@@ -1097,15 +1292,25 @@ def run():
         "gates": {
             "completed_fridge_source_map_revalidated": source_map_revalidated,
             "fresh_derivative_map_created": map_created,
-            "exact_two_shells_and_two_pickups_validated_before_delete": all_identities_validated,
+            "declared_absent_source_shell_verified_before_mutation": declared_absent_shell_verified,
+            "exact_one_shell_and_two_pickups_validated_before_delete": all_binding_identities_validated,
             "exact_two_existing_hssd_meshes_loaded": len(mesh_records) == 2,
-            "only_two_visual_shells_deleted": only_shells_deleted,
+            "exact_one_visual_shell_deleted": exact_one_shell_deleted,
+            "only_declared_visual_shell_deleted": only_declared_shell_deleted,
             "pickup_collision_physics_authority_preserved": authority_preserved,
             "presentation_meshes_bound_with_identity_transform": len(pickups_after)
             == 2,
             "map_saved": map_saved,
             "map_cold_reloaded": map_reloaded,
             "bound_pickups_reloaded_exact": len(pickups_reloaded) == 2,
+            "declared_shell_dispositions_revalidated_after_cold_reload": len(
+                shell_disposition_observations
+            )
+            == 2
+            and all(
+                row["cold_reload_absence_evidence"] is not None
+                for row in shell_disposition_observations
+            ),
             "source_map_package_unchanged": source_map_unchanged,
             "runtime_pickup_place_drop_verified": False,
             "human_visual_reviewed": False,

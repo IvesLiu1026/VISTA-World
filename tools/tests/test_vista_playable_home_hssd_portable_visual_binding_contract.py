@@ -18,6 +18,10 @@ def test_closed_contract_validates_against_house_and_hssd_profile() -> None:
         "home.r1/room.kitchen_dining/entity.coffee_cup.01",
         "home.r1/room.living_room/entity.slipper.01",
     )
+    assert tuple(row["shell_disposition"] for row in document["bindings"]) == (
+        module.ABSENT_SHELL_DISPOSITION,
+        module.DELETE_SHELL_DISPOSITION,
+    )
     assert all(
         row["presentation_relative_transform"]
         == {
@@ -86,6 +90,27 @@ def test_digest_or_non_identity_presentation_transform_fails_closed() -> None:
     changed["content_digest"] = "0" * 64
     with pytest.raises(
         module.PortableVisualBindingContractError, match="content digest differs"
+    ):
+        module.validate_contract(changed)
+
+
+def test_shell_disposition_is_closed_and_semantic_specific() -> None:
+    document = module.load_contract()
+
+    changed = copy.deepcopy(document)
+    changed["bindings"][0]["shell_disposition"] = module.DELETE_SHELL_DISPOSITION
+    changed["content_digest"] = module.content_digest(changed)
+    with pytest.raises(
+        module.PortableVisualBindingContractError,
+        match="shell-disposition order differs",
+    ):
+        module.validate_contract(changed)
+
+    changed = copy.deepcopy(document)
+    changed["bindings"][0]["shell_disposition"] = "find_any_matching_shell"
+    changed["content_digest"] = module.content_digest(changed)
+    with pytest.raises(
+        module.PortableVisualBindingContractError, match="schema validation failed"
     ):
         module.validate_contract(changed)
 
