@@ -413,10 +413,23 @@ def mesh_path(component):
     return str(mesh.get_path_name()) if isinstance(mesh, unreal.StaticMesh) else None
 
 
-def object_name_from_actor_path(path):
-    marker = ":PersistentLevel."
-    require(marker in path, "legacy actor path is not persistent-level scoped")
-    return path.rsplit(marker, 1)[1]
+def derivative_actor_path_matches(path, derivative_object_path):
+    """Require a persistent actor in the fresh map without pinning UE's clone name.
+
+    ``new_level_from_template`` preserves the actor's sealed semantic tags,
+    label, class, transform, mesh, and collision state, but Unreal assigns a
+    fresh persistent object name (for example ``StaticMeshActor_63``).  The
+    source receipt continues to pin the original object path; the derivative
+    proof pins the new map scope and every observable identity field instead.
+    """
+    package_leaf = derivative_object_path.rsplit("/", 1)[-1]
+    prefix = (
+        derivative_object_path
+        + "."
+        + package_leaf
+        + ":PersistentLevel."
+    )
+    return isinstance(path, str) and path.startswith(prefix) and len(path) > len(prefix)
 
 
 def find_unique_actor(actors, required_tag, label):
@@ -425,12 +438,12 @@ def find_unique_actor(actors, required_tag, label):
     return matches[0]
 
 
-def validate_legacy_shell(actor, expected):
+def validate_legacy_shell(actor, expected, derivative_object_path):
     components = static_mesh_components(actor)
     require(
         str(actor.get_actor_label()) == expected["actor_label"]
-        and str(actor.get_path_name()).endswith(
-            ":PersistentLevel." + object_name_from_actor_path(expected["actor_path"])
+        and derivative_actor_path_matches(
+            str(actor.get_path_name()), derivative_object_path
         )
         and class_path(actor) == expected["actor_class_path"]
         and sorted_tags(actor) == expected["tags"]
@@ -446,13 +459,13 @@ def validate_legacy_shell(actor, expected):
     )
 
 
-def validate_legacy_proxy(actor, expected):
+def validate_legacy_proxy(actor, expected, derivative_object_path):
     components = static_mesh_components(actor)
     visible = property_or_none(components[0], "visible") if components else None
     require(
         str(actor.get_actor_label()) == expected["actor_label"]
-        and str(actor.get_path_name()).endswith(
-            ":PersistentLevel." + object_name_from_actor_path(expected["actor_path"])
+        and derivative_actor_path_matches(
+            str(actor.get_path_name()), derivative_object_path
         )
         and class_path(actor) == expected["actor_class_path"]
         and sorted_tags(actor) == expected["tags"]
@@ -849,8 +862,12 @@ def run():
             "legacy hidden proxy",
         )
         require(shell != proxy, "legacy shell and proxy unexpectedly alias")
-        validate_legacy_shell(shell, legacy["shell"])
-        validate_legacy_proxy(proxy, legacy["proxy"])
+        validate_legacy_shell(
+            shell, legacy["shell"], derivative["object_path"]
+        )
+        validate_legacy_proxy(
+            proxy, legacy["proxy"], derivative["object_path"]
+        )
         require(
             not any(
                 "VistaRole=articulated_fridge" in sorted_tags(actor) for actor in actors

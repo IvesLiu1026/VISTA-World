@@ -58,14 +58,35 @@ def test_cold_reload_releases_map_bound_wrappers_and_collects_before_map_load() 
 
 def test_commandlet_proves_both_legacy_actors_before_any_delete() -> None:
     source = COMMANDLET.read_text(encoding="utf-8")
-    shell_validation = source.index('validate_legacy_shell(shell, legacy["shell"])')
-    proxy_validation = source.index('validate_legacy_proxy(proxy, legacy["proxy"])')
+    shell_validation = source.index("validate_legacy_shell(")
+    proxy_validation = source.index("validate_legacy_proxy(")
     delete = source.index("actor_subsystem.destroy_actor(shell)")
     assert shell_validation < delete
     assert proxy_validation < delete
     assert '"legacy visual shell no longer matches the sealed receipt"' in source
     assert '"legacy hidden proxy no longer matches the sealed receipt"' in source
     assert "len(matches) == 1" in source
+
+
+def test_template_clone_identity_is_pinned_to_the_fresh_map_not_source_object_name() -> None:
+    source = COMMANDLET.read_text(encoding="utf-8")
+
+    helper = source.split("def derivative_actor_path_matches", 1)[1].split(
+        "def find_unique_actor", 1
+    )[0]
+    shell = source.split("def validate_legacy_shell", 1)[1].split(
+        "def validate_legacy_proxy", 1
+    )[0]
+    proxy = source.split("def validate_legacy_proxy", 1)[1].split(
+        "def material_paths", 1
+    )[0]
+
+    assert '":PersistentLevel."' in helper
+    assert "derivative_object_path" in helper
+    assert "object_name_from_actor_path(expected" not in shell
+    assert "object_name_from_actor_path(expected" not in proxy
+    assert "derivative_actor_path_matches(" in shell
+    assert "derivative_actor_path_matches(" in proxy
 
 
 def test_commandlet_imports_exact_three_core_png_links_without_replacement() -> None:
