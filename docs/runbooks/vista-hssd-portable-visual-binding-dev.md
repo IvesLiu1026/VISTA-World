@@ -62,6 +62,14 @@ assumption that every legal source pickup had a null `PresentationMesh`. The sea
 source map already contains the exact City Sample `cupA` presentation on the coffee
 pickup; its shell is nevertheless absent. Neither attempt may be reused.
 
+The observed attempt `hssd-portable-bind-dev-r1-20260901d` is permanently
+quarantined at the slipper proof. It proved the coffee source presentation contract,
+then exposed that UE 5.7's Python `StaticMeshActor` wrapper does not publish
+`get_root_component()`. The fixed commandlet uses that method only when callable and
+otherwise reads the exact `root_component` editor property; missing, pathless, failed,
+or conflicting method/property roots fail closed. Attempt D and its derivative path
+must never be reused.
+
 Validate the Git-side contract without resolving private HSSD payloads:
 
 ```bash
