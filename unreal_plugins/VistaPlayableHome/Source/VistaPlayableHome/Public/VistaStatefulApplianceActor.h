@@ -5,7 +5,16 @@
 #include "VistaStatefulApplianceActor.generated.h"
 
 class UStaticMeshComponent;
+class USceneComponent;
 class UVistaActionExecutorComponent;
+
+/** Closed visual-control vocabulary used by the R15 gesture router. */
+UENUM(BlueprintType)
+enum class EVistaApplianceControlStyle : uint8
+{
+    Rotary,
+    Button
+};
 
 /** Project-authored effect of the appliance's primary pressable control. */
 USTRUCT(BlueprintType)
@@ -71,8 +80,16 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Appliance")
     TObjectPtr<UStaticMeshComponent> Mesh;
 
+    /** Unique authored hand-contact point; never supplied by TCP/NLP input. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Appliance")
+    TObjectPtr<USceneComponent> ControlTarget;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Appliance")
     FName ApplianceKind = TEXT("generic");
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Appliance")
+    EVistaApplianceControlStyle ControlStyle =
+        EVistaApplianceControlStyle::Rotary;
 
     /** Backward-compatible authored default for active; it never implies power. */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Appliance")
