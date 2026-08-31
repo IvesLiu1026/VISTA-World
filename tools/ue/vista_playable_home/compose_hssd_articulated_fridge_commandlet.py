@@ -307,6 +307,13 @@ def property_or_none(value, name):
         return None
 
 
+def property_value(value, name, label):
+    try:
+        return value.get_editor_property(name)
+    except Exception as exc:
+        raise RuntimeError(label + " property unavailable: " + name) from exc
+
+
 def class_path(value):
     reflected = value.get_class() if value is not None else None
     return str(reflected.get_path_name()) if reflected is not None else ""
@@ -344,9 +351,12 @@ def observed_transform(actor):
 
 
 def relative_transform(component):
-    location = component.get_relative_location()
-    observed_rotation = component.get_relative_rotation()
-    scale = component.get_relative_scale3d()
+    # UE 5.7 does not expose these USceneComponent getters consistently on its
+    # generated Python surface.  Editor reflection is the stable serialized
+    # transform authority used by the other scene commandlets.
+    location = property_value(component, "relative_location", "component")
+    observed_rotation = property_value(component, "relative_rotation", "component")
+    scale = property_value(component, "relative_scale3d", "component")
     return {
         "location_cm": [float(location.x), float(location.y), float(location.z)],
         "rotation_deg": [
@@ -693,7 +703,9 @@ def articulated_observation(actor, binding):
         role: relative_transform(components[role])
         for role in ("primary_hinge", "secondary_hinge")
     }
-    handle_location = components["handle"].get_relative_location()
+    handle_location = property_value(
+        components["handle"], "relative_location", "handle target"
+    )
     observation = {
         "actor_path": str(actor.get_path_name()),
         "actor_label": str(actor.get_actor_label()),
