@@ -643,7 +643,9 @@ def inspect_sequence(
     )
     # UE 5.7 exposes the source sampling rate through AnimDataModel, not as a
     # Python method on AnimSequence itself.
-    data_model = property_or_none(sequence, "data_model")
+    data_model = property_or_none(sequence, "data_model_interface")
+    if data_model is None:
+        data_model = property_or_none(sequence, "data_model")
     require(data_model is not None, "AnimSequence data model is unavailable")
     rate = data_model.get_frame_rate()
     numerator = int(rate.numerator)
