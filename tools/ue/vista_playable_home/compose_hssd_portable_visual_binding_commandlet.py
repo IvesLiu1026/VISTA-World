@@ -509,14 +509,36 @@ def collision_label(component):
 
 
 def mobility_label(value):
-    token = str(value).strip().rsplit(".", 1)[-1].upper()
-    labels = {
-        "STATIC": "Static",
-        "STATIONARY": "Stationary",
-        "MOVABLE": "Movable",
+    enum_labels = (
+        ("STATIC", "Static"),
+        ("STATIONARY", "Stationary"),
+        ("MOVABLE", "Movable"),
+    )
+    enum_type = getattr(unreal, "ComponentMobility", None)
+    for attribute, label in enum_labels:
+        candidate = (
+            getattr(enum_type, attribute, None) if enum_type is not None else None
+        )
+        if candidate is not None and (value is candidate or value == candidate):
+            return label
+
+    token = str(value).strip()
+    aliases = {
+        "Static": "Static",
+        "Stationary": "Stationary",
+        "Movable": "Movable",
+        "ComponentMobility.STATIC": "Static",
+        "ComponentMobility.STATIONARY": "Stationary",
+        "ComponentMobility.MOVABLE": "Movable",
+        "<ComponentMobility.STATIC: 0>": "Static",
+        "<ComponentMobility.STATIONARY: 1>": "Stationary",
+        "<ComponentMobility.MOVABLE: 2>": "Movable",
     }
-    require(token in labels, "component mobility is outside the closed enum")
-    return labels[token]
+    require(
+        token in aliases,
+        "component mobility is outside the closed enum: " + repr(token[:96]),
+    )
+    return aliases[token]
 
 
 def vector(values):
