@@ -64,6 +64,11 @@ EXPECTED_ACTIONS_BY_ROLE = {
     "pickup": frozenset({"pick_up", "place", "drop", "inspect"}),
     "appliance": frozenset({"turn_on", "turn_off", "inspect"}),
 }
+APPLIANCE_STATUS_PIN_BY_INTERACTION = {
+    "stove.primary": ("stove", "heating"),
+    "faucet.primary": ("faucet", "flowing"),
+    "washer.primary": ("washer", "running"),
+}
 PROHIBITED_KEYS = frozenset(
     {
         "object_path",
@@ -345,7 +350,12 @@ def _validate_symbolic_value(field: str, value: Any, path: str) -> None:
 
 
 def _validate_action_state_contract(
-    action: Mapping[str, Any], *, interaction_index: int, action_index: int
+    action: Mapping[str, Any],
+    *,
+    interaction_id: str,
+    target_categories: Sequence[str],
+    interaction_index: int,
+    action_index: int,
 ) -> None:
     path = f"$.interactions[{interaction_index}].actions[{action_index}]"
     action_id = action["action_id"]
@@ -411,11 +421,20 @@ def _validate_action_state_contract(
                 f"{path}.postcondition",
                 "Appliance status must be a concrete semantic state",
             )
-        if (action_id == "turn_off") != (post["status"] == "idle"):
+        status_pin = APPLIANCE_STATUS_PIN_BY_INTERACTION.get(interaction_id)
+        if status_pin is None or tuple(target_categories) != (status_pin[0],):
             _fail(
-                "VISTA_INTERACTION_APPLIANCE_POSTCONDITION_INVALID",
+                "VISTA_INTERACTION_APPLIANCE_STATUS_INVALID",
                 f"{path}.postcondition",
-                "Turn off must become idle; turn on must become a non-idle status",
+                "Appliance interaction/category pair has no exact status pin",
+            )
+        expected_active_status = status_pin[1]
+        expected_status = expected_active_status if active else "idle"
+        if post["status"] != expected_status:
+            _fail(
+                "VISTA_INTERACTION_APPLIANCE_STATUS_INVALID",
+                f"{path}.postcondition",
+                "Appliance status differs from the exact category/action pin",
             )
 
 
@@ -618,6 +637,8 @@ def validate_bindings(
                 )
             _validate_action_state_contract(
                 action,
+                interaction_id=interaction["interaction_id"],
+                target_categories=interaction["target_categories"],
                 interaction_index=index,
                 action_index=action_index,
             )
@@ -656,8 +677,14 @@ def resolve_use(
     *,
     target_id: str,
     target_state: Mapping[str, Any],
+    runtime_context: Mapping[str, Any] | None = None,
 ) -> str:
-    """Resolve ``use`` to one concrete action or fail closed as ambiguous."""
+    """Resolve ``use`` and require every selected-action precondition.
+
+    Literal ``equals`` values are matched with exact Python types.  Symbolic
+    values such as ``$actor_id`` must be supplied as ``runtime_context`` keys;
+    they are never skipped or treated as wildcards.
+    """
 
     if not isinstance(bindings, ValidatedInteractionBindings):
         _fail(
@@ -675,24 +702,83 @@ def resolve_use(
             "$.target_id",
             "Target must have exactly one validated interaction binding",
         )
-    resolution = matches[0]["use_resolution"]
+    interaction = matches[0]
+    resolution = interaction["use_resolution"]
     if resolution["mode"] == "direct":
-        return resolution["direct_action_id"]
-    field = resolution["state_field"]
-    value = target_state.get(field)
-    if type(value) is not bool:
-        _fail(
-            "VISTA_INTERACTION_USE_STATE_INVALID",
-            f"$.target_state.{field}",
-            "Use dispatch requires an exact boolean runtime state",
-        )
-    selected = [
-        case["action_id"] for case in resolution["cases"] if case["equals"] is value
+        selected_action_id = resolution["direct_action_id"]
+    else:
+        field = resolution["state_field"]
+        if field not in target_state:
+            _fail(
+                "VISTA_INTERACTION_USE_PRECONDITION_MISSING",
+                f"$.target_state.{field}",
+                "Use dispatch state is missing",
+            )
+        value = target_state[field]
+        if type(value) is not bool:
+            _fail(
+                "VISTA_INTERACTION_USE_PRECONDITION_TYPE_MISMATCH",
+                f"$.target_state.{field}",
+                "Use dispatch requires an exact boolean runtime state",
+            )
+        selected = [
+            case["action_id"] for case in resolution["cases"] if case["equals"] is value
+        ]
+        if len(selected) != 1:
+            _fail(
+                "VISTA_INTERACTION_USE_AMBIGUOUS",
+                "$.target_state",
+                "Runtime state does not select exactly one concrete action",
+            )
+        selected_action_id = selected[0]
+
+    selected_actions = [
+        action
+        for action in interaction["actions"]
+        if action["action_id"] == selected_action_id
     ]
-    if len(selected) != 1:
+    if len(selected_actions) != 1:
         _fail(
             "VISTA_INTERACTION_USE_AMBIGUOUS",
-            "$.target_state",
-            "Runtime state does not select exactly one concrete action",
+            "$.action",
+            "Resolved use must identify one concrete action binding",
         )
-    return selected[0]
+    for precondition in selected_actions[0]["preconditions"]:
+        state_field = precondition["state_field"]
+        path = f"$.target_state.{state_field}"
+        if state_field not in target_state:
+            _fail(
+                "VISTA_INTERACTION_USE_PRECONDITION_MISSING",
+                path,
+                "Selected action precondition state is missing",
+            )
+        expected = precondition["value"]
+        if type(expected) is str and expected.startswith("$"):
+            context_key = expected[1:]
+            if runtime_context is None or context_key not in runtime_context:
+                _fail(
+                    "VISTA_INTERACTION_USE_CONTEXT_REQUIRED",
+                    f"$.runtime_context.{context_key}",
+                    "Symbolic action precondition requires explicit runtime context",
+                )
+            expected = runtime_context[context_key]
+            if type(expected) is not str or not expected:
+                _fail(
+                    "VISTA_INTERACTION_USE_CONTEXT_INVALID",
+                    f"$.runtime_context.{context_key}",
+                    "Symbolic action context must resolve to a non-empty string",
+                )
+        actual = target_state[state_field]
+        if expected is not None and type(actual) is not type(expected):
+            _fail(
+                "VISTA_INTERACTION_USE_PRECONDITION_TYPE_MISMATCH",
+                path,
+                "Selected action precondition state has the wrong exact type",
+            )
+        if actual != expected:
+            _fail(
+                "VISTA_INTERACTION_USE_PRECONDITION_FAILED",
+                path,
+                "Selected action precondition is not satisfied",
+            )
+    return selected_action_id
