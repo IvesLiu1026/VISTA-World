@@ -2,6 +2,7 @@
 
 // Modified in VISTA-World on 2026-08-22: report successful NPC interactions.
 
+#include "Engine/TargetPoint.h"
 #include "EngineUtils.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "NavigationSystem.h"
@@ -12,6 +13,8 @@
 #include "VistaHomeNpcCharacter.h"
 #include "VistaInteractable.h"
 #include "VistaItemCarrier.h"
+#include "VistaPickupActor.h"
+#include "VistaStatefulApplianceActor.h"
 
 namespace
 {
@@ -40,6 +43,32 @@ FString PlacementAnchorSemanticIdFor(const FVistaNpcAction& Action)
 {
     return Action.TargetSemanticId + PlacementAnchorDelimiter +
         Action.PlacementAnchorId;
+}
+
+TOptional<EVistaAffordance> AffordanceForAction(EVistaNpcActionType Type)
+{
+    switch (Type)
+    {
+    case EVistaNpcActionType::PickUp: return EVistaAffordance::PickUp;
+    case EVistaNpcActionType::Place: return EVistaAffordance::Place;
+    case EVistaNpcActionType::Drop: return EVistaAffordance::Drop;
+    case EVistaNpcActionType::OpenDoor: return EVistaAffordance::Open;
+    case EVistaNpcActionType::CloseDoor: return EVistaAffordance::Close;
+    case EVistaNpcActionType::Inspect: return EVistaAffordance::Inspect;
+    case EVistaNpcActionType::Toggle: return EVistaAffordance::Toggle;
+    case EVistaNpcActionType::Press: return EVistaAffordance::Press;
+    case EVistaNpcActionType::TurnOn: return EVistaAffordance::TurnOn;
+    case EVistaNpcActionType::TurnOff: return EVistaAffordance::TurnOff;
+    case EVistaNpcActionType::Sit: return EVistaAffordance::Sit;
+    default: return {};
+    }
+}
+
+bool SupportsAffordanceReadOnly(AActor* Target, EVistaAffordance Affordance)
+{
+    return IsValid(Target) &&
+        Target->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()) &&
+        IVistaInteractable::Execute_VistaGetAffordances(Target).Contains(Affordance);
 }
 } // namespace
 
@@ -177,6 +206,21 @@ bool AVistaHomeNpcController::ReplaceActionQueue(
     const TArray<FVistaNpcAction>& Actions,
     FName& OutCode)
 {
+    if (!ValidateQueueShape(Actions, OutCode))
+    {
+        return false;
+    }
+
+    CancelActionQueue(TEXT("QUEUE_REPLACED"));
+    ActionQueue = Actions;
+    OutCode = TEXT("QUEUE_REPLACED");
+    return true;
+}
+
+bool AVistaHomeNpcController::ValidateQueueShape(
+    const TArray<FVistaNpcAction>& Actions,
+    FName& OutCode) const
+{
     if (Actions.Num() > MaxQueueDepth)
     {
         OutCode = TEXT("QUEUE_DEPTH_EXCEEDED");
@@ -195,10 +239,179 @@ bool AVistaHomeNpcController::ReplaceActionQueue(
         }
         ActionIds.Add(Action.ActionId);
     }
+    OutCode = TEXT("QUEUE_SHAPE_VALID");
+    return true;
+}
 
-    CancelActionQueue(TEXT("QUEUE_REPLACED"));
-    ActionQueue = Actions;
-    OutCode = TEXT("QUEUE_REPLACED");
+bool AVistaHomeNpcController::PreflightActionQueue(
+    const TArray<FVistaNpcAction>& Actions,
+    FName& OutCode) const
+{
+    if (Actions.IsEmpty())
+    {
+        OutCode = TEXT("QUEUE_EMPTY");
+        return false;
+    }
+    if (!ValidateQueueShape(Actions, OutCode))
+    {
+        return false;
+    }
+    APawn* ControlledPawn = GetPawn();
+    if (!IsValid(ControlledPawn) || ControlledPawn->GetWorld() != GetWorld())
+    {
+        OutCode = TEXT("NPC_PAWN_UNAVAILABLE");
+        return false;
+    }
+    AActor* SimulatedHeldItem =
+        ControlledPawn->GetClass()->ImplementsInterface(UVistaItemCarrier::StaticClass())
+        ? IVistaItemCarrier::Execute_VistaGetHeldItem(ControlledPawn)
+        : nullptr;
+    for (const FVistaNpcAction& Action : Actions)
+    {
+        if (!ValidateActionTargetReadOnly(Action, SimulatedHeldItem, OutCode))
+        {
+            return false;
+        }
+    }
+    OutCode = TEXT("QUEUE_PREFLIGHT_OK");
+    return true;
+}
+
+bool AVistaHomeNpcController::ValidateActionTargetReadOnly(
+    const FVistaNpcAction& Action,
+    AActor*& InOutSimulatedHeldItem,
+    FName& OutCode) const
+{
+    if (!IsValid(GetPawn()))
+    {
+        OutCode = TEXT("NPC_PAWN_UNAVAILABLE");
+        return false;
+    }
+
+    if (Action.Type == EVistaNpcActionType::Drop)
+    {
+        AVistaPickupActor* HeldPickup =
+            Cast<AVistaPickupActor>(InOutSimulatedHeldItem);
+        if (!IsValid(HeldPickup))
+        {
+            OutCode = TEXT("NO_HELD_ITEM");
+            return false;
+        }
+        if (!SupportsAffordanceReadOnly(HeldPickup, EVistaAffordance::Drop))
+        {
+            OutCode = TEXT("AFFORDANCE_UNSUPPORTED");
+            return false;
+        }
+        InOutSimulatedHeldItem = nullptr;
+        OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
+        return true;
+    }
+
+    AActor* Target = Action.TargetSemanticId.IsEmpty()
+        ? nullptr : ResolveSemanticActor(Action.TargetSemanticId);
+    if (!Action.TargetSemanticId.IsEmpty() && !IsValid(Target))
+    {
+        OutCode = TEXT("TARGET_NOT_FOUND_OR_AMBIGUOUS");
+        return false;
+    }
+    if (Action.Type == EVistaNpcActionType::NavigateTo)
+    {
+        OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
+        return true;
+    }
+
+    if (Action.Type == EVistaNpcActionType::PickUp)
+    {
+        AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(Target);
+        if (!IsValid(Pickup))
+        {
+            OutCode = TEXT("PHYSICAL_TARGET_NOT_PICKUP");
+            return false;
+        }
+        if (!Pickup->bPortable)
+        {
+            OutCode = TEXT("ITEM_NOT_PORTABLE");
+            return false;
+        }
+        if (IsValid(InOutSimulatedHeldItem))
+        {
+            OutCode = TEXT("CARRIER_INVENTORY_STATE_MISMATCH");
+            return false;
+        }
+        if (IsValid(Pickup->GetCarrier()))
+        {
+            OutCode = TEXT("PHYSICAL_STATE_MISMATCH");
+            return false;
+        }
+        if (!SupportsAffordanceReadOnly(Pickup, EVistaAffordance::PickUp))
+        {
+            OutCode = TEXT("AFFORDANCE_UNSUPPORTED");
+            return false;
+        }
+        InOutSimulatedHeldItem = Pickup;
+        OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
+        return true;
+    }
+
+    if (Action.Type == EVistaNpcActionType::Place)
+    {
+        AVistaPickupActor* HeldPickup =
+            Cast<AVistaPickupActor>(InOutSimulatedHeldItem);
+        if (!IsValid(HeldPickup))
+        {
+            OutCode = TEXT("NO_HELD_ITEM");
+            return false;
+        }
+        if (!IsValid(Target))
+        {
+            OutCode = TEXT("PLACEMENT_OWNER_NOT_FOUND");
+            return false;
+        }
+        const FString AnchorSemanticId = PlacementAnchorSemanticIdFor(Action);
+        ATargetPoint* Anchor =
+            Cast<ATargetPoint>(ResolveSemanticActor(AnchorSemanticId));
+        const FName OwnerTag(
+            *(FString(TEXT("VistaOwner=")) + Action.TargetSemanticId));
+        const FName StableAnchorTag(
+            *(FString(TEXT("VistaSemanticId=")) + AnchorSemanticId));
+        if (!IsValid(Anchor) || !IsValid(Anchor->GetRootComponent()) ||
+            !Anchor->ActorHasTag(OwnerTag) ||
+            !Anchor->ActorHasTag(StableAnchorTag))
+        {
+            OutCode = TEXT("PLACEMENT_ANCHOR_NOT_FOUND_OR_INVALID");
+            return false;
+        }
+        if (!SupportsAffordanceReadOnly(HeldPickup, EVistaAffordance::Place))
+        {
+            OutCode = TEXT("AFFORDANCE_UNSUPPORTED");
+            return false;
+        }
+        InOutSimulatedHeldItem = nullptr;
+        OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
+        return true;
+    }
+
+    const TOptional<EVistaAffordance> Affordance =
+        AffordanceForAction(Action.Type);
+    if (Affordance.IsSet())
+    {
+        if (!IsValid(Target) ||
+            !SupportsAffordanceReadOnly(Target, Affordance.GetValue()))
+        {
+            OutCode = TEXT("AFFORDANCE_UNSUPPORTED");
+            return false;
+        }
+        if ((Action.Type == EVistaNpcActionType::Toggle ||
+             Action.Type == EVistaNpcActionType::Press ||
+             Action.Type == EVistaNpcActionType::TurnOn ||
+             Action.Type == EVistaNpcActionType::TurnOff) &&
+            !IsValid(Cast<AVistaStatefulApplianceActor>(Target)))
+        {
+            OutCode = TEXT("APPLIANCE_TARGET_REQUIRED");
+            return false;
+        }
+    }
+    OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
     return true;
 }
 
@@ -797,14 +1010,25 @@ AActor* AVistaHomeNpcController::ResolveSemanticActor(const FString& SemanticId)
     }
     const FName SemanticTag(*SemanticId);
     const FName StableSemanticTag(*(FString(TEXT("VistaSemanticId=")) + SemanticId));
+    AActor* Match = nullptr;
     for (TActorIterator<AActor> It(GetWorld()); It; ++It)
     {
         if (It->ActorHasTag(SemanticTag) || It->ActorHasTag(StableSemanticTag))
         {
-            return *It;
+            if (Match != nullptr)
+            {
+                return nullptr;
+            }
+            Match = *It;
         }
     }
-    return nullptr;
+    if (IsValid(Match) &&
+        Match->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()) &&
+        IVistaInteractable::Execute_VistaGetSemanticId(Match) != SemanticId)
+    {
+        return nullptr;
+    }
+    return Match;
 }
 
 FVistaInteractionResult AVistaHomeNpcController::ExecuteInteraction(
