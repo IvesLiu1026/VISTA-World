@@ -12,16 +12,16 @@ export LC_ALL=C LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin
 unset BASH_ENV ENV CDPATH GLOBIGNORE PYTHONHOME PYTHONPATH
 
 readonly SCHEMA='vista.r8-native-builder-r1-failure-seal/v1'
-readonly LIVE_SELF='/root/seal-vista-r8-native-builder-r1-failure-83f180e0-20260901.sh'
-readonly LOCK_PATH='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0-20260901.lock'
+readonly LIVE_SELF='/root/seal-vista-r8-native-builder-r1-failure-83f180e0-20260901b.sh'
+readonly LOCK_PATH='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0-20260901b.lock'
 # The authoritative seal lives below /root.  The candidate run's evidence
 # directory is intentionally owned by the unprivileged operator; using a
 # predictable child there would let that owner rename or substitute the child
 # while this root process is writing it.  A user-visible copy can be derived
 # only after this root-owned authority has closed.
 readonly EVIDENCE_PARENT='/root'
-readonly FINAL_NAME='vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901a'
-readonly STAGING_NAME='.vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901a.staging'
+readonly FINAL_NAME='vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901b'
+readonly STAGING_NAME='.vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901b.staging'
 readonly FINAL_PATH="${EVIDENCE_PARENT}/${FINAL_NAME}"
 readonly STAGING_PATH="${EVIDENCE_PARENT}/${STAGING_NAME}"
 
@@ -61,6 +61,10 @@ readonly FAILED_SEALER='/root/seal-vista-r8-native-builder-r1-failure-83f180e0.f
 readonly FAILED_SEALER_SHA256='518e9ecbf2f37d9bb70069e334a0e4ab5125cf6a8a756abd28be31aaa1641c90'
 readonly FAILED_SEALER_BYTES='31883'
 readonly FAILED_SEALER_LOCK='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0.lock'
+readonly FAILED_EMPTY_LOCK_SEALER='/root/seal-vista-r8-native-builder-r1-failure-83f180e0.failed-empty-lock-metadata-20260901b.sh'
+readonly FAILED_EMPTY_LOCK_SEALER_SHA256='109dbc378343c0309198d2c43b0772e124201609554440c63d80dc1c9b7101ba'
+readonly FAILED_EMPTY_LOCK_SEALER_BYTES='33118'
+readonly FAILED_EMPTY_LOCK_SEALER_LOCK='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0-20260901.lock'
 readonly EMPTY_SHA256='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 readonly R1_BUILDER_UID='997'
 readonly R1_BUILDER_GID='997'
@@ -123,6 +127,14 @@ assert_file() {
   [[ "$(/usr/bin/stat -Lc '%F|%a|%u|%g|%h|%s' -- "${path}")" == \
     "regular file|${mode}|${uid}|${gid}|1|${bytes}" ]] || fail "${label} metadata differs"
   [[ "$(sha256_of "${path}")" == "${sha}" ]] || fail "${label} SHA-256 differs"
+}
+
+assert_empty_file() {
+  local path="$1" mode="$2" uid="$3" gid="$4" label="$5"
+  [[ -f "${path}" && ! -L "${path}" ]] || fail "${label} is not closed regular"
+  [[ "$(/usr/bin/stat -Lc '%F|%a|%u|%g|%h|%s' -- "${path}")" == \
+    "regular empty file|${mode}|${uid}|${gid}|1|0" ]] || fail "${label} metadata differs"
+  [[ "$(sha256_of "${path}")" == "${EMPTY_SHA256}" ]] || fail "${label} SHA-256 differs"
 }
 
 assert_lock_file() {
@@ -469,7 +481,7 @@ assert_required_history() {
     '/root/vista-r8-native-builder-recovery-b7ead170-20260831b.sh' \
     '/root/vista-r8-native-builder-recovery-b7ead170-20260831c.sh' \
     '/root/vista-r8-native-builder-recovery-b7ead170-20260831d.sh' \
-    "${FAILED_SEALER}"; do
+    "${FAILED_SEALER}" "${FAILED_EMPTY_LOCK_SEALER}"; do
     [[ -e "${path}" || -L "${path}" ]] || fail "required append-only R1 history is absent: ${path}"
   done
   [[ ! -e '/root/vista-r8-native-builder-bootstrap-r1.failed-b7ead170-recovery-partial-20260831b' && \
@@ -477,8 +489,13 @@ assert_required_history() {
     fail 'successful recovery unexpectedly left its failure slot'
   assert_file "${FAILED_SEALER}" 500 0 0 "${FAILED_SEALER_SHA256}" \
     "${FAILED_SEALER_BYTES}" 'prior failed journal sealer'
-  assert_file "${FAILED_SEALER_LOCK}" 600 0 0 "${EMPTY_SHA256}" 0 \
-    'prior failed journal sealer lock'
+  assert_file "${FAILED_EMPTY_LOCK_SEALER}" 500 0 0 \
+    "${FAILED_EMPTY_LOCK_SEALER_SHA256}" "${FAILED_EMPTY_LOCK_SEALER_BYTES}" \
+    'prior failed empty-lock-metadata sealer'
+  assert_empty_file "${FAILED_SEALER_LOCK}" 600 0 0 'prior failed journal sealer lock'
+  [[ ! -e "${FAILED_EMPTY_LOCK_SEALER_LOCK}" && \
+    ! -L "${FAILED_EMPTY_LOCK_SEALER_LOCK}" ]] || \
+    fail 'prior empty-lock-metadata sealer unexpectedly created its fresh lock'
 }
 
 capture_cgroups() {

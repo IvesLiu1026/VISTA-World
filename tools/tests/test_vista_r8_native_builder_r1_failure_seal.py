@@ -44,7 +44,7 @@ def _secure_lock_probe(tmp_path: Path) -> tuple[Path, Path, Path]:
         _function_harness("")
         .replace(
             "readonly LIVE_SELF='/root/"
-            "seal-vista-r8-native-builder-r1-failure-83f180e0-20260901.sh'",
+            "seal-vista-r8-native-builder-r1-failure-83f180e0-20260901b.sh'",
             f"readonly LIVE_SELF='{probe}'",
         )
         .replace(
@@ -137,7 +137,7 @@ def test_fixed_evidence_contract_and_known_failure_pins() -> None:
         "vista.r8-native-builder-r1-failure-seal/v1",
         "EVIDENCE_PARENT='/root'",
         "FINAL_NAME='vista-r8-native-builder-r1-failure-seal-"
-        "b7ead170-83f180e0-20260901a'",
+        "b7ead170-83f180e0-20260901b'",
         "'81d481f1eb764c60a737835b867fcb63'",
         "'675339972529'",
         "'675341234136'",
@@ -199,6 +199,32 @@ def test_journal_boot_id_is_compacted_without_losing_kernel_evidence() -> None:
         check=False,
     )
     assert rejected.returncode != 0
+
+
+def test_empty_file_evidence_uses_gnu_stat_empty_type(tmp_path: Path) -> None:
+    fixture = tmp_path / "empty.lock"
+    fixture.write_bytes(b"")
+    fixture.chmod(0o600)
+    harness = _function_harness(
+        f'assert_empty_file "$1" 600 {os.getuid()} {os.getgid()} "fixture lock"'
+    )
+    accepted = subprocess.run(
+        ["/usr/bin/bash", "-c", harness, "fixture", str(fixture)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert accepted.returncode == 0, accepted.stderr
+
+    fixture.write_bytes(b"not empty")
+    rejected = subprocess.run(
+        ["/usr/bin/bash", "-c", harness, "fixture", str(fixture)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert rejected.returncode == 126
+    assert "metadata differs" in rejected.stderr
 
 
 def test_no_replace_lock_and_staging_only_cleanup_are_explicit() -> None:
@@ -288,8 +314,12 @@ def test_root_history_is_metadata_only_and_covers_prior_ceremonies() -> None:
     assert "failed-journal-boot-descriptor-20260901a.sh" in raw
     assert "518e9ecbf2f37d9bb70069e334a0e4ab5125cf6a8a756abd28be31aaa1641c90" in raw
     assert 'assert_file "${FAILED_SEALER}" 500 0 0' in raw
+    assert "failed-empty-lock-metadata-20260901b.sh" in raw
+    assert "109dbc378343c0309198d2c43b0772e124201609554440c63d80dc1c9b7101ba" in raw
+    assert 'assert_file "${FAILED_EMPTY_LOCK_SEALER}" 500 0 0' in raw
     assert 'emit_record "${FAILED_SEALER_LOCK}"' in raw
-    assert 'assert_file "${FAILED_SEALER_LOCK}" 600 0 0 "${EMPTY_SHA256}" 0' in raw
+    assert 'assert_empty_file "${FAILED_SEALER_LOCK}" 600 0 0' in raw
+    assert '[[ ! -e "${FAILED_EMPTY_LOCK_SEALER_LOCK}"' in raw
     assert "seal-vista-r8-native-builder-r1-failure-*.sh" in raw
     assert not re.search(r"(?:cp|install).*ROOT_HISTORY", raw)
 
