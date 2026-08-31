@@ -16,6 +16,13 @@ BUILD_RULES = PLUGIN / "VistaPlayableHome.Build.cs"
 PLUGIN_DESCRIPTOR = (
     ROOT / "unreal_plugins" / "VistaPlayableHome" / "VistaPlayableHome.uplugin"
 )
+PLUGIN_CONFIG = (
+    ROOT
+    / "unreal_plugins"
+    / "VistaPlayableHome"
+    / "Config"
+    / "DefaultVistaPlayableHome.ini"
+)
 
 
 def test_provider_selection_is_default_manny_and_closed_to_one_reviewed_class() -> None:
@@ -196,6 +203,99 @@ def test_citysample_visual_uses_hidden_manny_retarget_without_crowd_loop() -> No
     assert activation.index("ValidateCitySampleVisualDemo(") < activation.index(
         "SetMannyFallbackVisible(OwnerCharacter, false)"
     )
+
+
+def test_citysample_visual_fit_is_configurable_measured_and_fail_closed() -> None:
+    header = PROVIDER_HEADER.read_text(encoding="utf-8")
+    source = PROVIDER_SOURCE.read_text(encoding="utf-8")
+    config = PLUGIN_CONFIG.read_text(encoding="utf-8")
+    activation = source.split(
+        "bool UVistaCharacterProviderComponent::"
+        "ActivateAllowlistedCitySampleVisualDemo",
+        1,
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::NeutralizeCitySampleCharacter", 1
+    )[0]
+    configure = source.split(
+        "bool UVistaCharacterProviderComponent::ConfigureCitySampleVisualFit", 1
+    )[1].split("bool UVistaCharacterProviderComponent::ValidateCitySampleVisualFit", 1)[
+        0
+    ]
+    validate_fit = source.split(
+        "bool UVistaCharacterProviderComponent::ValidateCitySampleVisualFit", 1
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::ValidateCitySampleVisualDemo", 1
+    )[0]
+    validate_demo = source.split(
+        "bool UVistaCharacterProviderComponent::ValidateCitySampleVisualDemo", 1
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::ValidateMetaHumanVisualShell", 1
+    )[0]
+
+    for field, default, clamp_max in (
+        ("CitySampleVisualScale", "0.90f", 'ClampMax = "1.00"'),
+        ("CitySampleVisualFloorClearanceCm", "1.0f", 'ClampMax = "5.00"'),
+        ("CitySampleVisualTopClearanceCm", "2.0f", 'ClampMax = "10.00"'),
+    ):
+        assert field in header
+        assert "Config" in header.split(field, 1)[0].rsplit("UPROPERTY", 1)[1]
+        assert clamp_max in header.split(field, 1)[0].rsplit("UPROPERTY", 1)[1]
+        assert f"{field} = {default};" in header
+    assert "[/Script/VistaPlayableHome.VistaCharacterProviderComponent]" in config
+    assert "CitySampleVisualScale=0.900000" in config
+    assert "CitySampleVisualFloorClearanceCm=1.000000" in config
+    assert "CitySampleVisualTopClearanceCm=2.000000" in config
+
+    assert (
+        activation.index("ConfigureMetaHumanRetarget(")
+        < activation.index("ConfigureCitySampleVisualFit(")
+        < activation.index("ValidateCitySampleVisualDemo(")
+    )
+    assert (
+        "VisualCharacter.SetActorRelativeScale3D(FVector(CitySampleVisualScale))"
+        in configure
+    )
+    assert "TryMeasureVisibleSkeletalBounds(VisualCharacter, VisualBounds)" in configure
+    assert "VisualBounds.GetSize().Z" in configure
+    assert "OwnerCapsule->GetScaledCapsuleHalfHeight()" in configure
+    assert "VisualCharacter.AddActorWorldOffset(" in configure
+    assert "ETeleportType::TeleportPhysics" in configure
+    assert "ValidateCitySampleVisualFit(" in configure
+    assert "VISTA_CITYSAMPLE_VISUAL_FIT" in configure
+
+    for function in (configure, validate_fit):
+        assert "ECollisionEnabled::NoCollision" in function
+        assert "GetCollisionResponseToChannel(ECC_WorldStatic) != ECR_Block" in function
+        assert (
+            "GetCollisionResponseToChannel(ECC_WorldDynamic) != ECR_Block" in function
+        )
+        assert "citysample_visual_demo_capsule_authority_invalid" in function
+    assert "citysample_visual_demo_scaled_height_exceeds_capsule" in configure
+    assert "citysample_visual_demo_capsule_alignment_invalid" in validate_fit
+    assert "ValidateCitySampleVisualFit(" in validate_demo
+
+
+def test_citysample_visual_fit_keeps_visual_collision_disabled() -> None:
+    source = PROVIDER_SOURCE.read_text(encoding="utf-8")
+    configure = source.split(
+        "bool UVistaCharacterProviderComponent::ConfigureCitySampleVisualFit", 1
+    )[1].split("bool UVistaCharacterProviderComponent::ValidateCitySampleVisualFit", 1)[
+        0
+    ]
+    neutralize = source.split(
+        "bool UVistaCharacterProviderComponent::NeutralizeCitySampleCharacter", 1
+    )[1].split(
+        "bool UVistaCharacterProviderComponent::ConfigureCitySampleVisualFit", 1
+    )[0]
+
+    assert "SetCollisionEnabled" not in configure
+    assert "SetCollisionResponse" not in configure
+    assert "VisualCharacter.SetActorEnableCollision(false)" in neutralize
+    assert (
+        "VisualCapsule->SetCollisionEnabled(ECollisionEnabled::NoCollision)"
+        in neutralize
+    )
+    assert "DisableVisualCollision(VisualCharacter)" in neutralize
 
 
 def test_citysample_status_makes_no_runtime_fidelity_or_ai_use_claim() -> None:

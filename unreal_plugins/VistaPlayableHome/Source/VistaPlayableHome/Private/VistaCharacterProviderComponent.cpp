@@ -72,6 +72,11 @@ const TCHAR* MakeHumanCc0R8AnimBlueprintClassPath =
 
 const FName BodyComponentName(TEXT("Body"));
 const FName FaceComponentName(TEXT("Face"));
+constexpr float CitySampleVisualScaleMinimum = 0.75f;
+constexpr float CitySampleVisualScaleMaximum = 1.00f;
+constexpr float CitySampleFloorClearanceMaximumCm = 5.0f;
+constexpr float CitySampleTopClearanceMaximumCm = 10.0f;
+constexpr float CitySampleVisualFitToleranceCm = 0.5f;
 }
 
 UVistaCharacterProviderComponent::UVistaCharacterProviderComponent()
@@ -582,6 +587,10 @@ bool UVistaCharacterProviderComponent::ActivateAllowlistedCitySampleVisualDemo(
                     *VisualCharacter,
                     *LoadedRetargetAsset,
                     FailureCode) &&
+                ConfigureCitySampleVisualFit(
+                    OwnerCharacter,
+                    *VisualCharacter,
+                    FailureCode) &&
                 ValidateCitySampleVisualDemo(
                     OwnerCharacter,
                     *VisualCharacter,
@@ -702,6 +711,156 @@ bool UVistaCharacterProviderComponent::NeutralizeCitySampleCharacter(
     return true;
 }
 
+bool UVistaCharacterProviderComponent::ConfigureCitySampleVisualFit(
+    ACharacter& OwnerCharacter,
+    ACharacter& VisualCharacter,
+    FName& OutFailureCode) const
+{
+    UCapsuleComponent* OwnerCapsule = OwnerCharacter.GetCapsuleComponent();
+    if (!IsValid(OwnerCapsule) || !OwnerCapsule->IsRegistered() ||
+        OwnerCapsule->GetCollisionEnabled() == ECollisionEnabled::NoCollision ||
+        OwnerCapsule->GetCollisionResponseToChannel(ECC_WorldStatic) != ECR_Block ||
+        OwnerCapsule->GetCollisionResponseToChannel(ECC_WorldDynamic) != ECR_Block)
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_capsule_authority_invalid");
+        return false;
+    }
+
+    const bool bFitConfigValid =
+        FMath::IsFinite(CitySampleVisualScale) &&
+        CitySampleVisualScale >= CitySampleVisualScaleMinimum &&
+        CitySampleVisualScale <= CitySampleVisualScaleMaximum &&
+        FMath::IsFinite(CitySampleVisualFloorClearanceCm) &&
+        CitySampleVisualFloorClearanceCm >= 0.0f &&
+        CitySampleVisualFloorClearanceCm <=
+            CitySampleFloorClearanceMaximumCm &&
+        FMath::IsFinite(CitySampleVisualTopClearanceCm) &&
+        CitySampleVisualTopClearanceCm >= 0.0f &&
+        CitySampleVisualTopClearanceCm <= CitySampleTopClearanceMaximumCm;
+    if (!bFitConfigValid || !IsValid(VisualCharacter.GetRootComponent()))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_fit_config_invalid");
+        return false;
+    }
+
+    // Apply one reviewed uniform scale at the visual actor root. Do not scale
+    // the VISTA pawn, authoritative capsule, navigation agent or retarget source.
+    VisualCharacter.SetActorRelativeScale3D(FVector(CitySampleVisualScale));
+
+    FBox VisualBounds(ForceInit);
+    if (!TryMeasureVisibleSkeletalBounds(VisualCharacter, VisualBounds))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_bounds_unavailable");
+        return false;
+    }
+
+    const float CapsuleHalfHeightCm = OwnerCapsule->GetScaledCapsuleHalfHeight();
+    const float CapsuleBottomCm =
+        OwnerCapsule->GetComponentLocation().Z - CapsuleHalfHeightCm;
+    const float CapsuleTopCm =
+        OwnerCapsule->GetComponentLocation().Z + CapsuleHalfHeightCm;
+    const float TargetVisualBottomCm =
+        CapsuleBottomCm + CitySampleVisualFloorClearanceCm;
+    const float MaximumVisualTopCm =
+        CapsuleTopCm - CitySampleVisualTopClearanceCm;
+    const float VisualHeightCm = VisualBounds.GetSize().Z;
+    if (!FMath::IsFinite(CapsuleHalfHeightCm) || CapsuleHalfHeightCm <= 0.0f ||
+        !FMath::IsFinite(VisualHeightCm) || VisualHeightCm <= 0.0f ||
+        TargetVisualBottomCm + VisualHeightCm >
+            MaximumVisualTopCm + CitySampleVisualFitToleranceCm)
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_scaled_height_exceeds_capsule");
+        return false;
+    }
+
+    const float VerticalOffsetCm = TargetVisualBottomCm - VisualBounds.Min.Z;
+    if (!FMath::IsFinite(VerticalOffsetCm))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_alignment_offset_invalid");
+        return false;
+    }
+    VisualCharacter.AddActorWorldOffset(
+        FVector(0.0f, 0.0f, VerticalOffsetCm),
+        false,
+        nullptr,
+        ETeleportType::TeleportPhysics);
+
+    if (!ValidateCitySampleVisualFit(
+            OwnerCharacter,
+            VisualCharacter,
+            OutFailureCode))
+    {
+        return false;
+    }
+
+    UE_LOG(
+        LogVistaCharacterProvider,
+        Display,
+        TEXT("VISTA_CITYSAMPLE_VISUAL_FIT scale=%.3f offset_cm=%.3f "
+             "height_cm=%.3f capsule_half_height_cm=%.3f"),
+        CitySampleVisualScale,
+        VerticalOffsetCm,
+        VisualHeightCm,
+        CapsuleHalfHeightCm);
+    OutFailureCode = NAME_None;
+    return true;
+}
+
+bool UVistaCharacterProviderComponent::ValidateCitySampleVisualFit(
+    ACharacter& OwnerCharacter,
+    ACharacter& VisualCharacter,
+    FName& OutFailureCode) const
+{
+    const UCapsuleComponent* OwnerCapsule = OwnerCharacter.GetCapsuleComponent();
+    if (!IsValid(OwnerCapsule) || !OwnerCapsule->IsRegistered() ||
+        OwnerCapsule->GetCollisionEnabled() == ECollisionEnabled::NoCollision ||
+        OwnerCapsule->GetCollisionResponseToChannel(ECC_WorldStatic) != ECR_Block ||
+        OwnerCapsule->GetCollisionResponseToChannel(ECC_WorldDynamic) != ECR_Block)
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_capsule_authority_invalid");
+        return false;
+    }
+
+    const FVector AppliedScale = VisualCharacter.GetActorRelativeScale3D();
+    if (!AppliedScale.Equals(
+            FVector(CitySampleVisualScale),
+            KINDA_SMALL_NUMBER))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_scale_not_applied");
+        return false;
+    }
+
+    FBox VisualBounds(ForceInit);
+    if (!TryMeasureVisibleSkeletalBounds(VisualCharacter, VisualBounds))
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_bounds_unavailable");
+        return false;
+    }
+
+    const float CapsuleHalfHeightCm = OwnerCapsule->GetScaledCapsuleHalfHeight();
+    const float CapsuleBottomCm =
+        OwnerCapsule->GetComponentLocation().Z - CapsuleHalfHeightCm;
+    const float CapsuleTopCm =
+        OwnerCapsule->GetComponentLocation().Z + CapsuleHalfHeightCm;
+    const float TargetVisualBottomCm =
+        CapsuleBottomCm + CitySampleVisualFloorClearanceCm;
+    const float MaximumVisualTopCm =
+        CapsuleTopCm - CitySampleVisualTopClearanceCm;
+    if (!FMath::IsNearlyEqual(
+            VisualBounds.Min.Z,
+            TargetVisualBottomCm,
+            CitySampleVisualFitToleranceCm) ||
+        VisualBounds.Max.Z >
+            MaximumVisualTopCm + CitySampleVisualFitToleranceCm)
+    {
+        OutFailureCode = TEXT("citysample_visual_demo_capsule_alignment_invalid");
+        return false;
+    }
+
+    OutFailureCode = NAME_None;
+    return true;
+}
+
 bool UVistaCharacterProviderComponent::ValidateCitySampleVisualDemo(
     ACharacter& OwnerCharacter,
     ACharacter& VisualCharacter,
@@ -715,6 +874,14 @@ bool UVistaCharacterProviderComponent::ValidateCitySampleVisualDemo(
         VisualCharacter.AIControllerClass != nullptr)
     {
         OutFailureCode = TEXT("citysample_visual_demo_not_pure_visual");
+        return false;
+    }
+
+    if (!ValidateCitySampleVisualFit(
+            OwnerCharacter,
+            VisualCharacter,
+            OutFailureCode))
+    {
         return false;
     }
 
@@ -940,6 +1107,33 @@ USkeletalMeshComponent* UVistaCharacterProviderComponent::FindNamedSkeletalMesh(
         }
     }
     return nullptr;
+}
+
+bool UVistaCharacterProviderComponent::TryMeasureVisibleSkeletalBounds(
+    AActor& VisualActor,
+    FBox& OutBounds)
+{
+    OutBounds = FBox(ForceInit);
+    TInlineComponentArray<USkeletalMeshComponent*> VisualMeshes;
+    VisualActor.GetComponents(VisualMeshes);
+    for (USkeletalMeshComponent* VisualMesh : VisualMeshes)
+    {
+        if (!IsValid(VisualMesh) || !VisualMesh->IsRegistered() ||
+            !VisualMesh->IsVisible() ||
+            !IsValid(VisualMesh->GetSkeletalMeshAsset()))
+        {
+            continue;
+        }
+        VisualMesh->UpdateBounds();
+        const FBox ComponentBounds = VisualMesh->Bounds.GetBox();
+        if (ComponentBounds.IsValid &&
+            !ComponentBounds.Min.ContainsNaN() &&
+            !ComponentBounds.Max.ContainsNaN())
+        {
+            OutBounds += ComponentBounds;
+        }
+    }
+    return OutBounds.IsValid != 0;
 }
 
 bool UVistaCharacterProviderComponent::HasReadyGroomOrHairComponent(
