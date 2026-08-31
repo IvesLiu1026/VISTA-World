@@ -58,6 +58,38 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "VISTA|Character Provider")
     bool bAllowCommandLineProviderOverride = false;
 
+    /**
+     * Explicit uniform scale for the licensed City Sample visual shell. The
+     * shell is still visual-only: movement and collision remain on the owning
+     * VISTA character capsule. Runtime fit validation rejects invalid config or
+     * a scaled shell that cannot fit inside that capsule vertically.
+     */
+    UPROPERTY(
+        EditAnywhere,
+        Config,
+        BlueprintReadOnly,
+        Category = "VISTA|Character Provider|City Sample Visual Fit",
+        meta = (ClampMin = "0.75", ClampMax = "1.00", UIMin = "0.75", UIMax = "1.00"))
+    float CitySampleVisualScale = 0.90f;
+
+    /** Clearance between the measured visual feet and authoritative capsule bottom. */
+    UPROPERTY(
+        EditAnywhere,
+        Config,
+        BlueprintReadOnly,
+        Category = "VISTA|Character Provider|City Sample Visual Fit",
+        meta = (ClampMin = "0.00", ClampMax = "5.00", UIMin = "0.00", UIMax = "5.00"))
+    float CitySampleVisualFloorClearanceCm = 1.0f;
+
+    /** Required headroom below the authoritative capsule top after scaling. */
+    UPROPERTY(
+        EditAnywhere,
+        Config,
+        BlueprintReadOnly,
+        Category = "VISTA|Character Provider|City Sample Visual Fit",
+        meta = (ClampMin = "0.00", ClampMax = "10.00", UIMin = "0.00", UIMax = "10.00"))
+    float CitySampleVisualTopClearanceCm = 2.0f;
+
     UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "VISTA|Character Provider")
     FName ActiveProviderId = TEXT("manny");
 
@@ -107,6 +139,14 @@ private:
         ACharacter& OwnerCharacter,
         ACharacter& VisualCharacter,
         FName& OutFailureCode) const;
+    bool ConfigureCitySampleVisualFit(
+        ACharacter& OwnerCharacter,
+        ACharacter& VisualCharacter,
+        FName& OutFailureCode) const;
+    bool ValidateCitySampleVisualFit(
+        ACharacter& OwnerCharacter,
+        ACharacter& VisualCharacter,
+        FName& OutFailureCode) const;
     bool ValidateCitySampleVisualDemo(
         ACharacter& OwnerCharacter,
         ACharacter& VisualCharacter,
@@ -125,6 +165,9 @@ private:
     static USkeletalMeshComponent* FindNamedSkeletalMesh(
         AActor& VisualActor,
         FName ComponentName);
+    static bool TryMeasureVisibleSkeletalBounds(
+        AActor& VisualActor,
+        FBox& OutBounds);
     static bool HasReadyGroomOrHairComponent(AActor& VisualActor);
     static void DisableVisualCollision(AActor& VisualActor);
     static void SetMannyFallbackVisible(
