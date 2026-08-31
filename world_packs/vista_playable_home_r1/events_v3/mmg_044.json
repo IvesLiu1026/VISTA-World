@@ -1,0 +1,29 @@
+{
+  "schema_version": "simworld.vista.playable-event/v3",
+  "event_id": "mmg_044",
+  "compatible_house": {"house_id": "home.r1", "revision": "vista_playable_home_r1", "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"},
+  "action_catalog": {"schema_version": "vista.playable-action-catalog/v3", "catalog_id": "vista_indoor_actions", "catalog_revision": "vista_indoor_actions_r3", "content_digest": "0f761a4481586c7a684a7cddd188a6adae0ca67b8931fe3a757c6b62a79191cf"},
+  "interaction_bindings": {"schema_version": "vista.playable-interaction-bindings/v1", "binding_id": "vista_home_interactions", "binding_revision": "vista_home_interactions_r1", "content_digest": "261543543ee5370f0ef784a4d44c96351d4e367447046dfd4e40192f955ea0a0"},
+  "derivation": {
+    "base_event_schema_version": "simworld.vista.playable-event/v1",
+    "base_event_id": "mmg_044",
+    "base_event_content_digest": "6d7487760faed67dba961d8c7acbd07476af1c4d197160263f4b413bd9a60340",
+    "source_v2_event": {"schema_version": "simworld.vista.playable-event/v2", "event_id": "mmg_044", "content_digest": "7016f46cc55dde9b9ae8c4e4506090711333fa68da427505582f979ec2467508"},
+    "change_scope": "append_digest_bound_interaction_queue"
+  },
+  "npc_action_queues": [
+    {
+      "queue_id": "op.04",
+      "npc_id": "npc.resident",
+      "replace": true,
+      "actions": [
+        {"action": "navigate_to", "room_id": "home.r1/room.living_room"},
+        {"action": "inspect", "target_id": "home.r1/room.living_room/entity.keys.01"},
+        {"action": "pick_up", "target_id": "home.r1/room.living_room/entity.keys.01"},
+        {"action": "navigate_to", "room_id": "home.r1/room.entry_hall"},
+        {"action": "drop"}
+      ]
+    }
+  ],
+  "content_digest": "ed710555511eaf4280ac26ac831bf276147684c5f0fa5c75f67089baa7d9092d"
+}
