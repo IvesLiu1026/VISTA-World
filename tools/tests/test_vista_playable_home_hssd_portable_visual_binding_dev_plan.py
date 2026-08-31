@@ -120,6 +120,13 @@ def test_plan_seals_completed_fridge_source_and_two_closed_bindings(
         module.binding_contract.ABSENT_SHELL_DISPOSITION,
         module.binding_contract.DELETE_SHELL_DISPOSITION,
     )
+    assert tuple(
+        row["source_presentation"]["disposition"]
+        for row in execution["bindings"]
+    ) == (
+        module.binding_contract.EXACT_SOURCE_PRESENTATION,
+        module.binding_contract.NO_SOURCE_PRESENTATION,
+    )
     assert (
         paths["attempt"] / "inputs/hssd-portable-visual-binding-contract.json"
     ).is_file()

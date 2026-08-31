@@ -104,6 +104,7 @@
         "pickup_world_transform_cm",
         "pickup_root_component_name",
         "pickup_root_mesh_object_path",
+        "source_presentation",
         "presentation_component_name",
         "presentation_relative_transform",
         "presentation_policy"
@@ -147,6 +148,27 @@
         "pickup_world_transform_cm": {"$ref": "#/$defs/transform"},
         "pickup_root_component_name": {"const": "PickupMesh"},
         "pickup_root_mesh_object_path": {"type": "string", "pattern": "^/Game/VISTA/PlayableHome/.+\\..+$"},
+        "source_presentation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["disposition", "mesh_object_path", "relative_transform", "visible"],
+          "properties": {
+            "disposition": {
+              "enum": [
+                "exact_existing_presentation_to_replace",
+                "no_existing_presentation"
+              ]
+            },
+            "mesh_object_path": {
+              "oneOf": [
+                {"type": "string", "pattern": "^/Game/.+\\..+$"},
+                {"type": "null"}
+              ]
+            },
+            "relative_transform": {"$ref": "#/$defs/transform"},
+            "visible": {"type": "boolean"}
+          }
+        },
         "presentation_component_name": {"const": "PresentationMesh"},
         "presentation_relative_transform": {"$ref": "#/$defs/transform"},
         "presentation_policy": {

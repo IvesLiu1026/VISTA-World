@@ -41,6 +41,8 @@ EXPECTED_SEMANTIC_IDS = (
 )
 ABSENT_SHELL_DISPOSITION = "already_absent_source_shell"
 DELETE_SHELL_DISPOSITION = "exact_visual_shell_to_delete"
+EXACT_SOURCE_PRESENTATION = "exact_existing_presentation_to_replace"
+NO_SOURCE_PRESENTATION = "no_existing_presentation"
 EXPECTED_SHELL_DISPOSITIONS = (
     ABSENT_SHELL_DISPOSITION,
     DELETE_SHELL_DISPOSITION,
@@ -62,6 +64,16 @@ EXPECTED_BINDINGS = {
             "scale": [1, 1, 1],
         },
         "interaction_authority": "hidden_r1_proxy_query_authority_repaired",
+        "source_presentation": {
+            "disposition": EXACT_SOURCE_PRESENTATION,
+            "mesh_object_path": "/Game/CitySampleCrowd/Character/Accessories/cupA.cupA",
+            "relative_transform": {
+                "location_cm": [0, 0, 3.448716],
+                "rotation_deg": [0, 0, 0],
+                "scale": [0.775532, 0.775532, 0.775532],
+            },
+            "visible": True,
+        },
     },
     EXPECTED_SEMANTIC_IDS[1]: {
         "instance_id": "hssd.r1/living_room.slipper.01",
@@ -83,6 +95,16 @@ EXPECTED_BINDINGS = {
             "scale": [1, 1, 1],
         },
         "interaction_authority": "none_visual_dressing",
+        "source_presentation": {
+            "disposition": NO_SOURCE_PRESENTATION,
+            "mesh_object_path": None,
+            "relative_transform": {
+                "location_cm": [0, 0, 0],
+                "rotation_deg": [0, 0, 0],
+                "scale": [1, 1, 1],
+            },
+            "visible": False,
+        },
     },
 }
 
@@ -357,7 +379,8 @@ def validate_contract(
             binding["hssd_mesh_object_path"] == expected["hssd_mesh"]
             and binding["pickup_root_mesh_object_path"] == expected["root_mesh"]
             and binding["shell_actor_label"] == expected["shell_label"]
-            and binding["pickup_actor_label"] == expected["pickup_label"],
+            and binding["pickup_actor_label"] == expected["pickup_label"]
+            and binding["source_presentation"] == expected["source_presentation"],
             f"closed actor/mesh path binding differs: {semantic}",
         )
         expected_shell_tags = {
