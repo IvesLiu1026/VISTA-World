@@ -235,20 +235,77 @@ def test_exact_deletable_shell_rejects_duplicate_identity_instead_of_find_first(
     assert "next(" not in helper_source
 
 
-def test_mobility_normalizer_accepts_ue57_static_enum_surface(
+def test_mobility_normalizer_accepts_exact_enum_and_closed_ue57_aliases(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     commandlet = _load_helpers(monkeypatch)
 
-    class Mobility:
+    class EnumMember:
         def __str__(self) -> str:
-            return "ComponentMobility.STATIC"
+            return "must-not-be-used-for-an-exact-enum-member"
 
-    assert commandlet.mobility_label(Mobility()) == "Static"
-    assert commandlet.mobility_label("Static") == "Static"
-    assert commandlet.mobility_label("ComponentMobility.MOVABLE") == "Movable"
+    static = EnumMember()
+    stationary = EnumMember()
+    movable = EnumMember()
+    commandlet.unreal.ComponentMobility = types.SimpleNamespace(
+        STATIC=static,
+        STATIONARY=stationary,
+        MOVABLE=movable,
+    )
+    assert commandlet.mobility_label(static) == "Static"
+    assert commandlet.mobility_label(stationary) == "Stationary"
+    assert commandlet.mobility_label(movable) == "Movable"
+
+    aliases = {
+        "Static": "Static",
+        "Stationary": "Stationary",
+        "Movable": "Movable",
+        "ComponentMobility.STATIC": "Static",
+        "ComponentMobility.STATIONARY": "Stationary",
+        "ComponentMobility.MOVABLE": "Movable",
+        "<ComponentMobility.STATIC: 0>": "Static",
+        "<ComponentMobility.STATIONARY: 1>": "Stationary",
+        "<ComponentMobility.MOVABLE: 2>": "Movable",
+    }
+    for token, expected in aliases.items():
+        assert commandlet.mobility_label(token) == expected
+
+
+@pytest.mark.parametrize(
+    "token",
+    (
+        "<ComponentMobility.STATIC: 1>",
+        "<ComponentMobility.STATIC: 2>",
+        "<ComponentMobility.STATIONARY: 0>",
+        "<ComponentMobility.STATIONARY: 2>",
+        "<ComponentMobility.MOVABLE: 0>",
+        "<ComponentMobility.MOVABLE: 1>",
+        "ComponentMobility.NOT_STATIC",
+        "<ComponentMobility.NOT_STATIC: 0>",
+        "prefix<ComponentMobility.STATIC: 0>suffix",
+        "MOVABLE",
+        "ComponentMobility.FLYING",
+        "<ComponentMobility.FLYING: 3>",
+    ),
+)
+def test_mobility_normalizer_rejects_mismatches_substrings_and_unknowns(
+    monkeypatch: pytest.MonkeyPatch, token: str
+) -> None:
+    commandlet = _load_helpers(monkeypatch)
     with pytest.raises(RuntimeError, match="outside the closed enum"):
-        commandlet.mobility_label("ComponentMobility.NOT_STATIC")
+        commandlet.mobility_label(token)
+
+
+def test_mobility_normalizer_bounds_diagnostic_repr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commandlet = _load_helpers(monkeypatch)
+    token = "unknown-" + "x" * 200 + "-sensitive-tail"
+    with pytest.raises(RuntimeError) as caught:
+        commandlet.mobility_label(token)
+    message = str(caught.value)
+    assert token[:96] in message
+    assert "sensitive-tail" not in message
 
 
 def test_exact_shell_tags_reject_conflicting_safety_authority(
