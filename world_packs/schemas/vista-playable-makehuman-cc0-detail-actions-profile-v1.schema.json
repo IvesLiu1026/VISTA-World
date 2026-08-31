@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/IvesLiu1026/VISTA-World/world_packs/schemas/vista-playable-makehuman-cc0-detail-actions-profile-v1.schema.json",
+  "title": "VISTA MakeHuman CC0 Detail Actions R14 Profile V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "character_id",
+    "namespace_contract",
+    "source_character_binding",
+    "rig_contract",
+    "license_scope",
+    "provenance",
+    "quality_contract",
+    "clips",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "vista.makehuman-cc0-detail-actions-profile/v1"},
+    "profile_id": {"const": "makehuman_cc0_detail_actions_r14"},
+    "character_id": {"const": "makehuman_cc0_eurasian_female_arkit_v3"},
+    "namespace_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_namespace", "ue_content_namespace", "artifact_namespace", "existing_r8_bytes_reused"],
+      "properties": {
+        "source_namespace": {"const": "vista.makehuman-cc0-detail-actions/r14"},
+        "ue_content_namespace": {"const": "/Game/VISTA/MakeHumanCC0/R14/DetailActions"},
+        "artifact_namespace": {"const": "makehuman_cc0_detail_actions_r14"},
+        "existing_r8_bytes_reused": {"const": false}
+      }
+    },
+    "source_character_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_character_asset_lane", "character_id", "armature_name", "bone_count", "motion_source_policy", "r8_animation_artifact_dependency"],
+      "properties": {
+        "source_character_asset_lane": {"const": "makehuman_cc0_character_r6"},
+        "character_id": {"const": "makehuman_cc0_eurasian_female_arkit_v3"},
+        "armature_name": {"const": "VISTA_CC0_Hero_Rig_export"},
+        "bone_count": {"const": 53},
+        "motion_source_policy": {"const": "fresh_numeric_recipes_only"},
+        "r8_animation_artifact_dependency": {"const": "none"}
+      }
+    },
+    "rig_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["armature_name", "root_bone", "bone_count", "coordinate_system"],
+      "properties": {
+        "armature_name": {"const": "VISTA_CC0_Hero_Rig_export"},
+        "root_bone": {"const": "root"},
+        "bone_count": {"const": 53},
+        "coordinate_system": {"const": "blender_m_z_up_ue_export_minus_y_forward"}
+      }
+    },
+    "license_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["character_source_spdx", "motion_recipe_spdx", "external_binary_policy"],
+      "properties": {
+        "character_source_spdx": {"const": "CC0-1.0"},
+        "motion_recipe_spdx": {"const": "CC0-1.0"},
+        "external_binary_policy": {"const": "outside_git_only"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "motion_origin",
+        "contains_manny_derived_motion",
+        "contains_metahuman_motion",
+        "contains_city_sample_motion",
+        "contains_simworld_motion",
+        "contains_motion_capture"
+      ],
+      "properties": {
+        "motion_origin": {"const": "project_authored_numeric_keyframes"},
+        "contains_manny_derived_motion": {"const": false},
+        "contains_metahuman_motion": {"const": false},
+        "contains_city_sample_motion": {"const": false},
+        "contains_simworld_motion": {"const": false},
+        "contains_motion_capture": {"const": false}
+      }
+    },
+    "quality_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["anticipation_contact_follow_through_required", "pickup_clip_reuse_prohibited", "human_motion_review_required", "runtime_acceptance_default"],
+      "properties": {
+        "anticipation_contact_follow_through_required": {"const": true},
+        "pickup_clip_reuse_prohibited": {"const": true},
+        "human_motion_review_required": {"const": true},
+        "runtime_acceptance_default": {"const": false}
+      }
+    },
+    "clips": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/clip"}
+    },
+    "content_digest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "notify": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frame", "kind", "signal"],
+      "properties": {
+        "frame": {"type": "integer", "minimum": 0, "maximum": 120},
+        "kind": {"enum": ["contact", "completion"]},
+        "signal": {"type": "string", "pattern": "^vista_[a-z0-9_]{3,63}$"}
+      }
+    },
+    "phase_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["anticipation_end_frame", "engagement_frame", "follow_through_start_frame", "completion_frame"],
+      "properties": {
+        "anticipation_end_frame": {"type": "integer", "minimum": 1, "maximum": 120},
+        "engagement_frame": {"type": "integer", "minimum": 2, "maximum": 120},
+        "follow_through_start_frame": {"type": "integer", "minimum": 3, "maximum": 120},
+        "completion_frame": {"type": "integer", "minimum": 4, "maximum": 120}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic_type", "interaction_point", "height_cm"],
+      "properties": {
+        "semantic_type": {"enum": ["refrigerator_door", "held_object"]},
+        "interaction_point": {"enum": ["primary_door_handle", "held_object_visual_center"]},
+        "height_cm": {"type": "integer", "minimum": 70, "maximum": 150}
+      }
+    },
+    "clip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clip_id",
+        "event_action",
+        "actor_hand",
+        "action_name",
+        "ue_sequence_name",
+        "ue_montage_name",
+        "frame_start",
+        "frame_end",
+        "fps",
+        "loop",
+        "root_motion_policy",
+        "target",
+        "phase_contract",
+        "typed_notifies",
+        "recipe_id"
+      ],
+      "properties": {
+        "clip_id": {"enum": ["fridge_open_right", "fridge_close_right", "object_inspect_right"]},
+        "event_action": {"enum": ["open", "close", "inspect"]},
+        "actor_hand": {"const": "right"},
+        "action_name": {"type": "string", "pattern": "^VISTA_CC0_[A-Za-z0-9_]{3,63}_R14$"},
+        "ue_sequence_name": {"type": "string", "pattern": "^AS_VistaCC0[A-Za-z0-9_]{2,63}_R14$"},
+        "ue_montage_name": {"type": "string", "pattern": "^AM_VistaCC0[A-Za-z0-9_]{2,63}_R14$"},
+        "frame_start": {"const": 0},
+        "frame_end": {"type": "integer", "minimum": 60, "maximum": 120},
+        "fps": {"const": 30},
+        "loop": {"const": false},
+        "root_motion_policy": {"const": "forbidden"},
+        "target": {"$ref": "#/$defs/target"},
+        "phase_contract": {"$ref": "#/$defs/phase_contract"},
+        "typed_notifies": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"$ref": "#/$defs/notify"}},
+        "recipe_id": {"type": "string", "pattern": "^cc0_numeric_[a-z0-9_]{3,63}_r14$"}
+      }
+    }
+  }
+}

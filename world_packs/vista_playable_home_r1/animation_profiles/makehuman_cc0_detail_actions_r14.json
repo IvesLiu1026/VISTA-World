@@ -1,0 +1,133 @@
+{
+  "schema_version": "vista.makehuman-cc0-detail-actions-profile/v1",
+  "profile_id": "makehuman_cc0_detail_actions_r14",
+  "character_id": "makehuman_cc0_eurasian_female_arkit_v3",
+  "namespace_contract": {
+    "source_namespace": "vista.makehuman-cc0-detail-actions/r14",
+    "ue_content_namespace": "/Game/VISTA/MakeHumanCC0/R14/DetailActions",
+    "artifact_namespace": "makehuman_cc0_detail_actions_r14",
+    "existing_r8_bytes_reused": false
+  },
+  "source_character_binding": {
+    "source_character_asset_lane": "makehuman_cc0_character_r6",
+    "character_id": "makehuman_cc0_eurasian_female_arkit_v3",
+    "armature_name": "VISTA_CC0_Hero_Rig_export",
+    "bone_count": 53,
+    "motion_source_policy": "fresh_numeric_recipes_only",
+    "r8_animation_artifact_dependency": "none"
+  },
+  "rig_contract": {
+    "armature_name": "VISTA_CC0_Hero_Rig_export",
+    "root_bone": "root",
+    "bone_count": 53,
+    "coordinate_system": "blender_m_z_up_ue_export_minus_y_forward"
+  },
+  "license_scope": {
+    "character_source_spdx": "CC0-1.0",
+    "motion_recipe_spdx": "CC0-1.0",
+    "external_binary_policy": "outside_git_only"
+  },
+  "provenance": {
+    "motion_origin": "project_authored_numeric_keyframes",
+    "contains_manny_derived_motion": false,
+    "contains_metahuman_motion": false,
+    "contains_city_sample_motion": false,
+    "contains_simworld_motion": false,
+    "contains_motion_capture": false
+  },
+  "quality_contract": {
+    "anticipation_contact_follow_through_required": true,
+    "pickup_clip_reuse_prohibited": true,
+    "human_motion_review_required": true,
+    "runtime_acceptance_default": false
+  },
+  "clips": [
+    {
+      "clip_id": "fridge_open_right",
+      "event_action": "open",
+      "actor_hand": "right",
+      "action_name": "VISTA_CC0_FridgeOpenRight_R14",
+      "ue_sequence_name": "AS_VistaCC0FridgeOpenRight_R14",
+      "ue_montage_name": "AM_VistaCC0FridgeOpenRight_R14",
+      "frame_start": 0,
+      "frame_end": 78,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_type": "refrigerator_door",
+        "interaction_point": "primary_door_handle",
+        "height_cm": 112
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 14,
+        "engagement_frame": 26,
+        "follow_through_start_frame": 40,
+        "completion_frame": 66
+      },
+      "typed_notifies": [
+        {"frame": 26, "kind": "contact", "signal": "vista_fridge_door_handle_contact"},
+        {"frame": 66, "kind": "completion", "signal": "vista_fridge_open_completed"}
+      ],
+      "recipe_id": "cc0_numeric_fridge_open_right_r14"
+    },
+    {
+      "clip_id": "fridge_close_right",
+      "event_action": "close",
+      "actor_hand": "right",
+      "action_name": "VISTA_CC0_FridgeCloseRight_R14",
+      "ue_sequence_name": "AS_VistaCC0FridgeCloseRight_R14",
+      "ue_montage_name": "AM_VistaCC0FridgeCloseRight_R14",
+      "frame_start": 0,
+      "frame_end": 78,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_type": "refrigerator_door",
+        "interaction_point": "primary_door_handle",
+        "height_cm": 112
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 14,
+        "engagement_frame": 24,
+        "follow_through_start_frame": 38,
+        "completion_frame": 66
+      },
+      "typed_notifies": [
+        {"frame": 24, "kind": "contact", "signal": "vista_fridge_door_handle_contact"},
+        {"frame": 66, "kind": "completion", "signal": "vista_fridge_close_completed"}
+      ],
+      "recipe_id": "cc0_numeric_fridge_close_right_r14"
+    },
+    {
+      "clip_id": "object_inspect_right",
+      "event_action": "inspect",
+      "actor_hand": "right",
+      "action_name": "VISTA_CC0_ObjectInspectRight_R14",
+      "ue_sequence_name": "AS_VistaCC0ObjectInspectRight_R14",
+      "ue_montage_name": "AM_VistaCC0ObjectInspectRight_R14",
+      "frame_start": 0,
+      "frame_end": 90,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_type": "held_object",
+        "interaction_point": "held_object_visual_center",
+        "height_cm": 128
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 14,
+        "engagement_frame": 30,
+        "follow_through_start_frame": 48,
+        "completion_frame": 88
+      },
+      "typed_notifies": [
+        {"frame": 88, "kind": "completion", "signal": "vista_inspect_completed"}
+      ],
+      "recipe_id": "cc0_numeric_object_inspect_right_r14"
+    }
+  ],
+  "content_digest": "eccf9da1ca7283efc08cffabe1d52ba020578e3d7c04d423cb2356f25b320d43"
+}
