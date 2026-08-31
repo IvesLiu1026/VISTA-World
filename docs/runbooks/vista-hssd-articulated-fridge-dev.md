@@ -70,6 +70,9 @@ VISTA_ARTICULATED_FRIDGE_EXECUTION_SHA256=<exact sha256 of that file>
 Run the fixed script
 `tools/ue/vista_playable_home/compose_hssd_articulated_fridge_commandlet.py` through
 PythonScriptCommandlet in unattended/null-RHI mode. Do not point it at a live project.
+The isolated project must contain a freshly packaged `VistaPlayableHome` plugin from
+the same source revision; a stale package without
+`VistaPlayableHomeSceneAuthoringLibrary` will fail closed and quarantine the attempt.
 
 The commandlet will:
 
@@ -82,9 +85,11 @@ The commandlet will:
    Unreal assigns fresh persistent object names when cloning a level template, so the
    source receipt pins the original object path while the derivative gate pins the new
    map scope plus all observable identity fields.
-5. Delete those two actors only from the derivative, spawn
-   `/Script/VistaPlayableHome.VistaArticulatedFridgeActor`, and bind body, both hinges,
-   both doors and the handle target.
+5. Delete those two actors only from the derivative, then use the closed editor-module
+   scene-authoring bridge to call `UWorld::SpawnActor<AVistaArticulatedFridgeActor>` in
+   the current derivative level and bind body, both hinges, both doors and the handle
+   target. The bridge deliberately bypasses `EditorActorSubsystem` viewport actor
+   positioning, which is unsafe in an unattended `-NullRHI` commandlet.
 6. Save and cold-reload the derivative, re-observe the full binding, and prove that the
    base-map package hash is unchanged.
 
