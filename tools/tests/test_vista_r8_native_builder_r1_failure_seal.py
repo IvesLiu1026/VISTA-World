@@ -44,7 +44,7 @@ def _secure_lock_probe(tmp_path: Path) -> tuple[Path, Path, Path]:
         _function_harness("")
         .replace(
             "readonly LIVE_SELF='/root/"
-            "seal-vista-r8-native-builder-r1-failure-83f180e0-20260831.sh'",
+            "seal-vista-r8-native-builder-r1-failure-83f180e0-20260901.sh'",
             f"readonly LIVE_SELF='{probe}'",
         )
         .replace(
@@ -137,7 +137,7 @@ def test_fixed_evidence_contract_and_known_failure_pins() -> None:
         "vista.r8-native-builder-r1-failure-seal/v1",
         "EVIDENCE_PARENT='/root'",
         "FINAL_NAME='vista-r8-native-builder-r1-failure-seal-"
-        "b7ead170-83f180e0-20260831a'",
+        "b7ead170-83f180e0-20260901a'",
         "'81d481f1eb764c60a737835b867fcb63'",
         "'675339972529'",
         "'675341234136'",
@@ -167,6 +167,38 @@ def test_script_has_only_observational_systemd_commands() -> None:
         raw,
     )
     assert "/usr/bin/journalctl" in raw
+
+
+def test_journal_boot_id_is_compacted_without_losing_kernel_evidence() -> None:
+    raw = _raw()
+    assert 'JOURNAL_BOOT_ID="$(compact_journal_boot_id "${BOOT_ID}")"' in raw
+    assert raw.count('--boot="${JOURNAL_BOOT_ID}"') == 2
+    assert '--boot="${BOOT_ID}"' not in raw
+    assert 'printf \'%s\\n\' "${BOOT_ID}" >"${STAGING_PATH}/boot-id.txt"' in raw
+
+    harness = _function_harness('compact_journal_boot_id "$1"')
+    accepted = subprocess.run(
+        [
+            "/usr/bin/bash",
+            "-c",
+            harness,
+            "fixture",
+            "9121029d-2bf0-4ace-9413-2c6031f95f8b",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert accepted.returncode == 0, accepted.stderr
+    assert accepted.stdout == "9121029d2bf04ace94132c6031f95f8b"
+
+    rejected = subprocess.run(
+        ["/usr/bin/bash", "-c", harness, "fixture", "not-a-boot-id"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert rejected.returncode != 0
 
 
 def test_no_replace_lock_and_staging_only_cleanup_are_explicit() -> None:
@@ -253,6 +285,12 @@ def test_root_history_is_metadata_only_and_covers_prior_ceremonies() -> None:
     for suffix in ("20260831b.sh", "20260831c.sh", "20260831d.sh"):
         assert f"recovery-b7ead170-{suffix}" in raw
     assert "failed-b7ead170-recovery-partial-20260831a" in raw
+    assert "failed-journal-boot-descriptor-20260901a.sh" in raw
+    assert "518e9ecbf2f37d9bb70069e334a0e4ab5125cf6a8a756abd28be31aaa1641c90" in raw
+    assert 'assert_file "${FAILED_SEALER}" 500 0 0' in raw
+    assert 'emit_record "${FAILED_SEALER_LOCK}"' in raw
+    assert 'assert_file "${FAILED_SEALER_LOCK}" 600 0 0 "${EMPTY_SHA256}" 0' in raw
+    assert "seal-vista-r8-native-builder-r1-failure-*.sh" in raw
     assert not re.search(r"(?:cp|install).*ROOT_HISTORY", raw)
 
 

@@ -217,10 +217,10 @@ def test_prepare_cleanup_is_limited_to_locally_owned_paths() -> None:
 def test_activation_requires_closed_r1_seal_and_exact_sealer() -> None:
     raw = _raw(ACTIVATE)
     for token in (
-        "/root/vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260831a",
+        "/root/vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901a",
         "vista.r8-native-builder-r1-failure-seal/v1",
-        "518e9ecbf2f37d9bb70069e334a0e4ab5125cf6a8a756abd28be31aaa1641c90",
-        "31883",
+        "109dbc378343c0309198d2c43b0772e124201609554440c63d80dc1c9b7101ba",
+        "33118",
         "TRACE_PATH_DRIFT: trace host file[21]",
         "r2_activation_authorized=false",
         "sha256sum -c -- receipt.sha256",

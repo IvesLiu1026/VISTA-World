@@ -12,16 +12,16 @@ export LC_ALL=C LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin
 unset BASH_ENV ENV CDPATH GLOBIGNORE PYTHONHOME PYTHONPATH
 
 readonly SCHEMA='vista.r8-native-builder-r1-failure-seal/v1'
-readonly LIVE_SELF='/root/seal-vista-r8-native-builder-r1-failure-83f180e0-20260831.sh'
-readonly LOCK_PATH='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0.lock'
+readonly LIVE_SELF='/root/seal-vista-r8-native-builder-r1-failure-83f180e0-20260901.sh'
+readonly LOCK_PATH='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0-20260901.lock'
 # The authoritative seal lives below /root.  The candidate run's evidence
 # directory is intentionally owned by the unprivileged operator; using a
 # predictable child there would let that owner rename or substitute the child
 # while this root process is writing it.  A user-visible copy can be derived
 # only after this root-owned authority has closed.
 readonly EVIDENCE_PARENT='/root'
-readonly FINAL_NAME='vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260831a'
-readonly STAGING_NAME='.vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260831a.staging'
+readonly FINAL_NAME='vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901a'
+readonly STAGING_NAME='.vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901a.staging'
 readonly FINAL_PATH="${EVIDENCE_PARENT}/${FINAL_NAME}"
 readonly STAGING_PATH="${EVIDENCE_PARENT}/${STAGING_NAME}"
 
@@ -57,6 +57,11 @@ readonly PHASE_B_UNIT_SHA256='1e65b23e2ae857b88d3b488a63cfcba3d6462c265ff3b4d3b3
 readonly PHASE_B_UNIT_BYTES='2143'
 readonly REQUEST_V4_RECORD_SHA256='d368db55dc50b90822dda55d2c1ad5b2a8cdabaf8b9ba7aac61e50832f4fd476'
 readonly REQUEST_V4_RECORD_BYTES='1895'
+readonly FAILED_SEALER='/root/seal-vista-r8-native-builder-r1-failure-83f180e0.failed-journal-boot-descriptor-20260901a.sh'
+readonly FAILED_SEALER_SHA256='518e9ecbf2f37d9bb70069e334a0e4ab5125cf6a8a756abd28be31aaa1641c90'
+readonly FAILED_SEALER_BYTES='31883'
+readonly FAILED_SEALER_LOCK='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0.lock'
+readonly EMPTY_SHA256='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 readonly R1_BUILDER_UID='997'
 readonly R1_BUILDER_GID='997'
 readonly R1_PHASE_A_LOCK_FD='11'
@@ -362,6 +367,15 @@ assert_manager_state() {
 
 encode() { printf '%s' "$1" | /usr/bin/base64 -w0; }
 
+compact_journal_boot_id() {
+  local boot_id="$1" compact
+  [[ "${boot_id}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || \
+    return 1
+  compact="${boot_id//-/}"
+  [[ "${compact}" =~ ^[0-9a-f]{32}$ ]] || return 1
+  printf '%s' "${compact}"
+}
+
 emit_record() {
   local path="$1" metadata kind sha='-' target='-' encoded_path
   metadata="$(/usr/bin/stat -c '%F|%a|%u|%g|%h|%s|%d|%i|%y|%z' -- "${path}")" || \
@@ -428,6 +442,7 @@ capture_root_history() {
       \( -name 'vista-r8-native-builder-bootstrap-r1*' \
       -o -name 'vista-r8-native-builder-bootstrap-input-r1*' \
       -o -name 'vista-r8-native-builder-*-20260831*.sh' \
+      -o -name 'seal-vista-r8-native-builder-r1-failure-*.sh' \
       -o -name '.vista-r8-native-builder-bootstrap-r1*' \
       -o -name '.vista-r8-native-builder-bootstrap-input-r1*' \) \
       -print0 | /usr/bin/sort -z >"${roots_list}"; then
@@ -439,6 +454,7 @@ capture_root_history() {
       emit_tree "${path}"
       count="$((count + 1))"
     done <"${roots_list}"
+    emit_record "${FAILED_SEALER_LOCK}"
   } >"${output}"
   [[ "${count}" -gt 0 ]] || fail 'R1 root history selection is empty'
   /usr/bin/rm -f -- "${roots_list}" || fail 'cannot remove owned root-history list'
@@ -452,12 +468,17 @@ assert_required_history() {
     '/root/vista-r8-native-builder-bootstrap-r1.failed-b7ead170-recovery-partial-20260831a' \
     '/root/vista-r8-native-builder-recovery-b7ead170-20260831b.sh' \
     '/root/vista-r8-native-builder-recovery-b7ead170-20260831c.sh' \
-    '/root/vista-r8-native-builder-recovery-b7ead170-20260831d.sh'; do
+    '/root/vista-r8-native-builder-recovery-b7ead170-20260831d.sh' \
+    "${FAILED_SEALER}"; do
     [[ -e "${path}" || -L "${path}" ]] || fail "required append-only R1 history is absent: ${path}"
   done
   [[ ! -e '/root/vista-r8-native-builder-bootstrap-r1.failed-b7ead170-recovery-partial-20260831b' && \
     ! -L '/root/vista-r8-native-builder-bootstrap-r1.failed-b7ead170-recovery-partial-20260831b' ]] || \
     fail 'successful recovery unexpectedly left its failure slot'
+  assert_file "${FAILED_SEALER}" 500 0 0 "${FAILED_SEALER_SHA256}" \
+    "${FAILED_SEALER_BYTES}" 'prior failed journal sealer'
+  assert_file "${FAILED_SEALER_LOCK}" 600 0 0 "${EMPTY_SHA256}" 0 \
+    'prior failed journal sealer lock'
 }
 
 capture_cgroups() {
@@ -543,6 +564,9 @@ assert_r1_filesystem
 BOOT_ID="$(/usr/bin/tr -d '\n' </proc/sys/kernel/random/boot_id)"
 [[ "${BOOT_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || \
   fail 'boot ID differs'
+JOURNAL_BOOT_ID="$(compact_journal_boot_id "${BOOT_ID}")" || \
+  fail 'cannot derive compact journal boot ID'
+readonly JOURNAL_BOOT_ID
 printf '%s\n' "${BOOT_ID}" >"${STAGING_PATH}/boot-id.txt"
 
 capture_manager "${PHASE_A}" "${STAGING_PATH}/phase-a.systemctl-show.txt"
@@ -550,13 +574,13 @@ capture_manager "${PHASE_B}" "${STAGING_PATH}/phase-b.systemctl-show.txt"
 assert_manager_state "${STAGING_PATH}/phase-a.systemctl-show.txt" \
   "${STAGING_PATH}/phase-b.systemctl-show.txt"
 
-/usr/bin/journalctl --no-pager --quiet --boot="${BOOT_ID}" \
+/usr/bin/journalctl --no-pager --quiet --boot="${JOURNAL_BOOT_ID}" \
   "_SYSTEMD_INVOCATION_ID=${PHASE_A_INVOCATION}" -u "${PHASE_A}" \
   --output=short-iso-precise >"${STAGING_PATH}/phase-a.journal.txt" || \
   fail 'cannot capture R1 Phase A journal'
 /usr/bin/grep -Fq -- "${FAILURE_TEXT}" "${STAGING_PATH}/phase-a.journal.txt" || \
   fail 'exact R1 Phase A failure is absent from its invocation journal'
-/usr/bin/journalctl --no-pager --quiet --boot="${BOOT_ID}" -u "${PHASE_B}" \
+/usr/bin/journalctl --no-pager --quiet --boot="${JOURNAL_BOOT_ID}" -u "${PHASE_B}" \
   --output=short-iso-precise >"${STAGING_PATH}/phase-b.journal.txt" || \
   fail 'cannot capture R1 Phase B journal'
 
