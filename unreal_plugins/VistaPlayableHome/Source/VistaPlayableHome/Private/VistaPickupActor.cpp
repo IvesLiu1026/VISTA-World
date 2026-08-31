@@ -16,6 +16,12 @@ namespace
 constexpr const TCHAR* StableSemanticTagPrefix = TEXT("VistaSemanticId=");
 constexpr const TCHAR* PlacementOwnerTagPrefix = TEXT("VistaOwner=");
 constexpr const TCHAR* PlacementAnchorDelimiter = TEXT("/anchor.");
+const FName PourableKey(TEXT("pourable"));
+const FName FilledKey(TEXT("filled"));
+const FName LiquidTypeKey(TEXT("liquid_type"));
+const FName LiquidCapacityKey(TEXT("liquid_capacity_ml"));
+const FName LiquidAmountKey(TEXT("liquid_amount_ml"));
+const FName LiquidLevelKey(TEXT("liquid_level"));
 
 template <typename T>
 bool ScalarBitsEqual(const T& Left, const T& Right)
@@ -68,7 +74,62 @@ bool PhysicalSnapshotsBitExact(
             Right.AttachmentRelativeTransform) &&
         Left.bHeld == Right.bHeld &&
         Left.CarrierSemanticId == Right.CarrierSemanticId &&
+        Left.InventoryCarrierSemanticId ==
+            Right.InventoryCarrierSemanticId &&
+        Left.bInventorySlotOccupied == Right.bInventorySlotOccupied &&
+        Left.InventoryItemSemanticId == Right.InventoryItemSemanticId &&
         Left.PlacedAtSemanticId == Right.PlacedAtSemanticId;
+}
+
+bool LiquidStatesBitExact(
+    const FVistaLiquidStateSnapshot& Left,
+    const FVistaLiquidStateSnapshot& Right)
+{
+    return Left.bPourable == Right.bPourable &&
+        Left.LiquidType == Right.LiquidType &&
+        ScalarBitsEqual(
+            Left.CapacityMilliliters, Right.CapacityMilliliters) &&
+        ScalarBitsEqual(Left.AmountMilliliters, Right.AmountMilliliters);
+}
+
+bool ParseStrictBoolean(const FString& Value, bool& OutValue)
+{
+    if (Value == TEXT("true"))
+    {
+        OutValue = true;
+        return true;
+    }
+    if (Value == TEXT("false"))
+    {
+        OutValue = false;
+        return true;
+    }
+    return false;
+}
+
+bool ParseFiniteFloat(const FString& Value, float& OutValue)
+{
+    return LexTryParseString(OutValue, *Value) && FMath::IsFinite(OutValue);
+}
+
+bool IsClosedLiquidType(const FName Value)
+{
+    const FString Text = Value.ToString();
+    if (Text.IsEmpty() || Text.Len() > 64)
+    {
+        return false;
+    }
+    for (const TCHAR Character : Text)
+    {
+        if (!((Character >= TEXT('a') && Character <= TEXT('z')) ||
+              (Character >= TEXT('0') && Character <= TEXT('9')) ||
+              Character == TEXT('.') || Character == TEXT('_') ||
+              Character == TEXT('-')))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool IsLowerAsciiAlpha(const TCHAR Character)
@@ -322,7 +383,14 @@ AVistaPickupActor::AVistaPickupActor()
         EVistaAffordance::Inspect,
         EVistaAffordance::PickUp,
         EVistaAffordance::Drop,
-        EVistaAffordance::Place};
+        EVistaAffordance::Place,
+        EVistaAffordance::Pour};
+
+    LiquidState.bPourable = bPourable;
+    LiquidState.LiquidType = InitialLiquidType;
+    LiquidState.CapacityMilliliters = LiquidCapacityMilliliters;
+    LiquidState.AmountMilliliters =
+        LiquidCapacityMilliliters * InitialLiquidLevel;
 }
 
 bool AVistaPickupActor::ConfigurePresentationMesh(
@@ -369,6 +437,36 @@ void AVistaPickupActor::BeginPlay()
     Super::BeginPlay();
     RefreshPresentationState();
     NormalizePlacementState();
+    if (HasAuthority())
+    {
+        FVistaLiquidStateSnapshot Fallback;
+        Fallback.bPourable = bPourable ||
+            InitialStateValues.Contains(FilledKey) ||
+            InitialStateValues.Contains(LiquidLevelKey);
+        Fallback.LiquidType = InitialLiquidType;
+        Fallback.CapacityMilliliters = LiquidCapacityMilliliters;
+        Fallback.AmountMilliliters =
+            LiquidCapacityMilliliters * InitialLiquidLevel;
+        FVistaLiquidStateSnapshot InitialState;
+        FName Code;
+        const FVistaEntityRuntimeState AuthoredState =
+            Super::VistaGetRuntimeState_Implementation();
+        if (!ReadLiquidState(AuthoredState, Fallback, InitialState, Code))
+        {
+            InitialState = Fallback;
+            if (!ValidateLiquidState(InitialState, Code))
+            {
+                InitialState = FVistaLiquidStateSnapshot();
+                InitialState.CapacityMilliliters = 250.0f;
+                InitialState.LiquidType = TEXT("generic");
+            }
+        }
+        SetLiquidState(InitialState);
+    }
+    else
+    {
+        SyncRuntimeLiquidValues();
+    }
 }
 
 void AVistaPickupActor::GetLifetimeReplicatedProps(
@@ -376,6 +474,7 @@ void AVistaPickupActor::GetLifetimeReplicatedProps(
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(AVistaPickupActor, PhysicalDisposition);
+    DOREPLIFETIME(AVistaPickupActor, LiquidState);
 }
 
 FVistaEntityRuntimeState AVistaPickupActor::VistaGetRuntimeState_Implementation() const
@@ -402,7 +501,162 @@ FVistaEntityRuntimeState AVistaPickupActor::VistaGetRuntimeState_Implementation(
     {
         State.Values.Remove(TEXT("placed_at"));
     }
+    State.Values.Add(
+        PourableKey, LiquidState.bPourable ? TEXT("true") : TEXT("false"));
+    State.Values.Add(
+        FilledKey, LiquidState.IsFilled() ? TEXT("true") : TEXT("false"));
+    State.Values.Add(LiquidTypeKey, LiquidState.LiquidType.ToString());
+    State.Values.Add(
+        LiquidCapacityKey,
+        FString::SanitizeFloat(LiquidState.CapacityMilliliters));
+    State.Values.Add(
+        LiquidAmountKey,
+        FString::SanitizeFloat(LiquidState.AmountMilliliters));
+    State.Values.Add(
+        LiquidLevelKey,
+        FString::SanitizeFloat(LiquidState.GetLiquidLevel()));
     return State;
+}
+
+bool AVistaPickupActor::ValidateLiquidState(
+    const FVistaLiquidStateSnapshot& State,
+    FName& OutCode)
+{
+    if (!FMath::IsFinite(State.CapacityMilliliters) ||
+        State.CapacityMilliliters < 1.0f ||
+        State.CapacityMilliliters > 100000.0f ||
+        !FMath::IsFinite(State.AmountMilliliters) ||
+        State.AmountMilliliters < 0.0f ||
+        State.AmountMilliliters > State.CapacityMilliliters)
+    {
+        OutCode = TEXT("LIQUID_CAPACITY_OR_AMOUNT_INVALID");
+        return false;
+    }
+    if (State.IsFilled() && !IsClosedLiquidType(State.LiquidType))
+    {
+        OutCode = TEXT("LIQUID_TYPE_REQUIRED");
+        return false;
+    }
+    if (!State.LiquidType.IsNone() && !IsClosedLiquidType(State.LiquidType))
+    {
+        OutCode = TEXT("LIQUID_TYPE_INVALID");
+        return false;
+    }
+    OutCode = TEXT("LIQUID_STATE_VALID");
+    return true;
+}
+
+bool AVistaPickupActor::ReadLiquidState(
+    const FVistaEntityRuntimeState& State,
+    const FVistaLiquidStateSnapshot& Fallback,
+    FVistaLiquidStateSnapshot& OutState,
+    FName& OutCode) const
+{
+    OutState = Fallback;
+    if (const FString* PourableValue = State.Values.Find(PourableKey))
+    {
+        if (!ParseStrictBoolean(*PourableValue, OutState.bPourable))
+        {
+            OutCode = TEXT("POURABLE_STATE_INVALID");
+            return false;
+        }
+    }
+    if (const FString* TypeValue = State.Values.Find(LiquidTypeKey))
+    {
+        OutState.LiquidType = TypeValue->IsEmpty()
+            ? NAME_None : FName(**TypeValue);
+    }
+    if (const FString* CapacityValue = State.Values.Find(LiquidCapacityKey))
+    {
+        if (!ParseFiniteFloat(
+                *CapacityValue, OutState.CapacityMilliliters))
+        {
+            OutCode = TEXT("LIQUID_CAPACITY_INVALID");
+            return false;
+        }
+    }
+
+    bool bAmountPresent = false;
+    if (const FString* AmountValue = State.Values.Find(LiquidAmountKey))
+    {
+        bAmountPresent = true;
+        if (!ParseFiniteFloat(*AmountValue, OutState.AmountMilliliters))
+        {
+            OutCode = TEXT("LIQUID_AMOUNT_INVALID");
+            return false;
+        }
+    }
+    bool bLevelPresent = false;
+    float Level = 0.0f;
+    if (const FString* LevelValue = State.Values.Find(LiquidLevelKey))
+    {
+        bLevelPresent = true;
+        if (!ParseFiniteFloat(*LevelValue, Level) ||
+            Level < 0.0f || Level > 1.0f)
+        {
+            OutCode = TEXT("LIQUID_LEVEL_INVALID");
+            return false;
+        }
+        const float LevelAmount = OutState.CapacityMilliliters * Level;
+        if (bAmountPresent &&
+            !FMath::IsNearlyEqual(
+                OutState.AmountMilliliters, LevelAmount, 0.01f))
+        {
+            OutCode = TEXT("LIQUID_AMOUNT_LEVEL_MISMATCH");
+            return false;
+        }
+        OutState.AmountMilliliters = LevelAmount;
+    }
+
+    if (const FString* FilledValue = State.Values.Find(FilledKey))
+    {
+        bool bFilled = false;
+        if (!ParseStrictBoolean(*FilledValue, bFilled))
+        {
+            OutCode = TEXT("LIQUID_FILLED_STATE_INVALID");
+            return false;
+        }
+        if (!bAmountPresent && !bLevelPresent)
+        {
+            OutState.AmountMilliliters =
+                bFilled ? OutState.CapacityMilliliters : 0.0f;
+        }
+        else if (bFilled != OutState.IsFilled())
+        {
+            OutCode = TEXT("LIQUID_FILLED_LEVEL_MISMATCH");
+            return false;
+        }
+    }
+    return ValidateLiquidState(OutState, OutCode);
+}
+
+void AVistaPickupActor::SyncRuntimeLiquidValues()
+{
+    RuntimeStateValues.Add(
+        PourableKey, LiquidState.bPourable ? TEXT("true") : TEXT("false"));
+    RuntimeStateValues.Add(
+        FilledKey, LiquidState.IsFilled() ? TEXT("true") : TEXT("false"));
+    RuntimeStateValues.Add(LiquidTypeKey, LiquidState.LiquidType.ToString());
+    RuntimeStateValues.Add(
+        LiquidCapacityKey,
+        FString::SanitizeFloat(LiquidState.CapacityMilliliters));
+    RuntimeStateValues.Add(
+        LiquidAmountKey,
+        FString::SanitizeFloat(LiquidState.AmountMilliliters));
+    RuntimeStateValues.Add(
+        LiquidLevelKey,
+        FString::SanitizeFloat(LiquidState.GetLiquidLevel()));
+}
+
+void AVistaPickupActor::SetLiquidState(
+    const FVistaLiquidStateSnapshot& State)
+{
+    LiquidState = State;
+    SyncRuntimeLiquidValues();
+    if (HasAuthority())
+    {
+        ForceNetUpdate();
+    }
 }
 
 bool AVistaPickupActor::ValidatePublicStatePatch(
@@ -475,12 +729,39 @@ FVistaInteractionResult AVistaPickupActor::VistaApplyRuntimeState_Implementation
         return FVistaInteractionResult::Failure(
             EVistaInteractionStatus::Rejected, TEXT("AUTHORITY_REQUIRED"), SemanticId);
     }
+    if (ActiveTransactionExecutor.IsValid() ||
+        !ActiveTransactionCommandId.IsNone())
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Busy,
+            TEXT("PICKUP_TARGET_RESERVED"),
+            SemanticId);
+    }
 
     FName ValidationCode;
     if (!ValidatePublicStatePatch(State, ValidationCode))
     {
         return FVistaInteractionResult::Failure(
             EVistaInteractionStatus::Rejected, ValidationCode, SemanticId);
+    }
+    FVistaLiquidStateSnapshot NewLiquidState;
+    if (!ReadLiquidState(
+            State, LiquidState, NewLiquidState, ValidationCode))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            ValidationCode,
+            SemanticId);
+    }
+    if (NewLiquidState.bPourable != LiquidState.bPourable ||
+        !ScalarBitsEqual(
+            NewLiquidState.CapacityMilliliters,
+            LiquidState.CapacityMilliliters))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("LIQUID_AUTHORITY_PATCH_REJECTED"),
+            SemanticId);
     }
     // A public patch may change only non-physical values/presentation. Never
     // forward caller-owned transform data to the semantic-actor base, even
@@ -495,6 +776,7 @@ FVistaInteractionResult AVistaPickupActor::VistaApplyRuntimeState_Implementation
         return BaseResult;
     }
     SyncRuntimeDispositionValues();
+    SetLiquidState(NewLiquidState);
     return FVistaInteractionResult::Success(
         SemanticId,
         VistaGetRuntimeState_Implementation(),
@@ -515,7 +797,8 @@ FVistaInteractionResult AVistaPickupActor::VistaInteract_Implementation(
             EVistaInteractionStatus::Rejected, TEXT("AUTHORITY_REQUIRED"), SemanticId);
     }
 
-    if (UVistaActionExecutorComponent::IsPhysicalAffordance(Request.Affordance))
+    if (Request.Affordance == EVistaAffordance::Pour ||
+        UVistaActionExecutorComponent::IsPhysicalAffordance(Request.Affordance))
     {
         // Physical state is committed only by UVistaActionExecutorComponent at
         // a verified contact notify. The interface remains readable and keeps
@@ -536,7 +819,8 @@ bool AVistaPickupActor::TryReserveTransaction(
     {
         return false;
     }
-    if (ActiveTransactionExecutor.IsValid())
+    if (ActiveTransactionExecutor.IsValid() ||
+        !ActiveTransactionCommandId.IsNone())
     {
         return false;
     }
@@ -556,6 +840,188 @@ void AVistaPickupActor::ReleaseTransaction(
         ActiveTransactionCommandId = NAME_None;
     }
 }
+
+bool AVistaPickupActor::IsTransactionReservedBy(
+    const UVistaActionExecutorComponent* Executor,
+    FName CommandId) const
+{
+    return IsValid(Executor) && !CommandId.IsNone() &&
+        ActiveTransactionExecutor.Get() == Executor &&
+        ActiveTransactionCommandId == CommandId;
+}
+
+bool AVistaPickupActor::CapturePourTransactionState(
+    const AActor* ExpectedRequester,
+    FVistaLiquidStateSnapshot& OutLiquid,
+    FVistaPickupPhysicalStateSnapshot& OutPhysical,
+    FName& OutCode) const
+{
+    OutLiquid = FVistaLiquidStateSnapshot();
+    OutPhysical = FVistaPickupPhysicalStateSnapshot();
+    if (!HasAuthority() || !IsValid(ExpectedRequester) ||
+        GetCarrier() != ExpectedRequester)
+    {
+        OutCode = TEXT("POUR_SOURCE_NOT_HELD_BY_REQUESTER");
+        return false;
+    }
+    if (!LiquidState.bPourable)
+    {
+        OutCode = TEXT("POUR_SOURCE_NOT_POURABLE");
+        return false;
+    }
+    if (!ValidateLiquidState(LiquidState, OutCode) ||
+        !LiquidState.IsFilled())
+    {
+        if (OutCode == TEXT("LIQUID_STATE_VALID"))
+        {
+            OutCode = TEXT("POUR_SOURCE_EMPTY");
+        }
+        return false;
+    }
+
+    USceneComponent* AttachmentParent = nullptr;
+    AActor* Carrier = nullptr;
+    EVistaPickupDisposition Disposition = EVistaPickupDisposition::Free;
+    if (!CapturePhysicalState(
+            OutPhysical, AttachmentParent, Carrier, Disposition) ||
+        Carrier != ExpectedRequester ||
+        Disposition != EVistaPickupDisposition::Held ||
+        !OutPhysical.bHeld || !OutPhysical.bHasAttachmentParent)
+    {
+        OutCode = TEXT("POUR_SOURCE_HELD_STATE_INVALID");
+        return false;
+    }
+    OutLiquid = LiquidState;
+    OutCode = TEXT("POUR_SOURCE_READY");
+    return true;
+}
+
+FVistaInteractionResult AVistaPickupActor::CommitPourOut(
+    UVistaActionExecutorComponent* Executor,
+    FName CommandId,
+    const FVistaLiquidStateSnapshot& ExpectedBefore,
+    float TransferMilliliters)
+{
+    if (!IsTransactionReservedBy(Executor, CommandId))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("TRANSACTION_RESERVATION_REQUIRED"),
+            SemanticId);
+    }
+    if (!HasAuthority() || !LiquidStatesBitExact(LiquidState, ExpectedBefore) ||
+        !FMath::IsFinite(TransferMilliliters) ||
+        TransferMilliliters <= 0.0f ||
+        TransferMilliliters > ExpectedBefore.AmountMilliliters)
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("POUR_SOURCE_STATE_DRIFT"),
+            SemanticId);
+    }
+    FVistaLiquidStateSnapshot After = ExpectedBefore;
+    After.AmountMilliliters =
+        FMath::Max(0.0f, ExpectedBefore.AmountMilliliters - TransferMilliliters);
+    FName Code;
+    if (!ValidateLiquidState(After, Code))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            Code,
+            SemanticId);
+    }
+    SetLiquidState(After);
+    return FVistaInteractionResult::Success(
+        SemanticId,
+        VistaGetRuntimeState_Implementation(),
+        TEXT("POUR_SOURCE_DEBITED"));
+}
+
+FVistaInteractionResult AVistaPickupActor::RestorePourLiquidState(
+    UVistaActionExecutorComponent* Executor,
+    FName CommandId,
+    const FVistaLiquidStateSnapshot& State)
+{
+    if (!IsTransactionReservedBy(Executor, CommandId))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("TRANSACTION_RESERVATION_REQUIRED"),
+            SemanticId);
+    }
+    FName Code;
+    if (!HasAuthority() || !ValidateLiquidState(State, Code))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            HasAuthority() ? Code : FName(TEXT("AUTHORITY_REQUIRED")),
+            SemanticId);
+    }
+    SetLiquidState(State);
+    return FVistaInteractionResult::Success(
+        SemanticId,
+        VistaGetRuntimeState_Implementation(),
+        TEXT("POUR_SOURCE_STATE_RESTORED"));
+}
+
+bool AVistaPickupActor::PourStateMatches(
+    const FVistaLiquidStateSnapshot& ExpectedLiquid,
+    const FVistaPickupPhysicalStateSnapshot& ExpectedPhysical) const
+{
+    FVistaPickupPhysicalStateSnapshot ActualPhysical;
+    USceneComponent* AttachmentParent = nullptr;
+    AActor* Carrier = nullptr;
+    EVistaPickupDisposition Disposition = EVistaPickupDisposition::Free;
+    return CapturePhysicalState(
+               ActualPhysical, AttachmentParent, Carrier, Disposition) &&
+        LiquidStatesBitExact(LiquidState, ExpectedLiquid) &&
+        PhysicalSnapshotsBitExact(ActualPhysical, ExpectedPhysical);
+}
+
+#if WITH_DEV_AUTOMATION_TESTS
+bool AVistaPickupActor::ConfigureLiquidStateForDevAutomation(
+    const FVistaLiquidStateSnapshot& State,
+    FName& OutCode)
+{
+    if (!HasAuthority() || ActiveTransactionExecutor.IsValid() ||
+        !ActiveTransactionCommandId.IsNone() ||
+        !ValidateLiquidState(State, OutCode))
+    {
+        if (!HasAuthority())
+        {
+            OutCode = TEXT("AUTHORITY_REQUIRED");
+        }
+        else if (ActiveTransactionExecutor.IsValid() ||
+                 !ActiveTransactionCommandId.IsNone())
+        {
+            OutCode = TEXT("PICKUP_TARGET_RESERVED");
+        }
+        return false;
+    }
+    SetLiquidState(State);
+    OutCode = TEXT("LIQUID_STATE_CONFIGURED_FOR_TEST");
+    return true;
+}
+
+bool AVistaPickupActor::CapturePourStateForDevAutomation(
+    FVistaLiquidStateSnapshot& OutLiquid,
+    FVistaPickupPhysicalStateSnapshot& OutPhysical) const
+{
+    USceneComponent* AttachmentParent = nullptr;
+    AActor* Carrier = nullptr;
+    EVistaPickupDisposition Disposition = EVistaPickupDisposition::Free;
+    OutLiquid = LiquidState;
+    return CapturePhysicalState(
+        OutPhysical, AttachmentParent, Carrier, Disposition);
+}
+
+bool AVistaPickupActor::IsReservedForDevAutomation(
+    const UVistaActionExecutorComponent* Executor,
+    FName CommandId) const
+{
+    return IsTransactionReservedBy(Executor, CommandId);
+}
+#endif
 
 FVistaInteractionResult AVistaPickupActor::CommitTransactionalInteraction(
     UVistaActionExecutorComponent* Executor,
@@ -807,6 +1273,22 @@ void AVistaPickupActor::OnRep_PhysicalDisposition()
     }
 }
 
+void AVistaPickupActor::OnRep_LiquidState()
+{
+    FName Code;
+    if (!ValidateLiquidState(LiquidState, Code))
+    {
+        UE_LOG(
+            LogTemp,
+            Error,
+            TEXT("VISTA_PICKUP_LIQUID_STATE_REJECTED semantic_id=%s code=%s"),
+            *SemanticId,
+            *Code.ToString());
+        return;
+    }
+    SyncRuntimeLiquidValues();
+}
+
 void AVistaPickupActor::SyncRuntimeDispositionValues()
 {
     const bool bHeld =
@@ -946,14 +1428,12 @@ bool AVistaPickupActor::ApplyPhysicalDisposition()
             PhysicalDisposition.AngularVelocityDegrees);
 }
 
-bool AVistaPickupActor::CapturePhysicalStateTrusted(
+bool AVistaPickupActor::CapturePhysicalState(
     FVistaPickupPhysicalStateSnapshot& OutSnapshot,
     USceneComponent*& OutAttachmentParent,
     AActor*& OutCarrier,
-    EVistaPickupDisposition& OutDisposition,
-    const FVistaTrustedPhysicalRestoreToken& Token) const
+    EVistaPickupDisposition& OutDisposition) const
 {
-    static_cast<void>(Token);
     OutSnapshot = FVistaPickupPhysicalStateSnapshot();
     OutAttachmentParent = nullptr;
     OutCarrier = nullptr;
@@ -1022,6 +1502,18 @@ bool AVistaPickupActor::CapturePhysicalStateTrusted(
          (!OutSnapshot.CarrierSemanticId.IsEmpty() &&
           OutSnapshot.bInventorySlotOccupied &&
           OutSnapshot.InventoryItemSemanticId == SemanticId));
+}
+
+bool AVistaPickupActor::CapturePhysicalStateTrusted(
+    FVistaPickupPhysicalStateSnapshot& OutSnapshot,
+    USceneComponent*& OutAttachmentParent,
+    AActor*& OutCarrier,
+    EVistaPickupDisposition& OutDisposition,
+    const FVistaTrustedPhysicalRestoreToken& Token) const
+{
+    static_cast<void>(Token);
+    return CapturePhysicalState(
+        OutSnapshot, OutAttachmentParent, OutCarrier, OutDisposition);
 }
 
 bool AVistaPickupActor::MatchesPhysicalStateTrusted(
@@ -1101,6 +1593,17 @@ FVistaInteractionResult AVistaPickupActor::RestorePhysicalStateTrusted(
         return FVistaInteractionResult::Failure(
             EVistaInteractionStatus::Rejected,
             TEXT("TRUSTED_RESTORE_INPUT_INVALID"),
+            SemanticId);
+    }
+
+    FVistaLiquidStateSnapshot DesiredLiquidState;
+    FName LiquidCode;
+    if (!ReadLiquidState(
+            State, LiquidState, DesiredLiquidState, LiquidCode))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            LiquidCode,
             SemanticId);
     }
 
@@ -1275,6 +1778,7 @@ FVistaInteractionResult AVistaPickupActor::RestorePhysicalStateTrusted(
             TEXT("TRUSTED_RESTORE_CARRIER_VERIFY_FAILED"),
             SemanticId);
     }
+    SetLiquidState(DesiredLiquidState);
     ForceNetUpdate();
     return FVistaInteractionResult::Success(
         SemanticId,
