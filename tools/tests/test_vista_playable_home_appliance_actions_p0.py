@@ -20,6 +20,7 @@ def test_appliance_state_is_closed_and_not_a_single_on_bit() -> None:
     for member in ("bool bPowered", "bool bActive", "FName Status"):
         assert member in header
     assert "bool bOn =" not in header
+    assert "bRequiresPower" not in header
     for field in ('TEXT("powered")', 'TEXT("active")', 'TEXT("status")'):
         assert field in source
     assert "DOREPLIFETIME(AVistaStatefulApplianceActor, bPowered)" in source
@@ -27,6 +28,9 @@ def test_appliance_state_is_closed_and_not_a_single_on_bit() -> None:
     assert "DOREPLIFETIME(AVistaStatefulApplianceActor, Status)" in source
     assert "APPLIANCE_ACTIVE_WITHOUT_POWER" in source
     assert "!bActivePresent && bLegacyOnPresent" in source
+    assert "bActivePresent && bLegacyOnPresent" in source
+    assert "OutState.bActive != bLegacyOn" in source
+    assert "APPLIANCE_ACTIVE_ALIAS_MISMATCH" in source
 
 
 def test_transition_planner_covers_success_idempotence_and_failure() -> None:
@@ -64,6 +68,9 @@ def test_transition_planner_covers_success_idempotence_and_failure() -> None:
     assert "InPressProfile.bResultActive" in press
     assert "InPressProfile.ResultStatus" in press
     assert "OutAfter.bPowered" not in press
+    assert "if (!Before.bPowered)" in press
+    assert "bRequiresPower" not in press
+    assert press.index("if (!Before.bPowered)") < press.index("ControlId.IsNone")
 
     turn_on = _body(
         planner,
@@ -288,9 +295,47 @@ def test_editor_proof_exercises_transition_matrix() -> None:
         "washer start becomes running",
         "unpowered toggle fails closed",
         "unpowered washer press fails closed",
+        "unpowered non-activating press still fails closed",
+        "unpowered non-activating press has zero mutation",
         "turn_off preserves power",
         "repeated turn_off is idempotent",
         "repeated turn_off preserves exact state",
         "active without power fails closed",
     ):
         assert phrase in proof
+
+
+def test_editor_proof_invokes_real_semantic_transaction_and_rollback() -> None:
+    proof = _text(
+        ROOT
+        / "unreal_plugins"
+        / "VistaPlayableHome"
+        / "Source"
+        / "VistaPlayableHomeEditor"
+        / "Private"
+        / "Tests"
+        / "VistaApplianceActionsP0Proof.cpp"
+    )
+
+    for source_contract in (
+        "FActorTestSpawner Spawner",
+        "SpawnActor<AVistaStatefulApplianceActor>",
+        "NewObject<UVistaAnimationComponent>",
+        "NewObject<UVistaActionExecutorComponent>",
+        "BeginSemanticInteractionForDevAutomation",
+        "DriveSemanticInteractionForDevAutomation",
+    ):
+        assert source_contract in proof
+    for receipt_proof in (
+        "press begin does not mutate target",
+        "press reservation blocks out-of-band mutation",
+        "successful press mutates state exactly once",
+        "idempotent press has zero state mutations",
+        "forced post-contact failure completes verified rollback",
+        "rollback receipt proves restore and reservation release",
+        "rollback restores exact before state",
+        "rollback release permits a new authoritative state apply",
+        "conflicting active/on aliases fail closed",
+        "APPLIANCE_ACTIVE_ALIAS_MISMATCH",
+    ):
+        assert receipt_proof in proof

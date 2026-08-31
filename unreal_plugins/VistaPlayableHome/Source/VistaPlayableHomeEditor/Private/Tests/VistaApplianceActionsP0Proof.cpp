@@ -1,7 +1,77 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Components/ActorTestSpawner.h"
+#include "Components/SceneComponent.h"
+#include "GameFramework/Actor.h"
 #include "Misc/AutomationTest.h"
+#include "UObject/UObjectGlobals.h"
+#include "VistaActionExecutorComponent.h"
+#include "VistaAnimationComponent.h"
+#include "VistaInteractable.h"
+#include "VistaPlayableHomeRuntimeSubsystem.h"
 #include "VistaStatefulApplianceActor.h"
+
+namespace
+{
+bool RuntimeStatesExactlyMatch(
+    const FVistaEntityRuntimeState& Left,
+    const FVistaEntityRuntimeState& Right)
+{
+    if (Left.SemanticId != Right.SemanticId ||
+        !Left.Transform.Equals(Right.Transform, 0.0f) ||
+        Left.bHidden != Right.bHidden || Left.bPortable != Right.bPortable ||
+        Left.Values.Num() != Right.Values.Num())
+    {
+        return false;
+    }
+    for (const TPair<FName, FString>& Pair : Left.Values)
+    {
+        const FString* Other = Right.Values.Find(Pair.Key);
+        if (Other == nullptr || *Other != Pair.Value)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool StateValueEquals(
+    const FVistaEntityRuntimeState& State,
+    const FName Key,
+    const FString& Expected)
+{
+    const FString* Value = State.Values.Find(Key);
+    return Value != nullptr && *Value == Expected;
+}
+
+FVistaEntityRuntimeState PoweredIdleState(
+    AVistaStatefulApplianceActor& Appliance)
+{
+    FVistaEntityRuntimeState State =
+        IVistaInteractable::Execute_VistaGetRuntimeState(&Appliance);
+    State.Values.Add(TEXT("powered"), TEXT("true"));
+    State.Values.Add(TEXT("active"), TEXT("false"));
+    State.Values.Add(TEXT("on"), TEXT("false"));
+    State.Values.Add(TEXT("status"), TEXT("idle"));
+    return State;
+}
+
+FVistaSemanticActionRequest PressRequest(
+    const FName CommandId,
+    AActor& Requester,
+    AVistaStatefulApplianceActor& Appliance)
+{
+    FVistaSemanticActionRequest Request;
+    Request.CommandId = CommandId;
+    Request.Requester = &Requester;
+    Request.Target = &Appliance;
+    Request.RequesterSemanticId = TEXT("home.p0/entity.proof_requester");
+    Request.TargetSemanticId = Appliance.SemanticId;
+    Request.Affordance = EVistaAffordance::Press;
+    Request.TimeoutSeconds = 10.0f;
+    return Request;
+}
+} // namespace
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FVistaApplianceActionsP0TransitionProof,
@@ -162,6 +232,29 @@ bool FVistaApplianceActionsP0TransitionProof::RunTest(
         Code,
         FName(TEXT("APPLIANCE_POWER_REQUIRED")));
 
+    FVistaAppliancePressProfile NonActivatingPress;
+    NonActivatingPress.ControlId = TEXT("cycle_mode");
+    NonActivatingPress.bResultActive = false;
+    NonActivatingPress.ResultStatus = TEXT("idle");
+    TestFalse(
+        TEXT("unpowered non-activating press still fails closed"),
+        AVistaStatefulApplianceActor::PlanInteractionTransition(
+            Off,
+            EVistaAffordance::Press,
+            ActivityProfile,
+            NonActivatingPress,
+            After,
+            bMutated,
+            Code));
+    TestFalse(TEXT("unpowered non-activating press has zero mutation"), bMutated);
+    TestTrue(
+        TEXT("unpowered non-activating press preserves state"),
+        After == Off);
+    TestEqual(
+        TEXT("unpowered non-activating press has explicit code"),
+        Code,
+        FName(TEXT("APPLIANCE_POWER_REQUIRED")));
+
     TestTrue(
         TEXT("turn_off succeeds from running"),
         AVistaStatefulApplianceActor::PlanInteractionTransition(
@@ -226,6 +319,254 @@ bool FVistaApplianceActionsP0TransitionProof::RunTest(
         TEXT("inconsistent state has explicit code"),
         Code,
         FName(TEXT("APPLIANCE_STATE_INVALID")));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FVistaApplianceActionsP0TransactionProof,
+    "VISTA.PlayableHome.ApplianceActionsP0.TransactionReceipt",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FVistaApplianceActionsP0TransactionProof::RunTest(
+    const FString& Parameters)
+{
+    static_cast<void>(Parameters);
+    FActorTestSpawner Spawner;
+    UWorld& World = Spawner.GetWorld();
+    if (!IsValid(World.GetSubsystem<UVistaPlayableHomeRuntimeSubsystem>()))
+    {
+        AddError(TEXT("transient world did not initialize the action ledger"));
+        return false;
+    }
+
+    AActor& Requester = Spawner.SpawnActor<AActor>();
+    Requester.Tags.AddUnique(
+        FName(TEXT("VistaSemanticId=home.p0/entity.proof_requester")));
+    USceneComponent* RequesterRoot =
+        NewObject<USceneComponent>(&Requester, TEXT("ProofRoot"));
+    Requester.AddInstanceComponent(RequesterRoot);
+    const bool bRootAccepted = Requester.SetRootComponent(RequesterRoot);
+    RequesterRoot->RegisterComponent();
+    UVistaAnimationComponent* Animation =
+        NewObject<UVistaAnimationComponent>(&Requester, TEXT("ProofAnimation"));
+    Requester.AddInstanceComponent(Animation);
+    Animation->RegisterComponent();
+    UVistaActionExecutorComponent* Executor =
+        NewObject<UVistaActionExecutorComponent>(&Requester, TEXT("ProofExecutor"));
+    Requester.AddInstanceComponent(Executor);
+    Executor->RegisterComponent();
+
+    AVistaStatefulApplianceActor& Appliance =
+        Spawner.SpawnActor<AVistaStatefulApplianceActor>();
+    Appliance.SemanticId = TEXT("home.p0/entity.proof_washer");
+    TestTrue(
+        TEXT("proof requester root is registered"),
+        bRootAccepted && IsValid(RequesterRoot) &&
+            RequesterRoot->IsRegistered());
+    TestTrue(
+        TEXT("proof animation component is registered"),
+        IsValid(Animation) && Animation->IsRegistered());
+    TestTrue(
+        TEXT("proof executor component is registered"),
+        IsValid(Executor) && Executor->IsRegistered());
+
+    const FVistaEntityRuntimeState AuthoredIdle = PoweredIdleState(Appliance);
+    const FVistaInteractionResult InitialApply =
+        IVistaInteractable::Execute_VistaApplyRuntimeState(
+            &Appliance,
+            AuthoredIdle);
+    if (!InitialApply.IsSuccess())
+    {
+        AddError(FString::Printf(
+            TEXT("could not author proof appliance state: %s"),
+            *InitialApply.Code.ToString()));
+        return false;
+    }
+    const FVistaEntityRuntimeState Baseline =
+        IVistaInteractable::Execute_VistaGetRuntimeState(&Appliance);
+
+    FVistaEntityRuntimeState AliasConflict = Baseline;
+    AliasConflict.Values.Add(TEXT("active"), TEXT("true"));
+    AliasConflict.Values.Add(TEXT("on"), TEXT("false"));
+    const FVistaInteractionResult ConflictResult =
+        IVistaInteractable::Execute_VistaApplyRuntimeState(
+            &Appliance,
+            AliasConflict);
+    TestFalse(TEXT("conflicting active/on aliases fail closed"), ConflictResult.IsSuccess());
+    TestEqual(
+        TEXT("conflicting active/on aliases have typed code"),
+        ConflictResult.Code,
+        FName(TEXT("APPLIANCE_ACTIVE_ALIAS_MISMATCH")));
+    TestTrue(
+        TEXT("alias conflict preserves exact appliance state"),
+        RuntimeStatesExactlyMatch(
+            Baseline,
+            IVistaInteractable::Execute_VistaGetRuntimeState(&Appliance)));
+
+    FVistaActionTransactionRecord BeginRecord;
+    TestTrue(
+        TEXT("press transaction acquires target reservation"),
+        Executor->BeginSemanticInteractionForDevAutomation(
+            PressRequest(TEXT("p0-press-success"), Requester, Appliance),
+            BeginRecord));
+    TestTrue(
+        TEXT("press begin receipt records reservation acquired"),
+        BeginRecord.bTargetReservationAcquired);
+    TestFalse(
+        TEXT("press reservation is not released before terminal state"),
+        BeginRecord.bTargetReservationReleased);
+    TestEqual(
+        TEXT("press has zero mutations before contact"),
+        BeginRecord.StateMutationCount,
+        0);
+    TestTrue(
+        TEXT("press begin captures exact before state"),
+        RuntimeStatesExactlyMatch(Baseline, BeginRecord.BeforeState));
+    TestTrue(
+        TEXT("press begin does not mutate target"),
+        RuntimeStatesExactlyMatch(
+            Baseline,
+            IVistaInteractable::Execute_VistaGetRuntimeState(&Appliance)));
+    FVistaEntityRuntimeState ReservationProbe = Baseline;
+    ReservationProbe.Values.Add(TEXT("status"), TEXT("loaded"));
+    const FVistaInteractionResult ReservedApply =
+        IVistaInteractable::Execute_VistaApplyRuntimeState(
+            &Appliance,
+            ReservationProbe);
+    TestFalse(
+        TEXT("press reservation blocks out-of-band mutation"),
+        ReservedApply.IsSuccess());
+    TestEqual(
+        TEXT("reserved target has typed busy code"),
+        ReservedApply.Code,
+        FName(TEXT("APPLIANCE_TARGET_RESERVED")));
+    TestTrue(
+        TEXT("rejected out-of-band mutation preserves exact state"),
+        RuntimeStatesExactlyMatch(
+            Baseline,
+            IVistaInteractable::Execute_VistaGetRuntimeState(&Appliance)));
+
+    FVistaActionTransactionRecord SuccessRecord;
+    TestTrue(
+        TEXT("press reaches contact and succeeds"),
+        Executor->DriveSemanticInteractionForDevAutomation(
+            false,
+            SuccessRecord));
+    const FVistaEntityRuntimeState Running =
+        IVistaInteractable::Execute_VistaGetRuntimeState(&Appliance);
+    TestTrue(
+        TEXT("successful press has terminal success status"),
+        SuccessRecord.Status == EVistaActionTransactionStatus::Succeeded);
+    TestTrue(TEXT("successful press commits contact"), SuccessRecord.bContactCommitted);
+    TestEqual(
+        TEXT("successful press mutates state exactly once"),
+        SuccessRecord.StateMutationCount,
+        1);
+    TestTrue(
+        TEXT("successful press releases target reservation"),
+        SuccessRecord.bTargetReservationAcquired &&
+            SuccessRecord.bTargetReservationReleased);
+    TestTrue(
+        TEXT("successful press contact and after states match runtime"),
+        RuntimeStatesExactlyMatch(Running, SuccessRecord.ContactState) &&
+            RuntimeStatesExactlyMatch(Running, SuccessRecord.AfterState));
+    TestTrue(
+        TEXT("washer press contact produces active running state"),
+        StateValueEquals(Running, TEXT("powered"), TEXT("true")) &&
+            StateValueEquals(Running, TEXT("active"), TEXT("true")) &&
+            StateValueEquals(Running, TEXT("on"), TEXT("true")) &&
+            StateValueEquals(Running, TEXT("status"), TEXT("running")));
+
+    TestTrue(
+        TEXT("idempotent press still acquires transaction"),
+        Executor->BeginSemanticInteractionForDevAutomation(
+            PressRequest(TEXT("p0-press-idempotent"), Requester, Appliance),
+            BeginRecord));
+    FVistaActionTransactionRecord IdempotentRecord;
+    TestTrue(
+        TEXT("idempotent press completes transaction"),
+        Executor->DriveSemanticInteractionForDevAutomation(
+            false,
+            IdempotentRecord));
+    TestEqual(
+        TEXT("idempotent press has zero state mutations"),
+        IdempotentRecord.StateMutationCount,
+        0);
+    TestTrue(
+        TEXT("idempotent press preserves exact state"),
+        RuntimeStatesExactlyMatch(
+            Running,
+            IVistaInteractable::Execute_VistaGetRuntimeState(&Appliance)) &&
+            RuntimeStatesExactlyMatch(Running, IdempotentRecord.BeforeState) &&
+            RuntimeStatesExactlyMatch(Running, IdempotentRecord.ContactState) &&
+            RuntimeStatesExactlyMatch(Running, IdempotentRecord.AfterState));
+    TestTrue(
+        TEXT("idempotent press releases target reservation"),
+        IdempotentRecord.bTargetReservationAcquired &&
+            IdempotentRecord.bTargetReservationReleased);
+
+    const FVistaInteractionResult ResetResult =
+        IVistaInteractable::Execute_VistaApplyRuntimeState(
+            &Appliance,
+            Baseline);
+    if (!ResetResult.IsSuccess())
+    {
+        AddError(FString::Printf(
+            TEXT("could not reset appliance before rollback proof: %s"),
+            *ResetResult.Code.ToString()));
+        return false;
+    }
+    TestTrue(
+        TEXT("rollback press acquires target reservation"),
+        Executor->BeginSemanticInteractionForDevAutomation(
+            PressRequest(TEXT("p0-press-rollback"), Requester, Appliance),
+            BeginRecord));
+    FVistaActionTransactionRecord RollbackRecord;
+    TestTrue(
+        TEXT("forced post-contact failure completes verified rollback"),
+        Executor->DriveSemanticInteractionForDevAutomation(
+            true,
+            RollbackRecord));
+    const FVistaEntityRuntimeState AfterRollback =
+        IVistaInteractable::Execute_VistaGetRuntimeState(&Appliance);
+    TestTrue(
+        TEXT("forced post-contact receipt is failed"),
+        RollbackRecord.Status == EVistaActionTransactionStatus::Failed);
+    TestEqual(
+        TEXT("forced post-contact receipt has exact code"),
+        RollbackRecord.Code,
+        FName(TEXT("DEV_AUTOMATION_FORCED_POST_CONTACT_FAILURE")));
+    TestEqual(
+        TEXT("rollback path records one contact mutation"),
+        RollbackRecord.StateMutationCount,
+        1);
+    TestTrue(
+        TEXT("rollback receipt proves restore and reservation release"),
+        RollbackRecord.bTargetReservationAcquired &&
+            RollbackRecord.bTargetReservationReleased &&
+            RollbackRecord.bRollbackAttempted && RollbackRecord.bRolledBack);
+    TestTrue(
+        TEXT("rollback contact captured active running state"),
+        StateValueEquals(
+            RollbackRecord.ContactState,
+            TEXT("active"),
+            TEXT("true")) &&
+            StateValueEquals(
+                RollbackRecord.ContactState,
+                TEXT("status"),
+                TEXT("running")));
+    TestTrue(
+        TEXT("rollback restores exact before state"),
+        RuntimeStatesExactlyMatch(Baseline, RollbackRecord.BeforeState) &&
+            RuntimeStatesExactlyMatch(Baseline, RollbackRecord.AfterState) &&
+            RuntimeStatesExactlyMatch(Baseline, AfterRollback));
+    const FVistaInteractionResult PostRollbackApply =
+        IVistaInteractable::Execute_VistaApplyRuntimeState(
+            &Appliance,
+            Baseline);
+    TestTrue(
+        TEXT("rollback release permits a new authoritative state apply"),
+        PostRollbackApply.IsSuccess());
     return true;
 }
 
