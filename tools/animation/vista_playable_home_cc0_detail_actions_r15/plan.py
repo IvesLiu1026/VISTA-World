@@ -13,6 +13,7 @@ import copy
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 from typing import Any, Mapping, Sequence
@@ -242,6 +243,23 @@ EXPECTED_ACTIONS = dict(
         strict=True,
     )
 )
+EXPECTED_ACTION_NAMES = dict(
+    zip(
+        EXPECTED_CLIPS,
+        (
+            "VISTA_CC0_RotaryTurnOnRight_R15",
+            "VISTA_CC0_RotaryTurnOffRight_R15",
+            "VISTA_CC0_ButtonPressRight_R15",
+            "VISTA_CC0_CabinetDrawerOpenRight_R15",
+            "VISTA_CC0_CabinetDrawerCloseRight_R15",
+            "VISTA_CC0_SitDownChair_R15",
+            "VISTA_CC0_SeatedIdleLoop_R15",
+            "VISTA_CC0_StandUpChair_R15",
+            "VISTA_CC0_PourRight_R15",
+        ),
+        strict=True,
+    )
+)
 EXPECTED_TARGETS: Mapping[str, dict[str, Any]] = {
     "rotary_turn_on_right": {
         "semantic_types": ["stove_control", "faucet_control"],
@@ -409,6 +427,47 @@ def _expected_runtime_binding(clip_id: str) -> dict[str, Any]:
     }
 
 
+def _expected_clip_identity(clip_id: str) -> dict[str, str]:
+    action_name = EXPECTED_ACTION_NAMES[clip_id]
+    action_core = action_name.removeprefix("VISTA_CC0_").removesuffix("_R15")
+    return {
+        "action_name": action_name,
+        "ue_sequence_name": f"AS_VistaCC0{action_core}_R15",
+        "ue_montage_name": f"AM_VistaCC0{action_core}_R15",
+        "recipe_id": f"cc0_numeric_{clip_id}_r15",
+    }
+
+
+def expected_profile_record() -> dict[str, Any]:
+    raw = PROFILE_PATH.read_bytes()
+    profile = load_json(PROFILE_PATH)
+    return {
+        "relative_path": PROFILE_PATH.relative_to(REPOSITORY_ROOT).as_posix(),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "size_bytes": len(raw),
+        "content_digest": profile.get("content_digest"),
+    }
+
+
+def path_is_within_git_repository(path: Path) -> bool:
+    """Return true for a path inside any normal clone or linked worktree."""
+
+    try:
+        resolved = path.resolve(strict=False)
+    except OSError:
+        return True
+    for candidate in (resolved, *resolved.parents):
+        marker = candidate / ".git"
+        try:
+            os.lstat(marker)
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError:
+            return True
+        return True
+    return False
+
+
 def validate_profile(profile: Mapping[str, Any]) -> None:
     _assert_finite(profile)
     _validate_json_schema(profile)
@@ -449,6 +508,9 @@ def validate_profile(profile: Mapping[str, Any]) -> None:
         clip_id = clip["clip_id"]
         if clip["event_action"] != EXPECTED_ACTIONS[clip_id]:
             _fail("EVENT_ACTION_INVALID", clip_id)
+        expected_identity = _expected_clip_identity(clip_id)
+        if any(clip.get(field) != value for field, value in expected_identity.items()):
+            _fail("CLIP_IDENTITY_INVALID", clip_id)
         if clip["target"] != EXPECTED_TARGETS[clip_id]:
             _fail("TARGET_CONTACT_CONTRACT_INVALID", clip_id)
         target = clip["target"]
@@ -1263,7 +1325,9 @@ def _clip_plan(profile_clip: Mapping[str, Any]) -> dict[str, Any]:
     return result
 
 
-def validate_plan(plan: Mapping[str, Any]) -> None:
+def validate_plan(
+    plan: Mapping[str, Any], *, destination_must_be_fresh: bool = True
+) -> None:
     _assert_finite(plan)
     expected_keys = {
         "schema_version",
@@ -1291,6 +1355,8 @@ def validate_plan(plan: Mapping[str, Any]) -> None:
     validate_profile(plan["profile"])
     if plan["profile"] != load_profile():
         _fail("PLAN_PROFILE_INVALID", "profile is not repository authority")
+    if plan.get("profile_record") != expected_profile_record():
+        _fail("PLAN_PROFILE_RECORD_INVALID", "profile record differs")
     if tuple(plan.get("rig_bone_names", ())) != EXPECTED_BONES:
         _fail("RIG_CONTRACT_INVALID", "exact ordered 53-bone rig required")
     clips = plan.get("clips")
@@ -1314,6 +1380,11 @@ def validate_plan(plan: Mapping[str, Any]) -> None:
     if mode not in {"dry_run", "execute"}:
         _fail("PLAN_MODE_INVALID", repr(mode))
     executing = mode == "execute"
+    expected_status = (
+        "execution_plan_only_not_run" if executing else "dry_run_validated_no_write"
+    )
+    if plan.get("status") != expected_status:
+        _fail("PLAN_STATUS_INVALID", repr(plan.get("status")))
     if (
         plan.get("will_write") is not executing
         or plan.get("will_execute_blender") is not executing
@@ -1339,11 +1410,11 @@ def validate_plan(plan: Mapping[str, Any]) -> None:
         if type(destination_value) is not str or not destination_value:
             _fail("PLAN_OUTPUT_INVALID", "execute destination must be text")
         destination = Path(destination_value)
-        if (
-            not destination.is_absolute()
-            or destination.exists()
-            or destination.is_relative_to(REPOSITORY_ROOT)
-        ):
+        if not destination.is_absolute():
+            _fail("PLAN_OUTPUT_INVALID", "execute destination must be absolute")
+        if path_is_within_git_repository(destination):
+            _fail("PLAN_OUTPUT_INSIDE_GIT", str(destination))
+        if destination_must_be_fresh and destination.exists():
             _fail(
                 "PLAN_OUTPUT_INVALID",
                 "execute destination must be fresh and outside Git",
@@ -1364,7 +1435,6 @@ def build_plan(
         _fail("PLAN_OUTPUT_INVALID", "dry run destination is prohibited")
     if mode == "execute" and destination_root is None:
         _fail("PLAN_OUTPUT_INVALID", "execute destination is required")
-    profile_raw = PROFILE_PATH.read_bytes()
     plan = seal_document(
         {
             "schema_version": PLAN_SCHEMA_VERSION,
@@ -1376,12 +1446,7 @@ def build_plan(
             "will_write": mode == "execute",
             "will_execute_blender": mode == "execute",
             "profile": profile,
-            "profile_record": {
-                "relative_path": PROFILE_PATH.relative_to(REPOSITORY_ROOT).as_posix(),
-                "sha256": hashlib.sha256(profile_raw).hexdigest(),
-                "size_bytes": len(profile_raw),
-                "content_digest": profile["content_digest"],
-            },
+            "profile_record": expected_profile_record(),
             "rig_bone_names": list(EXPECTED_BONES),
             "clips": [_clip_plan(clip) for clip in profile["clips"]],
             "output": {

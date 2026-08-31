@@ -74,6 +74,12 @@ The final worker was also exercised with a self-digested plan that changed the
 typed rotary clip to a source-only backend. Blender exited with code 1 before
 writing a receipt: `WorkerError: runtime/source-only binding differs`.
 
+Both planner and Blender worker additionally require the exact clip identity
+table, mode-specific plan status, and repository profile record (relative
+path, raw SHA-256, byte size, and content digest). Execute destinations are
+rejected when any resolved ancestor contains a `.git` file or directory, so a
+different linked worktree is not a valid external artifact root either.
+
 ## Reproducible headless generation
 
 Use a new destination for every attempt. Never reuse a partial or failed root.
@@ -174,6 +180,35 @@ bytes were identical between the append-only `20260901a` and `20260901b`
 attempts. Blender FBX and Blend container hashes changed with the fresh output
 root/export metadata, so this lane claims deterministic motion semantics—not
 cross-path byte-identical Blender containers.
+
+## Standalone receipt validation
+
+The Blender-free validator reopens the archived execute plan and worker
+receipt, applies the current closed profile/plan checks in completed-run mode,
+and verifies that the artifact tree contains exactly the declared Blend, nine
+FBXs, and PNG with matching sizes and hashes:
+
+```bash
+PYTHONPATH=. uv run python -m \
+  tools.animation.vista_playable_home_cc0_detail_actions_r15.receipt \
+  --authority-root \
+  /data/sysx/vista-world/runs/vista-action-world-r1/\
+makehuman-cc0-detail-actions-r15-source-r1-20260901b
+```
+
+For `20260901b`, it reports:
+
+| Validation field | Value |
+| --- | --- |
+| validation content digest | `4d6e92e7f3235c2644d1ade45a57aba349cb03a7c70abb216346e1df1f03ae62` |
+| artifact tree digest | `f9199bda961b4b84e462ca5f20b7752d8cb0c08497f060ee0abe2e7a92c0ef4c` |
+| artifact count | `11` |
+| artifact bytes | `33,913,253` |
+
+`--worker-source` is an optional extra byte check against the exact historical
+worker file used for a run. The B receipt pins that worker as
+`8c0be236…`; later validator hardening intentionally does not rewrite or
+misattribute the historical receipt.
 
 ## Remaining gates
 

@@ -43,6 +43,12 @@ EXPECTED_CLIPS = (
     "stand_up_chair",
     "pour_right",
 )
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+PROFILE_RELATIVE_PATH = (
+    "world_packs/vista_playable_home_r1/animation_profiles/"
+    "makehuman_cc0_detail_actions_r15.json"
+)
+PROFILE_PATH = REPOSITORY_ROOT / PROFILE_RELATIVE_PATH
 EXPECTED_BONES = (
     "root",
     "pelvis",
@@ -418,6 +424,43 @@ def _notify_signature(notifies: Any) -> tuple[tuple[Any, ...], ...]:
     )
 
 
+def _expected_profile_record() -> dict[str, Any]:
+    _require(
+        PROFILE_PATH.is_file() and not PROFILE_PATH.is_symlink(),
+        "repository profile source invalid",
+    )
+    raw = PROFILE_PATH.read_bytes()
+    profile = json.loads(
+        raw.decode("utf-8"),
+        object_pairs_hook=_duplicate_keys,
+        parse_constant=_non_finite,
+    )
+    _require(type(profile) is dict, "repository profile root differs")
+    _assert_finite(profile)
+    return {
+        "relative_path": PROFILE_RELATIVE_PATH,
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "size_bytes": len(raw),
+        "content_digest": profile.get("content_digest"),
+    }
+
+
+def _path_is_within_git_repository(path: Path) -> bool:
+    try:
+        resolved = path.resolve(strict=False)
+    except OSError:
+        return True
+    for candidate in (resolved, *resolved.parents):
+        try:
+            os.lstat(candidate / ".git")
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError:
+            return True
+        return True
+    return False
+
+
 def _validate_keyframes(clip: Mapping[str, Any]) -> None:
     keyframes = clip.get("keyframes")
     _require(type(keyframes) is list and len(keyframes) >= 6, "keyframes missing")
@@ -533,9 +576,10 @@ def _validate_plan(plan: Mapping[str, Any]) -> None:
     _require(plan.get("acceptance") == ACCEPTANCE, "acceptance escalation prohibited")
     _require(
         plan.get("mode") == "execute"
+        and plan.get("status") == "execution_plan_only_not_run"
         and plan.get("will_write") is True
         and plan.get("will_execute_blender") is True,
-        "worker requires an explicit execute plan",
+        "worker requires an exact unexecuted plan status",
     )
     _require(not any(plan.get("claims", {}).values()), "plan claims must remain false")
     profile = plan.get("profile")
@@ -549,6 +593,11 @@ def _validate_plan(plan: Mapping[str, Any]) -> None:
         "profile binding differs",
     )
     _require(profile.get("provenance") == PROVENANCE, "motion provenance differs")
+    _require(
+        plan.get("profile_record") == _expected_profile_record()
+        and plan["profile_record"]["content_digest"] == profile.get("content_digest"),
+        "repository profile record differs",
+    )
     _require(
         profile.get("license_scope")
         == {
@@ -661,6 +710,10 @@ def _validate_plan(plan: Mapping[str, Any]) -> None:
         type(output.get("destination_root")) is str
         and Path(output["destination_root"]).is_absolute(),
         "sealed destination must be absolute text",
+    )
+    _require(
+        not _path_is_within_git_repository(Path(output["destination_root"])),
+        "sealed destination is inside a Git repository or worktree",
     )
 
 
