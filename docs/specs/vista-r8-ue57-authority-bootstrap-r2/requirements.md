@@ -247,6 +247,24 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   wildcards. `/dev/null` is the sole non-scratch writable endpoint, and only
   exact `O_RDWR` with the explicitly modelled non-mutating `O_CLOEXEC` flag is
   accepted.
+- WHEN an observed read-only tool invocation reads a kernel virtual sysctl,
+  the trace contract SHALL accept only the literal and canonical
+  `/proc/sys/vm/overcommit_memory` as a distinct finite host authority. Its
+  value SHALL be stream-read despite `st_size == 0`, SHALL be exactly one of
+  `0\n`, `1\n`, or `2\n`, and SHALL be bound by exact byte count and SHA-256.
+  The endpoint SHALL remain a root:root `0644`, single-link regular file opened
+  only with `O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK`; its path, mode, owner,
+  device, inode, and all other stable metadata SHALL remain exact before and
+  after replay and during independent authority review.
+- The finite sysctl component chain MAY omit only the volatile link count of
+  its exact `/proc` ancestor under one synthesized, schema-defined policy. It
+  SHALL retain every other `/proc` component field and every field for `/`,
+  `/proc/sys`, `/proc/sys/vm`, and the endpoint. The request cannot select or
+  extend this policy. Any other `/proc` or `/proc/sys` path, alias, traversal,
+  symlink, write-capable open, malformed value, content drift, inode drift,
+  component drift, or orphan profile reference SHALL fail zero-publication and
+  production replay. No prefix, glob, or generic procfs-host-input allowlist is
+  permitted.
 - The unprivileged Phase A request planner SHALL be observation-only: it SHALL
   run in fresh private temporary roots, emit only canonical request bytes, and
   assert `observation_only=true` and `production_native_output=false`. Cleanup
@@ -314,7 +332,7 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   sequence, and acknowledgements.
 - Phase B SHALL reuse, byte for byte, Phase A's installed-builder pin, source
   bundle pin, commit, seven-blob inventory, tools/toolchain ledger, runtime-map
-  sets, and trace-v2 contract; only its fixed service-unit binding and job may
+  sets, and trace-v3 contract; only its fixed service-unit binding and job may
   differ. Derivation SHALL re-read the exact Phase A request and manifest and
   prove manifest-to-request pin lineage. Later Phase B authority review SHALL
   hold both Phase A documents while revalidating those same common fields and

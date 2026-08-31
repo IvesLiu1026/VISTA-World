@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -219,6 +220,37 @@ def _request_trace_contract() -> dict[str, object]:
             for phase in ("phase-a", "phase-b")
         },
     }
+
+
+def _request_trace_contract_with_kernel_virtual() -> dict[str, object]:
+    contract = _request_trace_contract()
+    special = builder._planner_trace_file_record(
+        str(builder.KERNEL_VIRTUAL_SYSCTL_PATH)
+    )
+    contract["host_files"] = sorted(  # type: ignore[index]
+        [*contract["host_files"], special],  # type: ignore[index]
+        key=lambda item: item["path"],
+    )
+    profile = contract["profiles"][0]  # type: ignore[index]
+    profile["host_files"] = sorted(  # type: ignore[index]
+        [*profile["host_files"], str(builder.KERNEL_VIRTUAL_SYSCTL_PATH)]
+    )
+    profile["event_multiset"] = sorted(  # type: ignore[index]
+        [
+            *profile["event_multiset"],
+            {
+                "line": _trace_event(
+                    "openat",
+                    str(builder.KERNEL_VIRTUAL_SYSCTL_PATH),
+                    "OK",
+                    open_flags=["O_RDONLY"],
+                ),
+                "count": 1,
+            },
+        ],
+        key=lambda item: item["line"],
+    )
+    return contract
 
 
 def _source_pins() -> dict[str, dict[str, object]]:
@@ -1066,6 +1098,298 @@ def test_trace_contract_closes_all_phase_invocations_and_host_inputs(
     ]
     with pytest.raises(builder.BuilderError, match="trace profiles"):
         builder._validate_trace_contract(missing_child)
+
+
+def test_kernel_virtual_sysctl_record_is_finite_stream_pinned_and_revalidated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = builder.KERNEL_VIRTUAL_SYSCTL_PATH
+    record = builder._planner_trace_file_record(str(path))
+
+    assert path.stat().st_size == 0
+    assert record["path"] == record["canonical"] == str(path)
+    assert record["storage"] == "kernel_virtual"
+    assert record["mode"] == "0644"
+    assert record["pin"] in [
+        pin.public() for pin in builder._kernel_virtual_sysctl_pins()
+    ]
+    assert [item["path"] for item in record["component_chain"]] == list(
+        builder.KERNEL_VIRTUAL_COMPONENT_PATHS
+    )
+    assert "nlink" not in record["component_chain"][1]
+    assert record["component_chain"][1]["metadata_policy"] == (
+        builder.KERNEL_VIRTUAL_COMPONENT_POLICY
+    )
+    assert all(
+        "nlink" in item
+        for index, item in enumerate(record["component_chain"])
+        if index != 1
+    )
+    assert (
+        builder._validate_trace_host_record(
+            record, "finite sysctl", expected_kind="regular"
+        )
+        == record
+    )
+
+    held = builder._open_trace_host_file(record, "finite sysctl")
+    try:
+        builder._revalidate_held(held, "finite sysctl", builder.MAX_NATIVE_BYTES)
+        original_hash = builder._hash_kernel_virtual_sysctl_fd
+        monkeypatch.setattr(
+            builder,
+            "_hash_kernel_virtual_sysctl_fd",
+            lambda _descriptor: builder.FilePin("0" * 64, 2),
+        )
+        with pytest.raises(builder.BuilderError, match="FILE_DRIFT"):
+            builder._revalidate_held(held, "finite sysctl", builder.MAX_NATIVE_BYTES)
+        monkeypatch.setattr(builder, "_hash_kernel_virtual_sysctl_fd", original_hash)
+    finally:
+        held.close()
+
+    original_lstat = os.lstat
+    drift: dict[str, int] = {"nlink": 17, "inode": 0}
+
+    def changing_proc_lstat(
+        candidate: os.PathLike[str] | str, *args: object, **kwargs: object
+    ) -> object:
+        info = original_lstat(candidate, *args, **kwargs)
+        if os.fspath(candidate) != "/proc":
+            return info
+        return SimpleNamespace(
+            st_mode=info.st_mode,
+            st_uid=info.st_uid,
+            st_gid=info.st_gid,
+            st_dev=info.st_dev,
+            st_ino=info.st_ino + drift["inode"],
+            st_nlink=info.st_nlink + drift["nlink"],
+            st_size=info.st_size,
+            st_blocks=info.st_blocks,
+            st_mtime_ns=info.st_mtime_ns,
+            st_ctime_ns=info.st_ctime_ns,
+        )
+
+    monkeypatch.setattr(builder.os, "lstat", changing_proc_lstat)
+    builder._assert_component_chain_live(record["component_chain"], path, "nlink")
+    drift["inode"] = 1
+    with pytest.raises(builder.BuilderError, match="TRACE_PATH_DRIFT"):
+        builder._assert_component_chain_live(record["component_chain"], path, "inode")
+
+
+@pytest.mark.parametrize("raw", builder.KERNEL_VIRTUAL_SYSCTL_VALUES)
+def test_kernel_virtual_sysctl_reader_accepts_only_exact_finite_values(
+    tmp_path: Path, raw: bytes
+) -> None:
+    target = tmp_path / "finite-sysctl"
+    target.write_bytes(raw)
+    descriptor = os.open(target, os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        assert builder._hash_kernel_virtual_sysctl_fd(descriptor).public() == _pin(raw)
+    finally:
+        os.close(descriptor)
+
+    for malformed in (b"", b"1", b"3\n", b"1\nx"):
+        target.write_bytes(malformed)
+        descriptor = os.open(target, os.O_RDONLY | os.O_CLOEXEC)
+        try:
+            with pytest.raises(builder.BuilderError, match="TRACE_INPUT_DRIFT"):
+                builder._hash_kernel_virtual_sysctl_fd(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+@pytest.mark.parametrize(
+    "raw_path,cwd",
+    [
+        ("/proc/sys/vm/./overcommit_memory", Path("/")),
+        ("/proc//sys/vm/overcommit_memory", Path("/")),
+        ("/proc/sys/vm/../vm/overcommit_memory", Path("/")),
+        ("overcommit_memory", Path("/proc/sys/vm")),
+    ],
+)
+def test_kernel_virtual_sysctl_trace_rejects_nonliteral_spellings(
+    tmp_path: Path, raw_path: str, cwd: Path
+) -> None:
+    with pytest.raises(builder.BuilderError, match="TRACE_KERNEL_VIRTUAL_PATH_INVALID"):
+        builder._parse_trace_line(
+            f'openat(AT_FDCWD, "{raw_path}", O_RDONLY|O_CLOEXEC) = 3',
+            cwd=cwd,
+            scratch=tmp_path,
+        )
+
+
+def test_kernel_virtual_sysctl_trace_accepts_only_readonly_exact_literal(
+    tmp_path: Path,
+) -> None:
+    path = str(builder.KERNEL_VIRTUAL_SYSCTL_PATH)
+    event = builder._parse_trace_line(
+        f'openat(AT_FDCWD, "{path}", O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK) = 3',
+        cwd=tmp_path,
+        scratch=tmp_path,
+    )
+    assert event["paths"] == [path]
+    assert event["open_flags"] == [
+        "O_RDONLY",
+        "O_NOFOLLOW",
+        "O_CLOEXEC",
+        "O_NONBLOCK",
+    ]
+
+    alias = tmp_path / "overcommit-alias"
+    alias.symlink_to(builder.KERNEL_VIRTUAL_SYSCTL_PATH)
+    with pytest.raises(builder.BuilderError, match="TRACE_KERNEL_VIRTUAL_PATH_INVALID"):
+        builder._parse_trace_line(
+            f'openat(AT_FDCWD, "{alias}", O_RDONLY) = 3',
+            cwd=tmp_path,
+            scratch=tmp_path,
+        )
+
+    for flags, result in (
+        ("O_WRONLY", "3"),
+        ("O_RDONLY|O_CREAT", "-1 EACCES (Permission denied)"),
+        ("O_RDWR", "-1 EACCES (Permission denied)"),
+    ):
+        with pytest.raises(
+            builder.BuilderError, match="TRACE_KERNEL_VIRTUAL_PATH_INVALID"
+        ):
+            builder._parse_trace_line(
+                f'openat(AT_FDCWD, "{path}", {flags}) = {result}',
+                cwd=tmp_path,
+                scratch=tmp_path,
+            )
+
+
+def test_kernel_virtual_sysctl_planner_rejects_aliases_and_other_proc_inputs(
+    tmp_path: Path,
+) -> None:
+    alias = tmp_path / "overcommit-alias"
+    alias.symlink_to(builder.KERNEL_VIRTUAL_SYSCTL_PATH)
+    rejected_files = (
+        "/proc/sys/vm/./overcommit_memory",
+        "/proc//sys/vm/overcommit_memory",
+        "/proc/sys/vm/../vm/overcommit_memory",
+        "/proc/sys/vm/swappiness",
+        str(alias),
+    )
+    for path in rejected_files:
+        with pytest.raises(builder.BuilderError, match="TRACE_HOST_INPUT_UNTRUSTED"):
+            builder._planner_trace_file_record(path)
+    with pytest.raises(builder.BuilderError, match="TRACE_HOST_INPUT_UNTRUSTED"):
+        builder._planner_trace_directory_record("/proc/sys/vm")
+
+
+def test_kernel_virtual_sysctl_contract_requires_exact_profile_event_binding() -> None:
+    contract = _request_trace_contract_with_kernel_virtual()
+    assert builder._validate_trace_contract(contract) == contract
+
+    stale_schema = copy.deepcopy(contract)
+    stale_schema["schema"] = "vista.r8-native-builder-trace-contract/v2"
+    with pytest.raises(builder.BuilderError, match="trace contract schema/version"):
+        builder._validate_trace_contract(stale_schema)
+
+    runtime_smuggle = copy.deepcopy(contract)
+    runtime_smuggle["builder_runtime_files"] = sorted(  # type: ignore[index]
+        [
+            *runtime_smuggle["builder_runtime_files"],  # type: ignore[index]
+            str(builder.KERNEL_VIRTUAL_SYSCTL_PATH),
+        ]
+    )
+    with pytest.raises(builder.BuilderError, match="trace builder_runtime_files"):
+        builder._validate_trace_contract(runtime_smuggle)
+
+    orphan_event = copy.deepcopy(contract)
+    first = orphan_event["profiles"][0]  # type: ignore[index]
+    first["host_files"].remove(str(builder.KERNEL_VIRTUAL_SYSCTL_PATH))
+    with pytest.raises(builder.BuilderError, match="orphan kernel virtual event"):
+        builder._validate_trace_contract(orphan_event)
+
+    missing_event = copy.deepcopy(contract)
+    first = missing_event["profiles"][0]  # type: ignore[index]
+    first["event_multiset"] = [
+        item
+        for item in first["event_multiset"]
+        if str(builder.KERNEL_VIRTUAL_SYSCTL_PATH) not in item["line"]
+    ]
+    with pytest.raises(builder.BuilderError, match="kernel virtual profile binding"):
+        builder._validate_trace_contract(missing_event)
+
+    failed_write = copy.deepcopy(contract)
+    first = failed_write["profiles"][0]  # type: ignore[index]
+    first["event_multiset"] = sorted(
+        [
+            item
+            for item in first["event_multiset"]
+            if str(builder.KERNEL_VIRTUAL_SYSCTL_PATH) not in item["line"]
+        ]
+        + [
+            {
+                "line": _trace_event(
+                    "openat",
+                    str(builder.KERNEL_VIRTUAL_SYSCTL_PATH),
+                    "EACCES",
+                    open_flags=["O_WRONLY"],
+                ),
+                "count": 1,
+            }
+        ],
+        key=lambda item: item["line"],
+    )
+    with pytest.raises(builder.BuilderError, match="kernel virtual open flags"):
+        builder._validate_trace_contract(failed_write)
+
+
+def test_kernel_virtual_sysctl_contract_rejects_forged_record_fields() -> None:
+    contract = _request_trace_contract_with_kernel_virtual()
+    special = next(
+        record
+        for record in contract["host_files"]  # type: ignore[union-attr]
+        if record["path"] == str(builder.KERNEL_VIRTUAL_SYSCTL_PATH)
+    )
+
+    mutations: list[tuple[str, object]] = [
+        ("storage", "regular"),
+        ("pin", _pin(b"3\n")),
+        ("mode", "0600"),
+    ]
+    for field, value in mutations:
+        changed = copy.deepcopy(contract)
+        target = next(
+            record
+            for record in changed["host_files"]  # type: ignore[union-attr]
+            if record["path"] == str(builder.KERNEL_VIRTUAL_SYSCTL_PATH)
+        )
+        target[field] = value
+        with pytest.raises(builder.BuilderError, match="REQUEST_INVALID"):
+            builder._validate_trace_contract(changed)
+
+    changed = copy.deepcopy(contract)
+    target = next(
+        record
+        for record in changed["host_files"]  # type: ignore[union-attr]
+        if record["path"] == str(builder.KERNEL_VIRTUAL_SYSCTL_PATH)
+    )
+    target["component_chain"][1]["metadata_policy"] = "request-selected"
+    with pytest.raises(builder.BuilderError, match="REQUEST_INVALID"):
+        builder._validate_trace_contract(changed)
+
+    for index, field, value in (
+        (2, "inode", 1),
+        (-1, "inode", 1),
+        (-1, "mode", "0600"),
+    ):
+        changed = copy.deepcopy(contract)
+        target = next(
+            record
+            for record in changed["host_files"]  # type: ignore[union-attr]
+            if record["path"] == str(builder.KERNEL_VIRTUAL_SYSCTL_PATH)
+        )
+        if field == "inode":
+            target["component_chain"][index][field] += value
+        else:
+            target["component_chain"][index][field] = value
+        assert target != special
+        with pytest.raises(builder.BuilderError, match="TRACE_PATH_DRIFT"):
+            builder._open_trace_host_file(target, "forged component")
 
 
 def test_trace_host_inventory_accepts_and_revalidates_empty_file(

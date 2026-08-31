@@ -39,7 +39,7 @@ from typing import Any, Iterable, Mapping, NoReturn, Sequence
 
 
 REQUEST_SCHEMA = "vista.r8-native-builder-request/v2"
-TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v2"
+TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v3"
 PHASE_A_MANIFEST_SCHEMA = "vista.r8-native-builder-phase-a-manifest/v1"
 PHASE_B_MANIFEST_SCHEMA = "vista.r8-native-builder-phase-b-manifest/v1"
 JOB_MANIFEST_SCHEMA = "vista.r8-native-builder-job-manifest/v1"
@@ -78,6 +78,18 @@ READELF_PATH = Path("/usr/bin/readelf")
 STRACE_PATH = Path("/usr/bin/strace")
 STRACE_VERSION = "strace -- version 5.16"
 FIXED_COMPILER_SOURCE_FD = 900
+
+KERNEL_VIRTUAL_SYSCTL_PATH = Path("/proc/sys/vm/overcommit_memory")
+KERNEL_VIRTUAL_COMPONENT_PATH = Path("/proc")
+KERNEL_VIRTUAL_COMPONENT_POLICY = "proc-root-nlink-volatile-v1"
+KERNEL_VIRTUAL_SYSCTL_VALUES = (b"0\n", b"1\n", b"2\n")
+KERNEL_VIRTUAL_COMPONENT_PATHS = (
+    "/",
+    "/proc",
+    "/proc/sys",
+    "/proc/sys/vm",
+    "/proc/sys/vm/overcommit_memory",
+)
 
 PINNED_PYTHON_SHA256 = (
     "7d51cd6b48b521277f5caa4610a82126e315fa2be4df069823a8b1eeb5bd4a86"
@@ -275,6 +287,24 @@ TRACE_OPEN_FLAG_TOKENS = frozenset(
     }
 )
 TRACE_DEV_NULL_ALLOWED_NONMUTATING_FLAGS = frozenset({"O_CLOEXEC"})
+KERNEL_VIRTUAL_ALLOWED_OPEN_FLAGS = frozenset(
+    {"O_CLOEXEC", "O_LARGEFILE", "O_NOFOLLOW", "O_NONBLOCK"}
+)
+KERNEL_VIRTUAL_READ_SYSCALLS = frozenset(
+    {
+        "access",
+        "faccessat",
+        "faccessat2",
+        "lstat",
+        "newfstatat",
+        "open",
+        "openat",
+        "openat2",
+        "stat",
+        "statfs",
+        "statx",
+    }
+)
 MAX_TRACE_FILE_BYTES = 64 * 1024 * 1024
 MAX_TRACE_LINES = 1_000_000
 TRACE_FORBIDDEN_STATE_SYSCALLS = frozenset(
@@ -397,6 +427,37 @@ class HeldWorkspaceChain:
     def close(self) -> None:
         for _path, descriptor, _metadata in reversed(self.entries):
             os.close(descriptor)
+
+
+def _kernel_virtual_sysctl_pins() -> frozenset[FilePin]:
+    return frozenset(
+        FilePin(hashlib.sha256(raw).hexdigest(), len(raw))
+        for raw in KERNEL_VIRTUAL_SYSCTL_VALUES
+    )
+
+
+def _path_is_procfs(value: str | Path) -> bool:
+    return PurePosixPath(str(value)).parts[:2] == ("/", "proc")
+
+
+def _is_kernel_virtual_sysctl_target(
+    requested: str | Path, canonical: str | Path
+) -> bool:
+    return str(requested) == str(KERNEL_VIRTUAL_SYSCTL_PATH) and str(canonical) == str(
+        KERNEL_VIRTUAL_SYSCTL_PATH
+    )
+
+
+def _kernel_virtual_component_chain_is_exact(
+    chain: Sequence[Mapping[str, Any]],
+) -> bool:
+    return (
+        tuple(item.get("path") for item in chain) == KERNEL_VIRTUAL_COMPONENT_PATHS
+        and tuple(item.get("kind") for item in chain)
+        == ("directory", "directory", "directory", "directory", "regular")
+        and chain[1].get("metadata_policy") == KERNEL_VIRTUAL_COMPONENT_POLICY
+        and all(item.get("kind") != "symlink" for item in chain)
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -648,6 +709,47 @@ def _valid_trace_open_flags(value: Any) -> bool:
     )
 
 
+def _kernel_virtual_open_flags_are_readonly(value: Any) -> bool:
+    return (
+        _valid_trace_open_flags(value)
+        and "O_RDONLY" in value
+        and all(
+            flag == "O_RDONLY" or flag in KERNEL_VIRTUAL_ALLOWED_OPEN_FLAGS
+            for flag in value
+        )
+    )
+
+
+def _validate_kernel_virtual_trace_argument(
+    syscall: str,
+    raw_path: str,
+    resolved_path: str,
+    open_flags: list[str] | None,
+) -> None:
+    expected = str(KERNEL_VIRTUAL_SYSCTL_PATH)
+    resolved_canonical = (
+        os.path.realpath(resolved_path) if resolved_path.startswith("/") else ""
+    )
+    touches_authority = (
+        raw_path == expected
+        or os.path.normpath(resolved_path) == expected
+        or resolved_canonical == expected
+    )
+    if not touches_authority:
+        return
+    if (
+        raw_path != expected
+        or resolved_path != expected
+        or resolved_canonical != expected
+        or syscall not in KERNEL_VIRTUAL_READ_SYSCALLS
+        or (
+            syscall in TRACE_OPEN_SYSCALLS
+            and not _kernel_virtual_open_flags_are_readonly(open_flags)
+        )
+    ):
+        _fail("TRACE_KERNEL_VIRTUAL_PATH_INVALID", f"{syscall}:{raw_path}")
+
+
 def _normalized_mutating_open_is_safe(value: Mapping[str, Any]) -> bool:
     flags = value["open_flags"]
     if value.get("outcome") != "OK" or not _trace_open_mutates(flags):
@@ -814,6 +916,12 @@ def _parse_trace_line(
             if has_parent and _path_is_scratch_scoped(resolved, scratch):
                 _fail("TRACE_PATH_TRAVERSAL", syscall)
             resolved_arguments.append(resolved)
+    for (raw_path, _offset), resolved_path in zip(
+        path_arguments, resolved_arguments, strict=True
+    ):
+        _validate_kernel_virtual_trace_argument(
+            syscall, raw_path, resolved_path, open_flags
+        )
     if syscall in TRACE_OPEN_SYSCALLS and outcome == "OK" and any(parent_components):
         annotated = _trace_result_path(result)
         if (
@@ -907,7 +1015,9 @@ def _trace_event_multiset(
     return multiset, parsed
 
 
-def _path_component_record(path: Path) -> dict[str, Any]:
+def _path_component_record(
+    path: Path, *, finite_kernel_virtual: bool = False
+) -> dict[str, Any]:
     info = os.lstat(path)
     if stat.S_ISREG(info.st_mode):
         kind = "regular"
@@ -925,10 +1035,15 @@ def _path_component_record(path: Path) -> dict[str, Any]:
         "gid": info.st_gid,
         "device": info.st_dev,
         "inode": info.st_ino,
-        "nlink": info.st_nlink,
         "mtime_ns": info.st_mtime_ns,
         "ctime_ns": info.st_ctime_ns,
     }
+    if finite_kernel_virtual and path == KERNEL_VIRTUAL_COMPONENT_PATH:
+        if kind != "directory":
+            _fail("TRACE_PATH_INVALID", f"kernel virtual component {path}")
+        result["metadata_policy"] = KERNEL_VIRTUAL_COMPONENT_POLICY
+    else:
+        result["nlink"] = info.st_nlink
     if kind == "symlink":
         result["target"] = os.readlink(path)
     return result
@@ -937,17 +1052,26 @@ def _path_component_record(path: Path) -> dict[str, Any]:
 def _path_component_chain(path: Path) -> list[dict[str, Any]]:
     if not path.is_absolute() or path.as_posix() != str(path):
         _fail("TRACE_PATH_INVALID", str(path))
-    chain = [_path_component_record(Path("/"))]
+    canonical = Path(os.path.realpath(path))
+    finite_kernel_virtual = _is_kernel_virtual_sysctl_target(path, canonical)
+    chain = [
+        _path_component_record(Path("/"), finite_kernel_virtual=finite_kernel_virtual)
+    ]
     current = Path("/")
     for part in path.parts[1:]:
         current /= part
-        chain.append(_path_component_record(current))
-    canonical = Path(os.path.realpath(path))
+        chain.append(
+            _path_component_record(current, finite_kernel_virtual=finite_kernel_virtual)
+        )
     canonical_current = Path("/")
     for part in canonical.parts[1:]:
         canonical_current /= part
         if all(item["path"] != str(canonical_current) for item in chain):
-            chain.append(_path_component_record(canonical_current))
+            chain.append(
+                _path_component_record(
+                    canonical_current, finite_kernel_virtual=finite_kernel_virtual
+                )
+            )
     return chain
 
 
@@ -989,7 +1113,9 @@ def _deepest_existing_trace_directory(path: str) -> str:
     return str(deepest)
 
 
-def _validate_component_chain_shape(value: Any, label: str) -> list[dict[str, Any]]:
+def _validate_component_chain_shape(
+    value: Any, label: str, *, finite_kernel_virtual: bool = False
+) -> list[dict[str, Any]]:
     if type(value) is not list or not value:
         _fail("REQUEST_INVALID", f"{label} component chain")
     common = {
@@ -1004,13 +1130,30 @@ def _validate_component_chain_shape(value: Any, label: str) -> list[dict[str, An
         "mtime_ns",
         "ctime_ns",
     }
+    finite_component = (common - {"nlink"}) | {"metadata_policy"}
     result: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
+    seen_finite_component = False
     for item in value:
-        if type(item) is not dict or set(item) not in (common, common | {"target"}):
+        if type(item) is not dict or set(item) not in (
+            common,
+            common | {"target"},
+            finite_component,
+        ):
             _fail("REQUEST_INVALID", f"{label} component record")
+        is_finite_component = set(item) == finite_component
         kind = item.get("kind")
-        if kind == "symlink":
+        if is_finite_component:
+            if (
+                not finite_kernel_virtual
+                or seen_finite_component
+                or item.get("path") != str(KERNEL_VIRTUAL_COMPONENT_PATH)
+                or kind != "directory"
+                or item.get("metadata_policy") != KERNEL_VIRTUAL_COMPONENT_POLICY
+            ):
+                _fail("REQUEST_INVALID", f"{label} finite component")
+            seen_finite_component = True
+        elif kind == "symlink":
             if set(item) != common | {"target"} or type(item.get("target")) is not str:
                 _fail("REQUEST_INVALID", f"{label} symlink component")
         elif kind not in {"regular", "directory"} or set(item) != common:
@@ -1029,9 +1172,9 @@ def _validate_component_chain_shape(value: Any, label: str) -> list[dict[str, An
                     "gid",
                     "device",
                     "inode",
-                    "nlink",
                     "mtime_ns",
                     "ctime_ns",
+                    *(("nlink",) if not is_finite_component else ()),
                 )
             )
         ):
@@ -1040,6 +1183,8 @@ def _validate_component_chain_shape(value: Any, label: str) -> list[dict[str, An
         result.append(dict(item))
     if result[0]["path"] != "/" or result[0]["kind"] != "directory":
         _fail("REQUEST_INVALID", f"{label} root component")
+    if finite_kernel_virtual != seen_finite_component:
+        _fail("REQUEST_INVALID", f"{label} finite component policy")
     return result
 
 
@@ -1098,7 +1243,18 @@ def _validate_trace_host_record(
             "REQUEST_INVALID",
             f"{label} path requested={path!r} canonical={canonical!r}",
         )
-    chain = _validate_component_chain_shape(value.get("component_chain"), label)
+    finite_kernel_virtual = _is_kernel_virtual_sysctl_target(path, canonical)
+    if (_path_is_procfs(path) or _path_is_procfs(canonical)) and not (
+        expected_kind == "regular" and finite_kernel_virtual
+    ):
+        _fail("REQUEST_INVALID", f"{label} unapproved procfs host input")
+    chain = _validate_component_chain_shape(
+        value.get("component_chain"),
+        label,
+        finite_kernel_virtual=finite_kernel_virtual,
+    )
+    if finite_kernel_virtual and not _kernel_virtual_component_chain_is_exact(chain):
+        _fail("REQUEST_INVALID", f"{label} finite component sequence")
     final = next((item for item in reversed(chain) if item["path"] == canonical), None)
     if (
         final is None
@@ -1110,13 +1266,23 @@ def _validate_trace_host_record(
     ):
         _fail("REQUEST_INVALID", f"{label} canonical component")
     if expected_kind == "regular":
+        pin = _parse_trace_pin(value.get("pin"), label)
         if (
             value.get("mode") != final["mode"]
-            or value.get("storage") not in {"empty", "regular", "sparse", "virtual"}
+            or value.get("storage")
+            not in {"empty", "regular", "sparse", "virtual", "kernel_virtual"}
             or (value.get("storage") == "virtual" and not canonical.startswith("/sys/"))
+            or (
+                finite_kernel_virtual
+                and (
+                    value.get("storage") != "kernel_virtual"
+                    or value.get("mode") != "0644"
+                    or pin not in _kernel_virtual_sysctl_pins()
+                )
+            )
+            or (value.get("storage") == "kernel_virtual" and not finite_kernel_virtual)
         ):
             _fail("REQUEST_INVALID", f"{label} mode")
-        _parse_trace_pin(value.get("pin"), label)
     return dict(value)
 
 
@@ -1145,6 +1311,35 @@ def _validate_trace_event_multiset(value: Any, label: str) -> list[dict[str, Any
         previous = item["line"]
         result.append(dict(item))
     return result
+
+
+def _validate_kernel_virtual_profile_binding(
+    events: Sequence[Mapping[str, Any]],
+    host_files: Sequence[str],
+    label: str,
+) -> bool:
+    expected = str(KERNEL_VIRTUAL_SYSCTL_PATH)
+    referenced = expected in host_files
+    successful_read_open = False
+    observed_event = False
+    for item in events:
+        event = json.loads(str(item["line"]), object_pairs_hook=_strict_object)
+        if expected not in event["paths"]:
+            continue
+        observed_event = True
+        syscall = event["syscall"]
+        if syscall not in KERNEL_VIRTUAL_READ_SYSCALLS:
+            _fail("REQUEST_INVALID", f"{label} kernel virtual syscall")
+        if syscall in TRACE_OPEN_SYSCALLS:
+            if not _kernel_virtual_open_flags_are_readonly(event.get("open_flags")):
+                _fail("REQUEST_INVALID", f"{label} kernel virtual open flags")
+            if event["outcome"] == "OK":
+                successful_read_open = True
+    if observed_event and not referenced:
+        _fail("REQUEST_INVALID", f"{label} orphan kernel virtual event")
+    if referenced != successful_read_open:
+        _fail("REQUEST_INVALID", f"{label} kernel virtual profile binding")
+    return referenced
 
 
 def _valid_normalized_trace_event(raw: str) -> bool:
@@ -1331,6 +1526,7 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
         _fail("REQUEST_INVALID", "implicit hardlink or bind alias")
 
     file_path_set = set(file_paths)
+    kernel_virtual_path = str(KERNEL_VIRTUAL_SYSCTL_PATH)
     runtime_sets: list[set[str]] = []
     for key in ("tracer_runtime_files", "builder_runtime_files"):
         paths = value.get(key)
@@ -1339,6 +1535,7 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
             or not paths
             or paths != sorted(set(paths))
             or any(path not in file_path_set for path in paths)
+            or kernel_virtual_path in paths
         ):
             _fail("REQUEST_INVALID", f"trace {key}")
         runtime_sets.append(set(paths))
@@ -1361,6 +1558,7 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
     covered_files = set().union(*runtime_sets)
     covered_directories: set[str] = set()
     observed_ids: list[str] = []
+    kernel_virtual_profile_seen = False
     for profile in profiles:
         if type(profile) is not dict or set(profile) != {
             "id",
@@ -1377,7 +1575,9 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
             "tool"
         ):
             _fail("REQUEST_INVALID", "trace profile identity")
-        _validate_trace_event_multiset(profile.get("event_multiset"), profile_id)
+        events = _validate_trace_event_multiset(
+            profile.get("event_multiset"), profile_id
+        )
         profile_files = profile.get("host_files")
         profile_directories = profile.get("host_directories")
         if (
@@ -1389,6 +1589,8 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
             or any(path not in set(directory_paths) for path in profile_directories)
         ):
             _fail("REQUEST_INVALID", f"trace profile paths {profile_id}")
+        if _validate_kernel_virtual_profile_binding(events, profile_files, profile_id):
+            kernel_virtual_profile_seen = True
         searches = _validate_trace_search_state(profile.get("search_state"), profile_id)
         for search in searches:
             anchor = _deepest_existing_trace_directory(search["path"])
@@ -1402,6 +1604,8 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
         _fail("REQUEST_INVALID", "trace profile order")
     if covered_files != file_path_set or covered_directories != set(directory_paths):
         _fail("REQUEST_INVALID", "orphan trace host inputs")
+    if (kernel_virtual_path in file_path_set) != kernel_virtual_profile_seen:
+        _fail("REQUEST_INVALID", "kernel virtual profile coverage")
     return dict(value)
 
 
@@ -1443,6 +1647,16 @@ def _hash_stream_fd(descriptor: int, maximum: int) -> FilePin:
         digest.update(block)
     os.lseek(descriptor, 0, os.SEEK_SET)
     return FilePin(digest.hexdigest(), total)
+
+
+def _hash_kernel_virtual_sysctl_fd(descriptor: int) -> FilePin:
+    maximum = max(map(len, KERNEL_VIRTUAL_SYSCTL_VALUES))
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    raw = os.read(descriptor, maximum + 1)
+    if raw not in KERNEL_VIRTUAL_SYSCTL_VALUES or os.read(descriptor, 1):
+        _fail("TRACE_INPUT_DRIFT", str(KERNEL_VIRTUAL_SYSCTL_PATH))
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    return FilePin(hashlib.sha256(raw).hexdigest(), len(raw))
 
 
 def _read_fd(descriptor: int, pin: FilePin, label: str) -> bytes:
@@ -1587,7 +1801,9 @@ def _open_held_tool(path: Path, expected: Mapping[str, Any], label: str) -> Held
 
 def _revalidate_held(item: HeldFile, label: str, maximum: int) -> None:
     observed_pin = (
-        _hash_stream_fd(item.descriptor, maximum)
+        _hash_kernel_virtual_sysctl_fd(item.descriptor)
+        if item.path == KERNEL_VIRTUAL_SYSCTL_PATH
+        else _hash_stream_fd(item.descriptor, maximum)
         if item.virtual
         else _hash_fd(item.descriptor, maximum)
     )
@@ -1603,6 +1819,7 @@ def _revalidate_held(item: HeldFile, label: str, maximum: int) -> None:
 def _open_trace_host_file(record: Mapping[str, Any], label: str) -> HeldFile:
     path = Path(record["path"])
     canonical = Path(record["canonical"])
+    finite_kernel_virtual = _is_kernel_virtual_sysctl_target(path, canonical)
     _assert_component_chain_live(record["component_chain"], path, label)
     if record["storage"] == "regular":
         held = _open_held_regular(
@@ -1620,6 +1837,11 @@ def _open_trace_host_file(record: Mapping[str, Any], label: str) -> HeldFile:
         try:
             info = os.fstat(descriptor)
             storage = record["storage"]
+            pin = (
+                _hash_kernel_virtual_sysctl_fd(descriptor)
+                if finite_kernel_virtual
+                else _hash_stream_fd(descriptor, MAX_NATIVE_BYTES)
+            )
             if (
                 not stat.S_ISREG(info.st_mode)
                 or stat.S_IMODE(info.st_mode) != int(record["mode"], 8)
@@ -1627,6 +1849,16 @@ def _open_trace_host_file(record: Mapping[str, Any], label: str) -> HeldFile:
                 or info.st_gid != ROOT_GID
                 or info.st_nlink != 1
                 or (storage == "virtual" and not str(canonical).startswith("/sys/"))
+                or (
+                    storage == "kernel_virtual"
+                    and (
+                        not finite_kernel_virtual
+                        or stat.S_IMODE(info.st_mode) != 0o644
+                        or info.st_size != 0
+                        or pin not in _kernel_virtual_sysctl_pins()
+                    )
+                )
+                or (finite_kernel_virtual and storage != "kernel_virtual")
                 or (
                     storage == "sparse"
                     and not (info.st_size > 0 and info.st_blocks * 512 < info.st_size)
@@ -1640,7 +1872,7 @@ def _open_trace_host_file(record: Mapping[str, Any], label: str) -> HeldFile:
                 canonical,
                 descriptor,
                 info,
-                _hash_stream_fd(descriptor, MAX_NATIVE_BYTES),
+                pin,
                 True,
             )
         except BaseException:
@@ -3591,6 +3823,11 @@ def _planner_tool_record(path: Path, label: str) -> dict[str, Any]:
 def _planner_trace_file_record(path: str) -> dict[str, Any]:
     requested = Path(path)
     canonical = Path(os.path.realpath(requested))
+    finite_kernel_virtual = _is_kernel_virtual_sysctl_target(path, canonical)
+    if (_path_is_procfs(path) or _path_is_procfs(canonical)) and not (
+        finite_kernel_virtual
+    ):
+        _fail("TRACE_HOST_INPUT_UNTRUSTED", f"unapproved procfs input {path}")
     component_chain = _path_component_chain(requested)
     info = os.stat(canonical, follow_symlinks=False)
     if (
@@ -3598,6 +3835,10 @@ def _planner_trace_file_record(path: str) -> dict[str, Any]:
         or info.st_uid != ROOT_UID
         or info.st_gid != ROOT_GID
         or info.st_nlink != 1
+        or (
+            finite_kernel_virtual
+            and (stat.S_IMODE(info.st_mode) != 0o644 or info.st_size != 0)
+        )
         or not _component_chain_is_immutable_root_owned(component_chain)
     ):
         _fail("TRACE_HOST_INPUT_UNTRUSTED", path)
@@ -3606,7 +3847,12 @@ def _planner_trace_file_record(path: str) -> dict[str, Any]:
     )
     try:
         try:
-            if str(canonical).startswith("/sys/") and (
+            if finite_kernel_virtual:
+                storage = "kernel_virtual"
+                pin = _hash_kernel_virtual_sysctl_fd(descriptor)
+                if pin not in _kernel_virtual_sysctl_pins():
+                    _fail("TRACE_HOST_INPUT_UNTRUSTED", path)
+            elif str(canonical).startswith("/sys/") and (
                 info.st_size == 0 or info.st_blocks * 512 < info.st_size
             ):
                 storage = "virtual"
@@ -3639,6 +3885,8 @@ def _planner_trace_file_record(path: str) -> dict[str, Any]:
 def _planner_trace_directory_record(path: str) -> dict[str, Any]:
     requested = Path(path)
     canonical = Path(os.path.realpath(requested))
+    if _path_is_procfs(requested) or _path_is_procfs(canonical):
+        _fail("TRACE_HOST_INPUT_UNTRUSTED", f"unapproved procfs directory {path}")
     component_chain = _path_component_chain(requested)
     info = os.stat(canonical, follow_symlinks=False)
     if (

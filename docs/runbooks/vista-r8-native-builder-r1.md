@@ -85,7 +85,7 @@ or any relaxation of the other process/filesystem hardening.
 Before any root installation, the unprivileged `--plan-phase-a-request` mode
 runs each Python-startup, Git, compiler, and `readelf` invocation in fresh
 private scratch. It emits canonical request bytes only; its claims remain
-`observation_only=true` and `production_native_output=false`. Trace contract v2
+`observation_only=true` and `production_native_output=false`. Trace contract v3
 pins successful host files and path-component chains, directory searches,
 negative search results, runtime mapped-file device/inode/path/bytes, and each
 invocation's exact pre-run scratch inventory. Production accepts only the same
@@ -99,6 +99,20 @@ non-writable component chain and matching `-yy` canonical result. Finite
 `/proc/self` or trace-tree procfs probes are exact tokens rather than durable
 host directories. Exact `/dev/null` with `O_RDWR` and optional `O_CLOEXEC` is
 the only non-scratch mutating-open endpoint.
+
+The one finite procfs host authority is the literal and canonical
+`/proc/sys/vm/overcommit_memory`. It is not a `/proc/sys` allowlist. The
+planner and both replay validators require root:root `0644`, one link, an exact
+device/inode and complete endpoint component, a read-only no-follow descriptor,
+and stream-pinned bytes equal to exactly `0\n`, `1\n`, or `2\n` even though
+procfs reports size zero. Trace v3 synthesizes one closed
+`proc-root-nlink-volatile-v1` record for that endpoint's `/proc` ancestor: only
+the volatile `nlink` is omitted. Path, mode, owner, device, inode, mtime, and
+ctime remain pinned there, and all metadata remains pinned for `/`,
+`/proc/sys`, `/proc/sys/vm`, and the endpoint. Any other procfs path, alias,
+traversal, symlink, write flag, malformed value, or replay drift offered as a
+durable host input fails closed; the earlier exact process-local proc tokens
+remain finite trace events rather than durable host authorities.
 
 The root bootstrap verifies the fixed account record, lock state,
 subordinate-ID exclusion, and absence of numeric-997 processes. Production
@@ -132,7 +146,7 @@ review audit, and the canonical initial-bootstrap input. The fresh
 `vista_r8_ue57_initial_bootstrap.py` Git blob must match the helper provenance
 in those embedded documents; stale helper provenance is rejected.
 It must also carry Phase A's builder pin, bundle/commit/seven-blob inventory,
-tools/toolchain ledger, runtime-map sets, and trace-v2 contract without change.
+tools/toolchain ledger, runtime-map sets, and trace-v3 contract without change.
 The zero-write derivation re-reads Phase A's request and manifest and validates
 their pin edge. The later authority audit opens and retains both documents
 while repeating that comparison against the installed Phase B request.
@@ -353,12 +367,17 @@ git diff --check
 ```
 
 In addition to the static suite, the unprivileged observation-only planner was
-run twice over one ephemeral exact Git bundle. Both runs completed observation
-and cold replay for all 27 invocation profiles and emitted byte-identical
-canonical request bytes (`2ce00fb45eb6c935f0c127370ec0f09313cf33cb763eda6ff63fe6e95394756d`,
+run twice over one ephemeral exact Git bundle after the trace-v3 correction.
+Both runs completed observation and cold replay for all 27 invocation profiles
+and emitted byte-identical canonical request bytes
+(`1a14f2af3e574e6c13ed15f08f2c5a958c992d95eac3f33d8ceed8749593c490`,
 2,435,395 bytes). These request bytes explicitly retain
 `observation_only=true` and `production_native_output=false`; the ephemeral
-bundle and outputs were removed after comparison.
+bundle and outputs were removed after comparison. This host's two runs did not
+emit the finite sysctl access, so the exact authority was correctly absent
+rather than admitted as an orphan; focused planner, contract, held-open, and
+revalidation tests exercise both its accepted literal form and its closed
+negative matrix.
 
 No root bootstrap, account creation, daemon reload, systemd start, production
 builder phase, candidate publication, or UE action was executed while

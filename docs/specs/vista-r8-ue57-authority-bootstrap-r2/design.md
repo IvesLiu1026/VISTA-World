@@ -119,6 +119,30 @@ trace-tree tokens instead of treating `/proc` metadata as durable host input.
 The only external write-like open modeled by the observed contract is exact
 `/dev/null` with `O_RDWR` and, optionally, `O_CLOEXEC`.
 
+Trace contract v3 adds one separate finite kernel-virtual host authority for
+the exact literal and canonical `/proc/sys/vm/overcommit_memory`; this is not a
+procfs prefix rule. Planner assembly recognizes no alias, traversal, symlink,
+or second sysctl. It opens the endpoint read-only with
+`O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK`, requires root:root `0644` with one link, and
+stream-reads the value because procfs reports `st_size == 0`. Only `0\n`,
+`1\n`, or `2\n` is valid, and the request records the resulting exact size and
+SHA-256 together with the endpoint's full component metadata.
+
+The v3 component-chain schema has one alternate record shape synthesized only
+for the `/proc` ancestor of that exact endpoint. Its fixed
+`proc-root-nlink-volatile-v1` policy omits `nlink`, whose value changes when
+unrelated processes enter or leave, but retains path, kind, mode, owner,
+device, inode, mtime, and ctime. Every record for `/`, `/proc/sys`,
+`/proc/sys/vm`, and the endpoint retains the ordinary complete metadata shape.
+The planner, production held-input opener, before/after replay revalidator, and
+independent authority administrator derive this policy from the exact endpoint
+rather than trusting a request field. Any special-policy record elsewhere, any
+other procfs host input, or any endpoint/content/component mismatch fails
+closed. Profile coverage and orphan accounting are extended symmetrically:
+the finite host record must have at least one exact successful read-only open
+event in a referencing profile, every such event must have that host record,
+and neither tracer nor builder runtime-map sets may absorb it as coverage.
+
 The inactive root bootstrap owns the account-record invariants (locked
 password, nologin shell, nonexistent home, subordinate-ID exclusion, and no
 live numeric-997 process). Once started, the production builder deliberately
@@ -153,7 +177,7 @@ accepts no `yhliu` candidate.
 
 The derivation does not discover a second toolchain contract. It copies the
 exact Phase A builder pin, bundle/commit/blob inventory, tools ledger, runtime
-map sets, and trace-v2 bytes, while replacing only the fixed systemd-unit
+map sets, and trace-v3 bytes, while replacing only the fixed systemd-unit
 binding and job. It re-reads Phase A's request and manifest and validates their
 pin edge before emitting bytes. Publication review repeats this comparison
 with both Phase A documents held, so request/manifest mutation or a coherently

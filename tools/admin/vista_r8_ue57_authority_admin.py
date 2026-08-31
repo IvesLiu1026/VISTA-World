@@ -218,8 +218,19 @@ NATIVE_BUILDER_PHASE_B_UNIT = Path(
 NATIVE_BUILDER_PHASE_A_SCHEMA = "vista.r8-native-builder-phase-a-manifest/v1"
 NATIVE_BUILDER_PHASE_B_SCHEMA = "vista.r8-native-builder-phase-b-manifest/v1"
 NATIVE_BUILDER_REQUEST_SCHEMA = "vista.r8-native-builder-request/v2"
-NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v2"
+NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v3"
 NATIVE_BUILDER_JOB_SCHEMA = "vista.r8-native-builder-job-manifest/v1"
+NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH = Path("/proc/sys/vm/overcommit_memory")
+NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATH = Path("/proc")
+NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY = "proc-root-nlink-volatile-v1"
+NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_VALUES = (b"0\n", b"1\n", b"2\n")
+NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS = (
+    "/",
+    "/proc",
+    "/proc/sys",
+    "/proc/sys/vm",
+    "/proc/sys/vm/overcommit_memory",
+)
 MAX_NATIVE_BUILDER_BUNDLE_BYTES = 512 * 1024 * 1024
 MAX_NATIVE_BUILDER_TRACE_FILE_BYTES = 64 * 1024 * 1024
 MAX_NATIVE_BUILDER_TRACE_LINES = 1_000_000
@@ -381,6 +392,24 @@ NATIVE_BUILDER_TRACE_OPEN_FLAG_TOKENS = frozenset(
     }
 )
 NATIVE_BUILDER_TRACE_DEV_NULL_ALLOWED_NONMUTATING_FLAGS = frozenset({"O_CLOEXEC"})
+NATIVE_BUILDER_KERNEL_VIRTUAL_ALLOWED_OPEN_FLAGS = frozenset(
+    {"O_CLOEXEC", "O_LARGEFILE", "O_NOFOLLOW", "O_NONBLOCK"}
+)
+NATIVE_BUILDER_KERNEL_VIRTUAL_READ_SYSCALLS = frozenset(
+    {
+        "access",
+        "faccessat",
+        "faccessat2",
+        "lstat",
+        "newfstatat",
+        "open",
+        "openat",
+        "openat2",
+        "stat",
+        "statfs",
+        "statx",
+    }
+)
 NATIVE_BUILDER_BUILD_ENVIRONMENT = {
     "PATH": "/usr/bin:/bin",
     "LANG": "C",
@@ -689,6 +718,19 @@ def _hash_fd(descriptor: int) -> tuple[str, int]:
     return digest.hexdigest(), size
 
 
+def _hash_kernel_virtual_sysctl_fd(descriptor: int) -> tuple[str, int]:
+    maximum = max(map(len, NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_VALUES))
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    raw = os.read(descriptor, maximum + 1)
+    if raw not in NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_VALUES or os.read(descriptor, 1):
+        _fail(
+            "NATIVE_BUILDER_TRACE_INPUT_DRIFT",
+            str(NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH),
+        )
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    return hashlib.sha256(raw).hexdigest(), len(raw)
+
+
 @dataclasses.dataclass(frozen=True)
 class FilePin:
     sha256: str
@@ -703,6 +745,38 @@ class FilePin:
         if executable is not None:
             value["executable"] = executable
         return value
+
+
+def _native_builder_kernel_virtual_sysctl_pins() -> frozenset[FilePin]:
+    return frozenset(
+        FilePin(hashlib.sha256(raw).hexdigest(), len(raw))
+        for raw in NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_VALUES
+    )
+
+
+def _native_builder_path_is_procfs(value: str | Path) -> bool:
+    return PurePosixPath(str(value)).parts[:2] == ("/", "proc")
+
+
+def _native_builder_is_kernel_virtual_sysctl_target(
+    requested: str | Path, canonical: str | Path
+) -> bool:
+    expected = str(NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH)
+    return str(requested) == expected and str(canonical) == expected
+
+
+def _native_builder_kernel_virtual_component_chain_is_exact(
+    chain: Sequence[Mapping[str, Any]],
+) -> bool:
+    return (
+        tuple(item.get("path") for item in chain)
+        == NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS
+        and tuple(item.get("kind") for item in chain)
+        == ("directory", "directory", "directory", "directory", "regular")
+        and chain[1].get("metadata_policy")
+        == NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY
+        and all(item.get("kind") != "symlink" for item in chain)
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -5590,7 +5664,11 @@ class HeldNativeBuilderPhase:
                 _fail("NATIVE_BUILDER_AUTHORITY_DRIFT", label)
         for label, held in self.held_files.items():
             metadata = held.metadata
-            digest, size = _hash_fd(held.descriptor)
+            digest, size = (
+                _hash_kernel_virtual_sysctl_fd(held.descriptor)
+                if held.canonical_path == NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH
+                else _hash_fd(held.descriptor)
+            )
             if (
                 _identity(os.fstat(held.descriptor)) != _identity(metadata)
                 or (digest, size)
@@ -5751,7 +5829,9 @@ def _require_native_builder_identity() -> None:
                 _fail("NATIVE_BUILDER_IDENTITY_INVALID", path.name)
 
 
-def _native_builder_component_record(path: Path) -> dict[str, Any]:
+def _native_builder_component_record(
+    path: Path, *, finite_kernel_virtual: bool = False
+) -> dict[str, Any]:
     try:
         info = os.lstat(path)
     except OSError as exc:
@@ -5772,10 +5852,15 @@ def _native_builder_component_record(path: Path) -> dict[str, Any]:
         "gid": info.st_gid,
         "device": info.st_dev,
         "inode": info.st_ino,
-        "nlink": info.st_nlink,
         "mtime_ns": info.st_mtime_ns,
         "ctime_ns": info.st_ctime_ns,
     }
+    if finite_kernel_virtual and path == NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATH:
+        if kind != "directory":
+            _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", str(path))
+        record["metadata_policy"] = NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY
+    else:
+        record["nlink"] = info.st_nlink
     if kind == "symlink":
         record["target"] = os.readlink(path)
     return record
@@ -5787,24 +5872,39 @@ def _native_builder_live_component_chain(
     if not path.is_absolute() or path.as_posix() != str(path):
         _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label)
     try:
-        chain = [_native_builder_component_record(Path("/"))]
+        canonical = Path(os.path.realpath(path))
+        finite_kernel_virtual = _native_builder_is_kernel_virtual_sysctl_target(
+            path, canonical
+        )
+        chain = [
+            _native_builder_component_record(
+                Path("/"), finite_kernel_virtual=finite_kernel_virtual
+            )
+        ]
         current = Path("/")
         for part in path.parts[1:]:
             current /= part
-            chain.append(_native_builder_component_record(current))
-        canonical = Path(os.path.realpath(path))
+            chain.append(
+                _native_builder_component_record(
+                    current, finite_kernel_virtual=finite_kernel_virtual
+                )
+            )
         current = Path("/")
         for part in canonical.parts[1:]:
             current /= part
             if all(item["path"] != str(current) for item in chain):
-                chain.append(_native_builder_component_record(current))
+                chain.append(
+                    _native_builder_component_record(
+                        current, finite_kernel_virtual=finite_kernel_virtual
+                    )
+                )
         return chain
     except OSError as exc:
         raise AuthorityError("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label) from exc
 
 
 def _native_builder_validate_component_chain(
-    value: Any, label: str
+    value: Any, label: str, *, finite_kernel_virtual: bool = False
 ) -> list[dict[str, Any]]:
     if type(value) is not list or not value:
         _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} chain")
@@ -5820,13 +5920,34 @@ def _native_builder_validate_component_chain(
         "mtime_ns",
         "ctime_ns",
     }
+    finite_component = (common - {"nlink"}) | {"metadata_policy"}
     result: list[dict[str, Any]] = []
     paths: set[str] = set()
+    seen_finite_component = False
     for item in value:
-        if type(item) is not dict or set(item) not in (common, common | {"target"}):
+        if type(item) is not dict or set(item) not in (
+            common,
+            common | {"target"},
+            finite_component,
+        ):
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} component")
+        is_finite_component = set(item) == finite_component
         kind = item.get("kind")
-        if kind == "symlink":
+        if is_finite_component:
+            if (
+                not finite_kernel_virtual
+                or seen_finite_component
+                or item.get("path") != str(NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATH)
+                or kind != "directory"
+                or item.get("metadata_policy")
+                != NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY
+            ):
+                _fail(
+                    "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+                    f"{label} finite component",
+                )
+            seen_finite_component = True
+        elif kind == "symlink":
             if set(item) != common | {"target"} or type(item.get("target")) is not str:
                 _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} symlink")
         elif kind not in {"regular", "directory"} or set(item) != common:
@@ -5846,9 +5967,9 @@ def _native_builder_validate_component_chain(
                     "gid",
                     "device",
                     "inode",
-                    "nlink",
                     "mtime_ns",
                     "ctime_ns",
+                    *(("nlink",) if not is_finite_component else ()),
                 )
             )
         ):
@@ -5857,6 +5978,11 @@ def _native_builder_validate_component_chain(
         result.append(dict(item))
     if result[0]["path"] != "/" or result[0]["kind"] != "directory":
         _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} root")
+    if finite_kernel_virtual != seen_finite_component:
+        _fail(
+            "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+            f"{label} finite component policy",
+        )
     return result
 
 
@@ -5950,9 +6076,29 @@ def _native_builder_validate_trace_host_record(
             "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
             f"{label} path requested={path!r} canonical={canonical!r}",
         )
-    chain = _native_builder_validate_component_chain(
-        value.get("component_chain"), label
+    finite_kernel_virtual = _native_builder_is_kernel_virtual_sysctl_target(
+        path, canonical
     )
+    if (
+        _native_builder_path_is_procfs(path)
+        or _native_builder_path_is_procfs(canonical)
+    ) and not (kind == "regular" and finite_kernel_virtual):
+        _fail(
+            "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+            f"{label} unapproved procfs host input",
+        )
+    chain = _native_builder_validate_component_chain(
+        value.get("component_chain"),
+        label,
+        finite_kernel_virtual=finite_kernel_virtual,
+    )
+    if finite_kernel_virtual and not (
+        _native_builder_kernel_virtual_component_chain_is_exact(chain)
+    ):
+        _fail(
+            "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+            f"{label} finite component sequence",
+        )
     final = next((item for item in chain if item["path"] == canonical), None)
     if (
         final is None
@@ -5968,8 +6114,18 @@ def _native_builder_validate_trace_host_record(
         if (
             pin.size_bytes > MAX_NATIVE_BUILDER_TRACE_FILE_BYTES
             or value.get("mode") != final["mode"]
-            or value.get("storage") not in {"empty", "regular", "sparse", "virtual"}
+            or value.get("storage")
+            not in {"empty", "regular", "sparse", "virtual", "kernel_virtual"}
             or (value.get("storage") == "virtual" and not canonical.startswith("/sys/"))
+            or (
+                finite_kernel_virtual
+                and (
+                    value.get("storage") != "kernel_virtual"
+                    or value.get("mode") != "0644"
+                    or pin not in _native_builder_kernel_virtual_sysctl_pins()
+                )
+            )
+            or (value.get("storage") == "kernel_virtual" and not finite_kernel_virtual)
         ):
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} storage")
     return dict(value)
@@ -6042,11 +6198,28 @@ def _native_builder_valid_trace_event(raw: str) -> bool:
     )
 
 
-def _native_builder_validate_trace_events(value: Any, label: str) -> None:
+def _native_builder_kernel_virtual_open_flags_are_readonly(value: Any) -> bool:
+    return (
+        type(value) is list
+        and bool(value)
+        and "O_RDONLY" in value
+        and len(value) == len(set(value))
+        and all(
+            flag == "O_RDONLY"
+            or flag in NATIVE_BUILDER_KERNEL_VIRTUAL_ALLOWED_OPEN_FLAGS
+            for flag in value
+        )
+    )
+
+
+def _native_builder_validate_trace_events(
+    value: Any, label: str
+) -> list[dict[str, Any]]:
     if type(value) is not list or not value:
         _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} events")
     previous = ""
     total = 0
+    result: list[dict[str, Any]] = []
     for item in value:
         if (
             type(item) is not dict
@@ -6064,6 +6237,51 @@ def _native_builder_validate_trace_events(value: Any, label: str) -> None:
         if total > MAX_NATIVE_BUILDER_TRACE_LINES:
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} event count")
         previous = item["line"]
+        result.append(dict(item))
+    return result
+
+
+def _native_builder_validate_kernel_virtual_profile_binding(
+    events: Sequence[Mapping[str, Any]],
+    host_files: Sequence[str],
+    label: str,
+) -> bool:
+    expected = str(NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH)
+    referenced = expected in host_files
+    successful_read_open = False
+    observed_event = False
+    for item in events:
+        event = json.loads(str(item["line"]), object_pairs_hook=_pairs)
+        if expected not in event["paths"]:
+            continue
+        observed_event = True
+        syscall = event["syscall"]
+        if syscall not in NATIVE_BUILDER_KERNEL_VIRTUAL_READ_SYSCALLS:
+            _fail(
+                "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+                f"{label} kernel virtual syscall",
+            )
+        if syscall in NATIVE_BUILDER_TRACE_OPEN_SYSCALLS:
+            if not _native_builder_kernel_virtual_open_flags_are_readonly(
+                event.get("open_flags")
+            ):
+                _fail(
+                    "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+                    f"{label} kernel virtual open flags",
+                )
+            if event["outcome"] == "OK":
+                successful_read_open = True
+    if observed_event and not referenced:
+        _fail(
+            "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+            f"{label} orphan kernel virtual event",
+        )
+    if referenced != successful_read_open:
+        _fail(
+            "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+            f"{label} kernel virtual profile binding",
+        )
+    return referenced
 
 
 def _native_builder_validate_trace_searches(
@@ -6223,6 +6441,7 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
                     "implicit hardlink or bind alias",
                 )
     file_set = set(file_paths)
+    kernel_virtual_path = str(NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH)
     runtime_sets: list[set[str]] = []
     for key in ("tracer_runtime_files", "builder_runtime_files"):
         paths = value.get(key)
@@ -6231,6 +6450,7 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
             or not paths
             or paths != sorted(set(paths))
             or any(path not in file_set for path in paths)
+            or kernel_virtual_path in paths
         ):
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", key)
         runtime_sets.append(set(paths))
@@ -6254,6 +6474,7 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
     covered_files = set().union(*runtime_sets)
     covered_directories: set[str] = set()
     observed_ids: list[str] = []
+    kernel_virtual_profile_seen = False
     directory_set = set(directory_paths)
     for profile in profiles:
         if type(profile) is not dict or set(profile) != {
@@ -6271,7 +6492,9 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
             "tool"
         ):
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "profile identity")
-        _native_builder_validate_trace_events(profile.get("event_multiset"), profile_id)
+        events = _native_builder_validate_trace_events(
+            profile.get("event_multiset"), profile_id
+        )
         profile_files = profile.get("host_files")
         profile_directories = profile.get("host_directories")
         if (
@@ -6283,6 +6506,10 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
             or any(path not in directory_set for path in profile_directories)
         ):
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", profile_id)
+        if _native_builder_validate_kernel_virtual_profile_binding(
+            events, profile_files, profile_id
+        ):
+            kernel_virtual_profile_seen = True
         searches = _native_builder_validate_trace_searches(
             profile.get("search_state"), profile_id
         )
@@ -6303,6 +6530,11 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
         _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "profile order")
     if covered_files != file_set or covered_directories != directory_set:
         _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "orphan host inputs")
+    if (kernel_virtual_path in file_set) != kernel_virtual_profile_seen:
+        _fail(
+            "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
+            "kernel virtual profile coverage",
+        )
     return dict(value)
 
 
@@ -6312,16 +6544,21 @@ def _native_builder_hold_trace_inputs(
     for index, record in enumerate(contract["host_files"]):
         label = f"trace-file:{index}"
         requested = Path(record["path"])
+        canonical = Path(record["canonical"])
+        finite_kernel_virtual = _native_builder_is_kernel_virtual_sysctl_target(
+            requested, canonical
+        )
         expected_chain = list(record["component_chain"])
         if _native_builder_live_component_chain(requested, label) != expected_chain:
             _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label)
-        canonical = Path(record["canonical"])
         descriptor = os.open(canonical, _file_flags())
         try:
             info = os.fstat(descriptor)
             sparse = info.st_size > 0 and info.st_blocks * 512 < info.st_size
             storage = (
-                "virtual"
+                "kernel_virtual"
+                if finite_kernel_virtual
+                else "virtual"
                 if str(canonical).startswith("/sys/") and (info.st_size == 0 or sparse)
                 else "empty"
                 if info.st_size == 0
@@ -6329,7 +6566,11 @@ def _native_builder_hold_trace_inputs(
                 if sparse
                 else "regular"
             )
-            digest, size = _hash_fd(descriptor)
+            digest, size = (
+                _hash_kernel_virtual_sysctl_fd(descriptor)
+                if finite_kernel_virtual
+                else _hash_fd(descriptor)
+            )
             pin = FilePin(digest, size)
             if (
                 not stat.S_ISREG(info.st_mode)
@@ -6337,6 +6578,14 @@ def _native_builder_hold_trace_inputs(
                 or info.st_gid != ROOT_GID
                 or info.st_nlink != 1
                 or stat.S_IMODE(info.st_mode) != int(record["mode"], 8)
+                or (
+                    finite_kernel_virtual
+                    and (
+                        stat.S_IMODE(info.st_mode) != 0o644
+                        or info.st_size != 0
+                        or pin not in _native_builder_kernel_virtual_sysctl_pins()
+                    )
+                )
                 or storage != record["storage"]
                 or pin != _parse_pin(record["pin"], label)
                 or _identity(os.stat(canonical, follow_symlinks=False))

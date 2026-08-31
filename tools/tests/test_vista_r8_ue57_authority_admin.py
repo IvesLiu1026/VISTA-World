@@ -137,6 +137,79 @@ def _native_trace_contract(host: Path) -> dict[str, object]:
     }
 
 
+def _native_trace_contract_with_kernel_virtual() -> dict[str, object]:
+    runtime_path = native_builder.PYTHON_PATH
+    runtime = native_builder._planner_trace_file_record(str(runtime_path))
+    special = native_builder._planner_trace_file_record(
+        str(native_builder.KERNEL_VIRTUAL_SYSCTL_PATH)
+    )
+    root = native_builder._planner_trace_directory_record("/")
+    expected_tools = {
+        invocation: tool
+        for phase in ("phase-a", "phase-b")
+        for invocation, tool in admin._native_builder_expected_trace_invocations(phase)
+    }
+    profiles: list[dict[str, object]] = []
+    for index, (invocation, tool) in enumerate(sorted(expected_tools.items())):
+        host_files = [str(runtime_path)]
+        events = [
+            {
+                "line": _native_trace_event("access", "/vista-r8-absent", "ENOENT"),
+                "count": 1,
+            }
+        ]
+        if index == 0:
+            host_files.append(str(native_builder.KERNEL_VIRTUAL_SYSCTL_PATH))
+            events.append(
+                {
+                    "line": _native_trace_event(
+                        "openat",
+                        str(native_builder.KERNEL_VIRTUAL_SYSCTL_PATH),
+                        "OK",
+                        open_flags=["O_RDONLY", "O_CLOEXEC"],
+                    ),
+                    "count": 1,
+                }
+            )
+        profiles.append(
+            {
+                "id": invocation,
+                "tool": tool,
+                "event_multiset": sorted(events, key=lambda item: item["line"]),
+                "host_files": sorted(host_files),
+                "host_directories": ["/"],
+                "search_state": [
+                    {
+                        "syscall": "access",
+                        "path": "/vista-r8-absent",
+                        "errno": "ENOENT",
+                        "count": 1,
+                    }
+                ],
+                "scratch_prestate": [],
+            }
+        )
+    return {
+        "schema": admin.NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA,
+        "tracer_version": admin.NATIVE_BUILDER_STRACE_VERSION,
+        "host_files": sorted((runtime, special), key=lambda item: item["path"]),
+        "host_directories": [root],
+        "tracer_runtime_files": [str(runtime_path)],
+        "builder_runtime_files": [str(runtime_path)],
+        "path_aliases": [],
+        "profiles": profiles,
+        "phase_invocations": {
+            phase: [
+                invocation
+                for invocation, _tool in admin._native_builder_expected_trace_invocations(
+                    phase
+                )
+            ]
+            for phase in ("phase-a", "phase-b")
+        },
+    }
+
+
 def _engine_source(root: Path) -> None:
     _write(root / "Engine/Binaries/Linux/UnrealEditor-Cmd", b"editor\0", 0o755)
     _write(root / "Engine/Binaries/Linux/UnrealEditor.modules", b"{}\n")
@@ -295,6 +368,229 @@ def test_native_builder_trace_inputs_hold_empty_bytes_and_reject_drift(
         authority.close()
 
 
+def test_native_builder_kernel_virtual_contract_mirror_and_held_revalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contract = _native_trace_contract_with_kernel_virtual()
+    assert admin._native_builder_validate_trace_contract(contract) == contract
+    special = next(
+        record
+        for record in contract["host_files"]  # type: ignore[union-attr]
+        if record["path"] == str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH)
+    )
+    assert admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH.stat().st_size == 0
+    assert special["storage"] == "kernel_virtual"
+    assert special["pin"]["size_bytes"] == 2
+    assert special["pin"] in [
+        pin.public() for pin in admin._native_builder_kernel_virtual_sysctl_pins()
+    ]
+    assert [item["path"] for item in special["component_chain"]] == list(
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS
+    )
+
+    authority = admin.HeldNativeBuilderPhase(
+        contextlib.ExitStack(), {}, {}, {}, {}, {}, {}
+    )
+    admin._native_builder_hold_trace_inputs(authority, contract)
+    try:
+        authority.revalidate()
+        original_lstat = os.lstat
+        drift: dict[str, int] = {"nlink": 31, "inode": 0}
+
+        def changing_proc_lstat(
+            candidate: os.PathLike[str] | str, *args: object, **kwargs: object
+        ) -> object:
+            info = original_lstat(candidate, *args, **kwargs)
+            if os.fspath(candidate) != "/proc":
+                return info
+            return type(
+                "ProcStat",
+                (),
+                {
+                    "st_mode": info.st_mode,
+                    "st_uid": info.st_uid,
+                    "st_gid": info.st_gid,
+                    "st_dev": info.st_dev,
+                    "st_ino": info.st_ino + drift["inode"],
+                    "st_nlink": info.st_nlink + drift["nlink"],
+                    "st_size": info.st_size,
+                    "st_blocks": info.st_blocks,
+                    "st_mtime_ns": info.st_mtime_ns,
+                    "st_ctime_ns": info.st_ctime_ns,
+                },
+            )()
+
+        monkeypatch.setattr(admin.os, "lstat", changing_proc_lstat)
+        authority.revalidate()
+        drift["inode"] = 1
+        with pytest.raises(
+            admin.AuthorityError, match="NATIVE_BUILDER_TRACE_INPUT_DRIFT"
+        ):
+            authority.revalidate()
+        drift["inode"] = 0
+        original_hash = admin._hash_kernel_virtual_sysctl_fd
+        monkeypatch.setattr(
+            admin,
+            "_hash_kernel_virtual_sysctl_fd",
+            lambda _descriptor: ("0" * 64, 2),
+        )
+        with pytest.raises(
+            admin.AuthorityError, match="NATIVE_BUILDER_AUTHORITY_DRIFT"
+        ):
+            authority.revalidate()
+        monkeypatch.setattr(admin, "_hash_kernel_virtual_sysctl_fd", original_hash)
+    finally:
+        authority.close()
+
+
+def test_native_builder_kernel_virtual_reader_mirror_rejects_malformed_bytes(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "finite-sysctl"
+    for raw in admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_VALUES:
+        _write(target, raw)
+        descriptor = os.open(target, os.O_RDONLY | os.O_CLOEXEC)
+        try:
+            assert admin._hash_kernel_virtual_sysctl_fd(descriptor) == (
+                hashlib.sha256(raw).hexdigest(),
+                len(raw),
+            )
+        finally:
+            os.close(descriptor)
+
+    for malformed in (b"", b"1", b"3\n", b"1\nx"):
+        _write(target, malformed)
+        descriptor = os.open(target, os.O_RDONLY | os.O_CLOEXEC)
+        try:
+            with pytest.raises(
+                admin.AuthorityError, match="NATIVE_BUILDER_TRACE_INPUT_DRIFT"
+            ):
+                admin._hash_kernel_virtual_sysctl_fd(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+def test_native_builder_kernel_virtual_contract_mirror_rejects_tampering() -> None:
+    contract = _native_trace_contract_with_kernel_virtual()
+
+    stale = copy.deepcopy(contract)
+    stale["schema"] = "vista.r8-native-builder-trace-contract/v2"
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_contract(stale)
+
+    runtime_smuggle = copy.deepcopy(contract)
+    runtime_smuggle["tracer_runtime_files"] = sorted(  # type: ignore[index]
+        [
+            *runtime_smuggle["tracer_runtime_files"],  # type: ignore[index]
+            str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH),
+        ]
+    )
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_contract(runtime_smuggle)
+
+    orphan = copy.deepcopy(contract)
+    first = orphan["profiles"][0]  # type: ignore[index]
+    first["host_files"].remove(str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH))
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_contract(orphan)
+
+    missing_event = copy.deepcopy(contract)
+    first = missing_event["profiles"][0]  # type: ignore[index]
+    first["event_multiset"] = [
+        item
+        for item in first["event_multiset"]
+        if str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH) not in item["line"]
+    ]
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_contract(missing_event)
+
+    failed_write = copy.deepcopy(contract)
+    first = failed_write["profiles"][0]  # type: ignore[index]
+    first["event_multiset"] = sorted(
+        [
+            item
+            for item in first["event_multiset"]
+            if str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH) not in item["line"]
+        ]
+        + [
+            {
+                "line": _native_trace_event(
+                    "openat",
+                    str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH),
+                    "EACCES",
+                    open_flags=["O_WRONLY"],
+                ),
+                "count": 1,
+            }
+        ],
+        key=lambda item: item["line"],
+    )
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_contract(failed_write)
+
+    for field, value in (
+        ("storage", "regular"),
+        (
+            "pin",
+            {"sha256": hashlib.sha256(b"3\n").hexdigest(), "size_bytes": 2},
+        ),
+        ("mode", "0600"),
+    ):
+        changed = copy.deepcopy(contract)
+        special = next(
+            record
+            for record in changed["host_files"]  # type: ignore[union-attr]
+            if record["path"] == str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH)
+        )
+        special[field] = value
+        with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+            admin._native_builder_validate_trace_contract(changed)
+
+    other_proc = copy.deepcopy(contract)
+    special = next(
+        record
+        for record in other_proc["host_files"]  # type: ignore[union-attr]
+        if record["path"] == str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH)
+    )
+    special["path"] = special["canonical"] = "/proc/sys/vm/swappiness"
+    special["component_chain"][-1]["path"] = "/proc/sys/vm/swappiness"
+    other_proc["host_files"] = sorted(  # type: ignore[index]
+        other_proc["host_files"],
+        key=lambda item: item["path"],  # type: ignore[index]
+    )
+    with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+        admin._native_builder_validate_trace_contract(other_proc)
+
+
+def test_native_builder_kernel_virtual_hold_rejects_component_drift() -> None:
+    contract = _native_trace_contract_with_kernel_virtual()
+    for index, field, value in (
+        (2, "inode", 1),
+        (-1, "inode", 1),
+        (-1, "mode", "0600"),
+    ):
+        changed = copy.deepcopy(contract)
+        special = next(
+            record
+            for record in changed["host_files"]  # type: ignore[union-attr]
+            if record["path"] == str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH)
+        )
+        if field == "inode":
+            special["component_chain"][index][field] += value
+        else:
+            special["component_chain"][index][field] = value
+        authority = admin.HeldNativeBuilderPhase(
+            contextlib.ExitStack(), {}, {}, {}, {}, {}, {}
+        )
+        try:
+            with pytest.raises(
+                admin.AuthorityError, match="NATIVE_BUILDER_TRACE_INPUT_DRIFT"
+            ):
+                admin._native_builder_hold_trace_inputs(authority, changed)
+        finally:
+            authority.close()
+
+
 def test_native_builder_trace_contract_rejects_unmodelled_symlink_alias(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -366,6 +662,34 @@ def test_native_builder_independent_consumer_mirror_matches_producer_contract() 
     assert (
         admin.NATIVE_BUILDER_TRACE_DEV_NULL_ALLOWED_NONMUTATING_FLAGS
         == native_builder.TRACE_DEV_NULL_ALLOWED_NONMUTATING_FLAGS
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH
+        == native_builder.KERNEL_VIRTUAL_SYSCTL_PATH
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATH
+        == native_builder.KERNEL_VIRTUAL_COMPONENT_PATH
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY
+        == native_builder.KERNEL_VIRTUAL_COMPONENT_POLICY
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_VALUES
+        == native_builder.KERNEL_VIRTUAL_SYSCTL_VALUES
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS
+        == native_builder.KERNEL_VIRTUAL_COMPONENT_PATHS
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_ALLOWED_OPEN_FLAGS
+        == native_builder.KERNEL_VIRTUAL_ALLOWED_OPEN_FLAGS
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_READ_SYSCALLS
+        == native_builder.KERNEL_VIRTUAL_READ_SYSCALLS
     )
     assert admin.NATIVE_BUILDER_BUILD_ENVIRONMENT == native_builder.BUILD_ENVIRONMENT
     for phase in ("phase-a", "phase-b"):
@@ -1678,8 +2002,8 @@ def test_engine_shell_and_native_admin_launchers_have_closed_entrypoints() -> No
     bindings = admin._engine_wrapper_review_bindings(
         engine_wrapper.encode("utf-8"),
         helper_pin=admin.FilePin(
-            "225a2e77a2e88ff6ea09b6f5749fe37971c4f226ca295409f1650264126718c9",
-            497_127,
+            "ce53ea2c5a5176879858c949e1e10b538fda9e077bfd547d122cd9768c3d8d70",
+            506_104,
         ),
         source_pin=admin.FilePin(
             "7b30cd3b5628a21579efc19013a1d13e9557684c6b8ab3b6495eb42544e4b3d9",
@@ -1690,7 +2014,7 @@ def test_engine_shell_and_native_admin_launchers_have_closed_entrypoints() -> No
             5_917_224,
         ),
     )
-    assert bindings["EXPECTED_HELPER_BYTES"] == "497127"
+    assert bindings["EXPECTED_HELPER_BYTES"] == "506104"
     assert bindings["EXPECTED_SOURCE_PIN_BYTES"] == "786"
     assert bindings["EXPECTED_PYTHON_BYTES"] == "5917224"
     admin_launcher = (root / "tools/admin/vista_r8_ue57_admin_launcher.c").read_text(
