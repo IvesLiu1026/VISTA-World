@@ -756,6 +756,8 @@ def _validate_default_input(raw: bytes) -> None:
         ("Crouch", "C"),
         ("Interact", "E"),
         ("Drop", "Q"),
+        ("Inspect", "I"),
+        ("ExitInspect", "Escape"),
     }
     if not required_axes.issubset(axes) or not required_actions.issubset(actions):
         _fail("SOURCE_INPUT_INVALID", "source DefaultInput.ini lacks fixed controls")

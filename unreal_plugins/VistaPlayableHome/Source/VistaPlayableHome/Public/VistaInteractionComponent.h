@@ -36,6 +36,18 @@ public:
     FVistaInteractionResult TryInteract(EVistaAffordance Affordance,
                                         USceneComponent* PlacementAnchor = nullptr);
 
+    /**
+     * Execute an interaction without publishing EventSpec success yet.
+     *
+     * This C++-only entry is for callers which must validate a postcondition
+     * before the interaction becomes observable (for example read-only
+     * Inspect).  The caller owns exactly one terminal
+     * RecordSuccessfulInteraction call after that validation succeeds.
+     */
+    FVistaInteractionResult TryInteractDeferredObservation(
+        EVistaAffordance Affordance,
+        USceneComponent* PlacementAnchor = nullptr);
+
     UFUNCTION(BlueprintCallable, Category = "VISTA|Interaction")
     void SetExpectedRevision(FName Revision) { ExpectedRevision = Revision; }
 
@@ -51,4 +63,8 @@ private:
 
     AActor* TraceForInteractable() const;
     void UpdateFocus(AActor* NewFocus);
+    FVistaInteractionResult TryInteractInternal(
+        EVistaAffordance Affordance,
+        USceneComponent* PlacementAnchor,
+        bool bPublishSuccessfulObservation);
 };

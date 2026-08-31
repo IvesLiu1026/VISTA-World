@@ -71,6 +71,8 @@ DEFAULT_INPUT = b"""[/Script/Engine.InputSettings]
 +ActionMappings=(ActionName="Crouch",Key=C)
 +ActionMappings=(ActionName="Interact",Key=E)
 +ActionMappings=(ActionName="Drop",Key=Q)
++ActionMappings=(ActionName="Inspect",Key=I)
++ActionMappings=(ActionName="ExitInspect",Key=Escape)
 """
 
 PINNED_BUILD_VERSION = (
@@ -1362,6 +1364,8 @@ def test_missing_required_engine_semantics_refuses_without_secret_echo(
 ; +ActionMappings=(ActionName="Crouch",Key=C)
 ; +ActionMappings=(ActionName="Interact",Key=E)
 ; +ActionMappings=(ActionName="Drop",Key=Q)
+; +ActionMappings=(ActionName="Inspect",Key=I)
+; +ActionMappings=(ActionName="ExitInspect",Key=Escape)
 """,
         DEFAULT_INPUT.replace(b'ActionName="Drop",Key=Q', b'ActionName="Drop",Key=G'),
     ],
