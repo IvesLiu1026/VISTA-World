@@ -233,14 +233,89 @@ def test_activation_requires_closed_r1_seal_and_exact_sealer() -> None:
 def test_activation_has_distinct_pre_and_post_reload_gates() -> None:
     raw = _raw(ACTIVATE)
     before, after = raw.split("/usr/bin/systemctl daemon-reload", 1)
-    assert "assert_r2_pre_reload_not_found" in before
+    assert "assert_r2_pre_reload_pristine" in before
     assert (
         'assert_r2_never_started "${PHASE_A}"'
-        not in before.split("assert_r2_pre_reload_not_found()", 1)[-1]
+        not in before.split("assert_r2_pre_reload_pristine()", 1)[-1]
     )
     assert 'assert_r2_never_started "${PHASE_A}"' in after
     assert raw.count("/usr/bin/systemctl daemon-reload") == 1
     assert "case \"${unit_file_state}\" in '' | static)" in raw
+    assert '"${unit}|${unit}|inactive|dead|/etc/systemd/system/${unit}||static|||"' in raw
+    assert "'success|no'" in raw
+    assert 'assert_absent "/sys/fs/cgroup/system.slice/${unit}"' in raw
+
+
+def test_activation_accepts_only_exact_pristine_loaded_pre_reload_vector(
+    tmp_path: Path,
+) -> None:
+    fixture = tmp_path / "manager.show"
+    unit = "vista-r8-native-builder-r2-phase-a.service"
+    base = {
+        "Id": unit,
+        "Names": unit,
+        "LoadState": "loaded",
+        "ActiveState": "inactive",
+        "SubState": "dead",
+        "FragmentPath": f"/etc/systemd/system/{unit}",
+        "DropInPaths": "",
+        "UnitFileState": "static",
+        "WantedBy": "",
+        "RequiredBy": "",
+        "Job": "",
+        "ProcSubset": "all",
+        "NeedDaemonReload": "no",
+        "NRestarts": "0",
+        "MainPID": "0",
+        "ControlPID": "0",
+        "ExecMainStartTimestampMonotonic": "0",
+        "ExecMainExitTimestampMonotonic": "0",
+        "ExecMainCode": "0",
+        "ExecMainStatus": "0",
+        "InvocationID": "",
+        "Result": "success",
+        "ConditionResult": "no",
+    }
+    harness = (
+        _prefix(ACTIVATE)
+        + "\n"
+        + """
+FIXTURE="$(/usr/bin/cat -- "$1")"
+manager_document() { printf '%s\\n' "$FIXTURE"; }
+UNIT="$2"
+assert_absent() { [[ "$1" == "/sys/fs/cgroup/system.slice/$UNIT" ]]; }
+assert_r2_pre_reload_pristine "$2"
+"""
+    )
+
+    def run(document: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        fixture.write_text(
+            "".join(f"{key}={value}\n" for key, value in document.items()),
+            encoding="utf-8",
+        )
+        return subprocess.run(
+            ["/usr/bin/bash", "-c", harness, "fixture", str(fixture), unit],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    accepted = run(base)
+    assert accepted.returncode == 0, accepted.stderr
+    accepted_not_found = run(
+        {**base, "LoadState": "not-found", "FragmentPath": "", "UnitFileState": ""}
+    )
+    assert accepted_not_found.returncode == 0, accepted_not_found.stderr
+    for key, value in (
+        ("NeedDaemonReload", "yes"),
+        ("ExecMainStartTimestampMonotonic", "1"),
+        ("FragmentPath", "/tmp/substituted.service"),
+        ("UnitFileState", "enabled"),
+        ("Result", "exit-code"),
+        ("ConditionResult", "yes"),
+    ):
+        rejected = run({**base, key: value})
+        assert rejected.returncode == 126, (key, rejected.stderr)
 
 
 def test_empty_manager_properties_fail_closed_when_missing_or_duplicated(
@@ -377,11 +452,29 @@ def test_activation_receipt_is_root_only_atomic_and_non_production() -> None:
     assert "receipt.sha256" in raw
     assert "content_digest=" in raw
     assert "activation-self-pin.sha256" in raw
+    assert "failed-activation-self-pin.sha256" in raw
     assert "activator_sha256=${LIVE_SELF_SHA256}" in raw
     assert "activator_size=${LIVE_SELF_BYTES}" in raw
+    assert "prior_activation_status=pre-mutation-failed-manager-loaded" in raw
+    assert "prior_activator_sha256=${FAILED_ACTIVATOR_SHA256}" in raw
     assert "network_access=false" in raw
     assert "production_native_output=false" in raw
     assert not re.search(r"(?:curl|wget|scp|rsync|ssh)\s", raw)
+
+
+def test_activation_pins_failed_pre_mutation_attempt_in_fresh_namespace() -> None:
+    raw = _raw(ACTIVATE)
+    for token in (
+        "activate_vista_r8_native_builder_r2_phase_a-83f180e0-20260901b.sh",
+        "vista-r8-native-builder-r2-phase-a-receipt-83f180e0-20260901b",
+        "vista-r8-native-builder-r2-activate-83f180e0-20260901b.lock.d",
+        "activate_vista_r8_native_builder_r2_phase_a.failed-pre-mutation-manager-loaded-83f180e0-20260901a.sh",
+        "40dababde27afadcf2c701e5671aeb21a9d0be39a279d83dcda203dff4504fb9",
+        "46128",
+        "verify_failed_activation_history",
+    ):
+        assert token in raw
+    assert raw.count("verify_failed_activation_history") >= 5
 
 
 def test_activation_holds_and_rebinds_the_global_bootstrap_lock() -> None:

@@ -9,7 +9,7 @@ IFS=$'\n\t'
 export LC_ALL=C LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin
 unset BASH_ENV ENV CDPATH GLOBIGNORE PYTHONHOME PYTHONPATH
 
-readonly LIVE_SELF='/root/activate_vista_r8_native_builder_r2_phase_a.sh'
+readonly LIVE_SELF='/root/activate_vista_r8_native_builder_r2_phase_a-83f180e0-20260901b.sh'
 readonly COMMIT='83f180e03935bcc7994962ec95f2d8c8027f405d'
 readonly PHASE_A='vista-r8-native-builder-r2-phase-a.service'
 readonly PHASE_B='vista-r8-native-builder-r2-phase-b.service'
@@ -24,9 +24,17 @@ readonly PHASE_A_UNIT="/etc/systemd/system/${PHASE_A}"
 readonly PHASE_B_UNIT="/etc/systemd/system/${PHASE_B}"
 readonly PHASE_A_FINAL="${STATE_ROOT}/phase-a-slot/published"
 readonly PHASE_B_FINAL="${STATE_ROOT}/phase-b-slot/published"
-readonly RECEIPT_FINAL='/root/vista-r8-native-builder-r2-phase-a-receipt-83f180e0-20260831a'
-readonly RECEIPT_STAGING='/root/.vista-r8-native-builder-r2-phase-a-receipt-83f180e0-20260831a.staging'
-readonly OUTER_LOCK='/run/lock/vista-r8-native-builder-r2-activate-83f180e0-20260831a.lock.d'
+readonly RECEIPT_FINAL='/root/vista-r8-native-builder-r2-phase-a-receipt-83f180e0-20260901b'
+readonly RECEIPT_STAGING='/root/.vista-r8-native-builder-r2-phase-a-receipt-83f180e0-20260901b.staging'
+readonly OUTER_LOCK='/run/lock/vista-r8-native-builder-r2-activate-83f180e0-20260901b.lock.d'
+
+readonly FAILED_ACTIVATOR_ORIGINAL='/root/activate_vista_r8_native_builder_r2_phase_a.sh'
+readonly FAILED_ACTIVATOR='/root/activate_vista_r8_native_builder_r2_phase_a.failed-pre-mutation-manager-loaded-83f180e0-20260901a.sh'
+readonly FAILED_ACTIVATOR_SHA256='40dababde27afadcf2c701e5671aeb21a9d0be39a279d83dcda203dff4504fb9'
+readonly FAILED_ACTIVATOR_BYTES='46128'
+readonly FAILED_RECEIPT_FINAL='/root/vista-r8-native-builder-r2-phase-a-receipt-83f180e0-20260831a'
+readonly FAILED_RECEIPT_STAGING='/root/.vista-r8-native-builder-r2-phase-a-receipt-83f180e0-20260831a.staging'
+readonly FAILED_OUTER_LOCK='/run/lock/vista-r8-native-builder-r2-activate-83f180e0-20260831a.lock.d'
 
 readonly R1_SEAL='/root/vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901c'
 readonly R1_SEALER='/root/seal-vista-r8-native-builder-r1-failure-83f180e0-20260901c.sh'
@@ -59,7 +67,7 @@ readonly EXPECTED_TRUSTED=$'.bootstrap.lock\nbootstrap_vista_r8_native_builder_r
 readonly EXPECTED_INPUT=$'phase-a-request.json\nsource.bundle'
 readonly EXPECTED_STATE_PRE=$'phase-a-slot\nphase-a-slot/.build.lock\nphase-b-slot\nphase-b-slot/.build.lock'
 readonly EXPECTED_PHASE_A=$'artifacts\nartifacts/bootstrap-r8-ue57-initial-authorities\nartifacts/launch-vista-authority-parent-seal\nartifacts/transfer-r8-ue57-stage-installer\nmanifest.json\nmanifests\nmanifests/initial-bootstrap-launcher.json\nmanifests/parent-seal-launcher.json\nmanifests/stage-transfer-launcher.json\nparent-seal-candidate\nparent-seal-candidate/launch-vista-authority-parent-seal\nparent-seal-candidate/vista_authority_parent_seal.py'
-readonly RECEIPT_FILES=$'activation-self-pin.sha256\nmanifest.txt\nphase-a-manifest.sha256\nphase-a-publication-inventory.txt\nphase-a.journal.txt\npost-start-validation.txt\nr1-after-reload-state.txt\nr1-after-reload.systemctl-show.txt\nr1-after-start-state.txt\nr1-after-start.systemctl-show.txt\nr1-before-reload-state.txt\nr1-seal-tree.sha256\nr2-after-reload.systemctl-show.txt\nr2-after-start.systemctl-show.txt\nr2-before-reload.systemctl-show.txt\nstart-exit.txt\nsystemd-analyze.txt'
+readonly RECEIPT_FILES=$'activation-self-pin.sha256\nfailed-activation-self-pin.sha256\nmanifest.txt\nphase-a-manifest.sha256\nphase-a-publication-inventory.txt\nphase-a.journal.txt\npost-start-validation.txt\nr1-after-reload-state.txt\nr1-after-reload.systemctl-show.txt\nr1-after-start-state.txt\nr1-after-start.systemctl-show.txt\nr1-before-reload-state.txt\nr1-seal-tree.sha256\nr2-after-reload.systemctl-show.txt\nr2-after-start.systemctl-show.txt\nr2-before-reload.systemctl-show.txt\nstart-exit.txt\nsystemd-analyze.txt'
 
 fail() { printf '%s\n' "VISTA R8 R2 Phase A activation: $*" >&2; exit 126; }
 sha256_of() { /usr/bin/sha256sum -- "$1" | /usr/bin/cut -d' ' -f1; }
@@ -105,6 +113,14 @@ assert_file() {
   assert_closed_file_metadata "${path}" "${mode}" "${uid}" "${gid}"
   [[ "$(/usr/bin/stat -Lc '%s' -- "${path}")" == "${size}" ]] || fail "file size differs: ${path}"
   [[ "$(sha256_of "${path}")" == "${sha}" ]] || fail "file pin differs: ${path}"
+}
+verify_failed_activation_history() {
+  assert_file "${FAILED_ACTIVATOR}" 500 0 0 \
+    "${FAILED_ACTIVATOR_SHA256}" "${FAILED_ACTIVATOR_BYTES}"
+  assert_absent "${FAILED_ACTIVATOR_ORIGINAL}"
+  assert_absent "${FAILED_RECEIPT_FINAL}"
+  assert_absent "${FAILED_RECEIPT_STAGING}"
+  assert_absent "${FAILED_OUTER_LOCK}"
 }
 verify_live_self() {
   local path_id held_id metadata
@@ -383,15 +399,28 @@ assert_r2_never_started() {
   doc="$(manager_document "${unit}")"
   [[ "$(property "${doc}" Id)|$(property "${doc}" Names)|$(property "${doc}" LoadState)|$(property "${doc}" ActiveState)|$(property "${doc}" SubState)|$(property "${doc}" FragmentPath)|$(property "${doc}" DropInPaths)|$(property "${doc}" UnitFileState)|$(property "${doc}" WantedBy)|$(property "${doc}" RequiredBy)|$(property "${doc}" Job)" == "${unit}|${unit}|loaded|inactive|dead|/etc/systemd/system/${unit}||static|||" ]] || fail "R2 manager provenance differs: ${unit}"
   [[ "$(property "${doc}" ProcSubset)|$(property "${doc}" NeedDaemonReload)|$(property "${doc}" NRestarts)|$(property "${doc}" MainPID)|$(property "${doc}" ControlPID)|$(property "${doc}" ExecMainStartTimestampMonotonic)|$(property "${doc}" ExecMainExitTimestampMonotonic)|$(property "${doc}" ExecMainCode)|$(property "${doc}" ExecMainStatus)|$(property "${doc}" InvocationID)" == 'all|no|0|0|0|0|0|0|0|' ]] || fail "R2 unit was started: ${unit}"
+  [[ "$(property "${doc}" Result)|$(property "${doc}" ConditionResult)" == 'success|no' ]] || fail "R2 never-started result differs: ${unit}"
+  assert_absent "/sys/fs/cgroup/system.slice/${unit}"
 }
 
-assert_r2_pre_reload_not_found() {
-  local unit="$1" doc unit_file_state
+assert_r2_pre_reload_pristine() {
+  local unit="$1" doc load_state unit_file_state
   doc="$(manager_document "${unit}")"
-  [[ "$(property "${doc}" Id)|$(property "${doc}" Names)|$(property "${doc}" LoadState)|$(property "${doc}" ActiveState)|$(property "${doc}" SubState)|$(property "${doc}" FragmentPath)|$(property "${doc}" DropInPaths)|$(property "${doc}" WantedBy)|$(property "${doc}" RequiredBy)|$(property "${doc}" Job)" == "${unit}|${unit}|not-found|inactive|dead|||||" ]] || fail "R2 pre-reload manager provenance differs: ${unit}"
+  load_state="$(property "${doc}" LoadState)" || fail "R2 pre-reload LoadState is unreadable: ${unit}"
   unit_file_state="$(property "${doc}" UnitFileState)" || fail "R2 pre-reload UnitFileState is unreadable: ${unit}"
-  case "${unit_file_state}" in '' | static) ;; *) fail "R2 pre-reload UnitFileState differs: ${unit}" ;; esac
+  case "${load_state}" in
+    not-found)
+      [[ "$(property "${doc}" Id)|$(property "${doc}" Names)|$(property "${doc}" ActiveState)|$(property "${doc}" SubState)|$(property "${doc}" FragmentPath)|$(property "${doc}" DropInPaths)|$(property "${doc}" WantedBy)|$(property "${doc}" RequiredBy)|$(property "${doc}" Job)" == "${unit}|${unit}|inactive|dead|||||" ]] || fail "R2 pre-reload not-found provenance differs: ${unit}"
+      case "${unit_file_state}" in '' | static) ;; *) fail "R2 pre-reload not-found UnitFileState differs: ${unit}" ;; esac
+      ;;
+    loaded)
+      [[ "$(property "${doc}" Id)|$(property "${doc}" Names)|$(property "${doc}" ActiveState)|$(property "${doc}" SubState)|$(property "${doc}" FragmentPath)|$(property "${doc}" DropInPaths)|$(property "${doc}" UnitFileState)|$(property "${doc}" WantedBy)|$(property "${doc}" RequiredBy)|$(property "${doc}" Job)" == "${unit}|${unit}|inactive|dead|/etc/systemd/system/${unit}||static|||" ]] || fail "R2 pre-reload loaded provenance differs: ${unit}"
+      ;;
+    *) fail "R2 pre-reload LoadState differs: ${unit}" ;;
+  esac
   [[ "$(property "${doc}" ProcSubset)|$(property "${doc}" NeedDaemonReload)|$(property "${doc}" NRestarts)|$(property "${doc}" MainPID)|$(property "${doc}" ControlPID)|$(property "${doc}" ExecMainStartTimestampMonotonic)|$(property "${doc}" ExecMainExitTimestampMonotonic)|$(property "${doc}" ExecMainCode)|$(property "${doc}" ExecMainStatus)|$(property "${doc}" InvocationID)" == 'all|no|0|0|0|0|0|0|0|' ]] || fail "R2 pre-reload unit was started: ${unit}"
+  [[ "$(property "${doc}" Result)|$(property "${doc}" ConditionResult)" == 'success|no' ]] || fail "R2 pre-reload result differs: ${unit}"
+  assert_absent "/sys/fs/cgroup/system.slice/${unit}"
 }
 
 verify_r1_seal() {
@@ -546,6 +575,9 @@ seal_receipt() {
     printf '%s\n' "status=${outcome}" "source_commit=${COMMIT}" "start_exit=${start_exit}" "phase_a_invocation_id=${invocation}"
     printf '%s\n' 'phase_b_started=false' 'network_access=false' 'production_native_output=false'
     printf '%s\n' "journal_capture_exit=${JOURNAL_CAPTURE_EXIT}" "activator_sha256=${LIVE_SELF_SHA256}" "activator_size=${LIVE_SELF_BYTES}"
+    printf '%s\n' 'prior_activation_status=pre-mutation-failed-manager-loaded' \
+      "prior_activator_sha256=${FAILED_ACTIVATOR_SHA256}" \
+      "prior_activator_size=${FAILED_ACTIVATOR_BYTES}"
     printf '%s\n' "r1_seal_tree_sha256=${R1_SEAL_TREE_SHA256}" "content_digest=${digest}"
   } >"${RECEIPT_STAGING}/manifest.txt"
   expected="$(printf '%s\n' ${RECEIPT_FILES} receipt.sha256 | /usr/bin/sort)"
@@ -585,6 +617,7 @@ R1_PHASE_B_LOCK_ID="$(/usr/bin/stat -Lc '%d:%i' -- "/proc/$$/fd/${R1_PHASE_B_LOC
 readonly R1_PHASE_A_LOCK_ID R1_PHASE_B_LOCK_ID
 assert_r1_state_filesystem
 verify_r1_build_lock_bindings
+verify_failed_activation_history
 assert_absent "${RECEIPT_FINAL}"; assert_absent "${RECEIPT_STAGING}"; assert_absent "${OUTER_LOCK}"
 trap '' HUP INT TERM
 /usr/bin/mkdir -m 0700 -- "${OUTER_LOCK}"
@@ -605,7 +638,8 @@ verify_r1_build_lock_bindings
 verify_r1_seal
 R1_SEAL_TREE_SHA256="$(r1_seal_tree_digest)" || fail 'cannot pin R1 seal tree'; readonly R1_SEAL_TREE_SHA256
 printf '%s\n' "${R1_SEAL_TREE_SHA256}" >"${OUTER_LOCK}/r1-seal-tree.sha256"
-verify_r2_disk; validate_request; assert_r1_vector; assert_r2_pre_reload_not_found "${PHASE_A}"; assert_r2_pre_reload_not_found "${PHASE_B}"
+verify_failed_activation_history
+verify_r2_disk; validate_request; assert_r1_vector; assert_r2_pre_reload_pristine "${PHASE_A}"; assert_r2_pre_reload_pristine "${PHASE_B}"
 available="$(/usr/bin/df -B1 --output=avail /var/lib | /usr/bin/tail -n1 | /usr/bin/tr -d ' ')" || fail 'cannot inspect /var/lib capacity'
 [[ "${available}" =~ ^[0-9]+$ && "${available}" -ge 1073741824 ]] || fail 'less than 1 GiB is available on /var/lib'
 trap '' HUP INT TERM
@@ -615,6 +649,7 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 printf '%s  %s\n' "${LIVE_SELF_SHA256}" "${LIVE_SELF}" >"${RECEIPT_STAGING}/activation-self-pin.sha256"
+printf '%s  %s\n' "${FAILED_ACTIVATOR_SHA256}" "${FAILED_ACTIVATOR}" >"${RECEIPT_STAGING}/failed-activation-self-pin.sha256"
 /usr/bin/systemd-analyze verify "${PHASE_A_UNIT}" "${PHASE_B_UNIT}" >"${RECEIPT_STAGING}/systemd-analyze.txt" 2>&1 || fail 'systemd unit verification failed'
 capture_pair "${PHASE_A}" "${PHASE_B}" "${RECEIPT_STAGING}/r2-before-reload.systemctl-show.txt"
 capture_r1_state "${RECEIPT_STAGING}/r1-before-reload-state.txt" || \
@@ -622,9 +657,10 @@ capture_r1_state "${RECEIPT_STAGING}/r1-before-reload-state.txt" || \
 printf '%s\n' "${R1_SEAL_TREE_SHA256}" >"${RECEIPT_STAGING}/r1-seal-tree.sha256"
 verify_r1_seal; [[ "$(r1_seal_tree_digest)" == "${R1_SEAL_TREE_SHA256}" ]] || fail 'R1 seal tree changed before reload'
 verify_live_self
+verify_failed_activation_history
 verify_r2_disk; validate_request; assert_r1_vector
 assert_r1_state_matches "${RECEIPT_STAGING}/r1-before-reload-state.txt"
-assert_r2_pre_reload_not_found "${PHASE_A}"; assert_r2_pre_reload_not_found "${PHASE_B}"
+assert_r2_pre_reload_pristine "${PHASE_A}"; assert_r2_pre_reload_pristine "${PHASE_B}"
 
 # From the reload through atomic receipt publication, every expected evidence
 # file exists and termination signals are deferred.  Commands are captured as
@@ -654,6 +690,7 @@ R1_RELOAD_STATE_EXIT="$?"
     "${R1_RELOAD_CAPTURE_EXIT}" -eq 0 && "${R1_RELOAD_STATE_EXIT}" -eq 0 ]] || exit 1
   verify_r1_seal
   verify_live_self
+  verify_failed_activation_history
   [[ "$(r1_seal_tree_digest)" == "${R1_SEAL_TREE_SHA256}" ]] || fail 'R1 seal tree changed after reload'
   /usr/bin/cmp -s -- "${RECEIPT_STAGING}/r1-before-reload-state.txt" \
     "${RECEIPT_STAGING}/r1-after-reload-state.txt" || fail 'R1 state changed during reload'
@@ -697,6 +734,7 @@ if [[ "${POST_RELOAD_EXIT}" -eq 0 && "${START_EXIT}" -eq 0 && \
   (
     verify_r1_seal
     verify_live_self
+    verify_failed_activation_history
     [[ "$(r1_seal_tree_digest)" == "${R1_SEAL_TREE_SHA256}" ]] || fail 'R1 seal tree changed after start'
     /usr/bin/cmp -s -- "${RECEIPT_STAGING}/r1-before-reload-state.txt" \
       "${RECEIPT_STAGING}/r1-after-start-state.txt" || fail 'R1 state changed during Phase A start'
@@ -726,6 +764,7 @@ if [[ "${RELOAD_EXIT}" -ne 0 || "${POST_RELOAD_EXIT}" -ne 0 || "${START_EXIT}" -
 fi
 verify_r1_seal; [[ "$(r1_seal_tree_digest)" == "${R1_SEAL_TREE_SHA256}" ]] || fail 'R1 seal tree changed after start'
 verify_live_self
+verify_failed_activation_history
 assert_r1_state_matches "${RECEIPT_FINAL}/r1-before-reload-state.txt"
 assert_r1_vector
 verify_phase_a_publication
