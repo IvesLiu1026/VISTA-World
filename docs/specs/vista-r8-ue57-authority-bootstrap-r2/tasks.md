@@ -1,12 +1,13 @@
 # Tasks: VISTA R8 UE 5.7 Authority Bootstrap R2
 
-Status: Dedicated-builder source milestone complete; privileged activation and T7 blocked
+Status: Fresh native-builder R2 namespace source complete; privileged activation and T7 blocked
 Updated: 2026-08-31
 Depends on: requirements.md, design.md
 
 ## Safety Rules
 
-- Source work occurs only on `codex/vista-r9-six-room-finish-r1`.
+- Source work for this recovery occurs only on
+  `codex/vista-r8-fresh-namespace-r2`.
 - Root bootstrap, account/unit installation, systemd reload/enable/start, builder
   execution, candidate execution, UE, engine copying, or authority publication
   requires a separate explicit approval after source review.
@@ -78,7 +79,13 @@ Depends on: requirements.md, design.md
     ceremony while any orphan/live process carries UID, GID, or group 997.
   - Add the root-reviewed three-operation bootstrap, root-owned installed
     builder/inputs, root:root `0555` state root, `997:997 0711` phase slots,
-    and `0600` phase locks without starting services.
+    `0600` phase locks, and one globally held R2 bootstrap-operation lock
+    without starting services.
+  - Deploy only the fresh R2 trusted/input/libexec/state roots and R2-named
+    units. Preserve all failed R1 paths and manager state as append-only
+    evidence; make every R1 native-builder root explicitly inaccessible to
+    both R2 services. Ensure the R2-built initial-bootstrap launcher and
+    installer embed only R2 native-builder/deployment paths.
   - Add the two fixed `PrivateNetwork` oneshots with pinned Python, closed
     environment, `UMask=0077`, strict protection, and phase-specific writable
     paths.
@@ -138,10 +145,14 @@ Depends on: requirements.md, design.md
     install or execute anything.
 
 - [ ] T6a. Install the inactive builder framework and close Phase A (R1a)
-  - Through the finite root ceremony, install or exactly reconcile only the
-    pinned framework and Phase A inputs.
+  - Through the finite root ceremony, install only the fresh pinned R2
+    framework and Phase A inputs. Never reconcile or reset the failed R1
+    framework, inputs, service state, or state root.
   - Confirm both units are inactive/empty and the bootstrap did not reload,
     enable, start, or execute them.
+  - Before the sole separate daemon reload/start, require adequate disk
+    headroom and exact fresh R2 manager/path state while retaining the R1
+    failed-state evidence.
   - Under a separate activation approval, run Phase A exactly once and validate
     its complete held-FD authority and parent-seal candidate.
   - Completion evidence: closed Phase A manifest and independent audit. **Not

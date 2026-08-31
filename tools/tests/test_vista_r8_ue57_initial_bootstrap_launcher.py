@@ -280,6 +280,8 @@ def test_binary_is_static_without_interp_or_needed(launcher: LauncherFixture) ->
 
 def test_source_has_no_shell_subprocess_or_caller_path_interface() -> None:
     raw = SOURCE.read_text()
+    assert '#define INSTALLED_ROOT_DEFAULT "/root/vista-r8-ue57-initial-bootstrap-r2"' in raw
+    assert "/root/vista-r8-ue57-initial-bootstrap-r1" not in raw
     assert "system(" not in raw
     assert "popen(" not in raw
     assert "/bin/sh" not in raw

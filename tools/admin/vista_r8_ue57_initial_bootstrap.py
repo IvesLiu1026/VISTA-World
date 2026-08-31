@@ -46,7 +46,7 @@ NATIVE_BUILDER_UID = 997
 NATIVE_BUILDER_GID = 997
 
 ROOT_PARENT = Path("/root")
-INSTALLED_ROOT = ROOT_PARENT / "vista-r8-ue57-initial-bootstrap-r1"
+INSTALLED_ROOT = ROOT_PARENT / "vista-r8-ue57-initial-bootstrap-r2"
 LAUNCHER_NAME = "bootstrap-r8-ue57-initial-authorities"
 HELPER_NAME = "vista_r8_ue57_initial_bootstrap.py"
 INPUT_PIN_NAME = "input-pin.json"
@@ -56,15 +56,15 @@ INSTALLED_HELPER = INSTALLED_ROOT / HELPER_NAME
 INSTALLED_INPUT_PIN = INSTALLED_ROOT / INPUT_PIN_NAME
 INSTALLED_LOCK = INSTALLED_ROOT / LOCK_NAME
 PYTHON_PATH = Path("/usr/bin/python3.10")
-NATIVE_BUILDER_STATE_ROOT = Path("/var/lib/vista-r8-native-builder-r1")
+NATIVE_BUILDER_STATE_ROOT = Path("/var/lib/vista-r8-native-builder-r2")
 NATIVE_BUILDER_PHASE_A_ROOT = NATIVE_BUILDER_STATE_ROOT / "phase-a-slot/published"
-NATIVE_BUILDER_INPUT_ROOT = Path("/etc/vista-r8-native-builder-r1")
+NATIVE_BUILDER_INPUT_ROOT = Path("/etc/vista-r8-native-builder-r2")
 NATIVE_BUILDER_SOURCE_BUNDLE = NATIVE_BUILDER_INPUT_ROOT / "source.bundle"
 NATIVE_BUILDER_HELPER = Path(
-    "/usr/local/libexec/vista-r8-native-builder-r1/vista_r8_native_builder.py"
+    "/usr/local/libexec/vista-r8-native-builder-r2/vista_r8_native_builder.py"
 )
 NATIVE_BUILDER_PHASE_A_UNIT = Path(
-    "/etc/systemd/system/vista-r8-native-builder-phase-a.service"
+    "/etc/systemd/system/vista-r8-native-builder-r2-phase-a.service"
 )
 NATIVE_BUILDER_SOURCE_PATHS = tuple(
     sorted(

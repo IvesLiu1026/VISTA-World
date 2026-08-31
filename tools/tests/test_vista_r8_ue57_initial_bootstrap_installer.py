@@ -597,7 +597,8 @@ def test_binary_is_static_and_source_has_no_execution_or_network_api(
     assert "INTERP" not in result.stdout
     assert "NEEDED" not in result.stdout
     raw = SOURCE.read_text()
-    assert "/var/lib/vista-r8-native-builder-r1/phase-b-slot/published/" in raw
+    assert "/var/lib/vista-r8-native-builder-r2/phase-b-slot/published/" in raw
+    assert "/var/lib/vista-r8-native-builder-r1/" not in raw
     assert '"initial-bootstrap-candidate"' in raw
     assert "#define REVIEW_UID ((uid_t)997)" in raw
     assert "#define REVIEW_GID ((gid_t)997)" in raw

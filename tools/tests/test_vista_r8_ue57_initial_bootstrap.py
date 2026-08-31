@@ -492,7 +492,7 @@ def test_v2_uses_fixed_native_builder_paths_and_parent_candidate() -> None:
     assert bootstrap.CORE_AUDIT_SCHEMA.endswith("/v2")
     assert (bootstrap.NATIVE_BUILDER_UID, bootstrap.NATIVE_BUILDER_GID) == (997, 997)
     assert bootstrap.PARENT_CANDIDATE == Path(
-        "/var/lib/vista-r8-native-builder-r1/phase-a-slot/published/"
+        "/var/lib/vista-r8-native-builder-r2/phase-a-slot/published/"
         "parent-seal-candidate"
     )
 

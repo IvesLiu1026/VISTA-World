@@ -1,6 +1,6 @@
 # Requirements: VISTA R8 UE 5.7 Authority Bootstrap R2
 
-Status: Dedicated-builder source milestone complete; privileged activation blocked
+Status: Fresh native-builder R2 namespace source complete; privileged activation blocked
 Updated: 2026-08-31
 Owner: Codex integrator
 
@@ -38,31 +38,32 @@ existing UE service, claim GTA-level quality, or satisfy R10/human review.
 ## Fixed Authority Layout
 
 ```text
-/root/vista-r8-native-builder-bootstrap-r1/
-  bootstrap_vista_r8_native_builder.sh
+/root/vista-r8-native-builder-bootstrap-r2/
+  .bootstrap.lock                    # root:root 0600, zero bytes
+  bootstrap_vista_r8_native_builder_r2.sh
   vista_r8_native_builder.py
   systemd/
-    vista-r8-native-builder-phase-a.service
-    vista-r8-native-builder-phase-b.service
+    vista-r8-native-builder-r2-phase-a.service
+    vista-r8-native-builder-r2-phase-b.service
 
-/root/vista-r8-native-builder-bootstrap-input-r1/
+/root/vista-r8-native-builder-bootstrap-input-r2/
   source.bundle
   phase-a-request.json
   phase-b-request.json              # appended only after closed phase A
 
-/usr/local/libexec/vista-r8-native-builder-r1/
+/usr/local/libexec/vista-r8-native-builder-r2/
   vista_r8_native_builder.py
 
-/etc/vista-r8-native-builder-r1/
+/etc/vista-r8-native-builder-r2/
   source.bundle
   phase-a-request.json
   phase-b-request.json              # appended only after closed phase A
 
 /etc/systemd/system/
-  vista-r8-native-builder-phase-a.service
-  vista-r8-native-builder-phase-b.service
+  vista-r8-native-builder-r2-phase-a.service
+  vista-r8-native-builder-r2-phase-b.service
 
-/var/lib/vista-r8-native-builder-r1/
+/var/lib/vista-r8-native-builder-r2/
   phase-a-slot/
     .build.lock
     published/
@@ -99,13 +100,13 @@ existing UE service, claim GTA-level quality, or satisfy R10/human review.
   publish-reconcile-buildplugin
   receipt.json
 
-/root/vista-r8-ue57-initial-bootstrap-r1/
+/root/vista-r8-ue57-initial-bootstrap-r2/
   bootstrap-r8-ue57-initial-authorities
   vista_r8_ue57_initial_bootstrap.py
   input-pin.json
   .bootstrap.lock
 
-/root/vista-r8-ue57-initial-bootstrap-installer-r1/
+/root/vista-r8-ue57-initial-bootstrap-installer-r2/
   install-reconcile-r8-ue57-initial-bootstrap
 
 /data/vista-authorities/ue-5.7.3-r1/
@@ -163,6 +164,30 @@ existing UE service, claim GTA-level quality, or satisfy R10/human review.
   .makehuman-cc0-animation-ue57-r1-20260830a.invocation.json
 ```
 
+The failed native-builder R1 namespace is append-only evidence. These five
+roots are never reset, moved, replaced, reconciled, or modified by R2:
+
+```text
+/root/vista-r8-native-builder-bootstrap-r1/
+/root/vista-r8-native-builder-bootstrap-input-r1/
+/usr/local/libexec/vista-r8-native-builder-r1/
+/etc/vista-r8-native-builder-r1/
+/var/lib/vista-r8-native-builder-r1/
+```
+
+Both R2 units SHALL list every one of those roots explicitly as an ignored-if-
+absent `InaccessiblePaths=-...` entry in addition to the general `/root`
+restriction. No R2 source-built launcher or installer may embed an R1 native-
+builder publication path. The preserved repository R1 bootstrap and units are
+audit-only inputs and are not installed, compiled, or executed by the R2
+ceremony.
+
+This isolation rule is specific to the five native-builder R1 roots. Existing
+independently versioned authorities such as `ue-5.7.3-r1`, host runtime,
+BuildPlugin, parent-seal, stage installers, reviewed attempt IDs, and published
+evidence retain their approved names and remain fixed downstream contracts;
+their `r1` suffix does not identify the failed native-builder namespace.
+
 Unknown or partial R1 root bundle/policy paths are never reused or repaired.
 
 ## Functional Requirements
@@ -210,15 +235,27 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   ID 997, including an orphan process that predates account creation.
 - The finite root trust ceremony SHALL begin from the exact, independently
   pinned, root-owned `0555`
-  `/root/vista-r8-native-builder-bootstrap-r1` inventory shown above. The
+  `/root/vista-r8-native-builder-bootstrap-r2` inventory shown above. The
   bootstrap script may only install or exactly reconcile the inactive
   framework, append the Phase A inputs, or append the Phase B request. It SHALL
   NOT reload, enable, start, or execute either service or builder.
+- Every bootstrap operation SHALL validate the fixed root-owned, single-link,
+  zero-byte regular `0600` `.bootstrap.lock`, acquire it with nonblocking
+  exclusive `flock`, and retain it through the terminal close-state gate.
+  The close gate SHALL revalidate both trusted-root inventories and bind every
+  canonical trusted source path to the descriptor opened at operation start.
+- Before any framework mutation, combined group/passwd name and numeric-ID
+  lookups SHALL prove either a fully absent identity or one fully exact account
+  and group. The five R2 target paths SHALL be either all lexically absent or a
+  complete exact framework with empty input, lock-only slots, and no published
+  final. Mixed, dirty, or interrupted framework prefixes fail zero-write and
+  remain evidence; only the separate Phase A input append may resume its one-
+  file prefix.
 - The installed builder SHALL be the exact root-owned `0444`
-  `/usr/local/libexec/vista-r8-native-builder-r1/vista_r8_native_builder.py`
+  `/usr/local/libexec/vista-r8-native-builder-r2/vista_r8_native_builder.py`
   and SHALL run only through the pinned `/usr/bin/python3.10 -I -B`. The source
   bundle and canonical requests SHALL be root-owned `0444` regular,
-  single-link files below `/etc/vista-r8-native-builder-r1`; no worktree,
+  single-link files below `/etc/vista-r8-native-builder-r2`; no worktree,
   `yhliu`-owned candidate, caller path, or first-seen source is a production
   build input.
 - The source bundle SHALL be an exact Git bundle bound to one full source
@@ -293,7 +330,7 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   revalidate the same held host inputs and exact trace profile; the rehearsal
   binary or its observations are never production artifacts.
 - The only writable builder state SHALL be
-  `/var/lib/vista-r8-native-builder-r1`. Its root is root:root `0555`;
+  `/var/lib/vista-r8-native-builder-r2`. Its root is root:root `0555`;
   `phase-a-slot` and `phase-b-slot` are `997:997 0711`; each slot contains
   one `997:997 0600` `.build.lock`; and each final authority is the fresh
   no-replace `slot/published` root. Phase A SHALL NOT write Phase B, and Phase

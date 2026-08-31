@@ -137,7 +137,7 @@ BUILDPLUGIN_PAYLOAD = BUILDPLUGIN_AUTHORITY / "payload"
 ROOT_EXECUTION_AUTHORITY = Path("/root/vista-r8-ue57-executor-r2")
 ROOT_BUNDLE = ROOT_EXECUTION_AUTHORITY / "bundle"
 ROOT_POLICY = ROOT_EXECUTION_AUTHORITY / "policy.json"
-CHECKOUT_ROOT = Path("/home/yhliu/VISTA-World-worktrees/vista-r9-six-room-finish-r1")
+CHECKOUT_ROOT = Path("/home/yhliu/VISTA-World-worktrees/vista-r8-fresh-namespace-r2")
 BUNDLE_SOURCE_PATHS = {
     "makehuman_cc0_animation_runtime_executor.py": (
         CHECKOUT_ROOT / "tools/ue/vista_playable_home/"
@@ -181,23 +181,23 @@ INITIAL_BOOTSTRAP_LAUNCHER_NAME = "bootstrap-r8-ue57-initial-authorities"
 INITIAL_BOOTSTRAP_INSTALLER_NAME = "install-reconcile-r8-ue57-initial-bootstrap"
 INITIAL_BOOTSTRAP_INPUT_NAME = "input-pin.json"
 INITIAL_BOOTSTRAP_REVIEW_CANDIDATE_ROOT = Path(
-    "/var/lib/vista-r8-native-builder-r1/phase-b-slot/published/"
+    "/var/lib/vista-r8-native-builder-r2/phase-b-slot/published/"
     "initial-bootstrap-candidate"
 )
-INITIAL_BOOTSTRAP_INSTALL_ROOT = Path("/root/vista-r8-ue57-initial-bootstrap-r1")
+INITIAL_BOOTSTRAP_INSTALL_ROOT = Path("/root/vista-r8-ue57-initial-bootstrap-r2")
 INITIAL_BOOTSTRAP_INSTALLER_REVIEW_CANDIDATE_ROOT = Path(
-    "/var/lib/vista-r8-native-builder-r1/phase-b-slot/published/"
+    "/var/lib/vista-r8-native-builder-r2/phase-b-slot/published/"
     "initial-bootstrap-installer"
 )
 INITIAL_BOOTSTRAP_INSTALLER_INSTALL_ROOT = Path(
-    "/root/vista-r8-ue57-initial-bootstrap-installer-r1"
+    "/root/vista-r8-ue57-initial-bootstrap-installer-r2"
 )
 NATIVE_BUILDER_UID = 997
 NATIVE_BUILDER_GID = 997
 NATIVE_BUILDER_NAME = "vista-r8-builder"
 NATIVE_BUILDER_ACCOUNT_HOME = Path("/nonexistent")
-NATIVE_BUILDER_HOME = Path("/var/lib/vista-r8-native-builder-r1")
-NATIVE_BUILDER_INPUT_ROOT = Path("/etc/vista-r8-native-builder-r1")
+NATIVE_BUILDER_HOME = Path("/var/lib/vista-r8-native-builder-r2")
+NATIVE_BUILDER_INPUT_ROOT = Path("/etc/vista-r8-native-builder-r2")
 NATIVE_BUILDER_BUNDLE = NATIVE_BUILDER_INPUT_ROOT / "source.bundle"
 NATIVE_BUILDER_PHASE_A_REQUEST = NATIVE_BUILDER_INPUT_ROOT / "phase-a-request.json"
 NATIVE_BUILDER_PHASE_B_REQUEST = NATIVE_BUILDER_INPUT_ROOT / "phase-b-request.json"
@@ -207,13 +207,13 @@ NATIVE_BUILDER_PHASE_A_PARENT_SEAL_ROOT = (
     NATIVE_BUILDER_PHASE_A_ROOT / "parent-seal-candidate"
 )
 NATIVE_BUILDER_HELPER = Path(
-    "/usr/local/libexec/vista-r8-native-builder-r1/vista_r8_native_builder.py"
+    "/usr/local/libexec/vista-r8-native-builder-r2/vista_r8_native_builder.py"
 )
 NATIVE_BUILDER_PHASE_A_UNIT = Path(
-    "/etc/systemd/system/vista-r8-native-builder-phase-a.service"
+    "/etc/systemd/system/vista-r8-native-builder-r2-phase-a.service"
 )
 NATIVE_BUILDER_PHASE_B_UNIT = Path(
-    "/etc/systemd/system/vista-r8-native-builder-phase-b.service"
+    "/etc/systemd/system/vista-r8-native-builder-r2-phase-b.service"
 )
 NATIVE_BUILDER_PHASE_A_SCHEMA = "vista.r8-native-builder-phase-a-manifest/v1"
 NATIVE_BUILDER_PHASE_B_SCHEMA = "vista.r8-native-builder-phase-b-manifest/v1"
@@ -9439,7 +9439,7 @@ def build_bundle_input_review_candidate() -> dict[str, Any]:
 
     _fail(
         "DEDICATED_BUILDER_AUTHORITY_REQUIRED",
-        "executor launcher recipe is not authorized in native builder R1",
+        "executor launcher recipe is not authorized in native builder R2",
     )
 
 
@@ -10313,7 +10313,7 @@ def _build_stage_plan_review_candidate(stage: str) -> dict[str, Any]:
 
     _fail(
         "DEDICATED_BUILDER_AUTHORITY_REQUIRED",
-        f"{stage} admin launcher recipe is not authorized in native builder R1",
+        f"{stage} admin launcher recipe is not authorized in native builder R2",
     )
 
 
@@ -10420,7 +10420,7 @@ def build_stage_installer_review_candidate(key: str) -> dict[str, Any]:
 
     _fail(
         "DEDICATED_BUILDER_AUTHORITY_REQUIRED",
-        f"{key} stage-installer recipe is not authorized in native builder R1",
+        f"{key} stage-installer recipe is not authorized in native builder R2",
     )
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 import re
 import subprocess
@@ -8,19 +9,33 @@ import pytest
 
 
 ROOT = Path(__file__).parents[2]
-BOOTSTRAP = ROOT / "tools/admin/bootstrap_vista_r8_native_builder.sh"
+BOOTSTRAP = ROOT / "tools/admin/bootstrap_vista_r8_native_builder_r2.sh"
 UNIT_ROOT = ROOT / "tools/admin/systemd"
-PHASE_A_UNIT = UNIT_ROOT / "vista-r8-native-builder-phase-a.service"
-PHASE_B_UNIT = UNIT_ROOT / "vista-r8-native-builder-phase-b.service"
-RUNBOOK = ROOT / "docs/runbooks/vista-r8-native-builder-r1.md"
+PHASE_A_UNIT = UNIT_ROOT / "vista-r8-native-builder-r2-phase-a.service"
+PHASE_B_UNIT = UNIT_ROOT / "vista-r8-native-builder-r2-phase-b.service"
+RUNBOOK = ROOT / "docs/runbooks/vista-r8-native-builder-r2.md"
+R1_BOOTSTRAP = ROOT / "tools/admin/bootstrap_vista_r8_native_builder.sh"
+R1_PHASE_A_UNIT = UNIT_ROOT / "vista-r8-native-builder-phase-a.service"
+R1_PHASE_B_UNIT = UNIT_ROOT / "vista-r8-native-builder-phase-b.service"
 
-INPUT_ROOT = "/etc/vista-r8-native-builder-r1"
-STATE_ROOT = "/var/lib/vista-r8-native-builder-r1"
-BUILDER = "/usr/local/libexec/vista-r8-native-builder-r1/vista_r8_native_builder.py"
+INPUT_ROOT = "/etc/vista-r8-native-builder-r2"
+STATE_ROOT = "/var/lib/vista-r8-native-builder-r2"
+BUILDER = "/usr/local/libexec/vista-r8-native-builder-r2/vista_r8_native_builder.py"
+R1_INACCESSIBLE_ROOTS = (
+    "/root/vista-r8-native-builder-bootstrap-r1",
+    "/root/vista-r8-native-builder-bootstrap-input-r1",
+    "/usr/local/libexec/vista-r8-native-builder-r1",
+    "/etc/vista-r8-native-builder-r1",
+    "/var/lib/vista-r8-native-builder-r1",
+)
 
 
 def _text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _section(text: str, name: str) -> list[str]:
@@ -100,13 +115,25 @@ def test_bootstrap_is_bash_syntax_clean_and_never_runs_systemd_or_builder() -> N
     assert "readonly INSTALL_PHASE_A='install-phase-a-inputs'" in text
     assert "readonly INSTALL_PHASE_B='install-phase-b-request'" in text
     assert (
-        "readonly INPUT_CANDIDATE_ROOT='/root/vista-r8-native-builder-bootstrap-input-r1'"
+        "readonly INPUT_CANDIDATE_ROOT='/root/vista-r8-native-builder-bootstrap-input-r2'"
         in text
     )
     assert "/tmp/vista_r8_native_builder.py" not in text
     assert "systemctl daemon-reload" not in text
     assert re.search(r"systemctl\s+(start|enable|restart|try-restart)", text) is None
     assert re.search(r"python3(?:\.10)?\s+.*vista_r8_native_builder", text) is None
+
+
+def test_r1_sources_remain_byte_exact_audit_evidence() -> None:
+    assert _sha256(R1_BOOTSTRAP) == (
+        "26442b12d9a8da3614831232772983a5b6b7860f8a415511c8a381aca68c4cd4"
+    )
+    assert _sha256(R1_PHASE_A_UNIT) == (
+        "f3acaf39ad92fe2bc70680c9f7e0d8ab1e1f68f68553ebd4a74137c0cf939520"
+    )
+    assert _sha256(R1_PHASE_B_UNIT) == (
+        "1e65b23e2ae857b88d3b488a63cfcba3d6462c265ff3b4d3b33da046b9f96035"
+    )
 
 
 def test_bootstrap_local_declarations_do_not_expand_peer_assignments() -> None:
@@ -237,9 +264,9 @@ def test_bootstrap_rejects_orphan_builder_identity_processes() -> None:
 def test_bootstrap_installs_only_fixed_roots_modes_and_slot_inventory() -> None:
     text = _text(BOOTSTRAP)
     for literal in (
-        "readonly LIBEXEC_ROOT='/usr/local/libexec/vista-r8-native-builder-r1'",
-        "readonly INPUT_ROOT='/etc/vista-r8-native-builder-r1'",
-        "readonly STATE_ROOT='/var/lib/vista-r8-native-builder-r1'",
+        "readonly LIBEXEC_ROOT='/usr/local/libexec/vista-r8-native-builder-r2'",
+        "readonly INPUT_ROOT='/etc/vista-r8-native-builder-r2'",
+        "readonly STATE_ROOT='/var/lib/vista-r8-native-builder-r2'",
         'ensure_directory "${LIBEXEC_ROOT}" root root 0555 0 0',
         'ensure_directory "${INPUT_ROOT}" root root 0555 0 0',
         'ensure_directory "${STATE_ROOT}" root root 0555 0 0',
@@ -263,10 +290,101 @@ def test_bootstrap_installs_only_fixed_roots_modes_and_slot_inventory() -> None:
         assert literal in text
     assert "${STATE_ROOT}/inputs" not in text
     assert "${STATE_ROOT}/published" not in text
+    assert text.count('ensure_directory "${INPUT_ROOT}" root root 0555 0 0') == 1
     assert text.count('/usr/bin/sync --file-system -- "${path}"') >= 2
     assert text.count('/usr/bin/sync --file-system -- "${path%/*}"') >= 2
     assert text.count('/usr/bin/sync --file-system -- "${destination}"') >= 2
     assert text.count('/usr/bin/sync --file-system -- "${destination%/*}"') >= 2
+
+
+def test_framework_dirty_prestate_fails_before_any_mutation(tmp_path: Path) -> None:
+    libexec = tmp_path / "libexec"
+    libexec.mkdir()
+    (libexec / "evil").write_text("unexpected\n", encoding="ascii")
+    harness = f"""
+set -euo pipefail
+LIBEXEC_ROOT={libexec}
+BUILDER_DEST={libexec}/vista_r8_native_builder.py
+INPUT_ROOT={tmp_path}/input
+STATE_ROOT={tmp_path}/state
+PHASE_A_SLOT=${{STATE_ROOT}}/phase-a-slot
+PHASE_B_SLOT=${{STATE_ROOT}}/phase-b-slot
+UNIT_ROOT={tmp_path}/units
+PHASE_A_UNIT=phase-a.service
+PHASE_B_UNIT=phase-b.service
+BUILDER_UID=997
+BUILDER_GID=997
+BUILDER_SOURCE_SHA256=deadbeef
+BUILDER_SOURCE_SIZE=1
+PHASE_A_UNIT_SHA256=deadbeef
+PHASE_A_UNIT_SIZE=1
+PHASE_B_UNIT_SHA256=deadbeef
+PHASE_B_UNIT_SIZE=1
+fail() {{ printf '%s\n' "$*" >&2; exit 126; }}
+assert_directory() {{ :; }}
+verify_installed_file() {{ :; }}
+verify_lock() {{ :; }}
+verify_framework() {{ fail 'framework target not complete'; }}
+{_bash_function("assert_exact_inventory")}
+{_bash_function("assert_framework_target_prestate")}
+assert_framework_target_prestate
+/usr/bin/touch -- {tmp_path}/mutation-happened
+"""
+    result = subprocess.run(
+        ["/usr/bin/bash", "-c", harness],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert result.returncode == 126
+    assert "framework target not complete" in result.stderr
+    assert not (tmp_path / "mutation-happened").exists()
+
+    install_case = _text(BOOTSTRAP).rsplit('"${INSTALL_FRAMEWORK}")', 1)[1].split(
+        '"${INSTALL_PHASE_A}")', 1
+    )[0]
+    ordered = (
+        "assert_identity_prestate",
+        "assert_framework_target_prestate",
+        "validate_group 'true'",
+        "validate_user 'true'",
+        'ensure_directory "${LIBEXEC_ROOT}"',
+    )
+    offsets = [install_case.index(literal) for literal in ordered]
+    assert offsets == sorted(offsets)
+
+
+def test_framework_prestate_is_only_fresh_or_complete_reconcile() -> None:
+    target = _bash_function("assert_framework_target_prestate")
+    for path in (
+        "${LIBEXEC_ROOT}",
+        "${INPUT_ROOT}",
+        "${STATE_ROOT}",
+        "${UNIT_ROOT}/${PHASE_A_UNIT}",
+        "${UNIT_ROOT}/${PHASE_B_UNIT}",
+    ):
+        assert f'! -e "{path}"' in target
+        assert f'! -L "{path}"' in target
+    for literal in (
+        "verify_framework",
+        'assert_exact_inventory "${INPUT_ROOT}"',
+        "assert_exact_inventory \"${PHASE_A_SLOT}\" '.build.lock'",
+        "assert_exact_inventory \"${PHASE_B_SLOT}\" '.build.lock'",
+        "framework reconcile prestate contains phase A publication",
+        "framework reconcile prestate contains phase B publication",
+    ):
+        assert literal in target
+
+    identity = _bash_function("assert_identity_prestate")
+    assert identity.count("/usr/bin/getent") == 4
+    assert "builder account/group prestate is mixed or colliding" in identity
+    assert identity.count("reject_subordinate_id_ranges") == 1
+    assert identity.index("reject_subordinate_id_ranges") < identity.index("return")
+    assert "validate_group 'false'" in identity
+    assert "validate_user 'false'" in identity
+    assert "groupadd" not in identity
+    assert "useradd" not in identity
 
 
 def test_bootstrap_requires_inactive_empty_service_cgroups() -> None:
@@ -301,7 +419,8 @@ def test_bootstrap_exhaustively_rejects_systemd_filesystem_overrides() -> None:
         "vista-r8-.service.d",
         "vista-r8-native-.service.d",
         "vista-r8-native-builder-.service.d",
-        "vista-r8-native-builder-phase-.service.d",
+        "vista-r8-native-builder-r2-.service.d",
+        "vista-r8-native-builder-r2-phase-.service.d",
         "service.d",
     )
     text = _text(BOOTSTRAP)
@@ -354,11 +473,17 @@ def test_bootstrap_validates_loaded_manager_provenance_without_mutation() -> Non
 def test_bootstrap_requires_fixed_root_owned_live_self_and_held_assets() -> None:
     text = _text(BOOTSTRAP)
     for literal in (
-        "readonly TRUSTED_ROOT='/root/vista-r8-native-builder-bootstrap-r1'",
+        "readonly TRUSTED_ROOT='/root/vista-r8-native-builder-bootstrap-r2'",
         '[[ "${live_self}" == "${TRUSTED_SELF}" ]]',
         'assert_directory "${TRUSTED_ROOT}" 0 0 0555',
         'assert_directory "${TRUSTED_SYSTEMD}" 0 0 0555',
-        "'bootstrap_vista_r8_native_builder.sh' 'vista_r8_native_builder.py' 'systemd'",
+        "'.bootstrap.lock' 'bootstrap_vista_r8_native_builder_r2.sh'",
+        "'vista_r8_native_builder.py' 'systemd'",
+        'exec {BOOTSTRAP_LOCK_FD}<>"${BOOTSTRAP_LOCK}"',
+        '/usr/bin/flock -n "${BOOTSTRAP_LOCK_FD}"',
+        '[[ -f "${BOOTSTRAP_LOCK}" && ! -L "${BOOTSTRAP_LOCK}" ]]',
+        '[[ -f "${held}" ]]',
+        "bootstrap operation lock metadata differs",
         'exec {SELF_FD}<"${TRUSTED_SELF}"',
         'exec {BUILDER_FD}<"${TRUSTED_BUILDER}"',
         'observed_held_pin "${SELF_FD}" 0 0 0500',
@@ -375,8 +500,8 @@ def test_runbook_requires_independent_bootstrap_self_pin_verification() -> None:
     assert "The bootstrap script itself is part of that independent record" in text
     assert "separately conveyed SHA-256 and byte size" in text
     assert (
-        "/root/vista-r8-native-builder-bootstrap-r1/"
-        "bootstrap_vista_r8_native_builder.sh"
+        "/root/vista-r8-native-builder-bootstrap-r2/"
+        "bootstrap_vista_r8_native_builder_r2.sh"
     ) in text
     assert re.search(r"does not self-authorize a digest derived from\s+itself", text)
 
@@ -440,10 +565,8 @@ def test_terminal_operation_close_gate_is_the_last_validation_before_success() -
         "assert_services_quiescent",
         "assert_systemd_provenance 'true'",
         "assert_builder_identity_unused",
-        'verify_held_file "${SELF_FD}"',
-        'verify_held_file "${BUILDER_FD}"',
-        'verify_held_file "${PHASE_A_UNIT_FD}"',
-        'verify_held_file "${PHASE_B_UNIT_FD}"',
+        "verify_trusted_source_close_state",
+        "verify_held_bootstrap_lock",
         'verify_operation_close_state "$@"',
         "printf '%s\\n'",
     )
@@ -452,6 +575,51 @@ def test_terminal_operation_close_gate_is_the_last_validation_before_success() -
     assert re.search(
         r'verify_operation_close_state "\$@"\n\nprintf \'%s\\n\'', terminal
     )
+
+
+def test_trusted_source_close_gate_rejects_replaced_canonical_path(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.write_text("held\n", encoding="ascii")
+    replacement = tmp_path / "replacement"
+    replacement.write_text("replacement\n", encoding="ascii")
+    harness = f"""
+set -euo pipefail
+fail() {{ printf '%s\n' "$*" >&2; exit 126; }}
+held_path() {{ printf '/proc/%s/fd/%s' "$$" "$1"; }}
+verify_held_file() {{ :; }}
+{_bash_function("verify_held_regular_path_binding")}
+exec 9<"{source}"
+/usr/bin/mv -- "{source}" "{source}.held"
+/usr/bin/mv -- "{replacement}" "{source}"
+verify_held_regular_path_binding 9 "{source}" 0 0 0400 deadbeef 1 source
+"""
+    result = subprocess.run(
+        ["/usr/bin/bash", "-c", harness],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert result.returncode == 126
+    assert "canonical path identity differs" in result.stderr
+
+
+def test_phase_b_close_gate_uses_existing_sha_and_size_once() -> None:
+    gate = _bash_function("verify_operation_close_state")
+    assert (
+        'verify_installed_file "${BUNDLE_DEST}" \\\n'
+        '        "${PHASE_B_EXISTING_BUNDLE_SHA256}" \\\n'
+        '        "${PHASE_B_EXISTING_BUNDLE_SIZE}" 0444 \\\n'
+        "        'terminal installed source bundle'"
+    ) in gate
+    assert (
+        'verify_installed_file "${PHASE_A_REQUEST_DEST}" \\\n'
+        '        "${PHASE_B_EXISTING_PHASE_A_SHA256}" \\\n'
+        '        "${PHASE_B_EXISTING_PHASE_A_SIZE}" 0444 \\\n'
+        "        'terminal installed phase A request'"
+    ) in gate
 
 
 @pytest.mark.parametrize(
@@ -548,7 +716,7 @@ def test_units_are_network_filesystem_device_and_process_hardened() -> None:
         "ProtectProc=invisible",
         "ProcSubset=all",
         f"ReadOnlyPaths={INPUT_ROOT}",
-        "ReadOnlyPaths=/usr/local/libexec/vista-r8-native-builder-r1",
+        "ReadOnlyPaths=/usr/local/libexec/vista-r8-native-builder-r2",
         "DevicePolicy=closed",
         "LockPersonality=yes",
         "MemoryDenyWriteExecute=yes",
@@ -576,9 +744,22 @@ def test_units_are_network_filesystem_device_and_process_hardened() -> None:
         ]
         assert _values(service_lines, "CapabilityBoundingSet") == [""]
         assert _values(service_lines, "AmbientCapabilities") == [""]
-        assert "StateDirectory=vista-r8-native-builder-r1" not in service
+        assert "StateDirectory=vista-r8-native-builder-r2" not in service
         assert f"ReadWritePaths={STATE_ROOT}" not in service
         assert _section(text, "Install") == []
+
+
+def test_r2_units_explicitly_hide_every_r1_builder_root() -> None:
+    expected = {f"-{path}" for path in R1_INACCESSIBLE_ROOTS}
+    for path in (PHASE_A_UNIT, PHASE_B_UNIT):
+        raw = _text(path)
+        service = _section(raw, "Service")
+        inaccessible = set(_values(service, "InaccessiblePaths"))
+        assert expected <= inaccessible
+        for root in R1_INACCESSIBLE_ROOTS:
+            assert [line for line in raw.splitlines() if root in line] == [
+                f"InaccessiblePaths=-{root}"
+            ]
 
 
 def test_units_expose_the_read_only_kernel_virtual_trace_authority() -> None:
@@ -632,7 +813,9 @@ def test_phase_slots_are_mutually_write_isolated_and_b_reads_closed_a() -> None:
     )
 
     assert _values(phase_b_unit, "Requires") == []
-    assert _values(phase_b_unit, "After") == ["vista-r8-native-builder-phase-a.service"]
+    assert _values(phase_b_unit, "After") == [
+        "vista-r8-native-builder-r2-phase-a.service"
+    ]
     phase_a_manifest = f"{STATE_ROOT}/phase-a-slot/published/manifest.json"
     phase_b_manifest = f"{STATE_ROOT}/phase-b-slot/published/manifest.json"
     assert phase_a_manifest in _values(phase_b_unit, "ConditionPathExists")
@@ -643,16 +826,16 @@ def test_phase_slots_are_mutually_write_isolated_and_b_reads_closed_a() -> None:
 def test_runbook_preserves_layout_and_runtime_claims() -> None:
     text = _text(RUNBOOK)
     for literal in (
-        "Status: source correction complete; inactive c963 framework retained as evidence;",
-        "/root/vista-r8-native-builder-bootstrap-r1/",
-        "/root/vista-r8-native-builder-bootstrap-input-r1/",
+        "Status: fresh R2 namespace source complete; privileged activation not performed",
+        "/root/vista-r8-native-builder-bootstrap-r2/",
+        "/root/vista-r8-native-builder-bootstrap-input-r2/",
         "phase-a-slot/",
         "997:997 0711",
         "install-framework",
         "install-phase-a-inputs",
         "install-phase-b-request",
         "does not compile a local `yhliu` candidate",
-        "Phase A inputs were not installed",
+        "R1 evidence is never reset, moved, replaced, reconciled, or modified",
     ):
         assert literal in text
     assert "The Phase B unit has `After=phase-a` but not `Requires=phase-a`" in text

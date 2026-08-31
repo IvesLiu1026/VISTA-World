@@ -1,6 +1,6 @@
 # Design: VISTA R8 UE 5.7 Authority Bootstrap R2
 
-Status: Dedicated-builder source milestone complete; privileged activation blocked
+Status: Fresh native-builder R2 namespace source complete; privileged activation blocked
 Updated: 2026-08-31
 Depends on: requirements.md
 
@@ -72,17 +72,27 @@ fresh-account orphan-numeric-ID case. This removes the former dependency on
 native builds.
 
 The bootstrap trust ceremony begins from the exact root-owned
-`/root/vista-r8-native-builder-bootstrap-r1` inventory. Its script has three
+`/root/vista-r8-native-builder-bootstrap-r2` inventory. Its script has three
 closed append/reconcile operations: install the inactive framework, install the
 source bundle plus Phase A request, and install the Phase B request after Phase A
 closes. It pins and holds its live self, builder, both unit files, and supplied
 inputs; verifies exact owners, modes, links, hashes, account records, empty unit
 cgroups, and append-only inventories; fsyncs every installed file and parent;
-and never reloads, enables, starts, or executes systemd or the builder.
+and never reloads, enables, starts, or executes systemd or the builder. One
+fixed root-owned zero-byte `0600` `.bootstrap.lock` is part of that inventory;
+the script validates and holds it with nonblocking `flock` for the complete
+operation and rebinds every canonical trusted-source path to its held inode at
+the final close gate.
+Before creating an identity or target, a zero-write gate accepts only a wholly
+absent group/user plus fresh five-path target set, an already exact group/user
+plus fresh targets, or an exact identity plus complete framework reconciliation.
+Any identity collision or partial/dirty framework is evidence, not a resumable
+installation prefix.
 
 The root-owned builder is installed as `0444` below
-`/usr/local/libexec/vista-r8-native-builder-r1`. Root-owned `0444` inputs
-live below `/etc/vista-r8-native-builder-r1`. The state root is root:root
+`/usr/local/libexec/vista-r8-native-builder-r2`. Root-owned `0444` inputs
+live below `/etc/vista-r8-native-builder-r2`. The state root
+`/var/lib/vista-r8-native-builder-r2` is root:root
 `0555`; its two `997:997 0711` phase slots are the only writable locations
 and each owns one `0600` lock. A phase creates private scratch below its own
 slot and promotes exactly one fresh `published` directory with
@@ -94,6 +104,12 @@ device/process protections, no capabilities or supplementary groups,
 `UMask=0077`, a closed environment, and phase-specific read/write paths. Phase
 B can read the closed Phase A publication but cannot write it. Neither unit is
 enabled or started by source implementation or bootstrap installation.
+Both units explicitly make the five failed R1 trusted/input/install/state roots
+inaccessible. The R1 filesystem and manager failure state remain append-only
+evidence and are neither an input nor a reconciliation target for R2.
+Other approved `r1`-suffixed engine, host-runtime, BuildPlugin, parent-seal,
+stage, attempt, and evidence authorities are separate versioned contracts, not
+members of the failed native-builder namespace, and are intentionally retained.
 
 For every job the builder validates its held executable, request, service unit,
 source bundle, Git, compiler, readelf, and full toolchain ledger. It extracts
@@ -303,8 +319,11 @@ handling. It never relies on `PYTHONHOME` with isolated Python.
 
 ### Operation serialization
 
-The independently reviewed bootstrap root owns four `0600`, single-link lock
-files for engine, runtime, root bundle, and executor operations. Each privileged
+The fresh native-builder R2 bootstrap root owns its own `0600`, single-link
+zero-byte operation lock. Every one of its three inactive install/reconcile
+operations holds that lock from trusted-source opening through the terminal
+close-state gate. The independently reviewed authority bootstrap root owns four
+additional `0600`, single-link lock files for engine, runtime, root bundle, and executor operations. Each privileged
 operation validates its literal lock identity and obtains a nonblocking
 exclusive `flock`. Engine source coordination separately requires the runtime
 owner to attest that no writer is active; read-only UE use is not itself a

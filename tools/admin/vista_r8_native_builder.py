@@ -5,7 +5,7 @@ This helper is intentionally standard-library only.  Production execution is
 through one of the two fixed systemd units in ``tools/admin/systemd``.  The
 units run this file as the nologin ``vista-r8-builder`` identity (997:997),
 with a private network namespace.  Inputs are immutable root-owned files below
-``/etc/vista-r8-native-builder-r1`` and the only writable namespace is the
+``/etc/vista-r8-native-builder-r2`` and the only writable namespace is the
 fixed state root below ``/var/lib``.
 
 The builder does not authorize a request.  It verifies and executes an already
@@ -51,19 +51,19 @@ BUILDER_GID = 997
 ROOT_UID = 0
 ROOT_GID = 0
 
-INSTALL_ROOT = Path("/usr/local/libexec/vista-r8-native-builder-r1")
+INSTALL_ROOT = Path("/usr/local/libexec/vista-r8-native-builder-r2")
 INSTALLED_BUILDER = INSTALL_ROOT / "vista_r8_native_builder.py"
 UNIT_PATHS = {
-    "phase-a": Path("/etc/systemd/system/vista-r8-native-builder-phase-a.service"),
-    "phase-b": Path("/etc/systemd/system/vista-r8-native-builder-phase-b.service"),
+    "phase-a": Path("/etc/systemd/system/vista-r8-native-builder-r2-phase-a.service"),
+    "phase-b": Path("/etc/systemd/system/vista-r8-native-builder-r2-phase-b.service"),
 }
-INPUT_ROOT = Path("/etc/vista-r8-native-builder-r1")
+INPUT_ROOT = Path("/etc/vista-r8-native-builder-r2")
 SOURCE_BUNDLE = INPUT_ROOT / "source.bundle"
 REQUEST_PATHS = {
     "phase-a": INPUT_ROOT / "phase-a-request.json",
     "phase-b": INPUT_ROOT / "phase-b-request.json",
 }
-STATE_ROOT = Path("/var/lib/vista-r8-native-builder-r1")
+STATE_ROOT = Path("/var/lib/vista-r8-native-builder-r2")
 PHASE_SLOTS = {
     "phase-a": STATE_ROOT / "phase-a-slot",
     "phase-b": STATE_ROOT / "phase-b-slot",
@@ -4505,7 +4505,10 @@ def plan_phase_a_request(
         reviewed_phase_a_unit_pin, "reviewed phase A unit", maximum=MAX_SOURCE_BYTES
     )
     builder_path = Path(__file__).resolve()
-    unit_path = builder_path.parent / "systemd/vista-r8-native-builder-phase-a.service"
+    unit_path = (
+        builder_path.parent
+        / "systemd/vista-r8-native-builder-r2-phase-a.service"
+    )
     held_builder = _open_planner_source(
         builder_path, builder_pin, mode=0o644, label="reviewed builder"
     )

@@ -43,7 +43,7 @@ _Static_assert(sizeof(EXPECTED_PYTHON_SHA256) == 65,
 _Static_assert(EXPECTED_HELPER_SIZE > 0, "helper size must be positive");
 _Static_assert(EXPECTED_PYTHON_SIZE > 0, "Python size must be positive");
 
-#define INSTALLED_ROOT_DEFAULT "/root/vista-r8-ue57-initial-bootstrap-r1"
+#define INSTALLED_ROOT_DEFAULT "/root/vista-r8-ue57-initial-bootstrap-r2"
 #define PYTHON_PATH_DEFAULT "/usr/bin/python3.10"
 #define LAUNCHER_NAME "bootstrap-r8-ue57-initial-authorities"
 #define HELPER_NAME "vista_r8_ue57_initial_bootstrap.py"

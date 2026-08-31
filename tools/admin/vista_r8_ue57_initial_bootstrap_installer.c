@@ -60,11 +60,11 @@ _Static_assert(EXPECTED_INPUT_PIN_SIZE > 0, "input size must be positive");
 #define LOCK_NAME ".bootstrap.lock"
 
 #define SELF_ROOT_DEFAULT                                                     \
-  "/root/vista-r8-ue57-initial-bootstrap-installer-r1"
+  "/root/vista-r8-ue57-initial-bootstrap-installer-r2"
 #define CANDIDATE_ROOT_DEFAULT                                                \
-  "/var/lib/vista-r8-native-builder-r1/phase-b-slot/published/"             \
+  "/var/lib/vista-r8-native-builder-r2/phase-b-slot/published/"             \
   "initial-bootstrap-candidate"
-#define FINAL_ROOT_DEFAULT "/root/vista-r8-ue57-initial-bootstrap-r1"
+#define FINAL_ROOT_DEFAULT "/root/vista-r8-ue57-initial-bootstrap-r2"
 #define ROOT_PARENT_DEFAULT "/root"
 
 #define INSTALL_OPERATION "install-initial-bootstrap"

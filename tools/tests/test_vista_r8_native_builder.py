@@ -465,12 +465,20 @@ def _phase_a_manifest(request: dict[str, object]) -> dict[str, object]:
 def test_fixed_identity_paths_phases_and_recipes() -> None:
     assert (builder.BUILDER_UID, builder.BUILDER_GID) == (997, 997)
     assert builder.INSTALLED_BUILDER == Path(
-        "/usr/local/libexec/vista-r8-native-builder-r1/vista_r8_native_builder.py"
+        "/usr/local/libexec/vista-r8-native-builder-r2/vista_r8_native_builder.py"
     )
-    assert builder.INPUT_ROOT == Path("/etc/vista-r8-native-builder-r1")
+    assert builder.INPUT_ROOT == Path("/etc/vista-r8-native-builder-r2")
+    assert builder.UNIT_PATHS == {
+        "phase-a": Path(
+            "/etc/systemd/system/vista-r8-native-builder-r2-phase-a.service"
+        ),
+        "phase-b": Path(
+            "/etc/systemd/system/vista-r8-native-builder-r2-phase-b.service"
+        ),
+    }
     assert builder.PHASE_ROOTS == {
-        "phase-a": Path("/var/lib/vista-r8-native-builder-r1/phase-a-slot/published"),
-        "phase-b": Path("/var/lib/vista-r8-native-builder-r1/phase-b-slot/published"),
+        "phase-a": Path("/var/lib/vista-r8-native-builder-r2/phase-a-slot/published"),
+        "phase-b": Path("/var/lib/vista-r8-native-builder-r2/phase-b-slot/published"),
     }
     assert builder.PHASE_A_JOB_IDS == (
         "stage-transfer-launcher",
@@ -2181,7 +2189,7 @@ def test_builder_claims_remain_negative() -> None:
         "network_access": False,
         "double_build_required": True,
         "worktree_or_user_candidate_input": False,
-        "write_root": "/var/lib/vista-r8-native-builder-r1",
+        "write_root": "/var/lib/vista-r8-native-builder-r2",
         "observation_only": True,
         "production_native_output": False,
     }

@@ -17,6 +17,24 @@ from tools.admin import vista_r8_native_builder as native_builder
 from tools.admin import vista_r8_ue57_authority_admin as admin
 
 
+def test_native_builder_source_contract_uses_fresh_r2_checkout() -> None:
+    expected = Path("/home/yhliu/VISTA-World-worktrees/vista-r8-fresh-namespace-r2")
+    assert admin.CHECKOUT_ROOT == expected
+    sources = {
+        admin.REVIEW_HELPER_SOURCE,
+        admin.STAGE_TRANSFER_LAUNCHER_SOURCE,
+        admin.PARENT_SEAL_HELPER_SOURCE,
+        admin.PARENT_SEAL_LAUNCHER_SOURCE,
+        admin.INITIAL_BOOTSTRAP_HELPER_SOURCE,
+        admin.INITIAL_BOOTSTRAP_LAUNCHER_SOURCE,
+        admin.INITIAL_BOOTSTRAP_INSTALLER_SOURCE,
+    }
+    assert {
+        source.relative_to(expected).as_posix() for source in sources
+    } == set(native_builder.SOURCE_PATHS)
+    assert all("vista-r9-six-room-finish-r1" not in str(source) for source in sources)
+
+
 def _write(path: Path, raw: bytes, mode: int = 0o644) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(raw)
@@ -2172,8 +2190,8 @@ def test_engine_shell_and_native_admin_launchers_have_closed_entrypoints() -> No
     bindings = admin._engine_wrapper_review_bindings(
         engine_wrapper.encode("utf-8"),
         helper_pin=admin.FilePin(
-            "247f5d6b0cf55de2b7840574c5529ed4c4560fb1176d152b9bed41f8f01f280f",
-            508_969,
+            "f9fd20d802a85bb3a57955edcd994644f64b34bb3fa7b8078cab0fcc0b1d7ce1",
+            512_140,
         ),
         source_pin=admin.FilePin(
             "7b30cd3b5628a21579efc19013a1d13e9557684c6b8ab3b6495eb42544e4b3d9",
@@ -2184,7 +2202,7 @@ def test_engine_shell_and_native_admin_launchers_have_closed_entrypoints() -> No
             5_917_224,
         ),
     )
-    assert bindings["EXPECTED_HELPER_BYTES"] == "508969"
+    assert bindings["EXPECTED_HELPER_BYTES"] == "512140"
     assert bindings["EXPECTED_SOURCE_PIN_BYTES"] == "786"
     assert bindings["EXPECTED_PYTHON_BYTES"] == "5917224"
     admin_launcher = (root / "tools/admin/vista_r8_ue57_admin_launcher.c").read_text(
