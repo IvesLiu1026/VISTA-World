@@ -182,16 +182,17 @@ bool AVistaStatefulApplianceActor::PlanInteractionTransition(
             : FName(TEXT("APPLIANCE_INACTIVE"));
         break;
     case EVistaAffordance::Press:
+        // P0 controls are never operable without external power. This is not
+        // author-overridable: a non-activating press must fail closed too.
+        if (!Before.bPowered)
+        {
+            OutCode = TEXT("APPLIANCE_POWER_REQUIRED");
+            return false;
+        }
         if (InPressProfile.ControlId.IsNone() ||
             InPressProfile.ResultStatus.IsNone())
         {
             OutCode = TEXT("APPLIANCE_PRESS_PROFILE_INVALID");
-            return false;
-        }
-        if ((InPressProfile.bRequiresPower ||
-             InPressProfile.bResultActive) && !Before.bPowered)
-        {
-            OutCode = TEXT("APPLIANCE_POWER_REQUIRED");
             return false;
         }
         OutAfter.bActive = InPressProfile.bResultActive;
@@ -273,6 +274,12 @@ bool AVistaStatefulApplianceActor::ReadClosedState(
     if (!bActivePresent && bLegacyOnPresent)
     {
         OutState.bActive = bLegacyOn;
+    }
+    else if (bActivePresent && bLegacyOnPresent &&
+             OutState.bActive != bLegacyOn)
+    {
+        OutCode = TEXT("APPLIANCE_ACTIVE_ALIAS_MISMATCH");
+        return false;
     }
     if (const FString* StatusValue = State.Values.Find(StatusKey))
     {

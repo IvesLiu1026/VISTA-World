@@ -18,9 +18,6 @@ struct VISTAPLAYABLEHOME_API FVistaAppliancePressProfile
     FName ControlId = TEXT("start");
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Appliance")
-    bool bRequiresPower = true;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Appliance")
     bool bResultActive = true;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VISTA|Appliance")
