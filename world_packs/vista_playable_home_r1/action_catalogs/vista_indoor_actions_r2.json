@@ -1,0 +1,1473 @@
+{
+  "schema_version": "vista.playable-action-catalog/v2",
+  "catalog_id": "vista_indoor_actions",
+  "catalog_revision": "vista_indoor_actions_r2",
+  "animation_profile_binding": {
+    "profile_id": "ue_5_7_3_animation_v1",
+    "profile_revision": "t12_source_inventory_r1",
+    "content_digest": "4a7947cd9f1a6edfaad32cc459d7193452dc938bccdb492ffa94af0af17320bd",
+    "acceptance_state": "source_inventory_only"
+  },
+  "acceptance_thresholds": {
+    "motion_warp_position_cm": 5,
+    "motion_warp_yaw_deg": 5,
+    "hand_contact_cm": 4,
+    "two_hand_contact_cm": 5,
+    "foot_penetration_cm": 1,
+    "attachment_pop_cm": 2,
+    "attachment_pop_deg": 3,
+    "seat_pelvis_cm": 3,
+    "seat_pelvis_yaw_deg": 5,
+    "recover_root_cm": 5
+  },
+  "control_intents": [
+    {
+      "intent_id": "speak",
+      "wire_action": "speak",
+      "backend_action": "Speak",
+      "required_parameters": [
+        "utterance"
+      ],
+      "optional_parameters": [
+        "timeout_s"
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "action_id": "idle",
+      "family": "locomotion",
+      "aliases": [],
+      "target_policy": "forbidden",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [],
+        "optional": [
+          "duration_s",
+          "pose"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "not_applicable",
+      "default_variant_id": "idle.neutral",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "idle.neutral",
+          "selectors": {
+            "pose": "standing"
+          },
+          "readiness": "candidate",
+          "animation_profile_action_id": "idle",
+          "rejection_reason": null
+        }
+      ]
+    },
+    {
+      "action_id": "walk",
+      "family": "locomotion",
+      "aliases": [
+        "navigate_to"
+      ],
+      "target_policy": "optional",
+      "approach_policy": "navigate",
+      "parameters": {
+        "required": [
+          "room_id"
+        ],
+        "optional": [
+          "target_id",
+          "distance_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_motion",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "not_applicable",
+      "default_variant_id": "walk.forward",
+      "legacy_bindings": [
+        {
+          "wire_action": "navigate_to",
+          "backend_action": "NavigateTo",
+          "variant_id": "walk.forward"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "walk.forward",
+          "selectors": {
+            "direction": "forward"
+          },
+          "readiness": "candidate",
+          "animation_profile_action_id": "locomotion",
+          "rejection_reason": null
+        }
+      ]
+    },
+    {
+      "action_id": "jog",
+      "family": "locomotion",
+      "aliases": [],
+      "target_policy": "optional",
+      "approach_policy": "navigate",
+      "parameters": {
+        "required": [
+          "room_id"
+        ],
+        "optional": [
+          "target_id",
+          "distance_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_motion",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "not_applicable",
+      "default_variant_id": "jog.forward",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "jog.forward",
+          "selectors": {
+            "direction": "forward"
+          },
+          "readiness": "candidate",
+          "animation_profile_action_id": "locomotion",
+          "rejection_reason": null
+        }
+      ]
+    },
+    {
+      "action_id": "sprint",
+      "family": "locomotion",
+      "aliases": [],
+      "target_policy": "optional",
+      "approach_policy": "navigate",
+      "parameters": {
+        "required": [
+          "room_id"
+        ],
+        "optional": [
+          "target_id",
+          "distance_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_motion",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "not_applicable",
+      "default_variant_id": "sprint.forward",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "sprint.forward",
+          "selectors": {
+            "direction": "forward"
+          },
+          "readiness": "candidate",
+          "animation_profile_action_id": "locomotion",
+          "rejection_reason": null
+        }
+      ]
+    },
+    {
+      "action_id": "turn_in_place",
+      "family": "locomotion",
+      "aliases": [
+        "turn"
+      ],
+      "target_policy": "optional",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [
+          "direction"
+        ],
+        "optional": [
+          "target_id"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "not_applicable",
+      "default_variant_id": "turn_in_place.left",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "turn_in_place.left",
+          "selectors": {
+            "direction": "left"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "turn",
+          "rejection_reason": "No accepted in-place turn asset has been authored or packaged."
+        },
+        {
+          "variant_id": "turn_in_place.right",
+          "selectors": {
+            "direction": "right"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "turn",
+          "rejection_reason": "No accepted in-place turn asset has been authored or packaged."
+        }
+      ]
+    },
+    {
+      "action_id": "crouch",
+      "family": "posture",
+      "aliases": [],
+      "target_policy": "forbidden",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [],
+        "optional": [
+          "duration_s"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "not_applicable",
+      "default_variant_id": "crouch.standing_to_crouched",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "crouch.standing_to_crouched",
+          "selectors": {
+            "pose": "crouched"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No catalog-bound crouch transition source is available."
+        }
+      ]
+    },
+    {
+      "action_id": "look_at",
+      "family": "attention",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [
+          "target_id"
+        ],
+        "optional": [
+          "duration_s"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "not_applicable",
+      "default_variant_id": "look_at.aligned",
+      "legacy_bindings": [
+        {
+          "wire_action": "look_at",
+          "backend_action": "LookAt",
+          "variant_id": "look_at.legacy_single_frame"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "look_at.aligned",
+          "selectors": {
+            "pose": "standing"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "look_at",
+          "rejection_reason": "A sustained target-aligned look animation still needs authoring."
+        },
+        {
+          "variant_id": "look_at.legacy_single_frame",
+          "selectors": {
+            "pose": "standing"
+          },
+          "readiness": "rejected_placeholder",
+          "animation_profile_action_id": "look_at",
+          "rejection_reason": "The experimental 0.033 second montage is not a visible look-at action."
+        }
+      ]
+    },
+    {
+      "action_id": "inspect",
+      "family": "attention",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "target_id"
+        ],
+        "optional": [
+          "duration_s",
+          "pose"
+        ]
+      },
+      "effect": {
+        "effect_id": "none",
+        "commit_phase": "none"
+      },
+      "rollback_policy": "not_applicable",
+      "default_variant_id": "inspect.focused",
+      "legacy_bindings": [
+        {
+          "wire_action": "inspect",
+          "backend_action": "Inspect",
+          "variant_id": "inspect.focused"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "inspect.focused",
+          "selectors": {
+            "pose": "standing"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No accepted sustained inspect animation and camera-focus package receipt exists."
+        }
+      ]
+    },
+    {
+      "action_id": "pause",
+      "family": "attention",
+      "aliases": [
+        "wait"
+      ],
+      "target_policy": "forbidden",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [],
+        "optional": [
+          "duration_s",
+          "pose"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "not_applicable",
+      "default_variant_id": "pause.hold",
+      "legacy_bindings": [
+        {
+          "wire_action": "wait",
+          "backend_action": "Wait",
+          "variant_id": "pause.hold"
+        },
+        {
+          "wire_action": "pause",
+          "backend_action": "Pause",
+          "variant_id": "pause.hold"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "pause.hold",
+          "selectors": {
+            "pose": "standing"
+          },
+          "readiness": "candidate",
+          "animation_profile_action_id": "pause",
+          "rejection_reason": null
+        }
+      ]
+    },
+    {
+      "action_id": "pick_up",
+      "family": "manipulation",
+      "aliases": [
+        "pickup"
+      ],
+      "target_policy": "required",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "target_id"
+        ],
+        "optional": [
+          "hand",
+          "height_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "held_state_claim",
+        "commit_phase": "contact"
+      },
+      "rollback_policy": "restore_pre_contact",
+      "default_variant_id": "pick_up.right_waist",
+      "legacy_bindings": [
+        {
+          "wire_action": "pick_up",
+          "backend_action": "PickUp",
+          "variant_id": "pick_up.right_waist"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "pick_up.right_waist",
+          "selectors": {
+            "hand": "right",
+            "height_band": "waist",
+            "weight_band": "light"
+          },
+          "readiness": "blocked_on_license",
+          "animation_profile_action_id": "pickup",
+          "rejection_reason": "The current pickup source awaits an explicit license acceptance receipt."
+        },
+        {
+          "variant_id": "pick_up.both_floor_heavy",
+          "selectors": {
+            "hand": "both",
+            "height_band": "floor",
+            "weight_band": "heavy"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "A two-hand floor pickup source is not available."
+        }
+      ]
+    },
+    {
+      "action_id": "carry",
+      "family": "manipulation",
+      "aliases": [],
+      "target_policy": "optional",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [],
+        "optional": [
+          "target_id",
+          "hand",
+          "pose"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_pre_contact",
+      "default_variant_id": "carry.right_light",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "carry.right_light",
+          "selectors": {
+            "hand": "right",
+            "weight_band": "light",
+            "pose": "standing"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No carry overlay has been authored for the current skeleton."
+        },
+        {
+          "variant_id": "carry.both_heavy",
+          "selectors": {
+            "hand": "both",
+            "weight_band": "heavy",
+            "pose": "standing"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No two-hand heavy carry overlay has been authored."
+        }
+      ]
+    },
+    {
+      "action_id": "place",
+      "family": "manipulation",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "align_support",
+      "parameters": {
+        "required": [
+          "target_id",
+          "placement_anchor_id"
+        ],
+        "optional": [
+          "hand",
+          "height_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "held_state_release",
+        "commit_phase": "release"
+      },
+      "rollback_policy": "restore_pre_contact",
+      "default_variant_id": "place.right_counter",
+      "legacy_bindings": [
+        {
+          "wire_action": "place",
+          "backend_action": "Place",
+          "variant_id": "place.right_counter"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "place.right_counter",
+          "selectors": {
+            "hand": "right",
+            "height_band": "counter",
+            "weight_band": "light"
+          },
+          "readiness": "blocked_on_license",
+          "animation_profile_action_id": "drop",
+          "rejection_reason": "The current put-aside source awaits an explicit license acceptance receipt."
+        }
+      ]
+    },
+    {
+      "action_id": "drop",
+      "family": "manipulation",
+      "aliases": [],
+      "target_policy": "forbidden",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [],
+        "optional": [
+          "hand",
+          "height_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "held_state_release",
+        "commit_phase": "release"
+      },
+      "rollback_policy": "restore_pre_contact",
+      "default_variant_id": "drop.right",
+      "legacy_bindings": [
+        {
+          "wire_action": "drop",
+          "backend_action": "Drop",
+          "variant_id": "drop.right"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "drop.right",
+          "selectors": {
+            "hand": "right"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "drop",
+          "rejection_reason": "No physics-synchronized release animation has passed acceptance."
+        }
+      ]
+    },
+    {
+      "action_id": "insert",
+      "family": "manipulation",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "align_support",
+      "parameters": {
+        "required": [
+          "target_id",
+          "secondary_target_id"
+        ],
+        "optional": [
+          "hand",
+          "height_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "multi_entity_state",
+        "commit_phase": "release"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "insert.right_counter",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "insert.right_counter",
+          "selectors": {
+            "hand": "right",
+            "height_band": "counter"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No insertion animation or target socket contract is available."
+        }
+      ]
+    },
+    {
+      "action_id": "pour",
+      "family": "manipulation",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "align_support",
+      "parameters": {
+        "required": [
+          "target_id",
+          "secondary_target_id"
+        ],
+        "optional": [
+          "hand",
+          "duration_s"
+        ]
+      },
+      "effect": {
+        "effect_id": "multi_entity_state",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "pour.right",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "pour.right",
+          "selectors": {
+            "hand": "right"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No container-aware pour animation and liquid state binding are available."
+        }
+      ]
+    },
+    {
+      "action_id": "push",
+      "family": "manipulation",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "target_id",
+          "distance_cm"
+        ],
+        "optional": [
+          "hand"
+        ]
+      },
+      "effect": {
+        "effect_id": "target_transform",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "push.both",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "push.both",
+          "selectors": {
+            "hand": "both",
+            "weight_band": "medium"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No target-motion synchronized push animation is available."
+        }
+      ]
+    },
+    {
+      "action_id": "pull_drag",
+      "family": "manipulation",
+      "aliases": [
+        "drag"
+      ],
+      "target_policy": "required",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "target_id",
+          "distance_cm",
+          "hand"
+        ],
+        "optional": [
+          "direction"
+        ]
+      },
+      "effect": {
+        "effect_id": "target_transform",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "pull_drag.right",
+      "legacy_bindings": [
+        {
+          "wire_action": "drag",
+          "backend_action": "Drag",
+          "variant_id": "pull_drag.legacy_no_target_motion"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "pull_drag.right",
+          "selectors": {
+            "hand": "right",
+            "direction": "backward"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "drag",
+          "rejection_reason": "A target-motion synchronized drag still needs authoring."
+        },
+        {
+          "variant_id": "pull_drag.legacy_no_target_motion",
+          "selectors": {
+            "hand": "right",
+            "direction": "forward"
+          },
+          "readiness": "rejected_placeholder",
+          "animation_profile_action_id": "drag",
+          "rejection_reason": "The experimental carrier-frame jog never moves the dragged target."
+        }
+      ]
+    },
+    {
+      "action_id": "equip",
+      "family": "manipulation",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "target_id"
+        ],
+        "optional": [
+          "hand",
+          "pose"
+        ]
+      },
+      "effect": {
+        "effect_id": "held_state_claim",
+        "commit_phase": "contact"
+      },
+      "rollback_policy": "restore_pre_contact",
+      "default_variant_id": "equip.right",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "equip.right",
+          "selectors": {
+            "hand": "right",
+            "pose": "standing"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No equipment socket and equip animation contract is available."
+        }
+      ]
+    },
+    {
+      "action_id": "articulation.open",
+      "family": "articulation",
+      "aliases": [
+        "open_door"
+      ],
+      "target_policy": "required",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "target_id"
+        ],
+        "optional": [
+          "hand"
+        ]
+      },
+      "effect": {
+        "effect_id": "target_state",
+        "commit_phase": "contact"
+      },
+      "rollback_policy": "restore_pre_contact",
+      "default_variant_id": "articulation.open.right",
+      "legacy_bindings": [
+        {
+          "wire_action": "open_door",
+          "backend_action": "OpenDoor",
+          "variant_id": "articulation.open.legacy_pickup"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "articulation.open.right",
+          "selectors": {
+            "hand": "right",
+            "height_band": "waist"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "door",
+          "rejection_reason": "A handle-aligned opening animation still needs authoring."
+        },
+        {
+          "variant_id": "articulation.open.legacy_pickup",
+          "selectors": {
+            "hand": "right",
+            "height_band": "waist"
+          },
+          "readiness": "rejected_placeholder",
+          "animation_profile_action_id": "door",
+          "rejection_reason": "The experimental door montage reuses a 100 cm pickup motion."
+        }
+      ]
+    },
+    {
+      "action_id": "close",
+      "family": "articulation",
+      "aliases": [
+        "close_door"
+      ],
+      "target_policy": "required",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "target_id"
+        ],
+        "optional": [
+          "hand"
+        ]
+      },
+      "effect": {
+        "effect_id": "target_state",
+        "commit_phase": "contact"
+      },
+      "rollback_policy": "restore_pre_contact",
+      "default_variant_id": "close.right",
+      "legacy_bindings": [
+        {
+          "wire_action": "close_door",
+          "backend_action": "CloseDoor",
+          "variant_id": "close.legacy_pickup"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "close.right",
+          "selectors": {
+            "hand": "right",
+            "height_band": "waist"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "door",
+          "rejection_reason": "A handle-aligned closing animation still needs authoring."
+        },
+        {
+          "variant_id": "close.legacy_pickup",
+          "selectors": {
+            "hand": "right",
+            "height_band": "waist"
+          },
+          "readiness": "rejected_placeholder",
+          "animation_profile_action_id": "door",
+          "rejection_reason": "The experimental door montage reuses a pickup motion."
+        }
+      ]
+    },
+    {
+      "action_id": "appliance.toggle_rotary",
+      "family": "appliance",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "target_id"
+        ],
+        "optional": [
+          "hand"
+        ]
+      },
+      "effect": {
+        "effect_id": "target_state",
+        "commit_phase": "contact"
+      },
+      "rollback_policy": "restore_pre_contact",
+      "default_variant_id": "appliance.toggle_rotary.right",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "appliance.toggle_rotary.right",
+          "selectors": {
+            "hand": "right",
+            "height_band": "counter"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No knob-aligned wrist rotation action is available."
+        }
+      ]
+    },
+    {
+      "action_id": "press_button",
+      "family": "appliance",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "target_id"
+        ],
+        "optional": [
+          "hand",
+          "height_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "target_state",
+        "commit_phase": "contact"
+      },
+      "rollback_policy": "restore_pre_contact",
+      "default_variant_id": "press_button.right",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "press_button.right",
+          "selectors": {
+            "hand": "right",
+            "height_band": "counter"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No fingertip-aligned press action is available."
+        }
+      ]
+    },
+    {
+      "action_id": "load",
+      "family": "appliance",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "align_support",
+      "parameters": {
+        "required": [
+          "target_id",
+          "secondary_target_id"
+        ],
+        "optional": [
+          "hand",
+          "height_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "multi_entity_state",
+        "commit_phase": "release"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "load.both_low",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "load.both_low",
+          "selectors": {
+            "hand": "both",
+            "height_band": "low"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No appliance load animation and interior socket contract are available."
+        }
+      ]
+    },
+    {
+      "action_id": "unload",
+      "family": "appliance",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "align_support",
+      "parameters": {
+        "required": [
+          "target_id",
+          "secondary_target_id"
+        ],
+        "optional": [
+          "hand",
+          "height_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "multi_entity_state",
+        "commit_phase": "contact"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "unload.both_low",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "unload.both_low",
+          "selectors": {
+            "hand": "both",
+            "height_band": "low"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No appliance unload animation and interior socket contract are available."
+        }
+      ]
+    },
+    {
+      "action_id": "contact.brace",
+      "family": "contact",
+      "aliases": [
+        "brace"
+      ],
+      "target_policy": "required",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "target_id",
+          "hand"
+        ],
+        "optional": [
+          "height_cm"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "contact"
+      },
+      "rollback_policy": "restore_pre_contact",
+      "default_variant_id": "contact.brace.both",
+      "legacy_bindings": [
+        {
+          "wire_action": "brace",
+          "backend_action": "Brace",
+          "variant_id": "contact.brace.legacy_heavy_pickup"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "contact.brace.both",
+          "selectors": {
+            "hand": "both",
+            "height_band": "waist"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "brace",
+          "rejection_reason": "A two-hand contact-constrained brace still needs authoring."
+        },
+        {
+          "variant_id": "contact.brace.legacy_heavy_pickup",
+          "selectors": {
+            "hand": "both",
+            "height_band": "floor",
+            "weight_band": "heavy"
+          },
+          "readiness": "rejected_placeholder",
+          "animation_profile_action_id": "brace",
+          "rejection_reason": "The experimental brace montage is a zero-height heavyweight pickup."
+        }
+      ]
+    },
+    {
+      "action_id": "step_up",
+      "family": "posture",
+      "aliases": [
+        "lift_foot"
+      ],
+      "target_policy": "optional",
+      "approach_policy": "align_target",
+      "parameters": {
+        "required": [
+          "foot",
+          "height_cm"
+        ],
+        "optional": [
+          "target_id",
+          "direction"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_motion",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "step_up.right",
+      "legacy_bindings": [
+        {
+          "wire_action": "lift_foot",
+          "backend_action": "LiftFoot",
+          "variant_id": "step_up.legacy_jump"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "step_up.right",
+          "selectors": {
+            "foot": "right",
+            "direction": "forward"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "lift_foot",
+          "rejection_reason": "A contact-aware step-up animation still needs authoring."
+        },
+        {
+          "variant_id": "step_up.legacy_jump",
+          "selectors": {
+            "foot": "right",
+            "direction": "forward"
+          },
+          "readiness": "rejected_placeholder",
+          "animation_profile_action_id": "lift_foot",
+          "rejection_reason": "The experimental lift-foot montage reuses Manny jump."
+        }
+      ]
+    },
+    {
+      "action_id": "sit_down",
+      "family": "posture",
+      "aliases": [
+        "sit"
+      ],
+      "target_policy": "required",
+      "approach_policy": "align_support",
+      "parameters": {
+        "required": [
+          "target_id"
+        ],
+        "optional": [
+          "pose"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "sit_down.chair",
+      "legacy_bindings": [
+        {
+          "wire_action": "sit",
+          "backend_action": "Sit",
+          "variant_id": "sit_down.chair"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "sit_down.chair",
+          "selectors": {
+            "pose": "seated"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No chair-aligned sit transition exists; the backend currently changes state instantly."
+        }
+      ]
+    },
+    {
+      "action_id": "seated_idle",
+      "family": "posture",
+      "aliases": [],
+      "target_policy": "optional",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [],
+        "optional": [
+          "target_id",
+          "duration_s",
+          "pose"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "not_applicable",
+      "default_variant_id": "seated_idle.chair",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "seated_idle.chair",
+          "selectors": {
+            "pose": "seated"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No accepted seated idle loop is available."
+        }
+      ]
+    },
+    {
+      "action_id": "stand_up",
+      "family": "posture",
+      "aliases": [],
+      "target_policy": "optional",
+      "approach_policy": "align_support",
+      "parameters": {
+        "required": [],
+        "optional": [
+          "target_id",
+          "pose"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "stand_up.chair",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "stand_up.chair",
+          "selectors": {
+            "pose": "standing"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No seat-aligned stand transition is available."
+        }
+      ]
+    },
+    {
+      "action_id": "stumble",
+      "family": "incident",
+      "aliases": [],
+      "target_policy": "optional",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [
+          "direction"
+        ],
+        "optional": [
+          "target_id"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_motion",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "stumble.forward",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "stumble.forward",
+          "selectors": {
+            "direction": "forward",
+            "pose": "standing"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No recoverable stumble animation is available."
+        }
+      ]
+    },
+    {
+      "action_id": "slip",
+      "family": "incident",
+      "aliases": [],
+      "target_policy": "optional",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [
+          "direction"
+        ],
+        "optional": [
+          "target_id"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_motion",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "slip.backward",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "slip.backward",
+          "selectors": {
+            "direction": "backward",
+            "pose": "standing"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No root-motion and collision-aware slip animation is available."
+        }
+      ]
+    },
+    {
+      "action_id": "fall",
+      "family": "incident",
+      "aliases": [],
+      "target_policy": "forbidden",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [
+          "direction"
+        ],
+        "optional": [
+          "pose"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "fall.forward_aligned",
+      "legacy_bindings": [
+        {
+          "wire_action": "fall",
+          "backend_action": "Fall",
+          "variant_id": "fall.legacy_unaligned"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "fall.forward_aligned",
+          "selectors": {
+            "direction": "forward",
+            "pose": "prone"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "fall",
+          "rejection_reason": "An aligned fall with capsule and collision transitions still needs authoring."
+        },
+        {
+          "variant_id": "fall.legacy_unaligned",
+          "selectors": {
+            "direction": "forward",
+            "pose": "prone"
+          },
+          "readiness": "rejected_placeholder",
+          "animation_profile_action_id": "fall",
+          "rejection_reason": "The experimental fall does not transition capsule or collision state."
+        }
+      ]
+    },
+    {
+      "action_id": "impact",
+      "family": "incident",
+      "aliases": [],
+      "target_policy": "optional",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [
+          "direction"
+        ],
+        "optional": [
+          "target_id",
+          "pose"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "contact"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "impact.forward",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "impact.forward",
+          "selectors": {
+            "direction": "forward",
+            "pose": "standing"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No target-aware impact reaction is available."
+        }
+      ]
+    },
+    {
+      "action_id": "spill",
+      "family": "incident",
+      "aliases": [],
+      "target_policy": "required",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [
+          "target_id"
+        ],
+        "optional": [
+          "secondary_target_id",
+          "direction"
+        ]
+      },
+      "effect": {
+        "effect_id": "multi_entity_state",
+        "commit_phase": "contact"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "spill.forward",
+      "legacy_bindings": [],
+      "variants": [
+        {
+          "variant_id": "spill.forward",
+          "selectors": {
+            "direction": "forward"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": null,
+          "rejection_reason": "No synchronized spill reaction and liquid-state effect are available."
+        }
+      ]
+    },
+    {
+      "action_id": "recover",
+      "family": "incident",
+      "aliases": [],
+      "target_policy": "forbidden",
+      "approach_policy": "none",
+      "parameters": {
+        "required": [
+          "pose"
+        ],
+        "optional": [
+          "direction"
+        ]
+      },
+      "effect": {
+        "effect_id": "actor_pose",
+        "commit_phase": "completion"
+      },
+      "rollback_policy": "restore_actor_and_target",
+      "default_variant_id": "recover.prone_aligned",
+      "legacy_bindings": [
+        {
+          "wire_action": "recover",
+          "backend_action": "Recover",
+          "variant_id": "recover.legacy_unaligned"
+        }
+      ],
+      "variants": [
+        {
+          "variant_id": "recover.prone_aligned",
+          "selectors": {
+            "direction": "forward",
+            "pose": "prone"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "recover",
+          "rejection_reason": "An aligned prone recovery with capsule restoration still needs authoring."
+        },
+        {
+          "variant_id": "recover.supine_aligned",
+          "selectors": {
+            "direction": "forward",
+            "pose": "supine"
+          },
+          "readiness": "blocked_on_source",
+          "animation_profile_action_id": "recover",
+          "rejection_reason": "An aligned supine recovery with capsule restoration still needs authoring."
+        },
+        {
+          "variant_id": "recover.legacy_unaligned",
+          "selectors": {
+            "direction": "forward",
+            "pose": "prone"
+          },
+          "readiness": "rejected_placeholder",
+          "animation_profile_action_id": "recover",
+          "rejection_reason": "The experimental recover does not realign the root or capsule."
+        }
+      ]
+    }
+  ],
+  "content_digest": "07eb0a4740ea214c15fa59504b0b923787c23fa0b9232adfc18a0efc0cec7e35",
+  "acceptance_receipts": []
+}
