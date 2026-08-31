@@ -12,16 +12,16 @@ export LC_ALL=C LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin
 unset BASH_ENV ENV CDPATH GLOBIGNORE PYTHONHOME PYTHONPATH
 
 readonly SCHEMA='vista.r8-native-builder-r1-failure-seal/v1'
-readonly LIVE_SELF='/root/seal-vista-r8-native-builder-r1-failure-83f180e0-20260901b.sh'
-readonly LOCK_PATH='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0-20260901b.lock'
+readonly LIVE_SELF='/root/seal-vista-r8-native-builder-r1-failure-83f180e0-20260901c.sh'
+readonly LOCK_PATH='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0-20260901c.lock'
 # The authoritative seal lives below /root.  The candidate run's evidence
 # directory is intentionally owned by the unprivileged operator; using a
 # predictable child there would let that owner rename or substitute the child
 # while this root process is writing it.  A user-visible copy can be derived
 # only after this root-owned authority has closed.
 readonly EVIDENCE_PARENT='/root'
-readonly FINAL_NAME='vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901b'
-readonly STAGING_NAME='.vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901b.staging'
+readonly FINAL_NAME='vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901c'
+readonly STAGING_NAME='.vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901c.staging'
 readonly FINAL_PATH="${EVIDENCE_PARENT}/${FINAL_NAME}"
 readonly STAGING_PATH="${EVIDENCE_PARENT}/${STAGING_NAME}"
 
@@ -65,6 +65,10 @@ readonly FAILED_EMPTY_LOCK_SEALER='/root/seal-vista-r8-native-builder-r1-failure
 readonly FAILED_EMPTY_LOCK_SEALER_SHA256='109dbc378343c0309198d2c43b0772e124201609554440c63d80dc1c9b7101ba'
 readonly FAILED_EMPTY_LOCK_SEALER_BYTES='33118'
 readonly FAILED_EMPTY_LOCK_SEALER_LOCK='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0-20260901.lock'
+readonly FAILED_EMPTY_JOURNAL_SEALER='/root/seal-vista-r8-native-builder-r1-failure-83f180e0.failed-empty-phase-b-journal-metadata-20260901c.sh'
+readonly FAILED_EMPTY_JOURNAL_SEALER_SHA256='640f72e4d66176bcc1e73412abcafdc57d5252060ce26beea59f61db9ffdeb7e'
+readonly FAILED_EMPTY_JOURNAL_SEALER_BYTES='34299'
+readonly FAILED_EMPTY_JOURNAL_SEALER_LOCK='/run/lock/vista-r8-native-builder-r1-failure-seal-83f180e0-20260901b.lock'
 readonly EMPTY_SHA256='e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
 readonly R1_BUILDER_UID='997'
 readonly R1_BUILDER_GID='997'
@@ -121,20 +125,24 @@ assert_directory() {
     "directory|${mode}|${uid}|${gid}" ]] || fail "${label} metadata differs"
 }
 
+assert_closed_file_metadata() {
+  local path="$1" mode="$2" uid="$3" gid="$4" label="$5"
+  [[ -f "${path}" && ! -L "${path}" ]] || fail "${label} is not closed regular"
+  [[ "$(/usr/bin/stat -Lc '%a|%u|%g|%h' -- "${path}")" == \
+    "${mode}|${uid}|${gid}|1" ]] || fail "${label} metadata differs"
+}
+
 assert_file() {
   local path="$1" mode="$2" uid="$3" gid="$4" sha="$5" bytes="$6" label="$7"
-  [[ -f "${path}" && ! -L "${path}" ]] || fail "${label} is not closed regular"
-  [[ "$(/usr/bin/stat -Lc '%F|%a|%u|%g|%h|%s' -- "${path}")" == \
-    "regular file|${mode}|${uid}|${gid}|1|${bytes}" ]] || fail "${label} metadata differs"
+  assert_closed_file_metadata "${path}" "${mode}" "${uid}" "${gid}" "${label}"
+  [[ "$(/usr/bin/stat -Lc '%s' -- "${path}")" == "${bytes}" ]] || \
+    fail "${label} size differs"
   [[ "$(sha256_of "${path}")" == "${sha}" ]] || fail "${label} SHA-256 differs"
 }
 
 assert_empty_file() {
   local path="$1" mode="$2" uid="$3" gid="$4" label="$5"
-  [[ -f "${path}" && ! -L "${path}" ]] || fail "${label} is not closed regular"
-  [[ "$(/usr/bin/stat -Lc '%F|%a|%u|%g|%h|%s' -- "${path}")" == \
-    "regular empty file|${mode}|${uid}|${gid}|1|0" ]] || fail "${label} metadata differs"
-  [[ "$(sha256_of "${path}")" == "${EMPTY_SHA256}" ]] || fail "${label} SHA-256 differs"
+  assert_file "${path}" "${mode}" "${uid}" "${gid}" "${EMPTY_SHA256}" 0 "${label}"
 }
 
 assert_lock_file() {
@@ -467,6 +475,7 @@ capture_root_history() {
       count="$((count + 1))"
     done <"${roots_list}"
     emit_record "${FAILED_SEALER_LOCK}"
+    emit_record "${FAILED_EMPTY_JOURNAL_SEALER_LOCK}"
   } >"${output}"
   [[ "${count}" -gt 0 ]] || fail 'R1 root history selection is empty'
   /usr/bin/rm -f -- "${roots_list}" || fail 'cannot remove owned root-history list'
@@ -481,7 +490,8 @@ assert_required_history() {
     '/root/vista-r8-native-builder-recovery-b7ead170-20260831b.sh' \
     '/root/vista-r8-native-builder-recovery-b7ead170-20260831c.sh' \
     '/root/vista-r8-native-builder-recovery-b7ead170-20260831d.sh' \
-    "${FAILED_SEALER}" "${FAILED_EMPTY_LOCK_SEALER}"; do
+    "${FAILED_SEALER}" "${FAILED_EMPTY_LOCK_SEALER}" \
+    "${FAILED_EMPTY_JOURNAL_SEALER}"; do
     [[ -e "${path}" || -L "${path}" ]] || fail "required append-only R1 history is absent: ${path}"
   done
   [[ ! -e '/root/vista-r8-native-builder-bootstrap-r1.failed-b7ead170-recovery-partial-20260831b' && \
@@ -492,7 +502,12 @@ assert_required_history() {
   assert_file "${FAILED_EMPTY_LOCK_SEALER}" 500 0 0 \
     "${FAILED_EMPTY_LOCK_SEALER_SHA256}" "${FAILED_EMPTY_LOCK_SEALER_BYTES}" \
     'prior failed empty-lock-metadata sealer'
+  assert_file "${FAILED_EMPTY_JOURNAL_SEALER}" 500 0 0 \
+    "${FAILED_EMPTY_JOURNAL_SEALER_SHA256}" "${FAILED_EMPTY_JOURNAL_SEALER_BYTES}" \
+    'prior failed empty-phase-b-journal-metadata sealer'
   assert_empty_file "${FAILED_SEALER_LOCK}" 600 0 0 'prior failed journal sealer lock'
+  assert_empty_file "${FAILED_EMPTY_JOURNAL_SEALER_LOCK}" 600 0 0 \
+    'prior failed empty-phase-b-journal-metadata sealer lock'
   [[ ! -e "${FAILED_EMPTY_LOCK_SEALER_LOCK}" && \
     ! -L "${FAILED_EMPTY_LOCK_SEALER_LOCK}" ]] || \
     fail 'prior empty-lock-metadata sealer unexpectedly created its fresh lock'
@@ -696,8 +711,8 @@ done
 assert_directory "${STAGING_PATH}" 555 0 0 'closed evidence staging'
 assert_inventory "${STAGING_PATH}" "${EXPECTED_EVIDENCE_INVENTORY}"
 for name in "${EVIDENCE_FILES[@]}" 'receipt.sha256'; do
-  [[ "$(/usr/bin/stat -Lc '%F|%a|%u|%g|%h' -- "${STAGING_PATH}/${name}")" == \
-    'regular file|444|0|0|1' ]] || fail "closed evidence metadata differs: ${name}"
+  assert_closed_file_metadata "${STAGING_PATH}/${name}" 444 0 0 \
+    "closed evidence file: ${name}"
 done
 (
   cd "${STAGING_PATH}" &&
@@ -720,8 +735,8 @@ trap 'exit 143' TERM
 assert_directory "${FINAL_PATH}" 555 0 0 'published R1 failure evidence'
 assert_inventory "${FINAL_PATH}" "${EXPECTED_EVIDENCE_INVENTORY}"
 for name in "${EVIDENCE_FILES[@]}" 'receipt.sha256'; do
-  [[ "$(/usr/bin/stat -Lc '%F|%a|%u|%g|%h' -- "${FINAL_PATH}/${name}")" == \
-    'regular file|444|0|0|1' ]] || fail "published evidence metadata differs: ${name}"
+  assert_closed_file_metadata "${FINAL_PATH}/${name}" 444 0 0 \
+    "published evidence file: ${name}"
 done
 (
   cd "${FINAL_PATH}" &&

@@ -44,7 +44,7 @@ def _secure_lock_probe(tmp_path: Path) -> tuple[Path, Path, Path]:
         _function_harness("")
         .replace(
             "readonly LIVE_SELF='/root/"
-            "seal-vista-r8-native-builder-r1-failure-83f180e0-20260901b.sh'",
+            "seal-vista-r8-native-builder-r1-failure-83f180e0-20260901c.sh'",
             f"readonly LIVE_SELF='{probe}'",
         )
         .replace(
@@ -137,7 +137,7 @@ def test_fixed_evidence_contract_and_known_failure_pins() -> None:
         "vista.r8-native-builder-r1-failure-seal/v1",
         "EVIDENCE_PARENT='/root'",
         "FINAL_NAME='vista-r8-native-builder-r1-failure-seal-"
-        "b7ead170-83f180e0-20260901b'",
+        "b7ead170-83f180e0-20260901c'",
         "'81d481f1eb764c60a737835b867fcb63'",
         "'675339972529'",
         "'675341234136'",
@@ -224,7 +224,29 @@ def test_empty_file_evidence_uses_gnu_stat_empty_type(tmp_path: Path) -> None:
         check=False,
     )
     assert rejected.returncode == 126
-    assert "metadata differs" in rejected.stderr
+    assert "size differs" in rejected.stderr
+
+
+def test_empty_phase_b_journal_is_valid_closed_evidence(tmp_path: Path) -> None:
+    phase_b_journal = tmp_path / "phase-b.journal.txt"
+    phase_b_journal.write_bytes(b"")
+    phase_b_journal.chmod(0o444)
+    harness = _function_harness(
+        f'assert_closed_file_metadata "$1" 444 {os.getuid()} {os.getgid()} '
+        '"empty Phase B journal"'
+    )
+    result = subprocess.run(
+        ["/usr/bin/bash", "-c", harness, "fixture", str(phase_b_journal)],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    raw = _raw()
+    assert 'assert_closed_file_metadata "${STAGING_PATH}/${name}" 444 0 0' in raw
+    assert 'assert_closed_file_metadata "${FINAL_PATH}/${name}" 444 0 0' in raw
+    assert "regular file|444|0|0|1" not in raw
 
 
 def test_no_replace_lock_and_staging_only_cleanup_are_explicit() -> None:
@@ -317,8 +339,13 @@ def test_root_history_is_metadata_only_and_covers_prior_ceremonies() -> None:
     assert "failed-empty-lock-metadata-20260901b.sh" in raw
     assert "109dbc378343c0309198d2c43b0772e124201609554440c63d80dc1c9b7101ba" in raw
     assert 'assert_file "${FAILED_EMPTY_LOCK_SEALER}" 500 0 0' in raw
+    assert "failed-empty-phase-b-journal-metadata-20260901c.sh" in raw
+    assert "640f72e4d66176bcc1e73412abcafdc57d5252060ce26beea59f61db9ffdeb7e" in raw
+    assert 'assert_file "${FAILED_EMPTY_JOURNAL_SEALER}" 500 0 0' in raw
     assert 'emit_record "${FAILED_SEALER_LOCK}"' in raw
+    assert 'emit_record "${FAILED_EMPTY_JOURNAL_SEALER_LOCK}"' in raw
     assert 'assert_empty_file "${FAILED_SEALER_LOCK}" 600 0 0' in raw
+    assert 'assert_empty_file "${FAILED_EMPTY_JOURNAL_SEALER_LOCK}" 600 0 0' in raw
     assert '[[ ! -e "${FAILED_EMPTY_LOCK_SEALER_LOCK}"' in raw
     assert "seal-vista-r8-native-builder-r1-failure-*.sh" in raw
     assert not re.search(r"(?:cp|install).*ROOT_HISTORY", raw)

@@ -28,10 +28,10 @@ readonly RECEIPT_FINAL='/root/vista-r8-native-builder-r2-phase-a-receipt-83f180e
 readonly RECEIPT_STAGING='/root/.vista-r8-native-builder-r2-phase-a-receipt-83f180e0-20260831a.staging'
 readonly OUTER_LOCK='/run/lock/vista-r8-native-builder-r2-activate-83f180e0-20260831a.lock.d'
 
-readonly R1_SEAL='/root/vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901b'
-readonly R1_SEALER='/root/seal-vista-r8-native-builder-r1-failure-83f180e0-20260901b.sh'
-readonly R1_SEALER_SHA256='640f72e4d66176bcc1e73412abcafdc57d5252060ce26beea59f61db9ffdeb7e'
-readonly R1_SEALER_BYTES='34299'
+readonly R1_SEAL='/root/vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901c'
+readonly R1_SEALER='/root/seal-vista-r8-native-builder-r1-failure-83f180e0-20260901c.sh'
+readonly R1_SEALER_SHA256='c418918f6907d595895fb8139bae3576741799bc7e789b2b8751ed5a1d1b163d'
+readonly R1_SEALER_BYTES='35026'
 readonly R1_PHASE_A='vista-r8-native-builder-phase-a.service'
 readonly R1_PHASE_B='vista-r8-native-builder-phase-b.service'
 readonly R1_STATE_ROOT='/var/lib/vista-r8-native-builder-r1'
@@ -94,10 +94,16 @@ assert_directory() {
   [[ -d "${path}" && ! -L "${path}" ]] || fail "directory differs: ${path}"
   [[ "$(/usr/bin/stat -Lc '%F|%a|%u|%g' -- "${path}")" == "directory|${mode}|${uid}|${gid}" ]] || fail "directory metadata differs: ${path}"
 }
+assert_closed_file_metadata() {
+  local path="$1" mode="$2" uid="$3" gid="$4"
+  [[ -f "${path}" && ! -L "${path}" ]] || fail "file differs: ${path}"
+  [[ "$(/usr/bin/stat -Lc '%a|%u|%g|%h' -- "${path}")" == \
+    "${mode}|${uid}|${gid}|1" ]] || fail "file metadata differs: ${path}"
+}
 assert_file() {
   local path="$1" mode="$2" uid="$3" gid="$4" sha="$5" size="$6"
-  [[ -f "${path}" && ! -L "${path}" ]] || fail "file differs: ${path}"
-  [[ "$(/usr/bin/stat -Lc '%F|%a|%u|%g|%h|%s' -- "${path}")" == "regular file|${mode}|${uid}|${gid}|1|${size}" ]] || fail "file metadata differs: ${path}"
+  assert_closed_file_metadata "${path}" "${mode}" "${uid}" "${gid}"
+  [[ "$(/usr/bin/stat -Lc '%s' -- "${path}")" == "${size}" ]] || fail "file size differs: ${path}"
   [[ "$(sha256_of "${path}")" == "${sha}" ]] || fail "file pin differs: ${path}"
 }
 verify_live_self() {
@@ -393,8 +399,7 @@ verify_r1_seal() {
   assert_directory "${R1_SEAL}" 555 0 0
   assert_inventory "${R1_SEAL}" "${R1_SEAL_INVENTORY}"
   for name in ${R1_SEAL_INVENTORY}; do
-    [[ -f "${R1_SEAL}/${name}" && ! -L "${R1_SEAL}/${name}" ]] || fail "R1 seal file differs: ${name}"
-    [[ "$(/usr/bin/stat -Lc '%F|%a|%u|%g|%h' -- "${R1_SEAL}/${name}")" == 'regular file|444|0|0|1' ]] || fail "R1 seal metadata differs: ${name}"
+    assert_closed_file_metadata "${R1_SEAL}/${name}" 444 0 0
   done
   receipt_names="$(/usr/bin/awk 'NF == 2 && $1 ~ /^[0-9a-f]{64}$/ && $2 !~ /^\// {print $2}' "${R1_SEAL}/receipt.sha256" | /usr/bin/sort)"
   [[ "${receipt_names}" == "${R1_RECEIPT_NAMES}" ]] || fail 'R1 seal receipt name inventory differs'
@@ -558,7 +563,7 @@ seal_receipt() {
   RECEIPT_STAGING_OWNED='false'
   RECEIPT_PUBLISHED='true'; assert_directory "${RECEIPT_FINAL}" 555 0 0; assert_inventory "${RECEIPT_FINAL}" "${expected}"
   for name in ${RECEIPT_FILES} receipt.sha256; do
-    [[ "$(/usr/bin/stat -Lc '%F|%a|%u|%g|%h' -- "${RECEIPT_FINAL}/${name}")" == 'regular file|444|0|0|1' ]] || fail "published receipt metadata differs: ${name}"
+    assert_closed_file_metadata "${RECEIPT_FINAL}/${name}" 444 0 0
   done
   (cd "${RECEIPT_FINAL}" && /usr/bin/sha256sum -c -- receipt.sha256 >/dev/null) || fail 'published activation receipt does not verify'
 }

@@ -217,10 +217,10 @@ def test_prepare_cleanup_is_limited_to_locally_owned_paths() -> None:
 def test_activation_requires_closed_r1_seal_and_exact_sealer() -> None:
     raw = _raw(ACTIVATE)
     for token in (
-        "/root/vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901b",
+        "/root/vista-r8-native-builder-r1-failure-seal-b7ead170-83f180e0-20260901c",
         "vista.r8-native-builder-r1-failure-seal/v1",
-        "640f72e4d66176bcc1e73412abcafdc57d5252060ce26beea59f61db9ffdeb7e",
-        "34299",
+        "c418918f6907d595895fb8139bae3576741799bc7e789b2b8751ed5a1d1b163d",
+        "35026",
         "TRACE_PATH_DRIFT: trace host file[21]",
         "r2_activation_authorized=false",
         "sha256sum -c -- receipt.sha256",
@@ -343,6 +343,8 @@ def test_activation_r1_unchanged_gate_is_complete_and_stateful() -> None:
         'cmp -s -- "${RECEIPT_STAGING}/r1-before-reload-state.txt"',
     ):
         assert token in raw
+    assert 'assert_closed_file_metadata "${R1_SEAL}/${name}" 444 0 0' in raw
+    assert "regular file|444|0|0|1" not in raw
     assert "%F|%a|%u|%g|%h|%s|%d|%i|%y|%z" in raw
     assert "os.O_CREAT" not in raw
     assert not re.search(r"exec[^\n]*<>[^\n]*\.build\.lock", raw)
