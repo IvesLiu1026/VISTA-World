@@ -410,6 +410,30 @@ bool AVistaHomeNpcController::ValidateActionTargetReadOnly(
             OutCode = TEXT("APPLIANCE_TARGET_REQUIRED");
             return false;
         }
+
+        if (Action.Type == EVistaNpcActionType::PickUp ||
+            Action.Type == EVistaNpcActionType::Place ||
+            Action.Type == EVistaNpcActionType::OpenDoor ||
+            Action.Type == EVistaNpcActionType::CloseDoor ||
+            Action.Type == EVistaNpcActionType::Inspect ||
+            Action.Type == EVistaNpcActionType::Toggle ||
+            Action.Type == EVistaNpcActionType::Press ||
+            Action.Type == EVistaNpcActionType::TurnOn ||
+            Action.Type == EVistaNpcActionType::TurnOff)
+        {
+            const UVistaAnimationComponent* Animation =
+                GetPawn()->FindComponentByClass<UVistaAnimationComponent>();
+            if (!IsValid(Animation) ||
+                !Animation->HasApprovedMutationAnimation(
+                    Action.Type, Target, OutCode))
+            {
+                if (!IsValid(Animation))
+                {
+                    OutCode = TEXT("ANIMATION_COMPONENT_UNAVAILABLE");
+                }
+                return false;
+            }
+        }
     }
     OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
     return true;

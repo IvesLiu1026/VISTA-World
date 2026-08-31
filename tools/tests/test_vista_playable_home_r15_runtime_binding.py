@@ -54,6 +54,7 @@ def test_r15_runtime_binding_keeps_the_nine_clip_authority_closed() -> None:
         assert montage in animation
     assert "/Game/VISTA/MakeHumanCC0/R15/DetailActions/Montages/" in animation
     assert "Cast<AVistaStatefulApplianceActor>(Target)" in animation
+    assert "ANIMATION_TARGET_PREFLIGHT_DEFERRED" in animation
     assert "Appliance->ControlStyle == EVistaApplianceControlStyle::Button" in animation
     assert "Type == EVistaNpcActionType::Toggle && Appliance->IsActive()" in animation
 
@@ -116,3 +117,8 @@ def test_vista_event_semantics_are_not_rewritten_to_match_the_gesture() -> None:
     executor = _text(RUNTIME / "Private/VistaActionExecutorSemantic.cpp")
     assert "Events->RecordSuccessfulInteraction(" in executor
     assert "FinalRecord.Affordance" in executor
+
+    npc = _text(RUNTIME / "Private/VistaHomeNpcController.cpp")
+    preflight = npc.split("bool AVistaHomeNpcController::ValidateActionTargetReadOnly", 1)[1]
+    assert "Animation->HasApprovedMutationAnimation(" in preflight
+    assert "Action.Type, Target, OutCode" in preflight
