@@ -546,7 +546,7 @@ def test_units_are_network_filesystem_device_and_process_hardened() -> None:
         "ProtectKernelModules=yes",
         "ProtectKernelTunables=yes",
         "ProtectProc=invisible",
-        "ProcSubset=pid",
+        "ProcSubset=all",
         f"ReadOnlyPaths={INPUT_ROOT}",
         "ReadOnlyPaths=/usr/local/libexec/vista-r8-native-builder-r1",
         "DevicePolicy=closed",
@@ -579,6 +579,19 @@ def test_units_are_network_filesystem_device_and_process_hardened() -> None:
         assert "StateDirectory=vista-r8-native-builder-r1" not in service
         assert f"ReadWritePaths={STATE_ROOT}" not in service
         assert _section(text, "Install") == []
+
+
+def test_units_expose_the_read_only_kernel_virtual_trace_authority() -> None:
+    """Trace v3 pins /proc/sys/vm/overcommit_memory inside both builders."""
+    for path in (PHASE_A_UNIT, PHASE_B_UNIT):
+        service = _section(_text(path), "Service")
+        assert _values(service, "ProcSubset") == ["all"]
+        assert _values(service, "ProtectProc") == ["invisible"]
+        assert _values(service, "ProtectKernelTunables") == ["yes"]
+    runbook = _text(RUNBOOK)
+    assert "`ProcSubset=all`" in runbook
+    assert "`ProtectProc=invisible`" in runbook
+    assert "`ProtectKernelTunables=yes`" in runbook
 
 
 def test_phase_slots_are_mutually_write_isolated_and_b_reads_closed_a() -> None:
@@ -627,10 +640,10 @@ def test_phase_slots_are_mutually_write_isolated_and_b_reads_closed_a() -> None:
     assert f"!{phase_a_manifest}" in _values(phase_a_unit, "ConditionPathExists")
 
 
-def test_runbook_preserves_source_only_and_no_local_compile_claims() -> None:
+def test_runbook_preserves_layout_and_runtime_claims() -> None:
     text = _text(RUNBOOK)
     for literal in (
-        "Status: source complete; root ceremony and both build phases not executed",
+        "Status: source correction complete; inactive c963 framework retained as evidence;",
         "/root/vista-r8-native-builder-bootstrap-r1/",
         "/root/vista-r8-native-builder-bootstrap-input-r1/",
         "phase-a-slot/",
@@ -639,7 +652,7 @@ def test_runbook_preserves_source_only_and_no_local_compile_claims() -> None:
         "install-phase-a-inputs",
         "install-phase-b-request",
         "does not compile a local `yhliu` candidate",
-        "No root bootstrap, account creation, daemon reload, systemd start",
+        "Phase A inputs were not installed",
     ):
         assert literal in text
     assert "The Phase B unit has `After=phase-a` but not `Requires=phase-a`" in text

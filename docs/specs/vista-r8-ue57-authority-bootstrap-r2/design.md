@@ -136,9 +136,16 @@ device, inode, mtime, and ctime. Every record for `/`, `/proc/sys`,
 `/proc/sys/vm`, and the endpoint retains the ordinary complete metadata shape.
 The planner, production held-input opener, before/after replay revalidator, and
 independent authority administrator derive this policy from the exact endpoint
-rather than trusting a request field. Any special-policy record elsewhere, any
-other procfs host input, or any endpoint/content/component mismatch fails
-closed. Profile coverage and orphan accounting are extended symmetrically:
+path rather than trusting a request field. Any special-policy record elsewhere,
+any other procfs host input, or any endpoint/content/component mismatch fails
+closed. The Phase A and Phase B service namespaces use `ProcSubset=all` so that
+this one non-process procfs endpoint remains visible, while
+`ProtectProc=invisible` and `ProtectKernelTunables=yes` continue to hide
+other-user process details and make kernel tunables read-only. A `pid`-only
+procfs subset is incompatible with this contract because it removes
+`/proc/sys` from the service view.
+
+Profile coverage and orphan accounting are extended symmetrically:
 the finite host record must have at least one exact successful read-only open
 event in a referencing profile, every such event must have that host record,
 and neither tracer nor builder runtime-map sets may absorb it as coverage.

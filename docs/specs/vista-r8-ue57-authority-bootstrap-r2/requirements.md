@@ -256,6 +256,12 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   only with `O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK`; its path, mode, owner,
   device, inode, and all other stable metadata SHALL remain exact before and
   after replay and during independent authority review.
+- WHEN either native-builder service validates the finite kernel-virtual
+  authority, its procfs namespace SHALL keep the exact non-process endpoint
+  visible with `ProcSubset=all`, SHALL retain `ProtectProc=invisible`, and
+  SHALL retain `ProtectKernelTunables=yes` so `/proc/sys` remains read-only.
+  `ProcSubset=pid` is forbidden because it removes `/proc/sys` from the
+  service view.
 - The finite sysctl component chain MAY omit only the volatile link count of
   its exact `/proc` ancestor under one synthesized, schema-defined policy. It
   SHALL retain every other `/proc` component field and every field for `/`,

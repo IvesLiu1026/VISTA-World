@@ -1,6 +1,7 @@
 # VISTA R8 Native Builder R1
 
-Status: source complete; root ceremony and both build phases not executed
+Status: source correction complete; inactive c963 framework retained as evidence;
+inputs and both build phases not executed
 Updated: 2026-08-31
 
 ## Purpose and claim boundary
@@ -113,6 +114,13 @@ ctime remain pinned there, and all metadata remains pinned for `/`,
 traversal, symlink, write flag, malformed value, or replay drift offered as a
 durable host input fails closed; the earlier exact process-local proc tokens
 remain finite trace events rather than durable host authorities.
+
+Both native-builder units therefore set `ProcSubset=all` so that the exact
+non-process procfs endpoint remains visible inside the service mount namespace.
+They retain `ProtectProc=invisible` to hide other-user process details and
+`ProtectKernelTunables=yes` to keep `/proc/sys` read-only. `ProcSubset=pid` is
+not a compatible hardening substitute here: it hides `/proc/sys` entirely and
+would make the required trace-v3 authority impossible to validate.
 
 The root bootstrap verifies the fixed account record, lock state,
 subordinate-ID exclusion, and absence of numeric-997 processes. Production
@@ -379,6 +387,13 @@ rather than admitted as an orphan; focused planner, contract, held-open, and
 revalidation tests exercise both its accepted literal form and its closed
 negative matrix.
 
-No root bootstrap, account creation, daemon reload, systemd start, production
-builder phase, candidate publication, or UE action was executed while
-authoring this runbook.
+No root mutation was executed during the initial authoring pass. Subsequent
+reviewed ceremonies preserved the failed 22dfa bootstrap source as evidence,
+then installed the c963 fixed-identity account and framework without daemon
+reload, enablement, or service start. A pre-start review found the incompatible
+`ProcSubset=pid` namespace boundary, so Phase A inputs were not installed and
+neither builder phase ever ran. Both units remained inactive/dead, both
+`published/` roots remained absent, and no candidate publication or UE action
+resulted from that framework. The corrected framework requires a newly pinned,
+independently reviewed replacement ceremony; the c963 installation and all
+c963 bundle/request pins are historical evidence only.
