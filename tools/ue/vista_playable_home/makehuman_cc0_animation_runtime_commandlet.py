@@ -641,7 +641,11 @@ def inspect_sequence(
         and property_or_none(sequence, "skeleton") == skeleton,
         "AnimSequence skeleton identity differs",
     )
-    rate = sequence.get_sampling_frame_rate()
+    # UE 5.7 exposes the source sampling rate through AnimDataModel, not as a
+    # Python method on AnimSequence itself.
+    data_model = property_or_none(sequence, "data_model")
+    require(data_model is not None, "AnimSequence data model is unavailable")
+    rate = data_model.get_frame_rate()
     numerator = int(rate.numerator)
     denominator = int(rate.denominator)
     frame_count = int(unreal.AnimationLibrary.get_num_frames(sequence))

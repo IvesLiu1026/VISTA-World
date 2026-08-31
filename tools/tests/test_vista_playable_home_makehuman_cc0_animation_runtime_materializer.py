@@ -219,6 +219,8 @@ def test_commandlet_is_syntax_valid_and_has_no_caller_selected_asset_surface() -
         '"use30_hz_to_bake_bone_animation", True',
         "unreal.InterchangeAnimationRange.TIMELINE",
         "unreal.RootMotionRootLock.REF_POSE",
+        'property_or_none(sequence, "data_model")',
+        "data_model.get_frame_rate()",
         "get_root_motion_lock_type(sequence)",
         "set_root_motion_enabled(sequence, False)",
         "set_is_root_motion_lock_forced(sequence, True)",
