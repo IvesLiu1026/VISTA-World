@@ -1,7 +1,7 @@
 # Requirements: VISTA Action World R1
 
 Status: Approved for iterative implementation
-Updated: 2026-08-28
+Updated: 2026-09-01
 
 ## Problem
 
@@ -230,6 +230,35 @@ WHEN this work changes contracts, composition or packaging THEN existing accepte
 run directories SHALL remain append-only, the current live package SHALL not be
 mutated in place, and rollback SHALL mean launching the previous sealed package.
 
+### R13. Playable actions have visible feedback and close VISTA events
+
+WHEN the player focuses an interactable object THEN the HUD SHALL expose the
+primary contextual action and a separate Inspect control whenever Inspect is an
+allowed affordance.
+
+WHEN a player, EventSpec or agent action is accepted THEN the presentation SHALL
+show its current phase and SHALL show its terminal success or typed failure code;
+an input that is rejected or blocked SHALL never appear to do nothing.
+
+WHEN Inspect succeeds THEN the system SHALL enter a bounded focus presentation
+with the target name, semantic identity, affordances and safe public state, and
+SHALL provide an explicit exit path without mutating the target.
+
+WHEN a pickup, place, drop, open, close, toggle or inspect action reaches its
+authoritative terminal success THEN the shared execution path SHALL publish
+exactly one interaction observation to the active VISTA event. Interrupted,
+rejected, timed-out or rolled-back actions SHALL publish none.
+
+Acceptance notes:
+- The first playable slice uses `E` for the contextual primary action, `I` for
+  explicit Inspect, `Q` for drop and `Escape`/`I` to exit Inspect.
+- Inspect presentation includes a visible target focus and information card;
+  logging `INSPECTED` without user-visible output is not acceptance.
+- Articulated doors and appliances commit state at a typed handle/contact signal;
+  changing only an invisible semantic proxy is not acceptance.
+- Player input, TCP commands and EventSpec actions expose the same terminal
+  action/interaction receipt identity even when their presentation differs.
+
 ## Edge Cases
 
 - A queue is replaced between contact commit and montage completion.
@@ -245,6 +274,11 @@ mutated in place, and rollback SHALL mean launching the previous sealed package.
   material, which UE 5.7 Interchange cannot represent through its single branch.
 - An animation completes visually but the authoritative target state did not
   change, or state changed without a contact notify.
+- A blocked player action returns a typed error but the HUD drops the result.
+- A visible HSSD appliance shell is separate from its semantic trace proxy, so
+  logical state changes without moving the visible articulated part.
+- Inspect is an allowed secondary affordance on an object whose primary action
+  is pickup, open/close or toggle.
 
 ## Open Questions
 
