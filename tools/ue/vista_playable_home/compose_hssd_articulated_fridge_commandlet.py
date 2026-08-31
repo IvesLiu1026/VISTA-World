@@ -12,6 +12,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 import os
 from pathlib import PurePosixPath
 import re
@@ -737,55 +738,75 @@ def articulated_observation(actor, binding):
         "rotation_deg": binding["secondary_hinge"]["rotation_deg"],
         "scale": [1.0, 1.0, 1.0],
     }
-    require(
-        observation["actor_label"] == binding["actor_label"]
-        and observation["actor_class_path"] == binding["actor_class_path"]
-        and observation["actor_hidden_in_game"] is False
-        and observation["actor_collision_enabled"] is True
-        and observation["semantic_id"] == binding["semantic_id"]
-        and observation["tags"] == binding["tags"]
-        and transform_matches(
+    checks = {
+        "actor_label": observation["actor_label"] == binding["actor_label"],
+        "actor_class": observation["actor_class_path"] == binding["actor_class_path"],
+        "actor_visible": observation["actor_hidden_in_game"] is False,
+        "actor_collision": observation["actor_collision_enabled"] is True,
+        "semantic_id": observation["semantic_id"] == binding["semantic_id"],
+        "tags": observation["tags"] == binding["tags"],
+        "world_transform": transform_matches(
             observation["world_transform_cm"], binding["world_transform_cm"]
-        )
-        and observation["open_angle_deg"] == float(binding["open_angle_deg"])
-        and observation["angular_speed_deg_s"] == float(binding["angular_speed_deg_s"])
-        and observation["receptacle_count"] == binding["receptacle_count"]
-        and mesh_components["body"]["mesh_path"] == expected_assets["body"]
-        and mesh_components["primary_door"]["mesh_path"]
-        == expected_assets["primary_door"]
-        and mesh_components["secondary_door"]["mesh_path"]
-        == expected_assets["secondary_door"]
-        and all(
+        ),
+        # UE serializes UPROPERTY float values as float32.  The HSSD-derived
+        # 171.887 deg/s literal therefore cannot be compared as an exact
+        # Python double after reflection.
+        "open_angle": math.isclose(
+            observation["open_angle_deg"],
+            float(binding["open_angle_deg"]),
+            rel_tol=0.0,
+            abs_tol=0.0001,
+        ),
+        "angular_speed": math.isclose(
+            observation["angular_speed_deg_s"],
+            float(binding["angular_speed_deg_s"]),
+            rel_tol=0.0,
+            abs_tol=0.0001,
+        ),
+        "receptacle_count": observation["receptacle_count"]
+        == binding["receptacle_count"],
+        "body_mesh": mesh_components["body"]["mesh_path"] == expected_assets["body"],
+        "primary_door_mesh": mesh_components["primary_door"]["mesh_path"]
+        == expected_assets["primary_door"],
+        "secondary_door_mesh": mesh_components["secondary_door"]["mesh_path"]
+        == expected_assets["secondary_door"],
+        "mesh_policy": all(
             item["collision_profile"] == "BlockAllDynamic"
             and item["collision_mode"] == "QueryAndPhysics"
             and item["simulate_physics"] is False
             and item["visible"] is True
             for item in mesh_components.values()
-        )
-        and transform_matches(
+        ),
+        "body_relative_transform": transform_matches(
             mesh_components["body"]["relative_transform"],
             binding["body_relative_transform"],
-        )
-        and transform_matches(
+        ),
+        "primary_door_relative_transform": transform_matches(
             mesh_components["primary_door"]["relative_transform"],
             binding["door_relative_transform"],
-        )
-        and transform_matches(
+        ),
+        "secondary_door_relative_transform": transform_matches(
             mesh_components["secondary_door"]["relative_transform"],
             binding["door_relative_transform"],
-        )
-        and transform_matches(hinge_transforms["primary_hinge"], expected_primary_hinge)
-        and transform_matches(
+        ),
+        "primary_hinge_transform": transform_matches(
+            hinge_transforms["primary_hinge"], expected_primary_hinge
+        ),
+        "secondary_hinge_transform": transform_matches(
             hinge_transforms["secondary_hinge"], expected_secondary_hinge
-        )
-        and all(
+        ),
+        "handle_location": all(
             abs(observed - float(expected)) <= 0.05
             for observed, expected in zip(
                 observation["handle_relative_location_cm"],
                 binding["handle_relative_location_cm"],
             )
         ),
-        "reloaded articulated-fridge binding differs",
+    }
+    failed = sorted(name for name, passed in checks.items() if not passed)
+    require(
+        not failed,
+        "articulated-fridge binding differs; failed checks: " + ",".join(failed),
     )
     return observation
 
