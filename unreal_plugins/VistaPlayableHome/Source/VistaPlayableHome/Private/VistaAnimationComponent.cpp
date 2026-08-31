@@ -18,10 +18,36 @@ constexpr const TCHAR* MakeHumanCc0PickupMontage =
 constexpr const TCHAR* MakeHumanCc0PlaceMontage =
     TEXT("/Game/VISTA/MakeHumanCC0/R8/Animations/Montages/"
          "AM_VistaCC0MugPlaceCountertop.AM_VistaCC0MugPlaceCountertop");
+constexpr const TCHAR* MakeHumanCc0DetailMontageRoot =
+    TEXT("/Game/VISTA/MakeHumanCC0/R14/DetailActions/Montages/");
+constexpr const TCHAR* MakeHumanCc0FridgeOpenMontage =
+    TEXT("/Game/VISTA/MakeHumanCC0/R14/DetailActions/Montages/"
+         "AM_VistaCC0FridgeOpenRight_R14.AM_VistaCC0FridgeOpenRight_R14");
+constexpr const TCHAR* MakeHumanCc0FridgeCloseMontage =
+    TEXT("/Game/VISTA/MakeHumanCC0/R14/DetailActions/Montages/"
+         "AM_VistaCC0FridgeCloseRight_R14.AM_VistaCC0FridgeCloseRight_R14");
+constexpr const TCHAR* MakeHumanCc0InspectMontage =
+    TEXT("/Game/VISTA/MakeHumanCC0/R14/DetailActions/Montages/"
+         "AM_VistaCC0ObjectInspectRight_R14.AM_VistaCC0ObjectInspectRight_R14");
 
 TSoftObjectPtr<UAnimMontage> Montage(const TCHAR* ObjectPath)
 {
     return TSoftObjectPtr<UAnimMontage>(FSoftObjectPath(ObjectPath));
+}
+
+bool IsMakeHumanCc0R8Active(const AActor* Owner)
+{
+    const UVistaCharacterProviderComponent* Provider = IsValid(Owner)
+        ? Owner->FindComponentByClass<UVistaCharacterProviderComponent>()
+        : nullptr;
+    return IsValid(Provider) && Provider->IsMakeHumanCc0R8Active();
+}
+
+bool IsMakeHumanCc0DetailAction(const EVistaNpcActionType Type)
+{
+    return Type == EVistaNpcActionType::OpenDoor ||
+        Type == EVistaNpcActionType::CloseDoor ||
+        Type == EVistaNpcActionType::Inspect;
 }
 }
 
@@ -144,6 +170,26 @@ bool UVistaAnimationComponent::ResolveMontage(
         return true;
     }
 
+    if (IsMakeHumanCc0DetailAction(Type) &&
+        IsMakeHumanCc0R8Active(GetOwner()))
+    {
+        const TCHAR* ObjectPath = Type == EVistaNpcActionType::OpenDoor
+            ? MakeHumanCc0FridgeOpenMontage
+            : Type == EVistaNpcActionType::CloseDoor
+                ? MakeHumanCc0FridgeCloseMontage
+                : MakeHumanCc0InspectMontage;
+        OutMontage = Montage(ObjectPath);
+        if (!OutMontage.ToSoftObjectPath().ToString().StartsWith(
+                MakeHumanCc0DetailMontageRoot,
+                ESearchCase::CaseSensitive))
+        {
+            OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
+            return false;
+        }
+        OutCode = TEXT("ANIMATION_MONTAGE_RESOLVED");
+        return true;
+    }
+
     const TSoftObjectPtr<UAnimMontage>* Existing = MontageByAction.Find(Type);
     if (Existing == nullptr ||
         !Existing->ToSoftObjectPath().ToString().StartsWith(
@@ -230,12 +276,16 @@ bool UVistaAnimationComponent::StartNpcAction(
     {
         return false;
     }
-    const FString RequiredRoot =
-        Action.Type == EVistaNpcActionType::PickUp ||
-            Action.Type == EVistaNpcActionType::Place ||
-            Action.Type == EVistaNpcActionType::Drop
-        ? FString(MakeHumanCc0MontageRoot)
-        : FString(ProjectAnimationRoot);
+    const FString ResolvedPath = MontageReference.ToSoftObjectPath().ToString();
+    const FString RequiredRoot = ResolvedPath.StartsWith(
+            MakeHumanCc0DetailMontageRoot,
+            ESearchCase::CaseSensitive)
+        ? FString(MakeHumanCc0DetailMontageRoot)
+        : Action.Type == EVistaNpcActionType::PickUp ||
+                Action.Type == EVistaNpcActionType::Place ||
+                Action.Type == EVistaNpcActionType::Drop
+            ? FString(MakeHumanCc0MontageRoot)
+            : FString(ProjectAnimationRoot);
     UAnimMontage* ResolvedMontage = MontageReference.LoadSynchronous();
     if (!IsValid(ResolvedMontage) ||
         !ResolvedMontage->GetPathName().StartsWith(
@@ -257,6 +307,21 @@ bool UVistaAnimationComponent::StartNpcAction(
 
     ExpectedCompletionSignal = CompletionSignalFor(Action.Type);
     ExpectedContactSignal = ContactSignalFor(Action.Type);
+    if (ResolvedPath.StartsWith(
+            MakeHumanCc0DetailMontageRoot,
+            ESearchCase::CaseSensitive))
+    {
+        if (Action.Type == EVistaNpcActionType::OpenDoor)
+        {
+            ExpectedContactSignal = TEXT("vista_fridge_door_handle_contact");
+            ExpectedCompletionSignal = TEXT("vista_fridge_open_completed");
+        }
+        else if (Action.Type == EVistaNpcActionType::CloseDoor)
+        {
+            ExpectedContactSignal = TEXT("vista_fridge_door_handle_contact");
+            ExpectedCompletionSignal = TEXT("vista_fridge_close_completed");
+        }
+    }
     if (ExpectedCompletionSignal.IsNone())
     {
         OutCode = TEXT("ANIMATION_COMPLETION_CONTRACT_MISSING");

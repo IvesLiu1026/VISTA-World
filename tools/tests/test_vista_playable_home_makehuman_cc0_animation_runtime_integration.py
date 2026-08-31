@@ -108,6 +108,27 @@ def test_cc0_runtime_path_does_not_reuse_private_epic_animation_paths() -> None:
         assert prohibited not in combined
 
 
+def test_r14_detail_actions_use_closed_paths_and_profile_signal_contract() -> None:
+    animation = _text(RUNTIME / "Private" / "VistaAnimationComponent.cpp")
+
+    for asset in (
+        "AM_VistaCC0FridgeOpenRight_R14",
+        "AM_VistaCC0FridgeCloseRight_R14",
+        "AM_VistaCC0ObjectInspectRight_R14",
+    ):
+        assert asset in animation
+    assert "/Game/VISTA/MakeHumanCC0/R14/DetailActions/Montages/" in animation
+    assert "IsMakeHumanCc0DetailAction(Type)" in animation
+    assert "IsMakeHumanCc0R8Active(GetOwner())" in animation
+    for signal in (
+        "vista_fridge_door_handle_contact",
+        "vista_fridge_open_completed",
+        "vista_fridge_close_completed",
+        "vista_inspect_completed",
+    ):
+        assert signal in animation
+
+
 def test_editor_authoring_bridge_has_zero_argument_closed_surface_and_topology() -> (
     None
 ):
