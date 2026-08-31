@@ -1,0 +1,407 @@
+{
+  "schema_version": "vista.makehuman-cc0-detail-actions-r15-profile/v1",
+  "profile_id": "makehuman_cc0_detail_actions_r15",
+  "character_id": "makehuman_cc0_eurasian_female_arkit_v3",
+  "acceptance": {
+    "accepted": false,
+    "runtime_execution_authorized": false,
+    "human_reviewed": false
+  },
+  "namespace_contract": {
+    "source_namespace": "vista.makehuman-cc0-detail-actions/r15",
+    "ue_content_namespace": "/Game/VISTA/MakeHumanCC0/R15/DetailActions",
+    "artifact_namespace": "makehuman_cc0_detail_actions_r15",
+    "existing_r8_or_r14_bytes_reused": false
+  },
+  "source_character_binding": {
+    "source_character_asset_lane": "makehuman_cc0_character_r6",
+    "character_id": "makehuman_cc0_eurasian_female_arkit_v3",
+    "armature_name": "VISTA_CC0_Hero_Rig_export",
+    "bone_count": 53,
+    "motion_source_policy": "fresh_numeric_recipes_only",
+    "prior_animation_artifact_dependency": "none"
+  },
+  "rig_contract": {
+    "armature_name": "VISTA_CC0_Hero_Rig_export",
+    "root_bone": "root",
+    "bone_count": 53,
+    "coordinate_system": "blender_m_z_up_ue_export_minus_y_forward"
+  },
+  "license_scope": {
+    "character_source_spdx": "CC0-1.0",
+    "motion_recipe_spdx": "CC0-1.0",
+    "external_binary_policy": "outside_git_only"
+  },
+  "provenance": {
+    "motion_origin": "project_authored_numeric_keyframes",
+    "contains_manny_derived_motion": false,
+    "contains_metahuman_motion": false,
+    "contains_city_sample_motion": false,
+    "contains_simworld_motion": false,
+    "contains_motion_capture": false
+  },
+  "quality_contract": {
+    "distinct_numeric_recipe_per_clip": true,
+    "root_motion_forbidden": true,
+    "contact_height_contract_required": true,
+    "loop_seam_required_for_looping_clips": true,
+    "human_motion_review_required": true
+  },
+  "target_height_bands": {
+    "counter": {"minimum_cm": 85, "maximum_cm": 110},
+    "waist": {"minimum_cm": 70, "maximum_cm": 100},
+    "seat": {"minimum_cm": 38, "maximum_cm": 55}
+  },
+  "clips": [
+    {
+      "clip_id": "rotary_turn_on_right",
+      "event_action": "turn_on",
+      "action_name": "VISTA_CC0_RotaryTurnOnRight_R15",
+      "ue_sequence_name": "AS_VistaCC0RotaryTurnOnRight_R15",
+      "ue_montage_name": "AM_VistaCC0RotaryTurnOnRight_R15",
+      "frame_start": 0,
+      "frame_end": 72,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_types": ["stove_control", "faucet_control"],
+        "interaction_point": "rotary_control_center",
+        "height_band": "counter",
+        "height_cm": 96,
+        "actor_hand": "right",
+        "hand_bone": "hand_r",
+        "primary_contact_bone": "hand_r",
+        "secondary_contact_bones": []
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 12,
+        "engagement_frame": 24,
+        "follow_through_start_frame": 42,
+        "completion_frame": 60
+      },
+      "typed_notifies": [
+        {"frame": 24, "kind": "contact", "signal": "vista_appliance_power_contact"},
+        {"frame": 60, "kind": "completion", "signal": "vista_appliance_turn_on_completed"}
+      ],
+      "runtime_binding": {
+        "backend_status": "typed_backend_available",
+        "contact_signal_authority": "UVistaAnimationComponent::ContactSignalFor",
+        "completion_signal_authority": "UVistaAnimationComponent::CompletionSignalFor",
+        "runtime_execution_authorized": false
+      },
+      "recipe_id": "cc0_numeric_rotary_turn_on_right_r15"
+    },
+    {
+      "clip_id": "rotary_turn_off_right",
+      "event_action": "turn_off",
+      "action_name": "VISTA_CC0_RotaryTurnOffRight_R15",
+      "ue_sequence_name": "AS_VistaCC0RotaryTurnOffRight_R15",
+      "ue_montage_name": "AM_VistaCC0RotaryTurnOffRight_R15",
+      "frame_start": 0,
+      "frame_end": 72,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_types": ["stove_control", "faucet_control"],
+        "interaction_point": "rotary_control_center",
+        "height_band": "counter",
+        "height_cm": 96,
+        "actor_hand": "right",
+        "hand_bone": "hand_r",
+        "primary_contact_bone": "hand_r",
+        "secondary_contact_bones": []
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 12,
+        "engagement_frame": 24,
+        "follow_through_start_frame": 42,
+        "completion_frame": 60
+      },
+      "typed_notifies": [
+        {"frame": 24, "kind": "contact", "signal": "vista_appliance_power_contact"},
+        {"frame": 60, "kind": "completion", "signal": "vista_appliance_turn_off_completed"}
+      ],
+      "runtime_binding": {
+        "backend_status": "typed_backend_available",
+        "contact_signal_authority": "UVistaAnimationComponent::ContactSignalFor",
+        "completion_signal_authority": "UVistaAnimationComponent::CompletionSignalFor",
+        "runtime_execution_authorized": false
+      },
+      "recipe_id": "cc0_numeric_rotary_turn_off_right_r15"
+    },
+    {
+      "clip_id": "button_press_right",
+      "event_action": "press",
+      "action_name": "VISTA_CC0_ButtonPressRight_R15",
+      "ue_sequence_name": "AS_VistaCC0ButtonPressRight_R15",
+      "ue_montage_name": "AM_VistaCC0ButtonPressRight_R15",
+      "frame_start": 0,
+      "frame_end": 66,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_types": ["washer_button"],
+        "interaction_point": "start_button_center",
+        "height_band": "waist",
+        "height_cm": 88,
+        "actor_hand": "right",
+        "hand_bone": "hand_r",
+        "primary_contact_bone": "hand_r",
+        "secondary_contact_bones": []
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 12,
+        "engagement_frame": 24,
+        "follow_through_start_frame": 38,
+        "completion_frame": 54
+      },
+      "typed_notifies": [
+        {"frame": 24, "kind": "contact", "signal": "vista_appliance_button_contact"},
+        {"frame": 54, "kind": "completion", "signal": "vista_appliance_press_completed"}
+      ],
+      "runtime_binding": {
+        "backend_status": "typed_backend_available",
+        "contact_signal_authority": "UVistaAnimationComponent::ContactSignalFor",
+        "completion_signal_authority": "UVistaAnimationComponent::CompletionSignalFor",
+        "runtime_execution_authorized": false
+      },
+      "recipe_id": "cc0_numeric_button_press_right_r15"
+    },
+    {
+      "clip_id": "cabinet_drawer_open_right",
+      "event_action": "open",
+      "action_name": "VISTA_CC0_CabinetDrawerOpenRight_R15",
+      "ue_sequence_name": "AS_VistaCC0CabinetDrawerOpenRight_R15",
+      "ue_montage_name": "AM_VistaCC0CabinetDrawerOpenRight_R15",
+      "frame_start": 0,
+      "frame_end": 78,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_types": ["cabinet_door", "drawer"],
+        "interaction_point": "primary_pull_handle",
+        "height_band": "waist",
+        "height_cm": 84,
+        "actor_hand": "right",
+        "hand_bone": "hand_r",
+        "primary_contact_bone": "hand_r",
+        "secondary_contact_bones": []
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 14,
+        "engagement_frame": 26,
+        "follow_through_start_frame": 44,
+        "completion_frame": 66
+      },
+      "typed_notifies": [
+        {"frame": 26, "kind": "contact", "signal": "vista_cabinet_handle_contact"},
+        {"frame": 66, "kind": "completion", "signal": "vista_cabinet_open_completed"}
+      ],
+      "runtime_binding": {
+        "backend_status": "source_only_unimplemented",
+        "contact_signal_authority": "r15_source_contract_only",
+        "completion_signal_authority": "r15_source_contract_only",
+        "runtime_execution_authorized": false
+      },
+      "recipe_id": "cc0_numeric_cabinet_drawer_open_right_r15"
+    },
+    {
+      "clip_id": "cabinet_drawer_close_right",
+      "event_action": "close",
+      "action_name": "VISTA_CC0_CabinetDrawerCloseRight_R15",
+      "ue_sequence_name": "AS_VistaCC0CabinetDrawerCloseRight_R15",
+      "ue_montage_name": "AM_VistaCC0CabinetDrawerCloseRight_R15",
+      "frame_start": 0,
+      "frame_end": 78,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_types": ["cabinet_door", "drawer"],
+        "interaction_point": "primary_pull_handle",
+        "height_band": "waist",
+        "height_cm": 84,
+        "actor_hand": "right",
+        "hand_bone": "hand_r",
+        "primary_contact_bone": "hand_r",
+        "secondary_contact_bones": []
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 14,
+        "engagement_frame": 26,
+        "follow_through_start_frame": 44,
+        "completion_frame": 66
+      },
+      "typed_notifies": [
+        {"frame": 26, "kind": "contact", "signal": "vista_cabinet_handle_contact"},
+        {"frame": 66, "kind": "completion", "signal": "vista_cabinet_close_completed"}
+      ],
+      "runtime_binding": {
+        "backend_status": "source_only_unimplemented",
+        "contact_signal_authority": "r15_source_contract_only",
+        "completion_signal_authority": "r15_source_contract_only",
+        "runtime_execution_authorized": false
+      },
+      "recipe_id": "cc0_numeric_cabinet_drawer_close_right_r15"
+    },
+    {
+      "clip_id": "sit_down_chair",
+      "event_action": "sit",
+      "action_name": "VISTA_CC0_SitDownChair_R15",
+      "ue_sequence_name": "AS_VistaCC0SitDownChair_R15",
+      "ue_montage_name": "AM_VistaCC0SitDownChair_R15",
+      "frame_start": 0,
+      "frame_end": 90,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_types": ["chair_seat"],
+        "interaction_point": "seat_surface_center",
+        "height_band": "seat",
+        "height_cm": 46,
+        "actor_hand": "none",
+        "hand_bone": "none",
+        "primary_contact_bone": "pelvis",
+        "secondary_contact_bones": ["thigh_l", "thigh_r", "foot_l", "foot_r"]
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 18,
+        "engagement_frame": 54,
+        "follow_through_start_frame": 66,
+        "completion_frame": 78
+      },
+      "typed_notifies": [
+        {"frame": 54, "kind": "contact", "signal": "vista_chair_seat_contact"},
+        {"frame": 78, "kind": "completion", "signal": "vista_sit_completed"}
+      ],
+      "runtime_binding": {
+        "backend_status": "source_only_unimplemented",
+        "contact_signal_authority": "r15_source_contract_only",
+        "completion_signal_authority": "r15_source_contract_only",
+        "runtime_execution_authorized": false
+      },
+      "recipe_id": "cc0_numeric_sit_down_chair_r15"
+    },
+    {
+      "clip_id": "seated_idle_loop",
+      "event_action": "seated_idle",
+      "action_name": "VISTA_CC0_SeatedIdleLoop_R15",
+      "ue_sequence_name": "AS_VistaCC0SeatedIdleLoop_R15",
+      "ue_montage_name": "AM_VistaCC0SeatedIdleLoop_R15",
+      "frame_start": 0,
+      "frame_end": 60,
+      "fps": 30,
+      "loop": true,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_types": ["chair_seat"],
+        "interaction_point": "seat_surface_center",
+        "height_band": "seat",
+        "height_cm": 46,
+        "actor_hand": "none",
+        "hand_bone": "none",
+        "primary_contact_bone": "pelvis",
+        "secondary_contact_bones": ["thigh_l", "thigh_r", "foot_l", "foot_r"]
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 12,
+        "engagement_frame": 24,
+        "follow_through_start_frame": 42,
+        "completion_frame": 54
+      },
+      "typed_notifies": [
+        {"frame": 54, "kind": "completion", "signal": "vista_seated_idle_cycle_completed"}
+      ],
+      "runtime_binding": {
+        "backend_status": "source_only_unimplemented",
+        "contact_signal_authority": "r15_source_contract_only",
+        "completion_signal_authority": "r15_source_contract_only",
+        "runtime_execution_authorized": false
+      },
+      "recipe_id": "cc0_numeric_seated_idle_loop_r15"
+    },
+    {
+      "clip_id": "stand_up_chair",
+      "event_action": "stand",
+      "action_name": "VISTA_CC0_StandUpChair_R15",
+      "ue_sequence_name": "AS_VistaCC0StandUpChair_R15",
+      "ue_montage_name": "AM_VistaCC0StandUpChair_R15",
+      "frame_start": 0,
+      "frame_end": 90,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_types": ["chair_seat"],
+        "interaction_point": "seat_surface_center",
+        "height_band": "seat",
+        "height_cm": 46,
+        "actor_hand": "none",
+        "hand_bone": "none",
+        "primary_contact_bone": "pelvis",
+        "secondary_contact_bones": ["thigh_l", "thigh_r", "foot_l", "foot_r"]
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 18,
+        "engagement_frame": 42,
+        "follow_through_start_frame": 60,
+        "completion_frame": 78
+      },
+      "typed_notifies": [
+        {"frame": 78, "kind": "completion", "signal": "vista_stand_completed"}
+      ],
+      "runtime_binding": {
+        "backend_status": "source_only_unimplemented",
+        "contact_signal_authority": "r15_source_contract_only",
+        "completion_signal_authority": "r15_source_contract_only",
+        "runtime_execution_authorized": false
+      },
+      "recipe_id": "cc0_numeric_stand_up_chair_r15"
+    },
+    {
+      "clip_id": "pour_right",
+      "event_action": "pour",
+      "action_name": "VISTA_CC0_PourRight_R15",
+      "ue_sequence_name": "AS_VistaCC0PourRight_R15",
+      "ue_montage_name": "AM_VistaCC0PourRight_R15",
+      "frame_start": 0,
+      "frame_end": 96,
+      "fps": 30,
+      "loop": false,
+      "root_motion_policy": "forbidden",
+      "target": {
+        "semantic_types": ["held_container"],
+        "interaction_point": "held_container_grip",
+        "height_band": "counter",
+        "height_cm": 92,
+        "actor_hand": "right",
+        "hand_bone": "hand_r",
+        "primary_contact_bone": "hand_r",
+        "secondary_contact_bones": []
+      },
+      "phase_contract": {
+        "anticipation_end_frame": 18,
+        "engagement_frame": 36,
+        "follow_through_start_frame": 60,
+        "completion_frame": 84
+      },
+      "typed_notifies": [
+        {"frame": 36, "kind": "contact", "signal": "vista_pour_tilt_contact"},
+        {"frame": 84, "kind": "completion", "signal": "vista_pour_completed"}
+      ],
+      "runtime_binding": {
+        "backend_status": "source_only_unimplemented",
+        "contact_signal_authority": "r15_source_contract_only",
+        "completion_signal_authority": "r15_source_contract_only",
+        "runtime_execution_authorized": false
+      },
+      "recipe_id": "cc0_numeric_pour_right_r15"
+    }
+  ],
+  "content_digest": "fb88d2cdfe810226d84b9111cbe99ad7c13842cab0e60c4af48354fe5bc02384"
+}
