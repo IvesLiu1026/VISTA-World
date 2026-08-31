@@ -30,6 +30,18 @@ const FName ProviderGripTag(TEXT("VistaProviderGripSocket"));
 const FName ValidatedCarryAnchorTag(TEXT("VistaValidatedCarryAnchor"));
 constexpr float MaximumContactDistanceCm = 300.0f;
 
+EVistaNpcActionType AnimationTypeForPhysicalAffordance(
+    const EVistaAffordance Affordance)
+{
+    switch (Affordance)
+    {
+    case EVistaAffordance::PickUp: return EVistaNpcActionType::PickUp;
+    case EVistaAffordance::Place: return EVistaNpcActionType::Place;
+    case EVistaAffordance::Drop: return EVistaNpcActionType::Drop;
+    default: return EVistaNpcActionType::Wait;
+    }
+}
+
 template <typename T>
 bool ScalarBitsEqual(const T& Left, const T& Right)
 {
@@ -972,9 +984,7 @@ bool UVistaActionExecutorComponent::BeginPhysicalInteractionImpl(
         ? FName(TEXT("ANIMATION_NOT_APPROVED"))
         : FName(TEXT("ANIMATION_COMPONENT_UNAVAILABLE"));
     const EVistaNpcActionType AnimationType =
-        InputRequest.Affordance == EVistaAffordance::PickUp
-            ? EVistaNpcActionType::PickUp
-            : EVistaNpcActionType::Place;
+        AnimationTypeForPhysicalAffordance(InputRequest.Affordance);
     bool bAnimationReady = IsValid(RequesterAnimation) &&
         RequesterAnimation->HasApprovedMutationAnimation(
             AnimationType,
@@ -1415,8 +1425,8 @@ bool UVistaActionExecutorComponent::StartAnimation(FName& OutCode)
     }
     FVistaNpcAction Action;
     Action.ActionId = ActiveAction->Record.CommandId;
-    Action.Type = ActiveAction->Request.Affordance == EVistaAffordance::PickUp
-        ? EVistaNpcActionType::PickUp : EVistaNpcActionType::Place;
+    Action.Type = AnimationTypeForPhysicalAffordance(
+        ActiveAction->Request.Affordance);
     Action.TargetSemanticId = ActiveAction->Record.TargetSemanticId;
     Action.Hand = EVistaAnimationHand::Right;
     Action.TimeoutSeconds = ActiveAction->Request.TimeoutSeconds;

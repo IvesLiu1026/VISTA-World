@@ -238,13 +238,24 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::GetNpcStatus(
     {
         Output.AnimationResult = Animation->GetPlaybackResult();
     }
-    if (IsValid(Controller->ActionExecutorComponent) &&
-        !Output.NpcActionResult.ActionId.IsNone())
+    if (IsValid(Controller->ActionExecutorComponent))
     {
-        Output.bHasActionTransaction =
-            Controller->ActionExecutorComponent->GetTransaction(
-                Output.NpcActionResult.ActionId,
-                Output.ActionTransaction);
+        if (!Output.NpcActionResult.ActionId.IsNone())
+        {
+            Output.bHasActionTransaction =
+                Controller->ActionExecutorComponent->GetTransaction(
+                    Output.NpcActionResult.ActionId,
+                    Output.ActionTransaction);
+        }
+        if (!Output.bHasActionTransaction &&
+            Output.bHasLastCompletedNpcActionResult &&
+            !Output.LastCompletedNpcActionResult.ActionId.IsNone())
+        {
+            Output.bHasActionTransaction =
+                Controller->ActionExecutorComponent->GetTransaction(
+                    Output.LastCompletedNpcActionResult.ActionId,
+                    Output.ActionTransaction);
+        }
     }
     Output.Code = TEXT("NPC_STATUS_OBSERVED");
     return Output;

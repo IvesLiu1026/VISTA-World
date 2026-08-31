@@ -71,7 +71,7 @@ EVistaNpcActionType AnimationTypeFor(const EVistaAffordance Affordance)
     {
     case EVistaAffordance::Open: return EVistaNpcActionType::OpenDoor;
     case EVistaAffordance::Close: return EVistaNpcActionType::CloseDoor;
-    case EVistaAffordance::Inspect: return EVistaNpcActionType::LookAt;
+    case EVistaAffordance::Inspect: return EVistaNpcActionType::Inspect;
     default: return EVistaNpcActionType::Wait;
     }
 }

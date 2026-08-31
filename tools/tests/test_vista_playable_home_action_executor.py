@@ -1097,15 +1097,10 @@ def test_all_gameplay_physical_routes_are_executor_only() -> None:
         "bool AVistaHomeNpcController::PollPhysicalAction",
     )
     assert "ActionExecutorComponent->BeginPhysicalInteraction" in npc_start
+    assert "ActionExecutorComponent->BeginSemanticInteraction" in npc_start
     assert "Execute_VistaInteract" not in npc_start
     assert "ReleaseFromCarrier(" not in npc_start
-    animated = _between(
-        npc,
-        "FVistaInteractionResult AVistaHomeNpcController::ExecuteAnimatedInteraction",
-        "void AVistaHomeNpcController::UpdateCurrentRoomFromNavigationTarget",
-    )
-    assert "EVistaNpcActionType::PickUp" not in animated
-    assert "EVistaNpcActionType::Place" not in animated
+    assert "ExecuteAnimatedInteraction" not in npc
 
     live = _between(
         runtime,
