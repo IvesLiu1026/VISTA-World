@@ -7,6 +7,9 @@ ROOT = Path(__file__).resolve().parents[2]
 COMMANDLET = (
     ROOT / "tools/ue/vista_playable_home/compose_hssd_articulated_fridge_commandlet.py"
 )
+EDITOR_MODULE = ROOT / "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHomeEditor"
+AUTHORING_HEADER = EDITOR_MODULE / "Public/VistaPlayableHomeSceneAuthoringLibrary.h"
+AUTHORING_SOURCE = EDITOR_MODULE / "Private/VistaPlayableHomeSceneAuthoringLibrary.cpp"
 
 
 def test_commandlet_compiles_and_is_bound_to_fresh_derivative_only() -> None:
@@ -43,7 +46,6 @@ def test_cold_reload_releases_map_bound_wrappers_and_collects_before_map_load() 
         "actor = None",
         "world = None",
         "mesh_by_role = None",
-        "actor_class = None",
     ):
         assert cold_reload.index(token) < collect
     assert collect < load
@@ -68,7 +70,9 @@ def test_commandlet_proves_both_legacy_actors_before_any_delete() -> None:
     assert "len(matches) == 1" in source
 
 
-def test_template_clone_identity_is_pinned_to_the_fresh_map_not_source_object_name() -> None:
+def test_template_clone_identity_is_pinned_to_the_fresh_map_not_source_object_name() -> (
+    None
+):
     source = COMMANDLET.read_text(encoding="utf-8")
 
     helper = source.split("def derivative_actor_path_matches", 1)[1].split(
@@ -126,3 +130,43 @@ def test_receipt_does_not_claim_runtime_visual_or_r6_acceptance() -> None:
     assert '"production_promoted": False' in source
     assert '"ue_runtime_launched": False' in source
     assert "base map package changed during derivative composition" in source
+
+
+def test_commandlet_uses_closed_native_spawn_bridge_instead_of_viewport_spawning() -> (
+    None
+):
+    source = COMMANDLET.read_text(encoding="utf-8")
+    assert "spawn_actor_from_class" not in source
+    assert "unreal.EditorActorSubsystem" in source
+    assert (
+        "unreal.VistaPlayableHomeSceneAuthoringLibrary.spawn_articulated_fridge_actor("
+    ) in source
+    assert 'stage = {"phase": "spawn_native_articulated_fridge"' in source
+    assert "native NullRHI-safe articulated-fridge spawn failed" in source
+    assert 'binding.get("actor_class_path") == ACTOR_CLASS' in source
+
+
+def test_native_spawn_bridge_is_editor_world_scoped_and_viewport_independent() -> None:
+    header = AUTHORING_HEADER.read_text(encoding="utf-8")
+    source = AUTHORING_SOURCE.read_text(encoding="utf-8")
+
+    assert "UBlueprintFunctionLibrary" in header
+    assert "SpawnArticulatedFridgeActor" in header
+    assert "UObject* WorldContextObject" in header
+    assert "UClass" not in header
+
+    assert "GetWorldFromContextObject" in source
+    assert "World->WorldType != EWorldType::Editor" in source
+    assert "World->GetCurrentLevel()" in source
+    assert "SpawnParameters.OverrideLevel = CurrentLevel" in source
+    assert "SpawnParameters.ObjectFlags |= RF_Transactional" in source
+    assert "ESpawnActorCollisionHandlingMethod::AlwaysSpawn" in source
+    assert "World->SpawnActor<AVistaArticulatedFridgeActor>" in source
+    assert "CurrentLevel->MarkPackageDirty()" in source
+    for forbidden in (
+        "EditorActorSubsystem",
+        "ActorPositioning",
+        "FSceneViewport",
+        "GEditor->AddActor",
+    ):
+        assert forbidden not in source

@@ -423,12 +423,7 @@ def derivative_actor_path_matches(path, derivative_object_path):
     proof pins the new map scope and every observable identity field instead.
     """
     package_leaf = derivative_object_path.rsplit("/", 1)[-1]
-    prefix = (
-        derivative_object_path
-        + "."
-        + package_leaf
-        + ":PersistentLevel."
-    )
+    prefix = derivative_object_path + "." + package_leaf + ":PersistentLevel."
     return isinstance(path, str) and path.startswith(prefix) and len(path) > len(prefix)
 
 
@@ -862,12 +857,8 @@ def run():
             "legacy hidden proxy",
         )
         require(shell != proxy, "legacy shell and proxy unexpectedly alias")
-        validate_legacy_shell(
-            shell, legacy["shell"], derivative["object_path"]
-        )
-        validate_legacy_proxy(
-            proxy, legacy["proxy"], derivative["object_path"]
-        )
+        validate_legacy_shell(shell, legacy["shell"], derivative["object_path"])
+        validate_legacy_proxy(proxy, legacy["proxy"], derivative["object_path"])
         require(
             not any(
                 "VistaRole=articulated_fridge" in sorted_tags(actor) for actor in actors
@@ -899,18 +890,17 @@ def run():
         legacy_removed = True
 
         binding = execution["actor_binding"]
-        actor_class = unreal.load_class(None, binding["actor_class_path"])
-        require(
-            actor_class is not None, "articulated-fridge actor class is unavailable"
-        )
         transform = binding["world_transform_cm"]
-        actor = actor_subsystem.spawn_actor_from_class(
-            actor_class,
+        stage = {"phase": "spawn_native_articulated_fridge", "detail": None}
+        actor = unreal.VistaPlayableHomeSceneAuthoringLibrary.spawn_articulated_fridge_actor(
+            world,
             vector(transform["location_cm"]),
             rotation(transform["rotation_deg"]),
-            transient=False,
         )
-        require(actor is not None, "failed to spawn articulated-fridge actor")
+        require(
+            actor is not None,
+            "native NullRHI-safe articulated-fridge spawn failed",
+        )
         configure_fridge(actor, binding, mesh_by_role)
         observation_before_save = articulated_observation(actor, binding)
 
@@ -937,7 +927,6 @@ def run():
         actor = None
         world = None
         mesh_by_role = None
-        actor_class = None
         unreal.collect_garbage()
 
         require(
