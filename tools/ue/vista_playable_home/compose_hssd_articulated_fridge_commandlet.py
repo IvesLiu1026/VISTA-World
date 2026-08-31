@@ -561,8 +561,8 @@ def import_link(binding, namespace):
 
 
 def set_relative_transform(component, transform):
-    component.set_relative_location(vector(transform["location_cm"]))
-    component.set_relative_rotation(rotation(transform["rotation_deg"]))
+    component.set_relative_location(vector(transform["location_cm"]), False, False)
+    component.set_relative_rotation(rotation(transform["rotation_deg"]), False, False)
     component.set_relative_scale3d(vector(transform["scale"]))
 
 
@@ -629,17 +629,21 @@ def configure_fridge(actor, binding, mesh_by_role):
     set_relative_transform(body, binding["body_relative_transform"])
     set_relative_transform(primary_door, binding["door_relative_transform"])
     set_relative_transform(secondary_door, binding["door_relative_transform"])
-    primary_hinge.set_relative_location(vector(binding["primary_hinge"]["location_cm"]))
+    primary_hinge.set_relative_location(
+        vector(binding["primary_hinge"]["location_cm"]), False, False
+    )
     primary_hinge.set_relative_rotation(
-        rotation(binding["primary_hinge"]["rotation_deg"])
+        rotation(binding["primary_hinge"]["rotation_deg"]), False, False
     )
     secondary_hinge.set_relative_location(
-        vector(binding["secondary_hinge"]["location_cm"])
+        vector(binding["secondary_hinge"]["location_cm"]), False, False
     )
     secondary_hinge.set_relative_rotation(
-        rotation(binding["secondary_hinge"]["rotation_deg"])
+        rotation(binding["secondary_hinge"]["rotation_deg"]), False, False
     )
-    handle.set_relative_location(vector(binding["handle_relative_location_cm"]))
+    handle.set_relative_location(
+        vector(binding["handle_relative_location_cm"]), False, False
+    )
     return {
         "body": body,
         "primary_hinge": primary_hinge,

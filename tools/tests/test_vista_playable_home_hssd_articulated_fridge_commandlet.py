@@ -120,6 +120,20 @@ def test_commandlet_binds_and_reloads_body_hinges_doors_and_handle() -> None:
     assert 'observation["handle_relative_location_cm"]' in source
 
 
+def test_component_transform_calls_use_the_ue57_sweep_and_teleport_signature() -> None:
+    source = COMMANDLET.read_text(encoding="utf-8")
+    helper = source.split("def set_relative_transform", 1)[1].split(
+        "def configure_mesh_component", 1
+    )[0]
+    configure = source.split("def configure_fridge", 1)[1].split(
+        "def component_observation", 1
+    )[0]
+
+    assert 'vector(transform["location_cm"]), False, False' in helper
+    assert 'rotation(transform["rotation_deg"]), False, False' in helper
+    assert configure.count("), False, False") == 5
+
+
 def test_receipt_does_not_claim_runtime_visual_or_r6_acceptance() -> None:
     source = COMMANDLET.read_text(encoding="utf-8")
     assert '"accepted": False' in source
