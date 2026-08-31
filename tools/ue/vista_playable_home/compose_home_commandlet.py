@@ -43,6 +43,30 @@ REALISM_R4_ROOM_IDS = {
     "home.r1/room.office",
     "home.r1/room.bathroom_laundry",
 }
+APPLIANCE_RUNTIME_PROFILES = {
+    "stove": {
+        "active_status": "heating",
+        "inactive_status": "idle",
+        "extra_affordances": ("turn_on", "turn_off"),
+        "press": None,
+    },
+    "faucet": {
+        "active_status": "flowing",
+        "inactive_status": "idle",
+        "extra_affordances": ("turn_on", "turn_off"),
+        "press": None,
+    },
+    "washer": {
+        "active_status": "running",
+        "inactive_status": "idle",
+        "extra_affordances": ("press", "turn_on", "turn_off"),
+        "press": {
+            "control_id": "start",
+            "result_active": True,
+            "result_status": "running",
+        },
+    },
+}
 
 
 def vector(values):
@@ -735,13 +759,55 @@ def apply_entity_properties(actor, operation, asset_entry):
     actor.set_actor_hidden_in_game(not bool(baseline.get("visible", True)))
     if operation["component_role"] in {"door", "container"}:
         set_if_present(actor, "initially_open", bool(baseline.get("open", False)))
+    runtime_affordances = list(operation["affordances"])
     if operation["component_role"] == "appliance":
+        category = operation["category"]
+        runtime_profile = APPLIANCE_RUNTIME_PROFILES.get(category)
+        initially_active = bool(baseline.get("active", False))
+        initially_powered = bool(baseline.get("powered", True))
         set_if_present(
             actor,
             "initially_on",
-            bool(baseline.get("active", baseline.get("powered", False))),
+            initially_active,
         )
-        set_if_present(actor, "appliance_kind", unreal.Name(operation["category"]))
+        set_if_present(actor, "initially_powered", initially_powered)
+        set_if_present(actor, "appliance_kind", unreal.Name(category))
+        if runtime_profile is not None:
+            initial_status = baseline.get(
+                "status",
+                runtime_profile[
+                    "active_status" if initially_active else "inactive_status"
+                ],
+            )
+            set_if_present(actor, "initial_status", unreal.Name(initial_status))
+            activity_profile = unreal.VistaApplianceActivityProfile()
+            activity_profile.set_editor_property(
+                "active_status", unreal.Name(runtime_profile["active_status"])
+            )
+            activity_profile.set_editor_property(
+                "inactive_status", unreal.Name(runtime_profile["inactive_status"])
+            )
+            require(
+                set_if_present(actor, "activity_profile", activity_profile),
+                "known appliance category lacks the R18 activity profile property",
+            )
+            if runtime_profile["press"] is not None:
+                press_source = runtime_profile["press"]
+                press_profile = unreal.VistaAppliancePressProfile()
+                press_profile.set_editor_property(
+                    "control_id", unreal.Name(press_source["control_id"])
+                )
+                press_profile.set_editor_property(
+                    "result_active", bool(press_source["result_active"])
+                )
+                press_profile.set_editor_property(
+                    "result_status", unreal.Name(press_source["result_status"])
+                )
+                require(
+                    set_if_present(actor, "press_profile", press_profile),
+                    "washer lacks the R18 press profile property",
+                )
+            runtime_affordances.extend(runtime_profile["extra_affordances"])
     if operation["component_role"] == "pickup":
         set_if_present(actor, "portable", bool(baseline.get("portable", True)))
     if operation["component_role"] == "npc":
@@ -770,12 +836,12 @@ def apply_entity_properties(actor, operation, asset_entry):
     try:
         enum_values = [
             getattr(unreal.VistaAffordance, name.upper())
-            for name in operation["affordances"]
+            for name in dict.fromkeys(runtime_affordances)
         ]
         set_if_present(actor, "allowed_affordances", enum_values)
     except Exception as exc:
         require(
-            not operation["affordances"],
+            not runtime_affordances,
             "failed to bind typed affordances: " + str(exc),
         )
 
@@ -841,9 +907,13 @@ def event_definitions(plan, assets, room_anchor_ids):
         "look_at": unreal.VistaNpcActionType.LOOK_AT,
         "pick_up": unreal.VistaNpcActionType.PICK_UP,
         "place": unreal.VistaNpcActionType.PLACE,
+        "drop": unreal.VistaNpcActionType.DROP,
         "open_door": unreal.VistaNpcActionType.OPEN_DOOR,
+        "open": unreal.VistaNpcActionType.OPEN_DOOR,
         "close_door": unreal.VistaNpcActionType.CLOSE_DOOR,
+        "close": unreal.VistaNpcActionType.CLOSE_DOOR,
         "sit": unreal.VistaNpcActionType.SIT,
+        "inspect": unreal.VistaNpcActionType.INSPECT,
         "wait": unreal.VistaNpcActionType.WAIT,
         "speak": unreal.VistaNpcActionType.SPEAK,
         "brace": unreal.VistaNpcActionType.BRACE,
@@ -852,6 +922,14 @@ def event_definitions(plan, assets, room_anchor_ids):
         "pause": unreal.VistaNpcActionType.PAUSE,
         "fall": unreal.VistaNpcActionType.FALL,
         "recover": unreal.VistaNpcActionType.RECOVER,
+        # EventSpec v3 source mappings are deliberately fail-closed.  These
+        # names document the compiler contract, but a commandlet run may use
+        # them only after the loaded plugin exposes a matching native enum.
+        # Presence here is not a runtime-acceptance receipt.
+        "toggle": getattr(unreal.VistaNpcActionType, "TOGGLE", None),
+        "press": getattr(unreal.VistaNpcActionType, "PRESS", None),
+        "turn_on": getattr(unreal.VistaNpcActionType, "TURN_ON", None),
+        "turn_off": getattr(unreal.VistaNpcActionType, "TURN_OFF", None),
     }
     condition_types = {
         "entity_state": unreal.VistaEventConditionType.ENTITY_STATE,
@@ -976,14 +1054,18 @@ def event_definitions(plan, assets, room_anchor_ids):
             elif source_op["op"] == "set_npc_queue":
                 npc_actions = []
                 for action_index, source_action in enumerate(source_op["actions"]):
+                    mapped_action_type = action_types[source_action["action"]]
+                    require(
+                        mapped_action_type is not None,
+                        "NPC action has source mapping but no runtime-authorized enum: "
+                        + source_action["action"],
+                    )
                     action = unreal.VistaNpcAction()
                     action.set_editor_property(
                         "action_id",
                         unreal.Name("%s_%02d" % (source_op["op_id"], action_index)),
                     )
-                    action.set_editor_property(
-                        "type", action_types[source_action["action"]]
-                    )
+                    action.set_editor_property("type", mapped_action_type)
                     target = source_action.get("target_id", "")
                     if not target and source_action.get("room_id"):
                         target = room_anchor_ids[source_action["room_id"]]
