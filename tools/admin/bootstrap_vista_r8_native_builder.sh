@@ -451,7 +451,8 @@ manager_property_value() {
 }
 
 assert_unit_manager_provenance() {
-  local unit="$1" expected="${UNIT_ROOT}/${unit}" document line key
+  local unit="$1" document line key
+  local expected="${UNIT_ROOT}/${unit}"
   local load_state fragment_path drop_in_paths unit_file_state names
   local wanted_by required_by
   local -a lines=()
@@ -510,7 +511,8 @@ assert_unit_manager_provenance() {
 }
 
 assert_unit_filesystem_provenance() {
-  local unit="$1" require_fragment="$2" expected="${UNIT_ROOT}/${unit}"
+  local unit="$1" require_fragment="$2"
+  local expected="${UNIT_ROOT}/${unit}"
   local root candidate dropin link raw_target resolved_target dependency
   local grep_status
   local -a links=() dependencies=()

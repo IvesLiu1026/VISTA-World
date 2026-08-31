@@ -109,6 +109,21 @@ def test_bootstrap_is_bash_syntax_clean_and_never_runs_systemd_or_builder() -> N
     assert re.search(r"python3(?:\.10)?\s+.*vista_r8_native_builder", text) is None
 
 
+def test_bootstrap_local_declarations_do_not_expand_peer_assignments() -> None:
+    """Bash expands a complete ``local`` command before assigning any peer."""
+
+    for line_number, raw_line in enumerate(_text(BOOTSTRAP).splitlines(), start=1):
+        line = raw_line.strip()
+        if not line.startswith("local "):
+            continue
+        declared = set(re.findall(r"(?:^|\s)([A-Za-z_][A-Za-z0-9_]*)=", line))
+        expanded = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", line))
+        assert not declared & expanded, (
+            f"line {line_number} expands a variable declared by the same local "
+            f"command: {line}"
+        )
+
+
 def test_bootstrap_fixes_identity_and_fails_closed_on_collisions() -> None:
     text = _text(BOOTSTRAP)
     for literal in (
