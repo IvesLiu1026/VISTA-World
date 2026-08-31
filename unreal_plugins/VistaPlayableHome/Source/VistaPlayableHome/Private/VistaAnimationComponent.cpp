@@ -196,6 +196,15 @@ bool UVistaAnimationComponent::HasApprovedMutationAnimation(
             OutCode = TEXT("ANIMATION_CC0_PROVIDER_REQUIRED");
             return false;
         }
+        if (!IsValid(Target))
+        {
+            // Queue-shape validation runs before semantic target resolution.
+            // It may prove provider readiness only; StartNpcAction and both
+            // transaction executors always call this overload again with the
+            // resolved authoritative target before reserving or mutating it.
+            OutCode = TEXT("ANIMATION_TARGET_PREFLIGHT_DEFERRED");
+            return true;
+        }
         const AVistaStatefulApplianceActor* Appliance =
             Cast<AVistaStatefulApplianceActor>(Target);
         if (!IsValid(Appliance))
