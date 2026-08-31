@@ -126,13 +126,17 @@ class VistaPlayableHomeInteractionBindingTests(unittest.TestCase):
         washer = "home.r1/room.bathroom_laundry/entity.washer.01"
         self.assertEqual(
             contract.resolve_use(
-                self.validated, target_id=washer, target_state={"active": False}
+                self.validated,
+                target_id=washer,
+                target_state={"active": False, "powered": True},
             ),
             "turn_on",
         )
         self.assertEqual(
             contract.resolve_use(
-                self.validated, target_id=washer, target_state={"active": True}
+                self.validated,
+                target_id=washer,
+                target_state={"active": True, "powered": True},
             ),
             "turn_off",
         )
@@ -149,7 +153,7 @@ class VistaPlayableHomeInteractionBindingTests(unittest.TestCase):
                     contract.resolve_use(
                         self.validated,
                         target_id=target_id,
-                        target_state={},
+                        target_state={"held_by": None},
                     ),
                     "pick_up",
                 )
@@ -179,6 +183,67 @@ class VistaPlayableHomeInteractionBindingTests(unittest.TestCase):
             self.assertEqual(
                 turn_on["postcondition"]["all_other_state_fields"], "preserve"
             )
+
+    def test_appliance_status_is_exactly_pinned_per_category_and_action(self) -> None:
+        for interaction_id, wrong_status in (
+            ("stove.primary", "flowing"),
+            ("faucet.primary", "running"),
+            ("washer.primary", "heating"),
+        ):
+            with self.subTest(interaction_id=interaction_id):
+                changed = copy.deepcopy(self.bindings)
+                interaction = self.interaction(interaction_id, changed)
+                turn_on = next(
+                    item
+                    for item in interaction["actions"]
+                    if item["action_id"] == "turn_on"
+                )
+                status = next(
+                    item
+                    for item in turn_on["postcondition"]["set"]
+                    if item["state_field"] == "status"
+                )
+                status["value"] = wrong_status
+                changed = self.reseal(changed)
+                self.assert_contract_error(
+                    "VISTA_INTERACTION_APPLIANCE_STATUS_INVALID",
+                    lambda changed=changed: contract.validate_bindings(
+                        changed, house=self.house, action_catalog=self.catalog
+                    ),
+                )
+
+        off = copy.deepcopy(self.bindings)
+        stove = self.interaction("stove.primary", off)
+        turn_off = next(
+            item for item in stove["actions"] if item["action_id"] == "turn_off"
+        )
+        status = next(
+            item
+            for item in turn_off["postcondition"]["set"]
+            if item["state_field"] == "status"
+        )
+        status["value"] = "heating"
+        off = self.reseal(off)
+        self.assert_contract_error(
+            "VISTA_INTERACTION_APPLIANCE_STATUS_INVALID",
+            lambda: contract.validate_bindings(
+                off, house=self.house, action_catalog=self.catalog
+            ),
+        )
+
+        interaction_drift = copy.deepcopy(self.bindings)
+        self.interaction("stove.primary", interaction_drift)["interaction_id"] = (
+            "stove.alternate"
+        )
+        interaction_drift = self.reseal(interaction_drift)
+        self.assert_contract_error(
+            "VISTA_INTERACTION_APPLIANCE_STATUS_INVALID",
+            lambda: contract.validate_bindings(
+                interaction_drift,
+                house=self.house,
+                action_catalog=self.catalog,
+            ),
+        )
 
     def test_missing_or_duplicate_boolean_cases_are_ambiguous(self) -> None:
         missing = copy.deepcopy(self.bindings)
@@ -230,18 +295,121 @@ class VistaPlayableHomeInteractionBindingTests(unittest.TestCase):
             ),
         )
 
-    def test_runtime_use_requires_exact_boolean_state(self) -> None:
+    def test_runtime_use_requires_present_exact_boolean_dispatch_state(self) -> None:
         target = "home.r1/room.kitchen_dining/entity.fridge.01"
-        for state in ({}, {"open": None}, {"open": 1}, {"open": "false"}):
+        self.assert_contract_error(
+            "VISTA_INTERACTION_USE_PRECONDITION_MISSING",
+            lambda: contract.resolve_use(
+                self.validated,
+                target_id=target,
+                target_state={},
+            ),
+        )
+        for state in ({"open": None}, {"open": 1}, {"open": "false"}):
             with self.subTest(state=state):
                 self.assert_contract_error(
-                    "VISTA_INTERACTION_USE_STATE_INVALID",
+                    "VISTA_INTERACTION_USE_PRECONDITION_TYPE_MISMATCH",
                     lambda state=state: contract.resolve_use(
                         self.validated,
                         target_id=target,
                         target_state=state,
                     ),
                 )
+
+    def test_direct_use_rejects_unsatisfied_pickup_precondition(self) -> None:
+        target = "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        self.assert_contract_error(
+            "VISTA_INTERACTION_USE_PRECONDITION_MISSING",
+            lambda: contract.resolve_use(
+                self.validated,
+                target_id=target,
+                target_state={},
+            ),
+        )
+        self.assert_contract_error(
+            "VISTA_INTERACTION_USE_PRECONDITION_FAILED",
+            lambda: contract.resolve_use(
+                self.validated,
+                target_id=target,
+                target_state={"held_by": "player.01"},
+            ),
+        )
+
+    def test_appliance_use_requires_powered_precondition_after_dispatch(self) -> None:
+        target = "home.r1/room.bathroom_laundry/entity.washer.01"
+        self.assert_contract_error(
+            "VISTA_INTERACTION_USE_PRECONDITION_MISSING",
+            lambda: contract.resolve_use(
+                self.validated,
+                target_id=target,
+                target_state={"active": False},
+            ),
+        )
+        self.assert_contract_error(
+            "VISTA_INTERACTION_USE_PRECONDITION_FAILED",
+            lambda: contract.resolve_use(
+                self.validated,
+                target_id=target,
+                target_state={"active": False, "powered": False},
+            ),
+        )
+        self.assert_contract_error(
+            "VISTA_INTERACTION_USE_PRECONDITION_TYPE_MISMATCH",
+            lambda: contract.resolve_use(
+                self.validated,
+                target_id=target,
+                target_state={"active": False, "powered": 1},
+            ),
+        )
+
+    def test_symbolic_precondition_requires_explicit_runtime_context(self) -> None:
+        changed = copy.deepcopy(self.bindings)
+        cup = self.interaction("coffee_cup.primary", changed)
+        cup["default_use_action"] = "place"
+        cup["use_resolution"]["direct_action_id"] = "place"
+        changed = self.reseal(changed)
+        validated = contract.validate_bindings(
+            changed,
+            house=self.house,
+            action_catalog=self.catalog,
+        )
+        target = "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+
+        self.assert_contract_error(
+            "VISTA_INTERACTION_USE_CONTEXT_REQUIRED",
+            lambda: contract.resolve_use(
+                validated,
+                target_id=target,
+                target_state={"held_by": "player.01"},
+            ),
+        )
+        self.assert_contract_error(
+            "VISTA_INTERACTION_USE_CONTEXT_INVALID",
+            lambda: contract.resolve_use(
+                validated,
+                target_id=target,
+                target_state={"held_by": "player.01"},
+                runtime_context={"actor_id": 1},
+            ),
+        )
+        self.assert_contract_error(
+            "VISTA_INTERACTION_USE_PRECONDITION_FAILED",
+            lambda: contract.resolve_use(
+                validated,
+                target_id=target,
+                target_state={"held_by": "other.01"},
+                runtime_context={"actor_id": "player.01"},
+            ),
+        )
+        self.assertEqual(
+            contract.resolve_use(
+                validated,
+                target_id=target,
+                target_state={"held_by": "player.01"},
+                runtime_context={"actor_id": "player.01"},
+            ),
+            "place",
+        )
 
     def test_stale_house_or_catalog_digest_fails_closed(self) -> None:
         stale_house = copy.deepcopy(self.bindings)
