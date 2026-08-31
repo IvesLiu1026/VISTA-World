@@ -476,7 +476,7 @@ def test_every_photoreal_failure_keeps_manny_and_reports_stable_status() -> None
     assert "Manny remains active" in unavailable
 
 
-def test_npc_owns_provider_without_changing_semantic_or_animation_components() -> None:
+def test_npc_owns_closed_cc0_action_provider_without_process_override() -> None:
     header = NPC_HEADER.read_text(encoding="utf-8")
     source = NPC_SOURCE.read_text(encoding="utf-8")
 
@@ -497,9 +497,11 @@ def test_npc_owns_provider_without_changing_semantic_or_animation_components() -
     assert "AIControllerClass = AVistaHomeNpcController::StaticClass();" in source
     assert (
         "CharacterProviderComponent->RequestedProviderId =\n"
-        "        UVistaCharacterProviderComponent::GetMannyProviderId();"
+        "        UVistaCharacterProviderComponent::GetMakeHumanCc0R8ProviderId();"
     ) in source
     assert "bAllowCommandLineProviderOverride = false;" in source
+    assert "GetMetaHumanVivianProviderId" not in source
+    assert "GetCitySampleCrowdVisualDemoProviderId" not in source
 
 
 def test_only_player_defaults_to_vivian_and_accepts_process_override() -> None:

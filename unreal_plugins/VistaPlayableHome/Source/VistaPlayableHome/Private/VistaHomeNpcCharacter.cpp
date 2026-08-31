@@ -50,7 +50,12 @@ AVistaHomeNpcCharacter::AVistaHomeNpcCharacter()
         CreateDefaultSubobject<UVistaCharacterProviderComponent>(
             TEXT("VistaCharacterProviderComponent"));
     CharacterProviderComponent->RequestedProviderId =
-        UVistaCharacterProviderComponent::GetMannyProviderId();
+        UVistaCharacterProviderComponent::GetMakeHumanCc0R8ProviderId();
+    // NPCs use the project-owned CC0 action skeleton when its exact runtime
+    // assets are present.  The provider already fails closed to Manny when the
+    // R6/R8 closure is absent.  Keep process overrides disabled so a player
+    // visual-demo flag can never instantiate MetaHuman or City Sample actors
+    // for event-controlled residents.
     CharacterProviderComponent->bAllowCommandLineProviderOverride = false;
 
     CarryAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("VistaCarryAnchor"));

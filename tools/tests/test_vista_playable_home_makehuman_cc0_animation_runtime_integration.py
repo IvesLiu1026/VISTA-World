@@ -89,6 +89,17 @@ def test_pickup_place_gate_requires_same_active_cc0_provider_instance() -> None:
     assert "Animation->HasApprovedMutationAnimation" in npc
 
 
+def test_event_npc_requests_cc0_action_provider_but_rejects_process_override() -> None:
+    npc = _text(RUNTIME / "Private" / "VistaHomeNpcCharacter.cpp")
+
+    assert (
+        "CharacterProviderComponent->RequestedProviderId =\n"
+        "        UVistaCharacterProviderComponent::GetMakeHumanCc0R8ProviderId();"
+    ) in npc
+    assert "CharacterProviderComponent->bAllowCommandLineProviderOverride = false;" in npc
+    assert "fails closed to Manny" in npc
+
+
 def test_cc0_runtime_path_does_not_reuse_private_epic_animation_paths() -> None:
     animation = _text(RUNTIME / "Private" / "VistaAnimationComponent.cpp")
     cc0_section = animation.split("MakeHumanCc0MontageRoot", 1)[1].split(
