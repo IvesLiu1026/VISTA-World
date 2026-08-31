@@ -193,7 +193,7 @@ def test_cancel_and_post_contact_failure_restore_then_release() -> None:
     assert "bTargetReservationReleased = true" in release
 
 
-def test_provider_gate_is_explicitly_candidate_only() -> None:
+def test_r15_provider_gate_is_target_aware_and_fail_closed() -> None:
     animation = _text(RUNTIME / "Private" / "VistaAnimationComponent.cpp")
     gate = _body(
         animation,
@@ -201,13 +201,22 @@ def test_provider_gate_is_explicitly_candidate_only() -> None:
         "bool UVistaAnimationComponent::ResolveMontage",
     )
     assert "IsApplianceCandidateAction(Type)" in gate
-    assert "ANIMATION_PROVIDER_CANDIDATE_ONLY" in gate
+    assert "IsMakeHumanCc0R8Active(GetOwner())" in gate
+    assert "Cast<AVistaStatefulApplianceActor>(Target)" in gate
+    assert "ANIMATION_APPLIANCE_TARGET_REQUIRED" in gate
+    assert "ANIMATION_CONTROL_STYLE_MISMATCH" in gate
+    assert "ANIMATION_CC0_SOURCE_APPROVED" in gate
     candidate_block = _body(
         gate,
         "if (IsApplianceCandidateAction(Type))",
         "if (Type == EVistaNpcActionType::PickUp",
     )
-    assert "return false" in candidate_block
+    assert candidate_block.index("ANIMATION_CC0_PROVIDER_REQUIRED") < candidate_block.index(
+        "ANIMATION_CC0_SOURCE_APPROVED"
+    )
+    assert candidate_block.index("ANIMATION_APPLIANCE_TARGET_REQUIRED") < candidate_block.index(
+        "ANIMATION_CC0_SOURCE_APPROVED"
+    )
     for action in ("Toggle", "Press", "TurnOn", "TurnOff"):
         assert f"EVistaNpcActionType::{action}" in animation
 
