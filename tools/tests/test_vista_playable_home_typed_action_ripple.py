@@ -38,8 +38,10 @@ def test_tcp_queue_accepts_closed_drop_inspect_and_place_anchor_shapes() -> None
     parser = source.split("TOptional<EVistaNpcActionType> ParseNpcAction", 1)[1].split(
         "FString DispatchTyped", 1
     )[0]
-    queue = source.split('Operation == TEXT("npc_queue")', 1)[1].split(
-        'Operation == TEXT("event")', 1
+    # Commit and EventSpec-v3 preflight deliberately share this one parser;
+    # the dispatcher must not grow a second, weaker action-shape implementation.
+    queue = source.split("bool ReadNpcQueueAction", 1)[1].split(
+        "bool ReadNpcQueueRequest", 1
     )[0]
 
     assert 'Value == TEXT("drop")' in parser
@@ -48,7 +50,7 @@ def test_tcp_queue_accepts_closed_drop_inspect_and_place_anchor_shapes() -> None
     assert "EVistaNpcActionType::Inspect" in parser
     assert 'TEXT("placement_anchor_id")' in queue
     assert "Action.PlacementAnchorId" in queue
-    assert "IsPlacementAnchorId(Action.PlacementAnchorId)" in queue
+    assert "IsPlacementAnchorId(OutAction.PlacementAnchorId)" in queue
     assert "NPC_PLACEMENT_ANCHOR_REQUIRED" in queue
     assert "NPC_PLACEMENT_ANCHOR_UNEXPECTED" in queue
     assert "NPC_DROP_TARGET_UNEXPECTED" in queue
