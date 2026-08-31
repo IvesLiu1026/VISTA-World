@@ -1047,7 +1047,7 @@ def run() -> None:
             )
         gates["exact_five_animation_sequences_imported"] = True
 
-        author_raw = unreal.VistaPlayableHomeCc0AnimationLibrary.author_make_human_cc0_r8_runtime_assets()
+        author_raw = unreal.VistaPlayableHomeCc0AnimationLibrary.author_make_human_cc_0_r_8_runtime_assets()
         author = json.loads(str(author_raw))
         require(
             author.get("status") == "authored_pending_typed_notifies"
@@ -1087,7 +1087,7 @@ def run() -> None:
                 ),
                 "failed to save typed montage",
             )
-        inspect_raw = unreal.VistaPlayableHomeCc0AnimationLibrary.inspect_make_human_cc0_r8_runtime_assets()
+        inspect_raw = unreal.VistaPlayableHomeCc0AnimationLibrary.inspect_make_human_cc_0_r_8_runtime_assets()
         runtime_authoring_result = json.loads(str(inspect_raw))
         require(
             runtime_authoring_result.get("status") == "success"
@@ -1141,7 +1141,7 @@ def run() -> None:
         gates["root_lock_ref_pose_cold_reloaded"] = True
         cold_runtime = json.loads(
             str(
-                unreal.VistaPlayableHomeCc0AnimationLibrary.inspect_make_human_cc0_r8_runtime_assets()
+                unreal.VistaPlayableHomeCc0AnimationLibrary.inspect_make_human_cc_0_r_8_runtime_assets()
             )
         )
         require(
