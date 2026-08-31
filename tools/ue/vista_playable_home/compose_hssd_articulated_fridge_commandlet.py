@@ -823,19 +823,15 @@ def run():
         )
 
         stage = {"phase": "duplicate_base_map", "detail": None}
-        require(
-            unreal.EditorAssetLibrary.duplicate_asset(
-                base_map["object_path"], derivative["object_path"]
-            ),
-            "failed to duplicate base map into fresh derivative",
-        )
-        map_duplicated = True
         level_subsystem = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
         actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
         require(
-            level_subsystem.load_level(derivative["object_path"]),
-            "failed to load fresh derivative map",
+            level_subsystem.new_level_from_template(
+                derivative["object_path"], base_map["object_path"]
+            ),
+            "failed to create fresh derivative from the base-map template",
         )
+        map_duplicated = True
         world = unreal.EditorLevelLibrary.get_editor_world()
         require(world is not None, "fresh derivative world is unavailable")
         actors = actor_subsystem.get_all_level_actors()
@@ -910,11 +906,33 @@ def run():
         )
         map_saved = True
         stage = {"phase": "cold_reload_derivative_map", "detail": None}
+
+        # Map_Load destroys and garbage-collects the current editor world before
+        # reopening the package.  Python wrappers in this frame otherwise keep
+        # its actors/components alive, while a duplicate_asset-created UWorld
+        # can retain RF_Standalone without ever becoming the current world.
+        # new_level_from_template above avoids that orphan world; release every
+        # remaining map-bound wrapper here before asking Map_Load to cold reload.
+        actors = None
+        shell = None
+        proxy = None
+        remaining = None
+        actor = None
+        world = None
+        mesh_by_role = None
+        actor_class = None
+        unreal.collect_garbage()
+
         require(
             level_subsystem.load_level(derivative["object_path"]),
             "fresh derivative map cold reload failed",
         )
         map_reloaded = True
+        reloaded_world = unreal.EditorLevelLibrary.get_editor_world()
+        require(
+            reloaded_world is not None, "cold-reloaded derivative world is unavailable"
+        )
+        actor_subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
         reloaded = actor_subsystem.get_all_level_actors()
         reloaded_actor = find_unique_actor(
             reloaded, "VistaRole=articulated_fridge", "articulated fridge"
