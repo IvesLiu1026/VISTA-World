@@ -231,8 +231,8 @@ def test_commandlet_is_syntax_valid_and_has_no_caller_selected_asset_surface() -
         "path == EXECUTION_PATH",
         "os.path.realpath(loaded_project) == PROJECT_FILE",
         "VistaPlayableHomeCc0AnimationLibrary",
-        "author_make_human_cc_0_r_8_runtime_assets",
-        "inspect_make_human_cc_0_r_8_runtime_assets",
+        "author_make_human_cc0r8_runtime_assets",
+        "inspect_make_human_cc0r8_runtime_assets",
     ):
         assert token in source
     assert "argparse" not in source
