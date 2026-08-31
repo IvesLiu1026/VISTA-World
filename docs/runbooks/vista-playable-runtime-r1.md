@@ -68,6 +68,48 @@ PYTHONPATH=. uv run --offline --no-sync python \
 The required engine is UE 5.7.3 for Linux x86_64. A different engine version
 does not satisfy the contract.
 
+## Moonlight mouse capture on headless X11
+
+The Sunshine input relay is fail-closed. Before forwarding any keyboard,
+button, absolute pointer, or relative mouse event, it requires exactly one
+direct child of the X11 root window that is all of the following:
+
+- visible, normal, non-override-redirect, and display-sized;
+- exact `WM_CLASS` resource class `UnrealEditor` by default; and
+- matched by the default title regex `^VistaPlayableHome\b`.
+
+An unnamed UE utility window, dialog, small window, unknown application, no
+match, or multiple matches receives no input. If a utility window owns X input
+focus, the relay raises and focuses the verified fullscreen window before it
+forwards the event. The identity is periodically revalidated. Runtime-specific
+titles can be configured explicitly without weakening the other checks:
+
+```bash
+vista-sunshine-x11-input-relay \
+  --display :118 \
+  --focus-window-class UnrealEditor \
+  --focus-window-title-regex '^VistaPlayableHome\b'
+```
+
+Starting or restarting the installed relay remains a T15-authorized runtime
+operation; this example is configuration documentation, not authorization to
+change the live service.
+
+For 360-degree camera look, Moonlight must send relative mouse motion. In the
+macOS client, use `Control+Option+Shift+M` (`Ctrl+Alt+Shift+M` in Moonlight's
+cross-platform notation) to toggle out of direct/absolute mouse mode, then
+click once inside the game viewport. `Control+Option+Shift+Z` toggles Moonlight
+keyboard/mouse capture. Absolute mode remains available for desktop-style
+pointing but cannot provide unbounded camera rotation.
+
+The focused regression suite is read-only and does not open input devices or
+change X11 focus:
+
+```bash
+PYTHONPATH=. uv run --offline --no-sync \
+  python -m unittest tools.tests.test_sunshine_x11_input_relay -v
+```
+
 ## Authorization checkpoints
 
 | Gate | Operation | Explicit approval required because |
