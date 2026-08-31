@@ -621,7 +621,8 @@ class PlayableHomeSourceContractTests(unittest.TestCase):
         self.assertIn('event_plan["public_goals"]', compose_source)
         self.assertIn('goal["description"]', compose_source)
         for key in ("MoveForward", "MoveRight", "MouseX", "MouseY", "SpaceBar",
-                    "LeftShift", "Crouch", "Interact", "Drop"):
+                    "LeftShift", "Crouch", "Interact", "Drop", "Inspect", "ExitInspect",
+                    "Escape"):
             self.assertIn(key, compose_source)
         self.assertIn("partial_saved_quarantined", compose_source)
         self.assertIn("unreal.PointLight", compose_source)

@@ -3270,6 +3270,8 @@ def default_input_ini() -> bytes:
         '+ActionMappings=(ActionName="Crouch",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=C)',
         '+ActionMappings=(ActionName="Interact",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=E)',
         '+ActionMappings=(ActionName="Drop",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=Q)',
+        '+ActionMappings=(ActionName="Inspect",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=I)',
+        '+ActionMappings=(ActionName="ExitInspect",bShift=False,bCtrl=False,bAlt=False,bCmd=False,Key=Escape)',
         "",
     ]
     return "\n".join(lines).encode("utf-8")

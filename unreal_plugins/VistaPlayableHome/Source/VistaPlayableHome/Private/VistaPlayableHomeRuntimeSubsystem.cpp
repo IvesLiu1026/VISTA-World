@@ -342,23 +342,48 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteInteraction(
     Output.TargetSemanticId = Command.TargetSemanticId;
     const bool bPhysical =
         UVistaActionExecutorComponent::IsPhysicalAffordance(Command.Affordance);
+    const bool bAnimatedSemantic =
+        UVistaActionExecutorComponent::IsAnimatedSemanticAffordance(
+            Command.Affordance);
+    const bool bTransactional = bPhysical || bAnimatedSemantic;
     FVistaPhysicalActionRequest PhysicalRequest;
-    if (bPhysical)
+    FVistaSemanticActionRequest SemanticRequest;
+    if (bTransactional)
     {
-        PhysicalRequest.CommandId = Command.Envelope.CommandId;
-        PhysicalRequest.RequesterSemanticId = Command.RequesterSemanticId;
-        PhysicalRequest.TargetSemanticId = Command.TargetSemanticId;
-        PhysicalRequest.PlacementAnchorSemanticId =
-            Command.PlacementAnchorSemanticId;
-        PhysicalRequest.Affordance = Command.Affordance;
-        PhysicalRequest.ExpectedRevision = Command.Envelope.ExpectedRevision;
-        PhysicalRequest.SessionGeneration = Command.Envelope.SessionGeneration;
-        PhysicalRequest.bCommitSessionGenerationOnSuccess = true;
+        FString CanonicalRequest;
+        if (bPhysical)
+        {
+            PhysicalRequest.CommandId = Command.Envelope.CommandId;
+            PhysicalRequest.RequesterSemanticId = Command.RequesterSemanticId;
+            PhysicalRequest.TargetSemanticId = Command.TargetSemanticId;
+            PhysicalRequest.PlacementAnchorSemanticId =
+                Command.PlacementAnchorSemanticId;
+            PhysicalRequest.Affordance = Command.Affordance;
+            PhysicalRequest.ExpectedRevision = Command.Envelope.ExpectedRevision;
+            PhysicalRequest.SessionGeneration = Command.Envelope.SessionGeneration;
+            PhysicalRequest.bCommitSessionGenerationOnSuccess = true;
+            CanonicalRequest =
+                UVistaActionExecutorComponent::CanonicalRequestHex(
+                    PhysicalRequest);
+        }
+        else
+        {
+            SemanticRequest.CommandId = Command.Envelope.CommandId;
+            SemanticRequest.RequesterSemanticId = Command.RequesterSemanticId;
+            SemanticRequest.TargetSemanticId = Command.TargetSemanticId;
+            SemanticRequest.Affordance = Command.Affordance;
+            SemanticRequest.ExpectedRevision = Command.Envelope.ExpectedRevision;
+            SemanticRequest.SessionGeneration = Command.Envelope.SessionGeneration;
+            SemanticRequest.bCommitSessionGenerationOnSuccess = true;
+            CanonicalRequest =
+                UVistaActionExecutorComponent::CanonicalSemanticRequestHex(
+                    SemanticRequest);
+        }
         FVistaActionTransactionRecord Replay;
         const EVistaPhysicalCommandClaimOutcome ReplayOutcome =
             TryReplayPhysicalCommand(
-                PhysicalRequest.CommandId,
-                UVistaActionExecutorComponent::CanonicalRequestHex(PhysicalRequest),
+                Command.Envelope.CommandId,
+                CanonicalRequest,
                 Replay);
         if (ReplayOutcome == EVistaPhysicalCommandClaimOutcome::Replay)
         {
@@ -384,7 +409,7 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteInteraction(
         Output.Code = TEXT("REQUESTER_NOT_FOUND");
         return Output;
     }
-    UVistaActionExecutorComponent* Executor = bPhysical
+    UVistaActionExecutorComponent* Executor = bTransactional
         ? ResolveActionExecutor(Requester) : nullptr;
     AActor* Target = ResolveSemanticActor(Command.TargetSemanticId);
     if (!IsValid(Target) ||
@@ -430,6 +455,27 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteInteraction(
         PhysicalRequest.TimeoutSeconds = 10.0f;
         FVistaActionTransactionRecord Transaction;
         Executor->BeginPhysicalInteraction(PhysicalRequest, Transaction);
+        ApplyTransactionResult(Transaction, Output);
+        return Output;
+    }
+
+    if (bAnimatedSemantic)
+    {
+        if (!IsValid(Executor))
+        {
+            Output.Code = TEXT("ACTION_EXECUTOR_NOT_FOUND");
+            return Output;
+        }
+        if (!Command.PlacementAnchorSemanticId.IsEmpty())
+        {
+            Output.Code = TEXT("PLACEMENT_ANCHOR_UNEXPECTED");
+            return Output;
+        }
+        SemanticRequest.Requester = Requester;
+        SemanticRequest.Target = Target;
+        SemanticRequest.TimeoutSeconds = 10.0f;
+        FVistaActionTransactionRecord Transaction;
+        Executor->BeginSemanticInteraction(SemanticRequest, Transaction);
         ApplyTransactionResult(Transaction, Output);
         return Output;
     }

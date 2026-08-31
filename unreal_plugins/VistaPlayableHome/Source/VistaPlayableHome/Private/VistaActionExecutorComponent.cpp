@@ -942,7 +942,7 @@ bool UVistaActionExecutorComponent::BeginPhysicalInteractionImpl(
         SetRejectedRecord(InputRequest, TEXT("COMMAND_LEDGER_CAPACITY"), OutRecord);
         return false;
     }
-    if (ActiveAction.IsSet())
+    if (HasActiveAction())
     {
         return RejectNewRequest(
             InputRequest, InputRequest, TEXT("ACTION_EXECUTOR_BUSY"), OutRecord);
@@ -1309,6 +1309,11 @@ void UVistaActionExecutorComponent::TickComponent(
     FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+    if (ActiveSemanticAction.IsSet())
+    {
+        TickSemanticAction();
+        return;
+    }
     if (!ActiveAction.IsSet())
     {
         return;
@@ -1796,6 +1801,19 @@ void UVistaActionExecutorComponent::FinishFailure(
 
 bool UVistaActionExecutorComponent::CancelActiveAction(FName Reason)
 {
+    if (ActiveSemanticAction.IsSet())
+    {
+        const FName Code = Reason.IsNone()
+            ? FName(TEXT("ACTION_CANCELED"))
+            : Reason;
+        if (UVistaAnimationComponent* Animation =
+                ActiveSemanticAction->Animation.Get())
+        {
+            Animation->StopActiveAction(Code);
+        }
+        FinishSemanticFailure(EVistaActionTransactionStatus::Canceled, Code);
+        return true;
+    }
     if (!ActiveAction.IsSet())
     {
         return false;

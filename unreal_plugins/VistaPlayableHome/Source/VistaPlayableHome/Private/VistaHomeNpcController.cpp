@@ -93,7 +93,9 @@ bool AVistaHomeNpcController::ValidateAction(
         return false;
     }
     if (Action.Type == EVistaNpcActionType::PickUp ||
-        Action.Type == EVistaNpcActionType::Place)
+        Action.Type == EVistaNpcActionType::Place ||
+        Action.Type == EVistaNpcActionType::OpenDoor ||
+        Action.Type == EVistaNpcActionType::CloseDoor)
     {
         const UVistaAnimationComponent* Animation = IsValid(GetPawn())
             ? GetPawn()->FindComponentByClass<UVistaAnimationComponent>()
@@ -540,6 +542,33 @@ bool AVistaHomeNpcController::StartPhysicalAction(
         return false;
     }
 
+    if (Action.Type == EVistaNpcActionType::OpenDoor ||
+        Action.Type == EVistaNpcActionType::CloseDoor)
+    {
+        if (!IsValid(Target))
+        {
+            CompleteCurrent(
+                EVistaNpcActionStatus::Failed,
+                TEXT("TARGET_NOT_FOUND"));
+            return false;
+        }
+        FVistaSemanticActionRequest Request;
+        Request.CommandId = Action.ActionId;
+        Request.Requester = GetPawn();
+        Request.Target = Target;
+        Request.Affordance = Action.Type == EVistaNpcActionType::OpenDoor
+            ? EVistaAffordance::Open
+            : EVistaAffordance::Close;
+        Request.TimeoutSeconds = Action.TimeoutSeconds;
+        FVistaActionTransactionRecord Record;
+        if (!ActionExecutorComponent->BeginSemanticInteraction(Request, Record))
+        {
+            CompleteCurrent(EVistaNpcActionStatus::Failed, Record.Code);
+            return false;
+        }
+        return true;
+    }
+
     AActor* PhysicalTarget = Target;
     AActor* PlacementOwner = nullptr;
     EVistaAffordance Affordance = EVistaAffordance::PickUp;
@@ -578,7 +607,9 @@ bool AVistaHomeNpcController::PollPhysicalAction()
 {
     if (!CurrentAction.IsSet() ||
         (CurrentAction->Type != EVistaNpcActionType::PickUp &&
-         CurrentAction->Type != EVistaNpcActionType::Place))
+         CurrentAction->Type != EVistaNpcActionType::Place &&
+         CurrentAction->Type != EVistaNpcActionType::OpenDoor &&
+         CurrentAction->Type != EVistaNpcActionType::CloseDoor))
     {
         return false;
     }

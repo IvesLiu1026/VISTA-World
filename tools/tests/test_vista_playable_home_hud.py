@@ -30,9 +30,11 @@ class VistaPlayableHomeHudSourceTests(unittest.TestCase):
         )
         self.assertNotIn("ChooseDefaultAffordance", self.character_header)
         self.assertIn(
-            "TryInteract(GetDefaultInteractionAffordance(Target))",
+            "const EVistaAffordance Affordance = GetDefaultInteractionAffordance(Target)",
             self.character_cpp,
         )
+        self.assertIn("TryInteract(Affordance)", self.character_cpp)
+        self.assertIn("BeginSemanticInteraction(Target, Affordance)", self.character_cpp)
         self.assertIn(
             "Character.GetDefaultInteractionAffordance(Target)",
             self.hud,
@@ -51,7 +53,7 @@ class VistaPlayableHomeHudSourceTests(unittest.TestCase):
         ):
             self.assertIn(f'TEXT("{label}")', self.hud)
 
-    def test_player_facing_copy_never_draws_raw_semantic_or_event_ids(self) -> None:
+    def test_normal_hud_hides_ids_but_inspection_labels_semantic_identity(self) -> None:
         for obsolete_surface in (
             "GetFocusedSemanticId",
             "GetActiveEventId",
@@ -73,6 +75,8 @@ class VistaPlayableHomeHudSourceTests(unittest.TestCase):
                 re.DOTALL,
             ),
         )
+        self.assertIn('DrawText(TEXT("SEMANTIC ID")', self.hud)
+        self.assertIn("DrawText(Inspection.SemanticId, Primary,", self.hud)
 
     def test_friendly_names_are_derived_without_event_or_item_cheats(self) -> None:
         self.assertIn("FriendlyNameFromSemanticId", self.hud)
@@ -106,8 +110,37 @@ class VistaPlayableHomeHudSourceTests(unittest.TestCase):
         self.assertIn("FMath::Clamp", self.hud)
         self.assertGreaterEqual(self.hud.count("DrawRect("), 6)
         self.assertIn('TEXT("[E]  %s")', self.hud)
+        self.assertIn('TEXT("      [I]  Inspect")', self.hud)
+        self.assertIn('TEXT("[I / ESC]  Exit inspection")', self.hud)
         self.assertIn('TEXT("CARRYING")', self.hud)
         self.assertIn('TEXT("[Q] DROP")', self.hud)
+
+    def test_typed_action_feedback_is_visible_instead_of_log_only(self) -> None:
+        self.assertIn("Character->IsActionFeedbackVisible()", self.hud)
+        self.assertIn("ResultStatusLabel(Feedback)", self.hud)
+        self.assertIn("Feedback.Code.ToString()", self.hud)
+        for label in (
+            "UNSUPPORTED",
+            "INVALID STATE",
+            "BUSY",
+            "BLOCKED",
+            "NOT FOUND",
+            "TIMED OUT",
+            "REJECTED",
+        ):
+            self.assertIn(f'TEXT("{label}")', self.hud)
+
+    def test_inspection_card_is_bounded_and_reads_only_character_projection(self) -> None:
+        self.assertIn("Character->GetInspectionPresentation()", self.hud)
+        self.assertIn("Inspection.Affordances", self.hud)
+        self.assertIn("Inspection.PublicState", self.hud)
+        self.assertIn("Inspection.PublicState.Num(), 8", self.hud)
+        self.assertIn("const FVistaInspectionStateRow& StateRow", self.hud)
+        self.assertIn("Character->IsInspectionActive()", self.hud)
+        card = self.hud.split(
+            "const FVistaInspectionPresentation& Inspection", 1
+        )[1].split("if (Character->IsActionFeedbackVisible())", 1)[0]
+        self.assertNotIn("VistaGetRuntimeState", card)
 
 
 if __name__ == "__main__":

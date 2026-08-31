@@ -412,7 +412,7 @@ def test_command_id_replay_is_idempotent_and_collision_is_rejected() -> None:
         "void UVistaActionExecutorComponent::TickComponent",
     )
     assert begin.index("Runtime->ClaimPhysicalCommand(") < begin.index(
-        "if (ActiveAction.IsSet())"
+        "if (HasActiveAction())"
     )
     assert "Active.CanonicalRequest = CanonicalRequest;" in begin
     assert "Pickup->TryReserveTransaction(this, Request.CommandId)" in begin
