@@ -595,6 +595,7 @@ bool AVistaPlayableHomeCharacter::ApplyIndoorCameraProfile(
 void AVistaPlayableHomeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     ExitInspection();
+    PendingInspectionTarget.Reset();
     RestoreNearCameraVisualOcclusion();
     RestoreIndoorViewLimits();
     SetSprinting(false);
@@ -616,6 +617,7 @@ void AVistaPlayableHomeCharacter::UnPossessed()
     // also covers ordinary controller switches where the pawn stays alive and
     // EndPlay is never called.
     ExitInspection();
+    PendingInspectionTarget.Reset();
     RestoreIndoorViewLimits();
     RestoreNearCameraVisualOcclusion();
     Super::UnPossessed();
@@ -866,7 +868,16 @@ void AVistaPlayableHomeCharacter::InspectPressed()
     }
     if (HasAuthority())
     {
-        PublishInteractionResult(PerformInspectInteraction());
+        const FVistaInteractionResult Result = BeginAnimatedInspectInteraction();
+        if (Result.Code == FName(TEXT("ACTION_ACCEPTED")) &&
+            !PendingPresentationCommandId.IsNone())
+        {
+            UpdatePendingActionFeedback();
+        }
+        else
+        {
+            PublishInteractionResult(Result);
+        }
     }
     else
     {
@@ -912,14 +923,16 @@ void AVistaPlayableHomeCharacter::ServerDropHeldItem_Implementation()
 
 void AVistaPlayableHomeCharacter::ServerPerformInspectInteraction_Implementation()
 {
-    FVistaInspectionPresentation Presentation;
-    AActor* Target = nullptr;
     const FVistaInteractionResult Result =
-        EvaluateInspectInteraction(Presentation, Target);
-    PublishInteractionResult(Result);
-    if (Result.IsSuccess())
+        BeginAnimatedInspectInteraction();
+    if (Result.Code == FName(TEXT("ACTION_ACCEPTED")) &&
+        !PendingPresentationCommandId.IsNone())
     {
-        ClientBeginInspectionPresentation(Target, Presentation);
+        UpdatePendingActionFeedback();
+    }
+    else
+    {
+        PublishInteractionResult(Result);
     }
 }
 
@@ -1205,10 +1218,79 @@ void AVistaPlayableHomeCharacter::UpdatePendingActionFeedback()
     }
     if (Record.IsTerminal())
     {
+        AActor* CompletedInspectionTarget =
+            Record.Status == EVistaActionTransactionStatus::Succeeded &&
+                Record.Affordance == EVistaAffordance::Inspect
+            ? PendingInspectionTarget.Get()
+            : nullptr;
         PendingPresentationCommandId = NAME_None;
         LastPresentedActionPhase = EVistaActionPhase::Idle;
         LastPresentedTransactionStatus = EVistaActionTransactionStatus::Idle;
         LastPresentedTransactionCode = NAME_None;
+        PendingInspectionTarget.Reset();
+        if (IsValid(CompletedInspectionTarget))
+        {
+            PresentCompletedInspection(CompletedInspectionTarget);
+        }
+    }
+}
+
+FVistaInteractionResult
+AVistaPlayableHomeCharacter::BeginAnimatedInspectInteraction()
+{
+    if (!HasAuthority() || !IsValid(InteractionComponent))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("INSPECT_AUTHORITY_REQUIRED"));
+    }
+    AActor* Target = InteractionComponent->GetFocusedActor();
+    if (!IsValid(Target) ||
+        !Target->GetClass()->ImplementsInterface(
+            UVistaInteractable::StaticClass()))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::NotFound,
+            TEXT("NO_INTERACTABLE_TARGET"));
+    }
+    const TArray<EVistaAffordance> Affordances =
+        IVistaInteractable::Execute_VistaGetAffordances(Target);
+    if (!Affordances.Contains(EVistaAffordance::Inspect))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Unsupported,
+            TEXT("INSPECT_UNSUPPORTED"),
+            IVistaInteractable::Execute_VistaGetSemanticId(Target));
+    }
+
+    const FVistaInteractionResult Result =
+        BeginSemanticInteraction(Target, EVistaAffordance::Inspect);
+    if (Result.IsSuccess() && !PendingPresentationCommandId.IsNone())
+    {
+        PendingInspectionTarget = Target;
+    }
+    return Result;
+}
+
+void AVistaPlayableHomeCharacter::PresentCompletedInspection(AActor* Target)
+{
+    if (!HasAuthority() || !IsValid(Target) ||
+        !Target->GetClass()->ImplementsInterface(
+            UVistaInteractable::StaticClass()))
+    {
+        return;
+    }
+    const FVistaInspectionPresentation Presentation =
+        BuildInspectionPresentation(
+            Target,
+            IVistaInteractable::Execute_VistaGetRuntimeState(Target));
+    if (IsLocallyControlled())
+    {
+        BeginInspectionPresentation(Target, Presentation);
+    }
+    else
+    {
+        ClientBeginInspectionPresentation(Target, Presentation);
     }
 }
 

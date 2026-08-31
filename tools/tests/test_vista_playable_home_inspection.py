@@ -33,6 +33,36 @@ def test_inspect_is_a_separate_i_key_action_with_two_explicit_exit_paths() -> No
     assert "ExitInspection();" in source
 
 
+def test_player_inspect_waits_for_the_typed_animation_before_presentation() -> None:
+    header = _source(CHARACTER_H)
+    source = _source(CHARACTER_CPP)
+
+    pressed = source.split(
+        "void AVistaPlayableHomeCharacter::InspectPressed()", 1
+    )[1].split(
+        "void AVistaPlayableHomeCharacter::ExitInspectPressed()", 1
+    )[0]
+    begin = source.split(
+        "AVistaPlayableHomeCharacter::BeginAnimatedInspectInteraction()", 1
+    )[1].split(
+        "void AVistaPlayableHomeCharacter::PresentCompletedInspection", 1
+    )[0]
+    feedback = source.split(
+        "void AVistaPlayableHomeCharacter::UpdatePendingActionFeedback()", 1
+    )[1].split(
+        "AVistaPlayableHomeCharacter::BeginAnimatedInspectInteraction()", 1
+    )[0]
+
+    assert "BeginAnimatedInspectInteraction()" in pressed
+    assert "PublishInteractionResult(PerformInspectInteraction())" not in pressed
+    assert "BeginSemanticInteraction(Target, EVistaAffordance::Inspect)" in begin
+    assert "PendingInspectionTarget = Target" in begin
+    assert "Record.Status == EVistaActionTransactionStatus::Succeeded" in feedback
+    assert "Record.Affordance == EVistaAffordance::Inspect" in feedback
+    assert "PresentCompletedInspection(CompletedInspectionTarget)" in feedback
+    assert "TWeakObjectPtr<AActor> PendingInspectionTarget;" in header
+
+
 def test_multi_affordance_objects_keep_e_primary_and_offer_i_inspect() -> None:
     character = _source(CHARACTER_CPP)
     hud = _source(HUD_CPP)
