@@ -150,7 +150,11 @@ bool AVistaHomeNpcController::ValidateAction(
         Action.Type == EVistaNpcActionType::Drop ||
         Action.Type == EVistaNpcActionType::OpenDoor ||
         Action.Type == EVistaNpcActionType::CloseDoor ||
-        Action.Type == EVistaNpcActionType::Inspect)
+        Action.Type == EVistaNpcActionType::Inspect ||
+        Action.Type == EVistaNpcActionType::Toggle ||
+        Action.Type == EVistaNpcActionType::Press ||
+        Action.Type == EVistaNpcActionType::TurnOn ||
+        Action.Type == EVistaNpcActionType::TurnOff)
     {
         const UVistaAnimationComponent* Animation = IsValid(GetPawn())
             ? GetPawn()->FindComponentByClass<UVistaAnimationComponent>()
@@ -379,7 +383,11 @@ void AVistaHomeNpcController::StartCurrentAction()
         Action.Type == EVistaNpcActionType::Drop ||
         Action.Type == EVistaNpcActionType::OpenDoor ||
         Action.Type == EVistaNpcActionType::CloseDoor ||
-        Action.Type == EVistaNpcActionType::Inspect)
+        Action.Type == EVistaNpcActionType::Inspect ||
+        Action.Type == EVistaNpcActionType::Toggle ||
+        Action.Type == EVistaNpcActionType::Press ||
+        Action.Type == EVistaNpcActionType::TurnOn ||
+        Action.Type == EVistaNpcActionType::TurnOff)
     {
         StartPhysicalAction(Action, Target);
         return;
@@ -574,7 +582,11 @@ bool AVistaHomeNpcController::StartPhysicalAction(
 
     if (Action.Type == EVistaNpcActionType::OpenDoor ||
         Action.Type == EVistaNpcActionType::CloseDoor ||
-        Action.Type == EVistaNpcActionType::Inspect)
+        Action.Type == EVistaNpcActionType::Inspect ||
+        Action.Type == EVistaNpcActionType::Toggle ||
+        Action.Type == EVistaNpcActionType::Press ||
+        Action.Type == EVistaNpcActionType::TurnOn ||
+        Action.Type == EVistaNpcActionType::TurnOff)
     {
         if (!IsValid(Target))
         {
@@ -597,6 +609,18 @@ bool AVistaHomeNpcController::StartPhysicalAction(
             break;
         case EVistaNpcActionType::Inspect:
             Request.Affordance = EVistaAffordance::Inspect;
+            break;
+        case EVistaNpcActionType::Toggle:
+            Request.Affordance = EVistaAffordance::Toggle;
+            break;
+        case EVistaNpcActionType::Press:
+            Request.Affordance = EVistaAffordance::Press;
+            break;
+        case EVistaNpcActionType::TurnOn:
+            Request.Affordance = EVistaAffordance::TurnOn;
+            break;
+        case EVistaNpcActionType::TurnOff:
+            Request.Affordance = EVistaAffordance::TurnOff;
             break;
         default:
             CompleteCurrent(
@@ -704,7 +728,11 @@ bool AVistaHomeNpcController::PollPhysicalAction()
          CurrentAction->Type != EVistaNpcActionType::Drop &&
          CurrentAction->Type != EVistaNpcActionType::OpenDoor &&
          CurrentAction->Type != EVistaNpcActionType::CloseDoor &&
-         CurrentAction->Type != EVistaNpcActionType::Inspect))
+         CurrentAction->Type != EVistaNpcActionType::Inspect &&
+         CurrentAction->Type != EVistaNpcActionType::Toggle &&
+         CurrentAction->Type != EVistaNpcActionType::Press &&
+         CurrentAction->Type != EVistaNpcActionType::TurnOn &&
+         CurrentAction->Type != EVistaNpcActionType::TurnOff))
     {
         return false;
     }
