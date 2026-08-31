@@ -1,7 +1,7 @@
 # Design: VISTA Action World R1
 
 Status: Approved for iterative implementation
-Updated: 2026-08-28
+Updated: 2026-09-01
 Depends on: requirements.md
 
 ## Summary
@@ -43,6 +43,40 @@ NLP / VISTA EventSpec / local input
 own action. `UVistaAnimationComponent` remains a clip/signal adapter. A new shared
 executor becomes the sole owner of physical-action phases, target snapshots,
 commit/rollback and receipts. The player and NPC both call it.
+
+### Playable presentation and VISTA event closure
+
+The interaction presentation is a projection of the shared action state, never
+an independent mutation path:
+
+```text
+focused semantic actor
+  -> E: catalog-selected primary action
+  -> I: explicit inspect action
+  -> shared validation/executor or typed non-mutating inspect path
+  -> action phase/result snapshot on the player
+  -> HUD prompt + phase/failure/success feedback
+  -> exactly one successful interaction observation
+  -> active EventSpec outcome evaluation
+```
+
+`AVistaPlayableHomeCharacter` retains the latest bounded presentation result and
+an optional inspected-target reference. `AVistaPlayableHomeHUD` reads that state
+to render an interaction card and action status. The HUD does not infer success
+from input or animation playback. Inspect mode temporarily focuses the camera on
+the semantic target, exposes only safe runtime fields and exits explicitly.
+
+The default `E` selector keeps pickup, open/close, toggle and sit precedence.
+Inspect is therefore bound separately and remains reachable on multi-affordance
+objects. Every rejected path publishes its typed code to the player HUD rather
+than dropping the returned `FVistaInteractionResult`.
+
+An articulated appliance is represented as one semantic authority with separate
+body and movable leaf components. The HSSD mesh may remain a private-research
+visual shell, but a hidden query proxy cannot be the visible state presentation.
+Open/close begins through the same action intent as NPC/TCP control, aligns to a
+handle anchor, commits `open` at the contact notify and drives the leaf toward its
+target hinge angle. Completion then records the interaction once for EventSpec.
 
 ### Visual asset flow
 
@@ -279,6 +313,8 @@ receipt. Visual builds expose source/placement digests and performance metrics.
 - R10 -> 1080p performance capture and quality profiles
 - R11 -> package/action/visual acceptance receipts
 - R12 -> isolated worktree and append-only run rollout
+- R13 -> explicit Inspect input/presentation, visible typed result state,
+  articulated appliance contact commit and exactly-once EventSpec observation
 
 ## Open Questions
 
