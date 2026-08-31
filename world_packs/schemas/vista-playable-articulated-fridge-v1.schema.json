@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simworld.org/schemas/vista-playable-articulated-fridge-v1.schema.json",
+  "title": "VISTA Playable HSSD Articulated Fridge v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "contract_id", "semantic_target_id", "dataset",
+    "source_model", "metadata_evidence", "source_files", "root_transform",
+    "links", "joints", "receptacles", "runtime_binding", "acceptance",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "vista.playable-articulated-fridge/v1"},
+    "contract_id": {"const": "hssd_side_by_side_fridge_r1"},
+    "semantic_target_id": {
+      "const": "home.r1/room.kitchen_dining/entity.fridge.01"
+    },
+    "dataset": {"$ref": "#/$defs/dataset"},
+    "source_model": {"$ref": "#/$defs/sourceModel"},
+    "metadata_evidence": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "items": {"$ref": "#/$defs/metadataEvidence"}
+    },
+    "source_files": {
+      "type": "array", "minItems": 16, "maxItems": 16,
+      "items": {"$ref": "#/$defs/sourceFile"}
+    },
+    "root_transform": {"$ref": "#/$defs/rootTransform"},
+    "links": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {"$ref": "#/$defs/link"}
+    },
+    "joints": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "items": {"$ref": "#/$defs/joint"}
+    },
+    "receptacles": {
+      "type": "array", "minItems": 11, "maxItems": 11,
+      "items": {"$ref": "#/$defs/receptacle"}
+    },
+    "runtime_binding": {"$ref": "#/$defs/runtimeBinding"},
+    "acceptance": {"$ref": "#/$defs/acceptance"},
+    "content_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "modelId": {"const": "01841f449f738c1e24fa15753d1fbc5fe0c6a92c"},
+    "vector3": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "prefixItems": [
+        {"type": "number"}, {"type": "number"}, {"type": "number"}
+      ],
+      "items": false
+    },
+    "dataset": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "revision", "license_spdx", "use_class", "payload_policy"],
+      "properties": {
+        "provider": {"const": "HSSD"},
+        "revision": {"const": "4369cb9876214c7fbebcf552eb532380e4d287e4"},
+        "license_spdx": {"const": "CC-BY-NC-4.0"},
+        "use_class": {"const": "private_noncommercial_research_only"},
+        "payload_policy": {"const": "external_payload_never_in_git"}
+      }
+    },
+    "sourceModel": {
+      "type": "object", "additionalProperties": false,
+      "required": ["model_id", "catalog_name", "wordnet", "category", "dimensions_m", "has_articulation"],
+      "properties": {
+        "model_id": {"$ref": "#/$defs/modelId"},
+        "catalog_name": {"const": "Samsung Side By Side Fridge Freezer RSH1DBBP Black"},
+        "wordnet": {"const": "refrigerator.n.01"},
+        "category": {"const": "fridge"},
+        "dimensions_m": {"$ref": "#/$defs/vector3"},
+        "has_articulation": {"const": true}
+      }
+    },
+    "metadataEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_path", "sha256", "size_bytes", "required_row"],
+      "properties": {
+        "relative_path": {"enum": ["metadata/fpmodels-with-decomposed.csv", "metadata/hssd_obj_semantics_condensed.csv"]},
+        "sha256": {"$ref": "#/$defs/digest"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "required_row": {"type": "string", "minLength": 20, "maxLength": 1024}
+      }
+    },
+    "sourceFile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "relative_path", "sha256", "size_bytes"],
+      "properties": {
+        "role": {
+          "enum": ["urdf", "ao_config", "body", "primary_door", "secondary_door", "receptacle"]
+        },
+        "relative_path": {
+          "type": "string",
+          "pattern": "^urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/[A-Za-z0-9_.-]+$",
+          "maxLength": 160
+        },
+        "sha256": {"$ref": "#/$defs/digest"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 10000000}
+      }
+    },
+    "rootTransform": {
+      "type": "object", "additionalProperties": false,
+      "required": ["joint_name", "parent", "child", "rpy_rad", "xyz_m", "ue_units_per_metre"],
+      "properties": {
+        "joint_name": {"const": "root_rotation"},
+        "parent": {"const": "root"},
+        "child": {"const": "fridge0014"},
+        "rpy_rad": {"$ref": "#/$defs/vector3"},
+        "xyz_m": {"$ref": "#/$defs/vector3"},
+        "ue_units_per_metre": {"const": 100}
+      }
+    },
+    "link": {
+      "type": "object", "additionalProperties": false,
+      "required": ["link_name", "role", "mesh_filename"],
+      "properties": {
+        "link_name": {"enum": ["fridge0014", "fridge0014_door01", "fridge0014_door02"]},
+        "role": {"enum": ["body", "primary_door", "secondary_door"]},
+        "mesh_filename": {"enum": ["fridge0014.glb", "fridge0014_door01.glb", "fridge0014_door02.glb"]}
+      }
+    },
+    "joint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["joint_name", "joint_type", "parent", "child", "axis", "origin_xyz_m", "origin_rpy_rad", "lower_rad", "upper_rad", "velocity_rad_s"],
+      "properties": {
+        "joint_name": {"enum": ["fridge0014_door01", "fridge0014_door02"]},
+        "joint_type": {"const": "revolute"},
+        "parent": {"const": "fridge0014"},
+        "child": {"enum": ["fridge0014_door01", "fridge0014_door02"]},
+        "axis": {"$ref": "#/$defs/vector3"},
+        "origin_xyz_m": {"$ref": "#/$defs/vector3"},
+        "origin_rpy_rad": {"$ref": "#/$defs/vector3"},
+        "lower_rad": {"const": 0},
+        "upper_rad": {"const": 2.7925267219543457},
+        "velocity_rad_s": {"const": 3}
+      }
+    },
+    "receptacle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["anchor_id", "mesh_filename", "parent_link"],
+      "properties": {
+        "anchor_id": {"type": "string", "pattern": "^fridge\\.(?:door|shelf|top)\\.[0-9]{2}$"},
+        "mesh_filename": {"type": "string", "pattern": "^fridge0014_[A-Za-z0-9_]+_receptacle_mesh\\.glb$"},
+        "parent_link": {"enum": ["fridge0014", "fridge0014_door01"]}
+      }
+    },
+    "runtimeBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["actor_class", "primary_open_angle_deg", "angular_speed_deg_s", "primary_door_only_r1", "legacy_shell_policy", "legacy_proxy_policy"],
+      "properties": {
+        "actor_class": {"const": "/Script/VistaPlayableHome.VistaArticulatedFridgeActor"},
+        "primary_open_angle_deg": {"type": "number", "exclusiveMinimum": 0, "maximum": 160},
+        "angular_speed_deg_s": {"type": "number", "exclusiveMinimum": 0, "maximum": 171.8875},
+        "primary_door_only_r1": {"const": true},
+        "legacy_shell_policy": {"const": "remove_in_fresh_derivative"},
+        "legacy_proxy_policy": {"const": "remove_in_fresh_derivative"}
+      }
+    },
+    "acceptance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["accepted", "status", "ue_imported", "runtime_verified", "human_reviewed", "gta_quality"],
+      "properties": {
+        "accepted": {"const": false},
+        "status": {"const": "source_verified_pending_ue_import_runtime_and_human_review"},
+        "ue_imported": {"const": false},
+        "runtime_verified": {"const": false},
+        "human_reviewed": {"const": false},
+        "gta_quality": {"const": false}
+      }
+    }
+  }
+}
