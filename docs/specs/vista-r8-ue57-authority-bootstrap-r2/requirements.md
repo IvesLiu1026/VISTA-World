@@ -254,7 +254,7 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   exact held root-owned read-only host-file authority with pinned bytes and
   component metadata. A different path, syscall, outcome, or open-flag set
   SHALL retain ordinary exact multiplicity; no sysfs prefix rule is permitted.
-  Trace v4 SHALL carry exactly one closed `event_count_policies` entry binding
+  Trace v5 SHALL carry exactly one closed `event_count_policies` entry binding
   this rule to `git:fetch`, and both producer and independent consumer SHALL
   reject a missing, additional, reordered, or changed policy projection.
 - WHEN an observed read-only tool invocation reads a kernel virtual sysctl,
@@ -263,24 +263,29 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   value SHALL be stream-read despite `st_size == 0`, SHALL be exactly one of
   `0\n`, `1\n`, or `2\n`, and SHALL be bound by exact byte count and SHA-256.
   The endpoint SHALL remain a root:root `0644`, single-link regular file opened
-  only with `O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK`; its path, mode, owner,
-  device, inode, and all other stable metadata SHALL remain exact before and
-  after replay and during independent authority review.
+  only with `O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK`; its path, kind, mode,
+  owner, link count, finite bytes, and descriptor-to-path identity inside each
+  namespace SHALL remain exact before and after replay and during independent
+  authority review.
 - WHEN either native-builder service validates the finite kernel-virtual
   authority, its procfs namespace SHALL keep the exact non-process endpoint
   visible with `ProcSubset=all`, SHALL retain `ProtectProc=invisible`, and
   SHALL retain `ProtectKernelTunables=yes` so `/proc/sys` remains read-only.
   `ProcSubset=pid` is forbidden because it removes `/proc/sys` from the
   service view.
-- The finite sysctl component chain MAY omit only the volatile link count of
-  its exact `/proc` ancestor under one synthesized, schema-defined policy. It
-  SHALL retain every other `/proc` component field and every field for `/`,
-  `/proc/sys`, `/proc/sys/vm`, and the endpoint. The request cannot select or
-  extend this policy. Any other `/proc` or `/proc/sys` path, alias, traversal,
-  symlink, write-capable open, malformed value, content drift, inode drift,
-  component drift, or orphan profile reference SHALL fail zero-publication and
-  production replay. No prefix, glob, or generic procfs-host-input allowlist is
-  permitted.
+- The finite sysctl component chain SHALL apply the synthesized
+  `proc-chain-mount-metadata-volatile-v2` policy only to the four exact procfs
+  records `/proc`, `/proc/sys`, `/proc/sys/vm`, and the endpoint. Those records
+  omit cross-namespace `device`, `inode`, `mtime_ns`, and `ctime_ns`; `/proc`
+  also omits its process-count-sensitive `nlink`. `/` retains the ordinary full
+  record, while the other three procfs records retain exact `nlink`. Every
+  record retains exact path, kind, mode, uid, and gid, and no symlink is
+  permitted. The request cannot select or extend this policy. Any other
+  `/proc` or `/proc/sys` path, alias, traversal, symlink, write-capable open,
+  malformed value, content drift, stable component drift, within-namespace
+  descriptor/path identity drift, or orphan profile reference SHALL fail
+  zero-publication and production replay. No prefix, glob, or generic
+  procfs-host-input allowlist is permitted.
 - The unprivileged Phase A request planner SHALL be observation-only: it SHALL
   run in fresh private temporary roots, emit only canonical request bytes, and
   assert `observation_only=true` and `production_native_output=false`. Cleanup
@@ -348,7 +353,7 @@ Unknown or partial R1 root bundle/policy paths are never reused or repaired.
   sequence, and acknowledgements.
 - Phase B SHALL reuse, byte for byte, Phase A's installed-builder pin, source
   bundle pin, commit, seven-blob inventory, tools/toolchain ledger, runtime-map
-  sets, and trace-v4 contract; only its fixed service-unit binding and job may
+  sets, and trace-v5 contract; only its fixed service-unit binding and job may
   differ. Derivation SHALL re-read the exact Phase A request and manifest and
   prove manifest-to-request pin lineage. Later Phase B authority review SHALL
   hold both Phase A documents while revalidating those same common fields and

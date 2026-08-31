@@ -39,7 +39,7 @@ from typing import Any, Iterable, Mapping, NoReturn, Sequence
 
 
 REQUEST_SCHEMA = "vista.r8-native-builder-request/v2"
-TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v4"
+TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v5"
 PHASE_A_MANIFEST_SCHEMA = "vista.r8-native-builder-phase-a-manifest/v1"
 PHASE_B_MANIFEST_SCHEMA = "vista.r8-native-builder-phase-b-manifest/v1"
 JOB_MANIFEST_SCHEMA = "vista.r8-native-builder-job-manifest/v1"
@@ -80,8 +80,7 @@ STRACE_VERSION = "strace -- version 5.16"
 FIXED_COMPILER_SOURCE_FD = 900
 
 KERNEL_VIRTUAL_SYSCTL_PATH = Path("/proc/sys/vm/overcommit_memory")
-KERNEL_VIRTUAL_COMPONENT_PATH = Path("/proc")
-KERNEL_VIRTUAL_COMPONENT_POLICY = "proc-root-nlink-volatile-v1"
+KERNEL_VIRTUAL_COMPONENT_POLICY = "proc-chain-mount-metadata-volatile-v2"
 KERNEL_VIRTUAL_SYSCTL_VALUES = (b"0\n", b"1\n", b"2\n")
 KERNEL_VIRTUAL_COMPONENT_PATHS = (
     "/",
@@ -89,6 +88,21 @@ KERNEL_VIRTUAL_COMPONENT_PATHS = (
     "/proc/sys",
     "/proc/sys/vm",
     "/proc/sys/vm/overcommit_memory",
+)
+KERNEL_VIRTUAL_COMPONENT_KINDS = (
+    "directory",
+    "directory",
+    "directory",
+    "directory",
+    "regular",
+)
+KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS = KERNEL_VIRTUAL_COMPONENT_PATHS[1:]
+KERNEL_VIRTUAL_NLINK_VOLATILE_PATHS = ("/proc",)
+KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS = (
+    "device",
+    "inode",
+    "mtime_ns",
+    "ctime_ns",
 )
 CPU_ONLINE_PATH = "/sys/devices/system/cpu/online"
 CPU_ONLINE_READ_EVENT_LINE = (
@@ -489,9 +503,17 @@ def _kernel_virtual_component_chain_is_exact(
 ) -> bool:
     return (
         tuple(item.get("path") for item in chain) == KERNEL_VIRTUAL_COMPONENT_PATHS
-        and tuple(item.get("kind") for item in chain)
-        == ("directory", "directory", "directory", "directory", "regular")
-        and chain[1].get("metadata_policy") == KERNEL_VIRTUAL_COMPONENT_POLICY
+        and tuple(item.get("kind") for item in chain) == KERNEL_VIRTUAL_COMPONENT_KINDS
+        and "metadata_policy" not in chain[0]
+        and all(
+            item.get("metadata_policy") == KERNEL_VIRTUAL_COMPONENT_POLICY
+            and all(
+                field not in item for field in KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS
+            )
+            for item in chain[1:]
+        )
+        and "nlink" not in chain[1]
+        and all(type(item.get("nlink")) is int for item in chain[2:])
         and all(item.get("kind") != "symlink" for item in chain)
     )
 
@@ -1070,17 +1092,30 @@ def _path_component_record(
         "mode": f"{stat.S_IMODE(info.st_mode):04o}",
         "uid": info.st_uid,
         "gid": info.st_gid,
-        "device": info.st_dev,
-        "inode": info.st_ino,
-        "mtime_ns": info.st_mtime_ns,
-        "ctime_ns": info.st_ctime_ns,
     }
-    if finite_kernel_virtual and path == KERNEL_VIRTUAL_COMPONENT_PATH:
-        if kind != "directory":
+    path_text = str(path)
+    kernel_virtual_component = (
+        finite_kernel_virtual and path_text in KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS
+    )
+    if kernel_virtual_component:
+        expected_kind = KERNEL_VIRTUAL_COMPONENT_KINDS[
+            KERNEL_VIRTUAL_COMPONENT_PATHS.index(path_text)
+        ]
+        if kind != expected_kind:
             _fail("TRACE_PATH_INVALID", f"kernel virtual component {path}")
         result["metadata_policy"] = KERNEL_VIRTUAL_COMPONENT_POLICY
+        if path_text not in KERNEL_VIRTUAL_NLINK_VOLATILE_PATHS:
+            result["nlink"] = info.st_nlink
     else:
-        result["nlink"] = info.st_nlink
+        result.update(
+            {
+                "device": info.st_dev,
+                "inode": info.st_ino,
+                "nlink": info.st_nlink,
+                "mtime_ns": info.st_mtime_ns,
+                "ctime_ns": info.st_ctime_ns,
+            }
+        )
     if kind == "symlink":
         result["target"] = os.readlink(path)
     return result
@@ -1167,52 +1202,62 @@ def _validate_component_chain_shape(
         "mtime_ns",
         "ctime_ns",
     }
-    finite_component = (common - {"nlink"}) | {"metadata_policy"}
+    kernel_virtual_base = {
+        "path",
+        "kind",
+        "mode",
+        "uid",
+        "gid",
+        "metadata_policy",
+    }
     result: list[dict[str, Any]] = []
     seen_paths: set[str] = set()
-    seen_finite_component = False
+    seen_kernel_virtual_paths: set[str] = set()
     for item in value:
-        if type(item) is not dict or set(item) not in (
-            common,
-            common | {"target"},
-            finite_component,
-        ):
+        if type(item) is not dict:
             _fail("REQUEST_INVALID", f"{label} component record")
-        is_finite_component = set(item) == finite_component
+        path = item.get("path")
+        is_kernel_virtual_component = (
+            finite_kernel_virtual
+            and type(path) is str
+            and path in KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS
+        )
         kind = item.get("kind")
-        if is_finite_component:
+        if is_kernel_virtual_component:
+            expected_fields = kernel_virtual_base | (
+                set() if path in KERNEL_VIRTUAL_NLINK_VOLATILE_PATHS else {"nlink"}
+            )
+            expected_kind = KERNEL_VIRTUAL_COMPONENT_KINDS[
+                KERNEL_VIRTUAL_COMPONENT_PATHS.index(path)
+            ]
             if (
-                not finite_kernel_virtual
-                or seen_finite_component
-                or item.get("path") != str(KERNEL_VIRTUAL_COMPONENT_PATH)
-                or kind != "directory"
+                set(item) != expected_fields
+                or path in seen_kernel_virtual_paths
+                or kind != expected_kind
                 or item.get("metadata_policy") != KERNEL_VIRTUAL_COMPONENT_POLICY
             ):
-                _fail("REQUEST_INVALID", f"{label} finite component")
-            seen_finite_component = True
+                _fail("REQUEST_INVALID", f"{label} kernel virtual component")
+            seen_kernel_virtual_paths.add(path)
         elif kind == "symlink":
             if set(item) != common | {"target"} or type(item.get("target")) is not str:
                 _fail("REQUEST_INVALID", f"{label} symlink component")
         elif kind not in {"regular", "directory"} or set(item) != common:
             _fail("REQUEST_INVALID", f"{label} component kind")
-        path = item.get("path")
+        numeric_fields = ["uid", "gid"]
+        if not is_kernel_virtual_component:
+            numeric_fields.extend(("device", "inode", "nlink", "mtime_ns", "ctime_ns"))
+        elif path not in KERNEL_VIRTUAL_NLINK_VOLATILE_PATHS:
+            numeric_fields.append("nlink")
         if (
             type(path) is not str
             or not Path(path).is_absolute()
+            or Path(path).as_posix() != path
             or path in seen_paths
             or type(item.get("mode")) is not str
             or re.fullmatch(r"[0-7]{4}", item["mode"]) is None
             or any(
                 type(item.get(key)) is not int or item[key] < 0
-                for key in (
-                    "uid",
-                    "gid",
-                    "device",
-                    "inode",
-                    "mtime_ns",
-                    "ctime_ns",
-                    *(("nlink",) if not is_finite_component else ()),
-                )
+                for key in numeric_fields
             )
         ):
             _fail("REQUEST_INVALID", f"{label} component values")
@@ -1220,8 +1265,11 @@ def _validate_component_chain_shape(
         result.append(dict(item))
     if result[0]["path"] != "/" or result[0]["kind"] != "directory":
         _fail("REQUEST_INVALID", f"{label} root component")
-    if finite_kernel_virtual != seen_finite_component:
-        _fail("REQUEST_INVALID", f"{label} finite component policy")
+    expected_kernel_virtual_paths = (
+        set(KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS) if finite_kernel_virtual else set()
+    )
+    if seen_kernel_virtual_paths != expected_kernel_virtual_paths:
+        _fail("REQUEST_INVALID", f"{label} kernel virtual component policy")
     return result
 
 
@@ -1489,22 +1537,23 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
         )
         for index, item in enumerate(files)
     ]
-    file_paths = [item["path"] for item in validated_files]
-    file_inodes = [
-        (
-            next(
-                component
-                for component in item["component_chain"]
-                if component["path"] == item["canonical"]
-            )["device"],
-            next(
-                component
-                for component in item["component_chain"]
-                if component["path"] == item["canonical"]
-            )["inode"],
+
+    def contract_inode_identity(
+        record: Mapping[str, Any],
+    ) -> tuple[int, int] | None:
+        if _is_kernel_virtual_sysctl_target(record["path"], record["canonical"]):
+            # v5 closes this exact record's aliases after held-open inside the
+            # replay namespace; its cross-namespace inode is intentionally absent.
+            return None
+        final = next(
+            component
+            for component in record["component_chain"]
+            if component["path"] == record["canonical"]
         )
-        for item in validated_files
-    ]
+        return final["device"], final["inode"]
+
+    file_paths = [item["path"] for item in validated_files]
+    file_inodes = [contract_inode_identity(item) for item in validated_files]
     if file_paths != sorted(set(file_paths)):
         _fail("REQUEST_INVALID", "trace file order")
 
@@ -1518,24 +1567,12 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
         for index, item in enumerate(directories)
     ]
     directory_paths = [item["path"] for item in validated_directories]
-    directory_inodes = [
-        (
-            next(
-                component
-                for component in item["component_chain"]
-                if component["path"] == item["canonical"]
-            )["device"],
-            next(
-                component
-                for component in item["component_chain"]
-                if component["path"] == item["canonical"]
-            )["inode"],
-        )
-        for item in validated_directories
-    ]
+    directory_inodes = [contract_inode_identity(item) for item in validated_directories]
     if directory_paths != sorted(set(directory_paths)):
         _fail("REQUEST_INVALID", "trace directory order")
-    if set(file_inodes) & set(directory_inodes):
+    if {item for item in file_inodes if item is not None} & {
+        item for item in directory_inodes if item is not None
+    }:
         _fail("REQUEST_INVALID", "trace file/directory alias")
 
     alias_projection: list[dict[str, Any]] = []
@@ -1568,10 +1605,13 @@ def _validate_trace_contract(value: Any) -> dict[str, Any]:
         _fail("REQUEST_INVALID", "trace path alias projection")
 
     def implicit_inode_alias(
-        records: Sequence[Mapping[str, Any]], inodes: Sequence[tuple[int, int]]
+        records: Sequence[Mapping[str, Any]],
+        inodes: Sequence[tuple[int, int] | None],
     ) -> bool:
         observed: dict[tuple[int, int], str] = {}
         for record, inode in zip(records, inodes, strict=True):
+            if inode is None:
+                continue
             previous = observed.setdefault(inode, record["canonical"])
             if previous != record["canonical"]:
                 return True

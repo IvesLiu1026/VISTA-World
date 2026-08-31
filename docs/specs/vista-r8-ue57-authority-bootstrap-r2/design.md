@@ -123,34 +123,41 @@ The `git:fetch` process tree has one observed multiplicity variation: the
 exact successful `openat` of `/sys/devices/system/cpu/online` with
 `O_RDONLY|O_CLOEXEC` occurs two or three times without changing its output.
 Both planner and replay canonicalize only that exact event's positive
-multiplicity to one. Trace v4 carries one exact `event_count_policies` entry
+multiplicity to one. Trace v5 carries one exact `event_count_policies` entry
 that binds the rule to `git:fetch`; producer and independent consumer require
 that complete singleton projection. The file remains held and pinned by exact
 root-owned, read-only bytes and component metadata. No other path, syscall,
 outcome, or flag set receives this normalization.
 
-Trace contract v4 retains the v3 finite kernel-virtual host authority for
-the exact literal and canonical `/proc/sys/vm/overcommit_memory`; this is not a
-procfs prefix rule. Planner assembly recognizes no alias, traversal, symlink,
-or second sysctl. It opens the endpoint read-only with
+Trace contract v5 retains the v4 event-count policy and finite kernel-virtual
+host authority for the exact literal and canonical
+`/proc/sys/vm/overcommit_memory`; this is not a procfs prefix rule. Planner
+assembly recognizes no alias, traversal, symlink, or second sysctl. It opens
+the endpoint read-only with
 `O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK`, requires root:root `0644` with one link, and
 stream-reads the value because procfs reports `st_size == 0`. Only `0\n`,
 `1\n`, or `2\n` is valid, and the request records the resulting exact size and
-SHA-256 together with the endpoint's full component metadata.
+SHA-256 together with its schema-defined stable component projection.
 
-The v3 component-chain schema has one alternate record shape synthesized only
-for the `/proc` ancestor of that exact endpoint. Its fixed
-`proc-root-nlink-volatile-v1` policy omits `nlink`, whose value changes when
-unrelated processes enter or leave, but retains path, kind, mode, owner,
-device, inode, mtime, and ctime. Every record for `/`, `/proc/sys`,
-`/proc/sys/vm`, and the endpoint retains the ordinary complete metadata shape.
+The v5 component-chain schema synthesizes its fixed
+`proc-chain-mount-metadata-volatile-v2` policy only for the four exact procfs
+records `/proc`, `/proc/sys`, `/proc/sys/vm`, and the endpoint. A systemd
+`ProtectProc=invisible` mount namespace may change `device`, `inode`, `mtime`,
+and `ctime` for every one of those records, so those four fields are omitted
+from their cross-namespace contract shape. `/proc` also omits its volatile
+process-count-sensitive `nlink`; the other three retain exact `nlink`. `/`
+retains the ordinary complete metadata shape, and every procfs record still
+pins path, kind, mode, owner, and the absence of symlinks.
 The planner, production held-input opener, before/after replay revalidator, and
 independent authority administrator derive this policy from the exact endpoint
-path rather than trusting a request field. Any special-policy record elsewhere,
-any other procfs host input, or any endpoint/content/component mismatch fails
-closed. The Phase A and Phase B service namespaces use `ProcSubset=all` so that
-this one non-process procfs endpoint remains visible, while
-`ProtectProc=invisible` and `ProtectKernelTunables=yes` continue to hide
+path rather than trusting a request field. Because the endpoint inode is absent
+from the cross-namespace contract projection, both production and independent
+review close file/directory and bind aliases again from actual held-open
+device/inode identities inside their current namespace. Any special-policy
+record elsewhere, any other procfs host input, or any endpoint/content/component
+mismatch fails closed. The Phase A and Phase B service namespaces use
+`ProcSubset=all` so that this one non-process procfs endpoint remains visible,
+while `ProtectProc=invisible` and `ProtectKernelTunables=yes` continue to hide
 other-user process details and make kernel tunables read-only. A `pid`-only
 procfs subset is incompatible with this contract because it removes
 `/proc/sys` from the service view.
@@ -194,7 +201,7 @@ accepts no `yhliu` candidate.
 
 The derivation does not discover a second toolchain contract. It copies the
 exact Phase A builder pin, bundle/commit/blob inventory, tools ledger, runtime
-map sets, and trace-v4 bytes, while replacing only the fixed systemd-unit
+map sets, and trace-v5 bytes, while replacing only the fixed systemd-unit
 binding and job. It re-reads Phase A's request and manifest and validates their
 pin edge before emitting bytes. Publication review repeats this comparison
 with both Phase A documents held, so request/manifest mutation or a coherently

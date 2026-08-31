@@ -145,7 +145,7 @@ def _native_build_provenance(
     }
 
 
-def test_root_consumer_mirror_matches_trace_v4_producer_contract() -> None:
+def test_root_consumer_mirror_matches_trace_v5_producer_contract() -> None:
     assert bootstrap.NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA == (
         native_builder.TRACE_CONTRACT_SCHEMA
     )

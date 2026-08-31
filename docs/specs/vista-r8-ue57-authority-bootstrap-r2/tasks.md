@@ -69,8 +69,9 @@ Depends on: requirements.md, design.md
 
 - [x] T5a. Implement the dedicated-builder source milestone (R1a, R10)
   - The exact post-commit planner exposed volatile `/proc` ancestor link-count
-    drift; trace-v3 closed that defect, and trace-v4 retains the same finite
-    authority while adding the exact CPU-online event-count policy.
+    drift; trace-v3 closed that defect, trace-v4 added the exact CPU-online
+    event-count policy, and trace-v5 makes the finite authority safe across
+    the service's `ProtectProc` mount namespace.
   - Add the fixed locked `vista-r8-builder:997:997` account contract with
     `/nonexistent`, `/usr/sbin/nologin`, no supplementary groups, and no
     subordinate-ID entry or range containing 997; reject every inactive
@@ -84,7 +85,7 @@ Depends on: requirements.md, design.md
   - Add strict canonical requests, exact Git-bundle/blob extraction, symlink-safe
     held tool validation, sealed source memfds, twice-built byte identity,
     static-ELF checks, full durability, and closed job/phase manifests.
-  - Add the observation-only Phase A request planner and exhaustive trace-v4
+  - Add the observation-only Phase A request planner and exhaustive trace-v5
     contract: exact per-invocation event/search/scratch prestate, mapped-file
     device/inode/path/byte closure, resolved two-path mutation endpoints, and
     fail-closed replay against held host inputs. Reject scratch raw `..`
@@ -97,10 +98,11 @@ Depends on: requirements.md, design.md
     counts for every near-miss event in both producer and independent mirror.
   - Model only literal/canonical `/proc/sys/vm/overcommit_memory` as the finite
     kernel-virtual host authority. Stream-pin exact `0\n`/`1\n`/`2\n` bytes,
-    omit only the synthesized `/proc` ancestor `nlink`, retain all other
-    component and endpoint metadata, and reject every arbitrary procfs path,
-    alias, traversal, symlink, write flag, malformed value, or replay drift in
-    both builder and authority-admin mirrors.
+    apply the closed mount-namespace metadata policy only to its four exact
+    procfs component records, retain stable component and endpoint metadata,
+    and reject every arbitrary procfs path, alias, traversal, symlink, write
+    flag, malformed value, or stable replay drift in both builder and
+    authority-admin mirrors.
   - Phase A emits the three launchers and exact
     `parent-seal-candidate/{vista_authority_parent_seal.py:0444,launch-vista-authority-parent-seal:0555}`.
   - Phase B consumes only closed Phase A plus its root-owned request embedding
@@ -115,9 +117,9 @@ Depends on: requirements.md, design.md
     late native production entry points fail closed.
   - Completion evidence: source, unit, bootstrap, helper, test, and runbook
     changes exist. Earlier trace-v2/v3 rehearsals are historical evidence only.
-    Fresh clean and controlled-load trace-v4 planner/replay runs over the new
+    Fresh clean and controlled-load trace-v5 planner/replay runs over the new
     exact bundle remain a T5b acceptance gate; they are not claimed as source
-    completion evidence. No trace-v4 root activation, production builder phase,
+    completion evidence. No trace-v5 root activation, production builder phase,
     candidate publication, or UE action is included in this completion.
 
 - [ ] T5b. Freeze and independently review builder inputs (R1a, R10)

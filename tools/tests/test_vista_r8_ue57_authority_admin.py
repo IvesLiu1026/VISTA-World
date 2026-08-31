@@ -389,6 +389,24 @@ def test_native_builder_kernel_virtual_contract_mirror_and_held_revalidation(
     assert [item["path"] for item in special["component_chain"]] == list(
         admin.NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS
     )
+    assert admin.NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA.endswith("/v5")
+    root, *proc_components = special["component_chain"]
+    assert "metadata_policy" not in root
+    assert all(
+        field in root
+        for field in admin.NATIVE_BUILDER_KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS
+    )
+    assert all(
+        component["metadata_policy"]
+        == admin.NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY
+        and all(
+            field not in component
+            for field in admin.NATIVE_BUILDER_KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS
+        )
+        for component in proc_components
+    )
+    assert "nlink" not in proc_components[0]
+    assert all("nlink" in component for component in proc_components[1:])
 
     authority = admin.HeldNativeBuilderPhase(
         contextlib.ExitStack(), {}, {}, {}, {}, {}, {}
@@ -397,13 +415,17 @@ def test_native_builder_kernel_virtual_contract_mirror_and_held_revalidation(
     try:
         authority.revalidate()
         original_lstat = os.lstat
-        drift: dict[str, int] = {"nlink": 31, "inode": 0}
+        drift: dict[str, str | None] = {"nlink_path": None}
 
         def changing_proc_lstat(
             candidate: os.PathLike[str] | str, *args: object, **kwargs: object
         ) -> object:
             info = original_lstat(candidate, *args, **kwargs)
-            if os.fspath(candidate) != "/proc":
+            candidate_text = os.fspath(candidate)
+            if (
+                candidate_text
+                not in admin.NATIVE_BUILDER_KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS
+            ):
                 return info
             return type(
                 "ProcStat",
@@ -412,24 +434,26 @@ def test_native_builder_kernel_virtual_contract_mirror_and_held_revalidation(
                     "st_mode": info.st_mode,
                     "st_uid": info.st_uid,
                     "st_gid": info.st_gid,
-                    "st_dev": info.st_dev,
-                    "st_ino": info.st_ino + drift["inode"],
-                    "st_nlink": info.st_nlink + drift["nlink"],
+                    "st_dev": info.st_dev + 211,
+                    "st_ino": info.st_ino + 223,
+                    "st_nlink": info.st_nlink
+                    + (31 if candidate_text == "/proc" else 0)
+                    + (1 if candidate_text == drift["nlink_path"] else 0),
                     "st_size": info.st_size,
                     "st_blocks": info.st_blocks,
-                    "st_mtime_ns": info.st_mtime_ns,
-                    "st_ctime_ns": info.st_ctime_ns,
+                    "st_mtime_ns": info.st_mtime_ns + 227,
+                    "st_ctime_ns": info.st_ctime_ns + 229,
                 },
             )()
 
         monkeypatch.setattr(admin.os, "lstat", changing_proc_lstat)
         authority.revalidate()
-        drift["inode"] = 1
+        drift["nlink_path"] = "/proc/sys/vm"
         with pytest.raises(
             admin.AuthorityError, match="NATIVE_BUILDER_TRACE_INPUT_DRIFT"
         ):
             authority.revalidate()
-        drift["inode"] = 0
+        drift["nlink_path"] = None
         original_hash = admin._hash_kernel_virtual_sysctl_fd
         monkeypatch.setattr(
             admin,
@@ -476,7 +500,7 @@ def test_native_builder_kernel_virtual_contract_mirror_rejects_tampering() -> No
     contract = _native_trace_contract_with_kernel_virtual()
 
     stale = copy.deepcopy(contract)
-    stale["schema"] = "vista.r8-native-builder-trace-contract/v3"
+    stale["schema"] = "vista.r8-native-builder-trace-contract/v4"
     with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
         admin._native_builder_validate_trace_contract(stale)
 
@@ -548,6 +572,17 @@ def test_native_builder_kernel_virtual_contract_mirror_rejects_tampering() -> No
         with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
             admin._native_builder_validate_trace_contract(changed)
 
+    for index, field in ((1, "device"), (2, "inode"), (-1, "ctime_ns")):
+        changed = copy.deepcopy(contract)
+        special = next(
+            record
+            for record in changed["host_files"]  # type: ignore[union-attr]
+            if record["path"] == str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH)
+        )
+        special["component_chain"][index][field] = 1
+        with pytest.raises(admin.AuthorityError, match="TRACE_CONTRACT_INVALID"):
+            admin._native_builder_validate_trace_contract(changed)
+
     other_proc = copy.deepcopy(contract)
     special = next(
         record
@@ -567,7 +602,8 @@ def test_native_builder_kernel_virtual_contract_mirror_rejects_tampering() -> No
 def test_native_builder_kernel_virtual_hold_rejects_component_drift() -> None:
     contract = _native_trace_contract_with_kernel_virtual()
     for index, field, value in (
-        (2, "inode", 1),
+        (2, "device", 1),
+        (2, "nlink", 1),
         (-1, "inode", 1),
         (-1, "mode", "0600"),
     ):
@@ -577,8 +613,10 @@ def test_native_builder_kernel_virtual_hold_rejects_component_drift() -> None:
             for record in changed["host_files"]  # type: ignore[union-attr]
             if record["path"] == str(admin.NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH)
         )
-        if field == "inode":
+        if field == "nlink":
             special["component_chain"][index][field] += value
+        elif field in admin.NATIVE_BUILDER_KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS:
+            special["component_chain"][index][field] = value
         else:
             special["component_chain"][index][field] = value
         authority = admin.HeldNativeBuilderPhase(
@@ -683,10 +721,6 @@ def test_native_builder_independent_consumer_mirror_matches_producer_contract() 
         == native_builder.KERNEL_VIRTUAL_SYSCTL_PATH
     )
     assert (
-        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATH
-        == native_builder.KERNEL_VIRTUAL_COMPONENT_PATH
-    )
-    assert (
         admin.NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY
         == native_builder.KERNEL_VIRTUAL_COMPONENT_POLICY
     )
@@ -697,6 +731,22 @@ def test_native_builder_independent_consumer_mirror_matches_producer_contract() 
     assert (
         admin.NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS
         == native_builder.KERNEL_VIRTUAL_COMPONENT_PATHS
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_KINDS
+        == native_builder.KERNEL_VIRTUAL_COMPONENT_KINDS
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS
+        == native_builder.KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_NLINK_VOLATILE_PATHS
+        == native_builder.KERNEL_VIRTUAL_NLINK_VOLATILE_PATHS
+    )
+    assert (
+        admin.NATIVE_BUILDER_KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS
+        == native_builder.KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS
     )
     assert (
         admin.NATIVE_BUILDER_KERNEL_VIRTUAL_ALLOWED_OPEN_FLAGS

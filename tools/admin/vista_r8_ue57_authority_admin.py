@@ -218,11 +218,10 @@ NATIVE_BUILDER_PHASE_B_UNIT = Path(
 NATIVE_BUILDER_PHASE_A_SCHEMA = "vista.r8-native-builder-phase-a-manifest/v1"
 NATIVE_BUILDER_PHASE_B_SCHEMA = "vista.r8-native-builder-phase-b-manifest/v1"
 NATIVE_BUILDER_REQUEST_SCHEMA = "vista.r8-native-builder-request/v2"
-NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v4"
+NATIVE_BUILDER_TRACE_CONTRACT_SCHEMA = "vista.r8-native-builder-trace-contract/v5"
 NATIVE_BUILDER_JOB_SCHEMA = "vista.r8-native-builder-job-manifest/v1"
 NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_PATH = Path("/proc/sys/vm/overcommit_memory")
-NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATH = Path("/proc")
-NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY = "proc-root-nlink-volatile-v1"
+NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY = "proc-chain-mount-metadata-volatile-v2"
 NATIVE_BUILDER_KERNEL_VIRTUAL_SYSCTL_VALUES = (b"0\n", b"1\n", b"2\n")
 NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS = (
     "/",
@@ -230,6 +229,23 @@ NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS = (
     "/proc/sys",
     "/proc/sys/vm",
     "/proc/sys/vm/overcommit_memory",
+)
+NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_KINDS = (
+    "directory",
+    "directory",
+    "directory",
+    "directory",
+    "regular",
+)
+NATIVE_BUILDER_KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS = (
+    NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS[1:]
+)
+NATIVE_BUILDER_KERNEL_VIRTUAL_NLINK_VOLATILE_PATHS = ("/proc",)
+NATIVE_BUILDER_KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS = (
+    "device",
+    "inode",
+    "mtime_ns",
+    "ctime_ns",
 )
 NATIVE_BUILDER_CPU_ONLINE_PATH = "/sys/devices/system/cpu/online"
 NATIVE_BUILDER_CPU_ONLINE_READ_EVENT_LINE = (
@@ -811,9 +827,19 @@ def _native_builder_kernel_virtual_component_chain_is_exact(
         tuple(item.get("path") for item in chain)
         == NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS
         and tuple(item.get("kind") for item in chain)
-        == ("directory", "directory", "directory", "directory", "regular")
-        and chain[1].get("metadata_policy")
-        == NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY
+        == NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_KINDS
+        and "metadata_policy" not in chain[0]
+        and all(
+            item.get("metadata_policy")
+            == NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY
+            and all(
+                field not in item
+                for field in NATIVE_BUILDER_KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS
+            )
+            for item in chain[1:]
+        )
+        and "nlink" not in chain[1]
+        and all(type(item.get("nlink")) is int for item in chain[2:])
         and all(item.get("kind") != "symlink" for item in chain)
     )
 
@@ -5889,17 +5915,31 @@ def _native_builder_component_record(
         "mode": f"{stat.S_IMODE(info.st_mode):04o}",
         "uid": info.st_uid,
         "gid": info.st_gid,
-        "device": info.st_dev,
-        "inode": info.st_ino,
-        "mtime_ns": info.st_mtime_ns,
-        "ctime_ns": info.st_ctime_ns,
     }
-    if finite_kernel_virtual and path == NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATH:
-        if kind != "directory":
+    path_text = str(path)
+    kernel_virtual_component = (
+        finite_kernel_virtual
+        and path_text in NATIVE_BUILDER_KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS
+    )
+    if kernel_virtual_component:
+        expected_kind = NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_KINDS[
+            NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS.index(path_text)
+        ]
+        if kind != expected_kind:
             _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", str(path))
         record["metadata_policy"] = NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY
+        if path_text not in NATIVE_BUILDER_KERNEL_VIRTUAL_NLINK_VOLATILE_PATHS:
+            record["nlink"] = info.st_nlink
     else:
-        record["nlink"] = info.st_nlink
+        record.update(
+            {
+                "device": info.st_dev,
+                "inode": info.st_ino,
+                "nlink": info.st_nlink,
+                "mtime_ns": info.st_mtime_ns,
+                "ctime_ns": info.st_ctime_ns,
+            }
+        )
     if kind == "symlink":
         record["target"] = os.readlink(path)
     return record
@@ -5959,39 +5999,58 @@ def _native_builder_validate_component_chain(
         "mtime_ns",
         "ctime_ns",
     }
-    finite_component = (common - {"nlink"}) | {"metadata_policy"}
+    kernel_virtual_base = {
+        "path",
+        "kind",
+        "mode",
+        "uid",
+        "gid",
+        "metadata_policy",
+    }
     result: list[dict[str, Any]] = []
     paths: set[str] = set()
-    seen_finite_component = False
+    seen_kernel_virtual_paths: set[str] = set()
     for item in value:
-        if type(item) is not dict or set(item) not in (
-            common,
-            common | {"target"},
-            finite_component,
-        ):
+        if type(item) is not dict:
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} component")
-        is_finite_component = set(item) == finite_component
+        path = item.get("path")
+        is_kernel_virtual_component = (
+            finite_kernel_virtual
+            and type(path) is str
+            and path in NATIVE_BUILDER_KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS
+        )
         kind = item.get("kind")
-        if is_finite_component:
+        if is_kernel_virtual_component:
+            expected_fields = kernel_virtual_base | (
+                set()
+                if path in NATIVE_BUILDER_KERNEL_VIRTUAL_NLINK_VOLATILE_PATHS
+                else {"nlink"}
+            )
+            expected_kind = NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_KINDS[
+                NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATHS.index(path)
+            ]
             if (
-                not finite_kernel_virtual
-                or seen_finite_component
-                or item.get("path") != str(NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_PATH)
-                or kind != "directory"
+                set(item) != expected_fields
+                or path in seen_kernel_virtual_paths
+                or kind != expected_kind
                 or item.get("metadata_policy")
                 != NATIVE_BUILDER_KERNEL_VIRTUAL_COMPONENT_POLICY
             ):
                 _fail(
                     "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
-                    f"{label} finite component",
+                    f"{label} kernel virtual component",
                 )
-            seen_finite_component = True
+            seen_kernel_virtual_paths.add(path)
         elif kind == "symlink":
             if set(item) != common | {"target"} or type(item.get("target")) is not str:
                 _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} symlink")
         elif kind not in {"regular", "directory"} or set(item) != common:
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} kind")
-        path = item.get("path")
+        numeric_fields = ["uid", "gid"]
+        if not is_kernel_virtual_component:
+            numeric_fields.extend(("device", "inode", "nlink", "mtime_ns", "ctime_ns"))
+        elif path not in NATIVE_BUILDER_KERNEL_VIRTUAL_NLINK_VOLATILE_PATHS:
+            numeric_fields.append("nlink")
         if (
             type(path) is not str
             or not Path(path).is_absolute()
@@ -6001,15 +6060,7 @@ def _native_builder_validate_component_chain(
             or re.fullmatch(r"[0-7]{4}", item["mode"]) is None
             or any(
                 type(item.get(key)) is not int or item[key] < 0
-                for key in (
-                    "uid",
-                    "gid",
-                    "device",
-                    "inode",
-                    "mtime_ns",
-                    "ctime_ns",
-                    *(("nlink",) if not is_finite_component else ()),
-                )
+                for key in numeric_fields
             )
         ):
             _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} values")
@@ -6017,10 +6068,15 @@ def _native_builder_validate_component_chain(
         result.append(dict(item))
     if result[0]["path"] != "/" or result[0]["kind"] != "directory":
         _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", f"{label} root")
-    if finite_kernel_virtual != seen_finite_component:
+    expected_kernel_virtual_paths = (
+        set(NATIVE_BUILDER_KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS)
+        if finite_kernel_virtual
+        else set()
+    )
+    if seen_kernel_virtual_paths != expected_kernel_virtual_paths:
         _fail(
             "NATIVE_BUILDER_TRACE_CONTRACT_INVALID",
-            f"{label} finite component policy",
+            f"{label} kernel virtual component policy",
         )
     return result
 
@@ -6454,7 +6510,13 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
     ):
         _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "host order")
 
-    def inode(record: Mapping[str, Any]) -> tuple[int, int]:
+    def inode(record: Mapping[str, Any]) -> tuple[int, int] | None:
+        if _native_builder_is_kernel_virtual_sysctl_target(
+            record["path"], record["canonical"]
+        ):
+            # v5 closes this exact record's aliases after held-open inside the
+            # review namespace; its cross-namespace inode is intentionally absent.
+            return None
         final = next(
             item
             for item in record["component_chain"]
@@ -6464,7 +6526,9 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
 
     file_inodes = [inode(item) for item in validated_files]
     directory_inodes = [inode(item) for item in validated_directories]
-    if set(file_inodes) & set(directory_inodes):
+    if {item for item in file_inodes if item is not None} & {
+        item for item in directory_inodes if item is not None
+    }:
         _fail("NATIVE_BUILDER_TRACE_CONTRACT_INVALID", "file/directory alias")
     alias_projection: list[dict[str, Any]] = []
     for kind, records in (
@@ -6503,6 +6567,8 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
     ):
         observed: dict[tuple[int, int], str] = {}
         for record, identity in zip(records, inodes, strict=True):
+            if identity is None:
+                continue
             previous = observed.setdefault(identity, record["canonical"])
             if previous != record["canonical"]:
                 _fail(
@@ -6622,6 +6688,7 @@ def _native_builder_validate_trace_contract(value: Any) -> dict[str, Any]:
 def _native_builder_hold_trace_inputs(
     authority: HeldNativeBuilderPhase, contract: Mapping[str, Any]
 ) -> None:
+    observed_file_inodes: dict[tuple[int, int], str] = {}
     for index, record in enumerate(contract["host_files"]):
         label = f"trace-file:{index}"
         requested = Path(record["path"])
@@ -6673,6 +6740,11 @@ def _native_builder_hold_trace_inputs(
                 != _identity(info)
             ):
                 _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label)
+            identity = (info.st_dev, info.st_ino)
+            previous = observed_file_inodes.get(identity)
+            if previous is not None and previous != record["canonical"]:
+                _fail("NATIVE_BUILDER_TRACE_INPUT_ALIAS", record["path"])
+            observed_file_inodes[identity] = record["canonical"]
             held = HeldSourceFile(requested, canonical, descriptor, info, ())
             authority.stack.callback(os.close, descriptor)
             authority.held_files[label] = held
@@ -6681,6 +6753,7 @@ def _native_builder_hold_trace_inputs(
         except BaseException:
             os.close(descriptor)
             raise
+    observed_directory_inodes: dict[tuple[int, int], str] = {}
     for index, record in enumerate(contract["host_directories"]):
         label = f"trace-directory:{index}"
         requested = Path(record["path"])
@@ -6698,6 +6771,14 @@ def _native_builder_hold_trace_inputs(
         ):
             os.close(descriptor)
             _fail("NATIVE_BUILDER_TRACE_INPUT_DRIFT", label)
+        identity = (info.st_dev, info.st_ino)
+        previous = observed_directory_inodes.get(identity)
+        if (
+            previous is not None and previous != record["canonical"]
+        ) or identity in observed_file_inodes:
+            os.close(descriptor)
+            _fail("NATIVE_BUILDER_TRACE_INPUT_ALIAS", record["path"])
+        observed_directory_inodes[identity] = record["canonical"]
         authority.directory_fds[label] = descriptor
         authority.directory_metadata[label] = info
         authority.directory_paths[label] = canonical

@@ -1190,15 +1190,22 @@ def test_kernel_virtual_sysctl_record_is_finite_stream_pinned_and_revalidated(
     assert [item["path"] for item in record["component_chain"]] == list(
         builder.KERNEL_VIRTUAL_COMPONENT_PATHS
     )
-    assert "nlink" not in record["component_chain"][1]
-    assert record["component_chain"][1]["metadata_policy"] == (
-        builder.KERNEL_VIRTUAL_COMPONENT_POLICY
+    assert builder.TRACE_CONTRACT_SCHEMA.endswith("/v5")
+    root, *proc_components = record["component_chain"]
+    assert "metadata_policy" not in root
+    assert all(
+        field in root for field in builder.KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS
     )
     assert all(
-        "nlink" in item
-        for index, item in enumerate(record["component_chain"])
-        if index != 1
+        item["metadata_policy"] == builder.KERNEL_VIRTUAL_COMPONENT_POLICY
+        and all(
+            field not in item
+            for field in builder.KERNEL_VIRTUAL_VOLATILE_METADATA_FIELDS
+        )
+        for item in proc_components
     )
+    assert "nlink" not in proc_components[0]
+    assert all("nlink" in item for item in proc_components[1:])
     assert (
         builder._validate_trace_host_record(
             record, "finite sysctl", expected_kind="regular"
@@ -1222,32 +1229,39 @@ def test_kernel_virtual_sysctl_record_is_finite_stream_pinned_and_revalidated(
         held.close()
 
     original_lstat = os.lstat
-    drift: dict[str, int] = {"nlink": 17, "inode": 0}
+    drift: dict[str, str | None] = {"nlink_path": None}
 
     def changing_proc_lstat(
         candidate: os.PathLike[str] | str, *args: object, **kwargs: object
     ) -> object:
         info = original_lstat(candidate, *args, **kwargs)
-        if os.fspath(candidate) != "/proc":
+        candidate_text = os.fspath(candidate)
+        if candidate_text not in builder.KERNEL_VIRTUAL_METADATA_VOLATILE_PATHS:
             return info
         return SimpleNamespace(
             st_mode=info.st_mode,
             st_uid=info.st_uid,
             st_gid=info.st_gid,
-            st_dev=info.st_dev,
-            st_ino=info.st_ino + drift["inode"],
-            st_nlink=info.st_nlink + drift["nlink"],
+            st_dev=info.st_dev + 101,
+            st_ino=info.st_ino + 103,
+            st_nlink=info.st_nlink
+            + (17 if candidate_text == "/proc" else 0)
+            + (1 if candidate_text == drift["nlink_path"] else 0),
             st_size=info.st_size,
             st_blocks=info.st_blocks,
-            st_mtime_ns=info.st_mtime_ns,
-            st_ctime_ns=info.st_ctime_ns,
+            st_mtime_ns=info.st_mtime_ns + 107,
+            st_ctime_ns=info.st_ctime_ns + 109,
         )
 
     monkeypatch.setattr(builder.os, "lstat", changing_proc_lstat)
-    builder._assert_component_chain_live(record["component_chain"], path, "nlink")
-    drift["inode"] = 1
+    builder._assert_component_chain_live(
+        record["component_chain"], path, "namespace metadata"
+    )
+    drift["nlink_path"] = "/proc/sys"
     with pytest.raises(builder.BuilderError, match="TRACE_PATH_DRIFT"):
-        builder._assert_component_chain_live(record["component_chain"], path, "inode")
+        builder._assert_component_chain_live(
+            record["component_chain"], path, "stable descendant nlink"
+        )
 
 
 @pytest.mark.parametrize("raw", builder.KERNEL_VIRTUAL_SYSCTL_VALUES)
@@ -1357,7 +1371,7 @@ def test_kernel_virtual_sysctl_contract_requires_exact_profile_event_binding() -
     assert builder._validate_trace_contract(contract) == contract
 
     stale_schema = copy.deepcopy(contract)
-    stale_schema["schema"] = "vista.r8-native-builder-trace-contract/v3"
+    stale_schema["schema"] = "vista.r8-native-builder-trace-contract/v4"
     with pytest.raises(builder.BuilderError, match="trace contract schema/version"):
         builder._validate_trace_contract(stale_schema)
 
@@ -1536,9 +1550,20 @@ def test_kernel_virtual_sysctl_contract_rejects_forged_record_fields() -> None:
     with pytest.raises(builder.BuilderError, match="REQUEST_INVALID"):
         builder._validate_trace_contract(changed)
 
+    for index, field in ((1, "device"), (2, "inode"), (-1, "mtime_ns")):
+        changed = copy.deepcopy(contract)
+        target = next(
+            record
+            for record in changed["host_files"]  # type: ignore[union-attr]
+            if record["path"] == str(builder.KERNEL_VIRTUAL_SYSCTL_PATH)
+        )
+        target["component_chain"][index][field] = 1
+        with pytest.raises(builder.BuilderError, match="REQUEST_INVALID"):
+            builder._validate_trace_contract(changed)
+
     for index, field, value in (
-        (2, "inode", 1),
-        (-1, "inode", 1),
+        (2, "nlink", 1),
+        (-1, "nlink", 1),
         (-1, "mode", "0600"),
     ):
         changed = copy.deepcopy(contract)
@@ -1547,7 +1572,7 @@ def test_kernel_virtual_sysctl_contract_rejects_forged_record_fields() -> None:
             for record in changed["host_files"]  # type: ignore[union-attr]
             if record["path"] == str(builder.KERNEL_VIRTUAL_SYSCTL_PATH)
         )
-        if field == "inode":
+        if field == "nlink":
             target["component_chain"][index][field] += value
         else:
             target["component_chain"][index][field] = value

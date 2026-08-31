@@ -86,7 +86,7 @@ or any relaxation of the other process/filesystem hardening.
 Before any root installation, the unprivileged `--plan-phase-a-request` mode
 runs each Python-startup, Git, compiler, and `readelf` invocation in fresh
 private scratch. It emits canonical request bytes only; its claims remain
-`observation_only=true` and `production_native_output=false`. Trace contract v4
+`observation_only=true` and `production_native_output=false`. Trace contract v5
 pins successful host files and path-component chains, directory searches,
 negative search results, runtime mapped-file device/inode/path/bytes, and each
 invocation's exact pre-run scratch inventory. Production accepts only the same
@@ -103,7 +103,7 @@ the only non-scratch mutating-open endpoint.
 
 The `git:fetch` process tree may perform the exact successful
 `openat(O_RDONLY|O_CLOEXEC)` of `/sys/devices/system/cpu/online` two or three
-times while producing the same output. Trace v4 therefore canonicalizes the
+times while producing the same output. Trace v5 therefore canonicalizes the
 multiplicity of only that exact event to one after at least one event was
 observed. The contract records this as its one exact `event_count_policies`
 entry, bound only to the `git:fetch` profile. The sysfs file remains a held,
@@ -113,24 +113,27 @@ or flag set keeps its ordinary exact count; this is not a sysfs prefix rule.
 
 The one finite procfs host authority is the literal and canonical
 `/proc/sys/vm/overcommit_memory`. It is not a `/proc/sys` allowlist. The
-planner and both replay validators require root:root `0644`, one link, an exact
-device/inode and complete endpoint component, a read-only no-follow descriptor,
+planner and both replay validators require root:root `0644`, one link, a
+read-only no-follow descriptor with exact within-namespace path identity,
 and stream-pinned bytes equal to exactly `0\n`, `1\n`, or `2\n` even though
-procfs reports size zero. Trace v4 synthesizes one closed
-`proc-root-nlink-volatile-v1` record for that endpoint's `/proc` ancestor: only
-the volatile `nlink` is omitted. Path, mode, owner, device, inode, mtime, and
-ctime remain pinned there, and all metadata remains pinned for `/`,
-`/proc/sys`, `/proc/sys/vm`, and the endpoint. Any other procfs path, alias,
-traversal, symlink, write flag, malformed value, or replay drift offered as a
-durable host input fails closed; the earlier exact process-local proc tokens
-remain finite trace events rather than durable host authorities.
+procfs reports size zero. Trace v5 applies the closed
+`proc-chain-mount-metadata-volatile-v2` policy only to `/proc`, `/proc/sys`,
+`/proc/sys/vm`, and the endpoint. Because `ProtectProc=invisible` creates a
+mount namespace, those records omit cross-namespace device, inode, mtime, and
+ctime; `/proc` additionally omits its process-count-sensitive link count. `/`
+keeps full metadata, the remaining procfs records keep exact link count, and
+all records keep exact path, kind, mode, and owner. Any other procfs path,
+alias, traversal, symlink, write flag, malformed value, stable-field drift, or
+within-namespace descriptor/path identity drift offered as a durable host input
+fails closed; the earlier exact process-local proc tokens remain finite trace
+events rather than durable host authorities.
 
 Both native-builder units therefore set `ProcSubset=all` so that the exact
 non-process procfs endpoint remains visible inside the service mount namespace.
 They retain `ProtectProc=invisible` to hide other-user process details and
 `ProtectKernelTunables=yes` to keep `/proc/sys` read-only. `ProcSubset=pid` is
 not a compatible hardening substitute here: it hides `/proc/sys` entirely and
-would make the required trace-v4 authority impossible to validate.
+would make the required trace-v5 authority impossible to validate.
 
 The root bootstrap verifies the fixed account record, lock state,
 subordinate-ID exclusion, and absence of numeric-997 processes. Production
@@ -164,7 +167,7 @@ review audit, and the canonical initial-bootstrap input. The fresh
 `vista_r8_ue57_initial_bootstrap.py` Git blob must match the helper provenance
 in those embedded documents; stale helper provenance is rejected.
 It must also carry Phase A's builder pin, bundle/commit/seven-blob inventory,
-tools/toolchain ledger, runtime-map sets, and trace-v4 contract without change.
+tools/toolchain ledger, runtime-map sets, and trace-v5 contract without change.
 The zero-write derivation re-reads Phase A's request and manifest and validates
 their pin edge. The later authority audit opens and retains both documents
 while repeating that comparison against the installed Phase B request.
@@ -396,7 +399,7 @@ emit the finite sysctl access, so the exact authority was correctly absent
 rather than admitted as an orphan; focused planner, contract, held-open, and
 revalidation tests exercise both its accepted literal form and its closed
 negative matrix. Those trace-v3 request bytes are historical evidence, not
-activation inputs. Trace v4 requires a fresh exact bundle plus clean and
+activation inputs. Trace v5 requires a fresh exact bundle plus clean and
 controlled-load planner/replay runs with byte-identical canonical requests
 before any root activation.
 
