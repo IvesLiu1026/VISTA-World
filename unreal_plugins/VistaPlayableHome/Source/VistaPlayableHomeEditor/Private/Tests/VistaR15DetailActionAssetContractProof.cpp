@@ -386,8 +386,8 @@ bool FVistaR15DetailActionAssetContractProof::RunTest(
               Montage->SlotAnimTracks.Num(), 1);
     if (Montage->SlotAnimTracks.Num() == 1) {
       const FSlotAnimationTrack &SlotTrack = Montage->SlotAnimTracks[0];
-      TestEqual(Context(Spec.ClipId, TEXT("default slot")), SlotTrack.SlotName,
-                FAnimSlotGroup::DefaultSlotName);
+      TestTrue(Context(Spec.ClipId, TEXT("default slot")),
+               SlotTrack.SlotName == FAnimSlotGroup::DefaultSlotName);
       TestEqual(Context(Spec.ClipId, TEXT("one animation segment")),
                 SlotTrack.AnimTrack.AnimSegments.Num(), 1);
       if (SlotTrack.AnimTrack.AnimSegments.Num() == 1) {
