@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simworld.org/schemas/vista-playable-interaction-bindings-v1.schema.json",
+  "title": "VISTA Playable Home Interaction Bindings v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "binding_id",
+    "binding_revision",
+    "house_binding",
+    "action_catalog_binding",
+    "interactions",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "vista.playable-interaction-bindings/v1"},
+    "binding_id": {"const": "vista_home_interactions"},
+    "binding_revision": {"const": "vista_home_interactions_r1"},
+    "house_binding": {"$ref": "#/$defs/houseBinding"},
+    "action_catalog_binding": {"$ref": "#/$defs/catalogBinding"},
+    "interactions": {
+      "type": "array",
+      "minItems": 10,
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/interaction"}
+    },
+    "content_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+      "maxLength": 96
+    },
+    "slug": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "maxLength": 96},
+    "entityId": {
+      "type": "string",
+      "pattern": "^home\\.r[0-9]+/room\\.[a-z][a-z0-9_]*/entity\\.[a-z][a-z0-9_]*\\.[0-9]{2}$",
+      "maxLength": 192
+    },
+    "houseBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["house_id", "revision", "content_digest"],
+      "properties": {
+        "house_id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 96},
+        "revision": {"type": "string", "pattern": "^[a-z][a-z0-9_]*_r[0-9]+$", "maxLength": 96},
+        "content_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "catalogBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog_id", "catalog_revision", "content_digest"],
+      "properties": {
+        "catalog_id": {"const": "vista_indoor_actions"},
+        "catalog_revision": {"const": "vista_indoor_actions_r3"},
+        "content_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "stateValue": {
+      "oneOf": [
+        {"type": "boolean"},
+        {"type": "null"},
+        {"type": "string", "minLength": 1, "maxLength": 224}
+      ]
+    },
+    "stateField": {
+      "enum": ["open", "active", "powered", "status", "held_by", "placed_at"]
+    },
+    "stateAssertion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state_field", "operator", "value"],
+      "properties": {
+        "state_field": {"$ref": "#/$defs/stateField"},
+        "operator": {"const": "equals"},
+        "value": {"$ref": "#/$defs/stateValue"}
+      }
+    },
+    "stateAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state_field", "value"],
+      "properties": {
+        "state_field": {"$ref": "#/$defs/stateField"},
+        "value": {"$ref": "#/$defs/stateValue"}
+      }
+    },
+    "postcondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["set", "all_other_state_fields"],
+      "properties": {
+        "set": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/stateAssignment"}
+        },
+        "all_other_state_fields": {"const": "preserve"}
+      }
+    },
+    "actionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_id", "preconditions", "postcondition"],
+      "properties": {
+        "action_id": {"$ref": "#/$defs/identifier"},
+        "preconditions": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {"$ref": "#/$defs/stateAssertion"}
+        },
+        "postcondition": {"$ref": "#/$defs/postcondition"}
+      }
+    },
+    "useCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["equals", "action_id"],
+      "properties": {
+        "equals": {"type": "boolean"},
+        "action_id": {"$ref": "#/$defs/identifier"}
+      }
+    },
+    "useResolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "state_field", "direct_action_id", "cases"],
+      "properties": {
+        "mode": {"enum": ["direct", "boolean_state_dispatch"]},
+        "state_field": {
+          "oneOf": [
+            {"$ref": "#/$defs/stateField"},
+            {"type": "null"}
+          ]
+        },
+        "direct_action_id": {
+          "oneOf": [
+            {"$ref": "#/$defs/identifier"},
+            {"type": "null"}
+          ]
+        },
+        "cases": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {"$ref": "#/$defs/useCase"}
+        }
+      }
+    },
+    "interaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interaction_id",
+        "target_ids",
+        "target_categories",
+        "component_role",
+        "house_affordances",
+        "default_use_action",
+        "use_resolution",
+        "actions"
+      ],
+      "properties": {
+        "interaction_id": {"$ref": "#/$defs/identifier"},
+        "target_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/entityId"}
+        },
+        "target_categories": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/slug"}
+        },
+        "component_role": {"enum": ["door", "container", "pickup", "appliance"]},
+        "house_affordances": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"enum": ["open", "close", "inspect", "pick_up", "drop", "place", "toggle"]}
+        },
+        "default_use_action": {"$ref": "#/$defs/identifier"},
+        "use_resolution": {"$ref": "#/$defs/useResolution"},
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {"$ref": "#/$defs/actionBinding"}
+        }
+      }
+    }
+  }
+}

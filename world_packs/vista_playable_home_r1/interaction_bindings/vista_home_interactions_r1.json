@@ -1,0 +1,256 @@
+{
+  "schema_version": "vista.playable-interaction-bindings/v1",
+  "binding_id": "vista_home_interactions",
+  "binding_revision": "vista_home_interactions_r1",
+  "house_binding": {
+    "house_id": "home.r1",
+    "revision": "vista_playable_home_r1",
+    "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+  },
+  "action_catalog_binding": {
+    "catalog_id": "vista_indoor_actions",
+    "catalog_revision": "vista_indoor_actions_r3",
+    "content_digest": "0f761a4481586c7a684a7cddd188a6adae0ca67b8931fe3a757c6b62a79191cf"
+  },
+  "interactions": [
+    {
+      "interaction_id": "fridge.primary",
+      "target_ids": ["home.r1/room.kitchen_dining/entity.fridge.01"],
+      "target_categories": ["fridge"],
+      "component_role": "container",
+      "house_affordances": ["open", "close", "inspect"],
+      "default_use_action": "use",
+      "use_resolution": {
+        "mode": "boolean_state_dispatch",
+        "state_field": "open",
+        "direct_action_id": null,
+        "cases": [
+          {"equals": false, "action_id": "articulation.open"},
+          {"equals": true, "action_id": "close"}
+        ]
+      },
+      "actions": [
+        {
+          "action_id": "articulation.open",
+          "preconditions": [{"state_field": "open", "operator": "equals", "value": false}],
+          "postcondition": {"set": [{"state_field": "open", "value": true}], "all_other_state_fields": "preserve"}
+        },
+        {
+          "action_id": "close",
+          "preconditions": [{"state_field": "open", "operator": "equals", "value": true}],
+          "postcondition": {"set": [{"state_field": "open", "value": false}], "all_other_state_fields": "preserve"}
+        },
+        {
+          "action_id": "inspect",
+          "preconditions": [],
+          "postcondition": {"set": [], "all_other_state_fields": "preserve"}
+        }
+      ]
+    },
+    {
+      "interaction_id": "door.standard",
+      "target_ids": [
+        "home.r1/room.entry_hall/entity.exit_door.01",
+        "home.r1/room.entry_hall/entity.interior_door.01",
+        "home.r1/room.entry_hall/entity.interior_door.02",
+        "home.r1/room.entry_hall/entity.interior_door.03",
+        "home.r1/room.entry_hall/entity.interior_door.04",
+        "home.r1/room.entry_hall/entity.interior_door.05"
+      ],
+      "target_categories": ["exit_door", "interior_door"],
+      "component_role": "door",
+      "house_affordances": ["open", "close", "inspect"],
+      "default_use_action": "use",
+      "use_resolution": {
+        "mode": "boolean_state_dispatch",
+        "state_field": "open",
+        "direct_action_id": null,
+        "cases": [
+          {"equals": false, "action_id": "articulation.open"},
+          {"equals": true, "action_id": "close"}
+        ]
+      },
+      "actions": [
+        {
+          "action_id": "articulation.open",
+          "preconditions": [{"state_field": "open", "operator": "equals", "value": false}],
+          "postcondition": {"set": [{"state_field": "open", "value": true}], "all_other_state_fields": "preserve"}
+        },
+        {
+          "action_id": "close",
+          "preconditions": [{"state_field": "open", "operator": "equals", "value": true}],
+          "postcondition": {"set": [{"state_field": "open", "value": false}], "all_other_state_fields": "preserve"}
+        },
+        {
+          "action_id": "inspect",
+          "preconditions": [],
+          "postcondition": {"set": [], "all_other_state_fields": "preserve"}
+        }
+      ]
+    },
+    {
+      "interaction_id": "cabinet.office",
+      "target_ids": ["home.r1/room.office/entity.cabinet.01"],
+      "target_categories": ["cabinet"],
+      "component_role": "container",
+      "house_affordances": ["open", "close", "inspect"],
+      "default_use_action": "use",
+      "use_resolution": {
+        "mode": "boolean_state_dispatch",
+        "state_field": "open",
+        "direct_action_id": null,
+        "cases": [
+          {"equals": false, "action_id": "articulation.open"},
+          {"equals": true, "action_id": "close"}
+        ]
+      },
+      "actions": [
+        {
+          "action_id": "articulation.open",
+          "preconditions": [{"state_field": "open", "operator": "equals", "value": false}],
+          "postcondition": {"set": [{"state_field": "open", "value": true}], "all_other_state_fields": "preserve"}
+        },
+        {
+          "action_id": "close",
+          "preconditions": [{"state_field": "open", "operator": "equals", "value": true}],
+          "postcondition": {"set": [{"state_field": "open", "value": false}], "all_other_state_fields": "preserve"}
+        },
+        {
+          "action_id": "inspect",
+          "preconditions": [],
+          "postcondition": {"set": [], "all_other_state_fields": "preserve"}
+        }
+      ]
+    },
+    {
+      "interaction_id": "coffee_cup.primary",
+      "target_ids": ["home.r1/room.kitchen_dining/entity.coffee_cup.01"],
+      "target_categories": ["coffee_cup"],
+      "component_role": "pickup",
+      "house_affordances": ["pick_up", "drop", "place", "inspect"],
+      "default_use_action": "pick_up",
+      "use_resolution": {"mode": "direct", "state_field": null, "direct_action_id": "pick_up", "cases": []},
+      "actions": [
+        {
+          "action_id": "pick_up",
+          "preconditions": [{"state_field": "held_by", "operator": "equals", "value": null}],
+          "postcondition": {"set": [{"state_field": "held_by", "value": "$actor_id"}, {"state_field": "placed_at", "value": null}], "all_other_state_fields": "preserve"}
+        },
+        {
+          "action_id": "place",
+          "preconditions": [{"state_field": "held_by", "operator": "equals", "value": "$actor_id"}],
+          "postcondition": {"set": [{"state_field": "held_by", "value": null}, {"state_field": "placed_at", "value": "$placement_anchor_id"}], "all_other_state_fields": "preserve"}
+        },
+        {
+          "action_id": "drop",
+          "preconditions": [{"state_field": "held_by", "operator": "equals", "value": "$actor_id"}],
+          "postcondition": {"set": [{"state_field": "held_by", "value": null}, {"state_field": "placed_at", "value": null}], "all_other_state_fields": "preserve"}
+        },
+        {"action_id": "inspect", "preconditions": [], "postcondition": {"set": [], "all_other_state_fields": "preserve"}}
+      ]
+    },
+    {
+      "interaction_id": "slipper.primary",
+      "target_ids": ["home.r1/room.living_room/entity.slipper.01"],
+      "target_categories": ["slipper"],
+      "component_role": "pickup",
+      "house_affordances": ["pick_up", "drop", "place", "inspect"],
+      "default_use_action": "pick_up",
+      "use_resolution": {"mode": "direct", "state_field": null, "direct_action_id": "pick_up", "cases": []},
+      "actions": [
+        {"action_id": "pick_up", "preconditions": [{"state_field": "held_by", "operator": "equals", "value": null}], "postcondition": {"set": [{"state_field": "held_by", "value": "$actor_id"}, {"state_field": "placed_at", "value": null}], "all_other_state_fields": "preserve"}},
+        {"action_id": "place", "preconditions": [{"state_field": "held_by", "operator": "equals", "value": "$actor_id"}], "postcondition": {"set": [{"state_field": "held_by", "value": null}, {"state_field": "placed_at", "value": "$placement_anchor_id"}], "all_other_state_fields": "preserve"}},
+        {"action_id": "drop", "preconditions": [{"state_field": "held_by", "operator": "equals", "value": "$actor_id"}], "postcondition": {"set": [{"state_field": "held_by", "value": null}, {"state_field": "placed_at", "value": null}], "all_other_state_fields": "preserve"}},
+        {"action_id": "inspect", "preconditions": [], "postcondition": {"set": [], "all_other_state_fields": "preserve"}}
+      ]
+    },
+    {
+      "interaction_id": "phone.primary",
+      "target_ids": ["home.r1/room.bedroom/entity.phone.01"],
+      "target_categories": ["phone"],
+      "component_role": "pickup",
+      "house_affordances": ["pick_up", "drop", "place", "inspect"],
+      "default_use_action": "pick_up",
+      "use_resolution": {"mode": "direct", "state_field": null, "direct_action_id": "pick_up", "cases": []},
+      "actions": [
+        {"action_id": "pick_up", "preconditions": [{"state_field": "held_by", "operator": "equals", "value": null}], "postcondition": {"set": [{"state_field": "held_by", "value": "$actor_id"}, {"state_field": "placed_at", "value": null}], "all_other_state_fields": "preserve"}},
+        {"action_id": "place", "preconditions": [{"state_field": "held_by", "operator": "equals", "value": "$actor_id"}], "postcondition": {"set": [{"state_field": "held_by", "value": null}, {"state_field": "placed_at", "value": "$placement_anchor_id"}], "all_other_state_fields": "preserve"}},
+        {"action_id": "drop", "preconditions": [{"state_field": "held_by", "operator": "equals", "value": "$actor_id"}], "postcondition": {"set": [{"state_field": "held_by", "value": null}, {"state_field": "placed_at", "value": null}], "all_other_state_fields": "preserve"}},
+        {"action_id": "inspect", "preconditions": [], "postcondition": {"set": [], "all_other_state_fields": "preserve"}}
+      ]
+    },
+    {
+      "interaction_id": "keys.primary",
+      "target_ids": ["home.r1/room.living_room/entity.keys.01"],
+      "target_categories": ["keys"],
+      "component_role": "pickup",
+      "house_affordances": ["pick_up", "drop", "place", "inspect"],
+      "default_use_action": "pick_up",
+      "use_resolution": {"mode": "direct", "state_field": null, "direct_action_id": "pick_up", "cases": []},
+      "actions": [
+        {"action_id": "pick_up", "preconditions": [{"state_field": "held_by", "operator": "equals", "value": null}], "postcondition": {"set": [{"state_field": "held_by", "value": "$actor_id"}, {"state_field": "placed_at", "value": null}], "all_other_state_fields": "preserve"}},
+        {"action_id": "place", "preconditions": [{"state_field": "held_by", "operator": "equals", "value": "$actor_id"}], "postcondition": {"set": [{"state_field": "held_by", "value": null}, {"state_field": "placed_at", "value": "$placement_anchor_id"}], "all_other_state_fields": "preserve"}},
+        {"action_id": "drop", "preconditions": [{"state_field": "held_by", "operator": "equals", "value": "$actor_id"}], "postcondition": {"set": [{"state_field": "held_by", "value": null}, {"state_field": "placed_at", "value": null}], "all_other_state_fields": "preserve"}},
+        {"action_id": "inspect", "preconditions": [], "postcondition": {"set": [], "all_other_state_fields": "preserve"}}
+      ]
+    },
+    {
+      "interaction_id": "stove.primary",
+      "target_ids": ["home.r1/room.kitchen_dining/entity.stove.01"],
+      "target_categories": ["stove"],
+      "component_role": "appliance",
+      "house_affordances": ["toggle", "inspect"],
+      "default_use_action": "use",
+      "use_resolution": {
+        "mode": "boolean_state_dispatch",
+        "state_field": "active",
+        "direct_action_id": null,
+        "cases": [{"equals": false, "action_id": "turn_on"}, {"equals": true, "action_id": "turn_off"}]
+      },
+      "actions": [
+        {"action_id": "turn_on", "preconditions": [{"state_field": "powered", "operator": "equals", "value": true}, {"state_field": "active", "operator": "equals", "value": false}], "postcondition": {"set": [{"state_field": "active", "value": true}, {"state_field": "status", "value": "heating"}], "all_other_state_fields": "preserve"}},
+        {"action_id": "turn_off", "preconditions": [{"state_field": "powered", "operator": "equals", "value": true}, {"state_field": "active", "operator": "equals", "value": true}], "postcondition": {"set": [{"state_field": "active", "value": false}, {"state_field": "status", "value": "idle"}], "all_other_state_fields": "preserve"}},
+        {"action_id": "inspect", "preconditions": [], "postcondition": {"set": [], "all_other_state_fields": "preserve"}}
+      ]
+    },
+    {
+      "interaction_id": "faucet.primary",
+      "target_ids": ["home.r1/room.bathroom_laundry/entity.faucet.01"],
+      "target_categories": ["faucet"],
+      "component_role": "appliance",
+      "house_affordances": ["toggle", "inspect"],
+      "default_use_action": "use",
+      "use_resolution": {
+        "mode": "boolean_state_dispatch",
+        "state_field": "active",
+        "direct_action_id": null,
+        "cases": [{"equals": false, "action_id": "turn_on"}, {"equals": true, "action_id": "turn_off"}]
+      },
+      "actions": [
+        {"action_id": "turn_on", "preconditions": [{"state_field": "powered", "operator": "equals", "value": true}, {"state_field": "active", "operator": "equals", "value": false}], "postcondition": {"set": [{"state_field": "active", "value": true}, {"state_field": "status", "value": "flowing"}], "all_other_state_fields": "preserve"}},
+        {"action_id": "turn_off", "preconditions": [{"state_field": "powered", "operator": "equals", "value": true}, {"state_field": "active", "operator": "equals", "value": true}], "postcondition": {"set": [{"state_field": "active", "value": false}, {"state_field": "status", "value": "idle"}], "all_other_state_fields": "preserve"}},
+        {"action_id": "inspect", "preconditions": [], "postcondition": {"set": [], "all_other_state_fields": "preserve"}}
+      ]
+    },
+    {
+      "interaction_id": "washer.primary",
+      "target_ids": ["home.r1/room.bathroom_laundry/entity.washer.01"],
+      "target_categories": ["washer"],
+      "component_role": "appliance",
+      "house_affordances": ["toggle", "inspect"],
+      "default_use_action": "use",
+      "use_resolution": {
+        "mode": "boolean_state_dispatch",
+        "state_field": "active",
+        "direct_action_id": null,
+        "cases": [{"equals": false, "action_id": "turn_on"}, {"equals": true, "action_id": "turn_off"}]
+      },
+      "actions": [
+        {"action_id": "turn_on", "preconditions": [{"state_field": "powered", "operator": "equals", "value": true}, {"state_field": "active", "operator": "equals", "value": false}], "postcondition": {"set": [{"state_field": "active", "value": true}, {"state_field": "status", "value": "running"}], "all_other_state_fields": "preserve"}},
+        {"action_id": "turn_off", "preconditions": [{"state_field": "powered", "operator": "equals", "value": true}, {"state_field": "active", "operator": "equals", "value": true}], "postcondition": {"set": [{"state_field": "active", "value": false}, {"state_field": "status", "value": "idle"}], "all_other_state_fields": "preserve"}},
+        {"action_id": "inspect", "preconditions": [], "postcondition": {"set": [], "all_other_state_fields": "preserve"}}
+      ]
+    }
+  ],
+  "content_digest": "261543543ee5370f0ef784a4d44c96351d4e367447046dfd4e40192f955ea0a0"
+}
