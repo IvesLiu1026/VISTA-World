@@ -8,6 +8,7 @@
 #include "VistaEventSubsystem.h"
 #include "VistaInteractable.h"
 #include "VistaPlayableHomeRuntimeSubsystem.h"
+#include "VistaStatefulApplianceActor.h"
 
 namespace
 {
@@ -72,6 +73,10 @@ EVistaNpcActionType AnimationTypeFor(const EVistaAffordance Affordance)
     case EVistaAffordance::Open: return EVistaNpcActionType::OpenDoor;
     case EVistaAffordance::Close: return EVistaNpcActionType::CloseDoor;
     case EVistaAffordance::Inspect: return EVistaNpcActionType::Inspect;
+    case EVistaAffordance::Toggle: return EVistaNpcActionType::Toggle;
+    case EVistaAffordance::Press: return EVistaNpcActionType::Press;
+    case EVistaAffordance::TurnOn: return EVistaNpcActionType::TurnOn;
+    case EVistaAffordance::TurnOff: return EVistaNpcActionType::TurnOff;
     default: return EVistaNpcActionType::Wait;
     }
 }
@@ -79,11 +84,20 @@ EVistaNpcActionType AnimationTypeFor(const EVistaAffordance Affordance)
 bool StateMatchesSemanticEffect(
     const FVistaEntityRuntimeState& Before,
     const FVistaEntityRuntimeState& After,
-    const EVistaAffordance Affordance)
+    const EVistaAffordance Affordance,
+    const AActor* Target)
 {
     if (Affordance == EVistaAffordance::Inspect)
     {
         return RuntimeStatesEquivalent(Before, After);
+    }
+    if (AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
+            Affordance))
+    {
+        const AVistaStatefulApplianceActor* Appliance =
+            Cast<AVistaStatefulApplianceActor>(Target);
+        return IsValid(Appliance) &&
+            Appliance->StateMatchesTransition(Before, After, Affordance);
     }
     const FString* Open = After.Values.Find(TEXT("open"));
     if (Open == nullptr)
@@ -130,7 +144,9 @@ bool UVistaActionExecutorComponent::IsAnimatedSemanticAffordance(
 {
     return Affordance == EVistaAffordance::Open ||
         Affordance == EVistaAffordance::Close ||
-        Affordance == EVistaAffordance::Inspect;
+        Affordance == EVistaAffordance::Inspect ||
+        AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
+            Affordance);
 }
 
 FString UVistaActionExecutorComponent::CanonicalSemanticRequestHex(
@@ -204,6 +220,23 @@ bool UVistaActionExecutorComponent::BeginSemanticInteraction(
     const FVistaSemanticActionRequest& InputRequest,
     FVistaActionTransactionRecord& OutRecord)
 {
+    return BeginSemanticInteractionImpl(InputRequest, OutRecord, false);
+}
+
+#if WITH_DEV_AUTOMATION_TESTS
+bool UVistaActionExecutorComponent::BeginSemanticInteractionForDevAutomation(
+    const FVistaSemanticActionRequest& InputRequest,
+    FVistaActionTransactionRecord& OutRecord)
+{
+    return BeginSemanticInteractionImpl(InputRequest, OutRecord, true);
+}
+#endif
+
+bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
+    const FVistaSemanticActionRequest& InputRequest,
+    FVistaActionTransactionRecord& OutRecord,
+    const bool bDevAutomationBypassesAnimationReadiness)
+{
     check(IsInGameThread());
     if (InputRequest.CommandId.IsNone())
     {
@@ -276,6 +309,19 @@ bool UVistaActionExecutorComponent::BeginSemanticInteraction(
             TEXT("SEMANTIC_PARTICIPANT_INVALID"),
             OutRecord);
     }
+    const bool bApplianceMutation =
+        AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
+            InputRequest.Affordance);
+    AVistaStatefulApplianceActor* Appliance =
+        Cast<AVistaStatefulApplianceActor>(Target);
+    if (bApplianceMutation && !IsValid(Appliance))
+    {
+        return RejectSemanticRequest(
+            InputRequest,
+            CanonicalRequest,
+            TEXT("APPLIANCE_TARGET_REQUIRED"),
+            OutRecord);
+    }
     if (!IsValid(GetWorld()) || Requester->GetWorld() != GetWorld() ||
         Target->GetWorld() != GetWorld())
     {
@@ -338,8 +384,15 @@ bool UVistaActionExecutorComponent::BeginSemanticInteraction(
         : FName(TEXT("ANIMATION_COMPONENT_UNAVAILABLE"));
     const EVistaNpcActionType AnimationType =
         AnimationTypeFor(Request.Affordance);
-    if (!IsValid(Animation) ||
-        !Animation->HasApprovedMutationAnimation(AnimationType, AnimationCode))
+    bool bAnimationReady = IsValid(Animation) &&
+        Animation->HasApprovedMutationAnimation(AnimationType, AnimationCode);
+#if WITH_DEV_AUTOMATION_TESTS
+    bAnimationReady = bAnimationReady ||
+        bDevAutomationBypassesAnimationReadiness;
+#else
+    static_cast<void>(bDevAutomationBypassesAnimationReadiness);
+#endif
+    if (!bAnimationReady)
     {
         return RejectSemanticRequest(
             InputRequest, CanonicalRequest, AnimationCode, OutRecord);
@@ -372,20 +425,110 @@ bool UVistaActionExecutorComponent::BeginSemanticInteraction(
             TEXT("BEFORE_STATE_INVALID"),
             OutRecord);
     }
+    if (bApplianceMutation)
+    {
+        if (!Appliance->TryReserveTransaction(this, Request.CommandId))
+        {
+            return RejectSemanticRequest(
+                InputRequest,
+                CanonicalRequest,
+                TEXT("APPLIANCE_TARGET_BUSY"),
+                OutRecord);
+        }
+        Active.bTargetReserved = true;
+        Active.Record.bTargetReservationAcquired = true;
+    }
     ActiveSemanticAction = MoveTemp(Active);
     if (!TransitionSemantic(EVistaActionPhase::Approach, TEXT("ACTION_APPROACH")))
     {
         ActiveSemanticAction->Record.Status =
             EVistaActionTransactionStatus::Failed;
         ActiveSemanticAction->Record.Code = TEXT("ACTION_LEDGER_PUBLISH_FAILED");
+        ReleaseSemanticTargetReservation();
         OutRecord = ActiveSemanticAction->Record;
         PublishSemanticRecord(true);
-        ActiveSemanticAction.Reset();
+        AbandonSemanticAfterPublishFailure();
         return false;
     }
     OutRecord = ActiveSemanticAction->Record;
     return true;
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+bool UVistaActionExecutorComponent::DriveSemanticInteractionForDevAutomation(
+    const bool bFailAfterContact,
+    FVistaActionTransactionRecord& OutRecord)
+{
+    check(IsInGameThread());
+    if (!ActiveSemanticAction.IsSet())
+    {
+        OutRecord = FVistaActionTransactionRecord();
+        OutRecord.Code = TEXT("DEV_AUTOMATION_SEMANTIC_ACTION_REQUIRED");
+        OutRecord.Status = EVistaActionTransactionStatus::Failed;
+        return false;
+    }
+
+    const FName CommandId = ActiveSemanticAction->Record.CommandId;
+    AdvanceSemanticApproach();
+    if (!ActiveSemanticAction.IsSet() ||
+        ActiveSemanticAction->Record.Phase != EVistaActionPhase::Align)
+    {
+        return GetTransaction(CommandId, OutRecord) && OutRecord.IsTerminal();
+    }
+    AdvanceSemanticAlign();
+    if (!ActiveSemanticAction.IsSet() ||
+        ActiveSemanticAction->Record.Phase != EVistaActionPhase::Animate)
+    {
+        return GetTransaction(CommandId, OutRecord) && OutRecord.IsTerminal();
+    }
+    if (!TransitionSemantic(
+            EVistaActionPhase::ContactCommit,
+            TEXT("DEV_AUTOMATION_SEMANTIC_CONTACT_COMMIT")))
+    {
+        FinishSemanticFailure(
+            EVistaActionTransactionStatus::Failed,
+            TEXT("ACTION_LEDGER_PUBLISH_FAILED"));
+        GetTransaction(CommandId, OutRecord);
+        return false;
+    }
+
+    FName ContactCode;
+    if (!CommitSemanticContact(ContactCode))
+    {
+        FinishSemanticFailure(
+            EVistaActionTransactionStatus::Failed,
+            ContactCode.IsNone()
+                ? FName(TEXT("DEV_AUTOMATION_SEMANTIC_CONTACT_FAILED"))
+                : ContactCode);
+        GetTransaction(CommandId, OutRecord);
+        return false;
+    }
+    if (bFailAfterContact)
+    {
+        FinishSemanticFailure(
+            EVistaActionTransactionStatus::Failed,
+            TEXT("DEV_AUTOMATION_FORCED_POST_CONTACT_FAILURE"));
+    }
+    else
+    {
+        CompleteSemanticSuccess();
+    }
+    if (!GetTransaction(CommandId, OutRecord))
+    {
+        OutRecord = FVistaActionTransactionRecord();
+        OutRecord.CommandId = CommandId;
+        OutRecord.Code = TEXT("DEV_AUTOMATION_LEDGER_RECORD_MISSING");
+        OutRecord.Status = EVistaActionTransactionStatus::Failed;
+        return false;
+    }
+    return bFailAfterContact
+        ? OutRecord.Status == EVistaActionTransactionStatus::Failed &&
+            OutRecord.bRollbackAttempted && OutRecord.bRolledBack &&
+            OutRecord.bTargetReservationReleased
+        : OutRecord.Status == EVistaActionTransactionStatus::Succeeded &&
+            OutRecord.bTargetReservationReleased;
+}
+#endif
 
 void UVistaActionExecutorComponent::TickSemanticAction()
 {
@@ -645,8 +788,18 @@ bool UVistaActionExecutorComponent::CommitSemanticContact(FName& OutCode)
         OutCode = TEXT("ACTION_LEDGER_PUBLISH_FAILED");
         return false;
     }
+    const bool bApplianceMutation =
+        AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
+            ActiveSemanticAction->Request.Affordance);
+    AVistaStatefulApplianceActor* Appliance =
+        Cast<AVistaStatefulApplianceActor>(Target);
     const FVistaInteractionResult Result =
-        IVistaInteractable::Execute_VistaInteract(Target, Interaction);
+        bApplianceMutation && IsValid(Appliance)
+        ? Appliance->CommitTransactionalInteraction(
+            this,
+            Interaction,
+            ActiveSemanticAction->Record.CommandId)
+        : IVistaInteractable::Execute_VistaInteract(Target, Interaction);
     if (!Result.IsSuccess())
     {
         OutCode = Result.Code.IsNone()
@@ -656,13 +809,19 @@ bool UVistaActionExecutorComponent::CommitSemanticContact(FName& OutCode)
     }
     const FVistaEntityRuntimeState ContactState =
         IVistaInteractable::Execute_VistaGetRuntimeState(Target);
+    ActiveSemanticAction->Record.StateMutationCount =
+        RuntimeStatesEquivalent(
+            ActiveSemanticAction->Record.BeforeState,
+            ContactState)
+        ? 0 : 1;
     if (ContactState.SemanticId !=
             ActiveSemanticAction->Record.TargetSemanticId ||
         ContactState.Transform.ContainsNaN() ||
         !StateMatchesSemanticEffect(
             ActiveSemanticAction->Record.BeforeState,
             ContactState,
-            ActiveSemanticAction->Request.Affordance))
+            ActiveSemanticAction->Request.Affordance,
+            Target))
     {
         OutCode = ActiveSemanticAction->Request.Affordance ==
                 EVistaAffordance::Inspect
@@ -702,7 +861,8 @@ void UVistaActionExecutorComponent::CompleteSemanticSuccess()
     if (!StateMatchesSemanticEffect(
             ActiveSemanticAction->Record.BeforeState,
             ActiveSemanticAction->Record.AfterState,
-            ActiveSemanticAction->Request.Affordance) ||
+            ActiveSemanticAction->Request.Affordance,
+            Target) ||
         !RuntimeStatesEquivalent(
             ActiveSemanticAction->Record.ContactState,
             ActiveSemanticAction->Record.AfterState))
@@ -759,7 +919,7 @@ void UVistaActionExecutorComponent::CompleteSemanticSuccess()
     FVistaActionTransactionRecord FinalRecord;
     if (!FinalizeSemantic(&FinalRecord))
     {
-        ActiveSemanticAction.Reset();
+        AbandonSemanticAfterPublishFailure();
         return;
     }
     if (UVistaEventSubsystem* Events = GetWorld()
@@ -810,13 +970,23 @@ void UVistaActionExecutorComponent::FinishSemanticFailure(
     if (ActiveSemanticAction->Record.bContactMutationAttempted)
     {
         AActor* Target = ActiveSemanticAction->Target.Get();
-        const FVistaInteractionResult Restore = IsValid(Target)
-            ? IVistaInteractable::Execute_VistaApplyRuntimeState(
-                Target,
-                ActiveSemanticAction->Record.BeforeState)
-            : FVistaInteractionResult::Failure(
+        AVistaStatefulApplianceActor* Appliance =
+            Cast<AVistaStatefulApplianceActor>(Target);
+        const bool bApplianceMutation =
+            AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
+                ActiveSemanticAction->Request.Affordance);
+        const FVistaInteractionResult Restore = !IsValid(Target)
+            ? FVistaInteractionResult::Failure(
                 EVistaInteractionStatus::NotFound,
-                TEXT("ROLLBACK_TARGET_LOST"));
+                TEXT("ROLLBACK_TARGET_LOST"))
+            : bApplianceMutation && IsValid(Appliance)
+                ? Appliance->RestoreTransactionalState(
+                    this,
+                    ActiveSemanticAction->Record.CommandId,
+                    ActiveSemanticAction->Record.BeforeState)
+                : IVistaInteractable::Execute_VistaApplyRuntimeState(
+                    Target,
+                    ActiveSemanticAction->Record.BeforeState);
         const FVistaEntityRuntimeState RestoredState = IsValid(Target)
             ? IVistaInteractable::Execute_VistaGetRuntimeState(Target)
             : FVistaEntityRuntimeState();
@@ -853,7 +1023,7 @@ void UVistaActionExecutorComponent::FinishSemanticFailure(
         ActiveSemanticAction->Record.Code);
     if (!FinalizeSemantic())
     {
-        ActiveSemanticAction.Reset();
+        AbandonSemanticAfterPublishFailure();
     }
 }
 
@@ -889,6 +1059,19 @@ bool UVistaActionExecutorComponent::FinalizeSemantic(
     FVistaActionTransactionRecord* OutFinalRecord)
 {
     check(ActiveSemanticAction.IsSet());
+    if (!ReleaseSemanticTargetReservation())
+    {
+        ActiveSemanticAction->Record.Status =
+            EVistaActionTransactionStatus::Failed;
+        ActiveSemanticAction->Record.Code =
+            TEXT("APPLIANCE_RESERVATION_RELEASE_FAILED");
+        PublishSemanticRecord(true);
+        if (OutFinalRecord != nullptr)
+        {
+            *OutFinalRecord = ActiveSemanticAction->Record;
+        }
+        return false;
+    }
     if (!PublishSemanticRecord(true))
     {
         return false;
@@ -899,4 +1082,42 @@ bool UVistaActionExecutorComponent::FinalizeSemantic(
     }
     ActiveSemanticAction.Reset();
     return true;
+}
+
+bool UVistaActionExecutorComponent::ReleaseSemanticTargetReservation()
+{
+    if (!ActiveSemanticAction.IsSet() ||
+        !ActiveSemanticAction->bTargetReserved)
+    {
+        return true;
+    }
+    AVistaStatefulApplianceActor* Appliance =
+        Cast<AVistaStatefulApplianceActor>(
+            ActiveSemanticAction->Target.Get());
+    const bool bReleased = !IsValid(Appliance) ||
+        Appliance->ReleaseTransaction(
+            this,
+            ActiveSemanticAction->Record.CommandId);
+    if (!bReleased)
+    {
+        return false;
+    }
+    ActiveSemanticAction->bTargetReserved = false;
+    ActiveSemanticAction->Record.bTargetReservationReleased = true;
+    return true;
+}
+
+void UVistaActionExecutorComponent::AbandonSemanticAfterPublishFailure()
+{
+    if (!ActiveSemanticAction.IsSet())
+    {
+        return;
+    }
+    if (UVistaAnimationComponent* Animation =
+            ActiveSemanticAction->Animation.Get())
+    {
+        Animation->StopActiveAction(TEXT("ACTION_LEDGER_PUBLISH_FAILED"));
+    }
+    ReleaseSemanticTargetReservation();
+    ActiveSemanticAction.Reset();
 }

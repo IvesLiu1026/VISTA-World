@@ -49,6 +49,14 @@ bool IsMakeHumanCc0DetailAction(const EVistaNpcActionType Type)
         Type == EVistaNpcActionType::CloseDoor ||
         Type == EVistaNpcActionType::Inspect;
 }
+
+bool IsApplianceCandidateAction(const EVistaNpcActionType Type)
+{
+    return Type == EVistaNpcActionType::Toggle ||
+        Type == EVistaNpcActionType::Press ||
+        Type == EVistaNpcActionType::TurnOn ||
+        Type == EVistaNpcActionType::TurnOff;
+}
 }
 
 UVistaAnimationComponent::UVistaAnimationComponent()
@@ -87,6 +95,10 @@ bool UVistaAnimationComponent::SupportsAction(EVistaNpcActionType Type)
     {
     case EVistaNpcActionType::LookAt:
     case EVistaNpcActionType::Inspect:
+    case EVistaNpcActionType::Toggle:
+    case EVistaNpcActionType::Press:
+    case EVistaNpcActionType::TurnOn:
+    case EVistaNpcActionType::TurnOff:
     case EVistaNpcActionType::PickUp:
     case EVistaNpcActionType::Place:
     case EVistaNpcActionType::Drop:
@@ -115,6 +127,14 @@ bool UVistaAnimationComponent::HasApprovedMutationAnimation(
     EVistaNpcActionType Type,
     FName& OutCode) const
 {
+    if (IsApplianceCandidateAction(Type))
+    {
+        // The transactional backend is source-ready, but no appliance montage
+        // has passed provider/license/runtime acceptance yet. Production stays
+        // fail-closed until an exact accepted binding replaces this gate.
+        OutCode = TEXT("ANIMATION_PROVIDER_CANDIDATE_ONLY");
+        return false;
+    }
     if (Type == EVistaNpcActionType::PickUp ||
         Type == EVistaNpcActionType::Place ||
         Type == EVistaNpcActionType::Drop)
@@ -144,6 +164,11 @@ bool UVistaAnimationComponent::ResolveMontage(
     TSoftObjectPtr<UAnimMontage>& OutMontage,
     FName& OutCode) const
 {
+    if (IsApplianceCandidateAction(Type))
+    {
+        OutCode = TEXT("ANIMATION_PROVIDER_CANDIDATE_ONLY");
+        return false;
+    }
     if (Type == EVistaNpcActionType::PickUp ||
         Type == EVistaNpcActionType::Place ||
         Type == EVistaNpcActionType::Drop)
@@ -217,6 +242,10 @@ FName UVistaAnimationComponent::CompletionSignalFor(EVistaNpcActionType Type)
     {
     case EVistaNpcActionType::LookAt: return TEXT("vista_look_at_completed");
     case EVistaNpcActionType::Inspect: return TEXT("vista_inspect_completed");
+    case EVistaNpcActionType::Toggle: return TEXT("vista_appliance_toggle_completed");
+    case EVistaNpcActionType::Press: return TEXT("vista_appliance_press_completed");
+    case EVistaNpcActionType::TurnOn: return TEXT("vista_appliance_turn_on_completed");
+    case EVistaNpcActionType::TurnOff: return TEXT("vista_appliance_turn_off_completed");
     case EVistaNpcActionType::PickUp: return TEXT("vista_pickup_completed");
     case EVistaNpcActionType::Place:
     case EVistaNpcActionType::Drop: return TEXT("vista_drop_completed");
@@ -241,6 +270,10 @@ FName UVistaAnimationComponent::ContactSignalFor(EVistaNpcActionType Type)
     case EVistaNpcActionType::Drop: return TEXT("vista_drop_release");
     case EVistaNpcActionType::OpenDoor:
     case EVistaNpcActionType::CloseDoor: return TEXT("vista_door_handle_contact");
+    case EVistaNpcActionType::Toggle: return TEXT("vista_appliance_toggle_contact");
+    case EVistaNpcActionType::Press: return TEXT("vista_appliance_button_contact");
+    case EVistaNpcActionType::TurnOn:
+    case EVistaNpcActionType::TurnOff: return TEXT("vista_appliance_power_contact");
     default: return NAME_None;
     }
 }

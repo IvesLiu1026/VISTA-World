@@ -216,6 +216,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VISTA|Interaction")
     FVistaInteractionResult PerformDefaultInteraction();
 
+    /** Explicit typed player path for appliance UI/input bindings. */
+    UFUNCTION(BlueprintCallable, Category = "VISTA|Interaction")
+    FVistaInteractionResult PerformFocusedApplianceInteraction(
+        EVistaAffordance Affordance);
+
     /** Read-only resolver shared by input handling and player-facing prompts. */
     EVistaAffordance GetDefaultInteractionAffordance(AActor* Target) const;
 

@@ -91,6 +91,16 @@ public:
     bool DrivePhysicalInteractionForDevAutomation(
         bool bFailAfterContact,
         FVistaActionTransactionRecord& OutRecord);
+
+    /** Editor-only proof entry; production still requires an accepted provider. */
+    bool BeginSemanticInteractionForDevAutomation(
+        const FVistaSemanticActionRequest& Request,
+        FVistaActionTransactionRecord& OutRecord);
+
+    /** Drive the real semantic commit/rollback path without loading a montage. */
+    bool DriveSemanticInteractionForDevAutomation(
+        bool bFailAfterContact,
+        FVistaActionTransactionRecord& OutRecord);
 #endif
 
     /** Replay is side-effect free; a known id with a different signature fails closed. */
@@ -172,6 +182,7 @@ private:
         double StartedAtSeconds = 0.0;
         bool bAnimationStarted = false;
         bool bAlignmentApplied = false;
+        bool bTargetReserved = false;
     };
 
     TOptional<FActivePhysicalAction> ActiveAction;
@@ -179,6 +190,10 @@ private:
 
     bool BeginPhysicalInteractionImpl(
         const FVistaPhysicalActionRequest& Request,
+        FVistaActionTransactionRecord& OutRecord,
+        bool bDevAutomationBypassesAnimationReadiness);
+    bool BeginSemanticInteractionImpl(
+        const FVistaSemanticActionRequest& Request,
         FVistaActionTransactionRecord& OutRecord,
         bool bDevAutomationBypassesAnimationReadiness);
 
@@ -241,4 +256,6 @@ private:
     bool PublishSemanticRecord(bool bTerminal = false);
     bool FinalizeSemantic(
         FVistaActionTransactionRecord* OutFinalRecord = nullptr);
+    bool ReleaseSemanticTargetReservation();
+    void AbandonSemanticAfterPublishFailure();
 };

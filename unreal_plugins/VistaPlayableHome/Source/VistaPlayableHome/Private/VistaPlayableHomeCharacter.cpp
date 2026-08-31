@@ -32,6 +32,7 @@
 #include "VistaInteractionComponent.h"
 #include "VistaPickupActor.h"
 #include "VistaPlayableHomeRuntimeSubsystem.h"
+#include "VistaStatefulApplianceActor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVistaPlayableHomeCamera, Log, All);
 
@@ -1284,16 +1285,47 @@ FVistaInteractionResult AVistaPlayableHomeCharacter::PerformDefaultInteraction()
     {
         return BeginPhysicalInteraction(Target, Affordance);
     }
-    if (Affordance == EVistaAffordance::Open ||
-        Affordance == EVistaAffordance::Close)
-    {
-        return BeginSemanticInteraction(Target, Affordance);
-    }
     if (Affordance == EVistaAffordance::Inspect)
     {
         return BeginAnimatedInspectInteraction();
     }
+    if (UVistaActionExecutorComponent::IsAnimatedSemanticAffordance(Affordance))
+    {
+        return BeginSemanticInteraction(Target, Affordance);
+    }
     return InteractionComponent->TryInteract(Affordance);
+}
+
+FVistaInteractionResult
+AVistaPlayableHomeCharacter::PerformFocusedApplianceInteraction(
+    const EVistaAffordance Affordance)
+{
+    if (!AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
+            Affordance))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Unsupported,
+            TEXT("APPLIANCE_AFFORDANCE_REQUIRED"));
+    }
+    AActor* Target = IsValid(InteractionComponent)
+        ? InteractionComponent->GetFocusedActor() : nullptr;
+    if (!IsValid(Target) ||
+        !Target->IsA<AVistaStatefulApplianceActor>())
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::NotFound,
+            TEXT("APPLIANCE_TARGET_REQUIRED"));
+    }
+    const TArray<EVistaAffordance> Affordances =
+        IVistaInteractable::Execute_VistaGetAffordances(Target);
+    if (!Affordances.Contains(Affordance))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Unsupported,
+            TEXT("AFFORDANCE_UNSUPPORTED"),
+            IVistaInteractable::Execute_VistaGetSemanticId(Target));
+    }
+    return BeginSemanticInteraction(Target, Affordance);
 }
 
 EVistaAffordance AVistaPlayableHomeCharacter::GetDefaultInteractionAffordance(
@@ -1317,6 +1349,27 @@ EVistaAffordance AVistaPlayableHomeCharacter::GetDefaultInteractionAffordance(
         return bOpen && Affordances.Contains(EVistaAffordance::Close)
             ? EVistaAffordance::Close
             : EVistaAffordance::Open;
+    }
+    if (Affordances.Contains(EVistaAffordance::TurnOn) ||
+        Affordances.Contains(EVistaAffordance::TurnOff))
+    {
+        const FVistaEntityRuntimeState State =
+            IVistaInteractable::Execute_VistaGetRuntimeState(Target);
+        const FString* ActiveValue = State.Values.Find(TEXT("active"));
+        const bool bActive = ActiveValue != nullptr &&
+            ActiveValue->Equals(TEXT("true"), ESearchCase::CaseSensitive);
+        if (bActive && Affordances.Contains(EVistaAffordance::TurnOff))
+        {
+            return EVistaAffordance::TurnOff;
+        }
+        if (!bActive && Affordances.Contains(EVistaAffordance::TurnOn))
+        {
+            return EVistaAffordance::TurnOn;
+        }
+    }
+    if (Affordances.Contains(EVistaAffordance::Press))
+    {
+        return EVistaAffordance::Press;
     }
     if (Affordances.Contains(EVistaAffordance::Toggle))
     {

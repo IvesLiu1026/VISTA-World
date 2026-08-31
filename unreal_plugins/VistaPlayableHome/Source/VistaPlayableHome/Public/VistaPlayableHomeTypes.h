@@ -19,7 +19,13 @@ enum class EVistaAffordance : uint8
     Place,
     Toggle,
     Sit,
-    Inspect
+    Inspect,
+    /** Press the target-authored control profile (for example washer/start). */
+    Press,
+    /** Idempotently activate an externally powered appliance. */
+    TurnOn,
+    /** Idempotently deactivate an appliance without changing external power. */
+    TurnOff
 };
 
 UENUM(BlueprintType)
@@ -306,6 +312,18 @@ struct VISTAPLAYABLEHOME_API FVistaActionTransactionRecord
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     int32 PhysicalMutationCount = 0;
 
+    /** Number of authoritative semantic-state mutations committed at contact. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    int32 StateMutationCount = 0;
+
+    /** True only after a mutable semantic target accepted this transaction. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bTargetReservationAcquired = false;
+
+    /** Terminal receipts prove that the semantic target was made available again. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    bool bTargetReservationReleased = false;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     int32 SessionGeneration = 0;
 
@@ -339,7 +357,15 @@ enum class EVistaNpcActionType : uint8
     /** Release the requester's currently held portable item without a target. */
     Drop,
     /** Read-only semantic inspection; intentionally distinct from LookAt. */
-    Inspect
+    Inspect,
+    /** Transactional appliance active-state toggle. */
+    Toggle,
+    /** Transactional target-authored appliance control press. */
+    Press,
+    /** Transactional idempotent appliance activation. */
+    TurnOn,
+    /** Transactional idempotent appliance deactivation. */
+    TurnOff
 };
 
 UENUM(BlueprintType)
