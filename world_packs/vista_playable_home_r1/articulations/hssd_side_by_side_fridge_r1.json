@@ -1,0 +1,99 @@
+{
+  "schema_version": "vista.playable-articulated-fridge/v1",
+  "contract_id": "hssd_side_by_side_fridge_r1",
+  "semantic_target_id": "home.r1/room.kitchen_dining/entity.fridge.01",
+  "dataset": {
+    "provider": "HSSD",
+    "revision": "4369cb9876214c7fbebcf552eb532380e4d287e4",
+    "license_spdx": "CC-BY-NC-4.0",
+    "use_class": "private_noncommercial_research_only",
+    "payload_policy": "external_payload_never_in_git"
+  },
+  "source_model": {
+    "model_id": "01841f449f738c1e24fa15753d1fbc5fe0c6a92c",
+    "catalog_name": "Samsung Side By Side Fridge Freezer RSH1DBBP Black",
+    "wordnet": "refrigerator.n.01",
+    "category": "fridge",
+    "dimensions_m": [0.9104543924331665, 1.7658493518829346, 0.704597681760788],
+    "has_articulation": true
+  },
+  "metadata_evidence": [
+    {
+      "relative_path": "metadata/fpmodels-with-decomposed.csv",
+      "sha256": "a5489ab4a5e29ee6699616a7c8da58660b0262aeaca38706981864567a1ab137",
+      "size_bytes": 5149465,
+      "required_row": "01841f449f738c1e24fa15753d1fbc5fe0c6a92c,Samsung Side By Side Fridge Freezer RSH1DBBP Black,refrigerator.n.01,,,kitchen,false,,,\"0.9104543924331665,1.7658493518829346,0.704597681760788\",fpModel-412,,,\"American fridges,Kitchen,Electrical,Fridges & Freezers,Kitchen appliances\",True,refrigerator.n.01,fridge,large_kitchen_appliance,receptacle"
+    },
+    {
+      "relative_path": "metadata/hssd_obj_semantics_condensed.csv",
+      "sha256": "6f2e16be9d0bf6c37f22b9e53e34d7d24b5764948502c66b0e2d4860e5260922",
+      "size_bytes": 1174818,
+      "required_row": "01841f449f738c1e24fa15753d1fbc5fe0c6a92c,Yes,No,fridge,fridge,,"
+    }
+  ],
+  "source_files": [
+    {"role":"urdf","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/01841f449f738c1e24fa15753d1fbc5fe0c6a92c.urdf","sha256":"ca0bb55db065473d7477fd48bd1bccdc9d04cbce6f686a398b60d72350ce9487","size_bytes":11520},
+    {"role":"ao_config","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/01841f449f738c1e24fa15753d1fbc5fe0c6a92c.ao_config.json","sha256":"9df6a015e7f0621f5ae23e2ad9c77beac0e52b1214eae3c30956b9a9ab8812fb","size_bytes":8291},
+    {"role":"body","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014.glb","sha256":"e4ebc48dad5a2f543098c982a830e8d153b6ca7e9c1038d84e293193b256ffe1","size_bytes":18904},
+    {"role":"primary_door","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_door01.glb","sha256":"2b82f3b5dbd58b654e7318f62d02f3680d9b02960f2fb7b0b97b3b98d401987c","size_bytes":63252},
+    {"role":"secondary_door","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_door02.glb","sha256":"5796ccfe7d2476aaef8dfccd6cdc5fdad8f25954cd08ae4a09bca9efa2f710f8","size_bytes":83984},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_door01_receptacle_mesh.glb","sha256":"379ff89315a2ffe1495bab56855c47ff107aac301ccc50c5fab8af525e7eabdd","size_bytes":1292},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_shelf_01_receptacle_mesh.glb","sha256":"f600aaf8e2f33fe68543fd73738c193ae6cb479a3e7f3c18d22d52dd244cd9ea","size_bytes":1156},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_shelf_02_receptacle_mesh.glb","sha256":"60ea3d962b92d2a859c0ff4b84411cc894239ae2e8df01ae9070d6ec57a040ee","size_bytes":1156},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_shelf_03_receptacle_mesh.glb","sha256":"1e0b8044e91fa79966e72a5777889cd4fb7bf20aaff811700c2afdeabd465744","size_bytes":1156},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_shelf_04_receptacle_mesh.glb","sha256":"87ac571bd4ebf42508c0825541139078087c3c14888e0f3b5d6d17066eebf69c","size_bytes":1156},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_shelf_05_receptacle_mesh.glb","sha256":"5b6121e0cd8d4b2eb650d145de9b6f32176f7ddb2885f05c0b210934e8793d8a","size_bytes":1156},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_shelf_06_receptacle_mesh.glb","sha256":"e4ce655fd9b27e3242b442dacc15195d8a2eb633b0783d0eec326a4b21bcd0ea","size_bytes":1160},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_shelf_07_receptacle_mesh.glb","sha256":"122a04d1b77f2cbb5aeb40b954f826f1a9776e720f878d78c32329a85fdd428f","size_bytes":1160},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_shelf_08_receptacle_mesh.glb","sha256":"09f0073734051fc689c2719abbf4765588b94373dd3ff8f63642e15900452ba7","size_bytes":1160},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_shelf_9_receptacle_mesh.glb","sha256":"55cf41225f251b30077801abf5b12426c25b320bd015b882bb954ca224107274","size_bytes":1156},
+    {"role":"receptacle","relative_path":"urdf/01841f449f738c1e24fa15753d1fbc5fe0c6a92c/fridge0014_top_receptacle_mesh.glb","sha256":"7d14d48ac7f71513e73a329857c4cb747b38e0e506a765e049a6bfe84376ca85","size_bytes":1120}
+  ],
+  "root_transform": {
+    "joint_name": "root_rotation",
+    "parent": "root",
+    "child": "fridge0014",
+    "rpy_rad": [-1.570796, 0, 0],
+    "xyz_m": [0, 0, 0],
+    "ue_units_per_metre": 100
+  },
+  "links": [
+    {"link_name":"fridge0014","role":"body","mesh_filename":"fridge0014.glb"},
+    {"link_name":"fridge0014_door01","role":"primary_door","mesh_filename":"fridge0014_door01.glb"},
+    {"link_name":"fridge0014_door02","role":"secondary_door","mesh_filename":"fridge0014_door02.glb"}
+  ],
+  "joints": [
+    {"joint_name":"fridge0014_door01","joint_type":"revolute","parent":"fridge0014","child":"fridge0014_door01","axis":[0,0,-1],"origin_xyz_m":[-0.454702,-0.286022,0.948854],"origin_rpy_rad":[0,0,0],"lower_rad":0,"upper_rad":2.7925267219543457,"velocity_rad_s":3},
+    {"joint_name":"fridge0014_door02","joint_type":"revolute","parent":"fridge0014","child":"fridge0014_door02","axis":[0,0,1],"origin_xyz_m":[0.455137,-0.286202,0.918887],"origin_rpy_rad":[0,0,0],"lower_rad":0,"upper_rad":2.7925267219543457,"velocity_rad_s":3}
+  ],
+  "receptacles": [
+    {"anchor_id":"fridge.door.01","mesh_filename":"fridge0014_door01_receptacle_mesh.glb","parent_link":"fridge0014_door01"},
+    {"anchor_id":"fridge.shelf.01","mesh_filename":"fridge0014_shelf_01_receptacle_mesh.glb","parent_link":"fridge0014"},
+    {"anchor_id":"fridge.shelf.02","mesh_filename":"fridge0014_shelf_02_receptacle_mesh.glb","parent_link":"fridge0014"},
+    {"anchor_id":"fridge.shelf.03","mesh_filename":"fridge0014_shelf_03_receptacle_mesh.glb","parent_link":"fridge0014"},
+    {"anchor_id":"fridge.shelf.04","mesh_filename":"fridge0014_shelf_04_receptacle_mesh.glb","parent_link":"fridge0014"},
+    {"anchor_id":"fridge.shelf.05","mesh_filename":"fridge0014_shelf_05_receptacle_mesh.glb","parent_link":"fridge0014"},
+    {"anchor_id":"fridge.shelf.06","mesh_filename":"fridge0014_shelf_06_receptacle_mesh.glb","parent_link":"fridge0014"},
+    {"anchor_id":"fridge.shelf.07","mesh_filename":"fridge0014_shelf_07_receptacle_mesh.glb","parent_link":"fridge0014"},
+    {"anchor_id":"fridge.shelf.08","mesh_filename":"fridge0014_shelf_08_receptacle_mesh.glb","parent_link":"fridge0014"},
+    {"anchor_id":"fridge.shelf.09","mesh_filename":"fridge0014_shelf_9_receptacle_mesh.glb","parent_link":"fridge0014"},
+    {"anchor_id":"fridge.top.01","mesh_filename":"fridge0014_top_receptacle_mesh.glb","parent_link":"fridge0014"}
+  ],
+  "runtime_binding": {
+    "actor_class": "/Script/VistaPlayableHome.VistaArticulatedFridgeActor",
+    "primary_open_angle_deg": 110,
+    "angular_speed_deg_s": 171.887,
+    "primary_door_only_r1": true,
+    "legacy_shell_policy": "remove_in_fresh_derivative",
+    "legacy_proxy_policy": "remove_in_fresh_derivative"
+  },
+  "acceptance": {
+    "accepted": false,
+    "status": "source_verified_pending_ue_import_runtime_and_human_review",
+    "ue_imported": false,
+    "runtime_verified": false,
+    "human_reviewed": false,
+    "gta_quality": false
+  },
+  "content_digest": "4429b9ed24fc5394880c74e10ca3dda2c11a70cc4687ee9f8bb0c3b7b05f0b92"
+}
