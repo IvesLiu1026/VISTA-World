@@ -1,0 +1,335 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/IvesLiu1026/VISTA-World/world_packs/schemas/vista-playable-makehuman-cc0-detail-actions-r15-profile-v1.schema.json",
+  "title": "VISTA MakeHuman CC0 Detail Actions R15 Profile V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_id",
+    "character_id",
+    "acceptance",
+    "namespace_contract",
+    "source_character_binding",
+    "rig_contract",
+    "license_scope",
+    "provenance",
+    "quality_contract",
+    "target_height_bands",
+    "clips",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "vista.makehuman-cc0-detail-actions-r15-profile/v1"},
+    "profile_id": {"const": "makehuman_cc0_detail_actions_r15"},
+    "character_id": {"const": "makehuman_cc0_eurasian_female_arkit_v3"},
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted", "runtime_execution_authorized", "human_reviewed"],
+      "properties": {
+        "accepted": {"const": false},
+        "runtime_execution_authorized": {"const": false},
+        "human_reviewed": {"const": false}
+      }
+    },
+    "namespace_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_namespace",
+        "ue_content_namespace",
+        "artifact_namespace",
+        "existing_r8_or_r14_bytes_reused"
+      ],
+      "properties": {
+        "source_namespace": {"const": "vista.makehuman-cc0-detail-actions/r15"},
+        "ue_content_namespace": {"const": "/Game/VISTA/MakeHumanCC0/R15/DetailActions"},
+        "artifact_namespace": {"const": "makehuman_cc0_detail_actions_r15"},
+        "existing_r8_or_r14_bytes_reused": {"const": false}
+      }
+    },
+    "source_character_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_character_asset_lane",
+        "character_id",
+        "armature_name",
+        "bone_count",
+        "motion_source_policy",
+        "prior_animation_artifact_dependency"
+      ],
+      "properties": {
+        "source_character_asset_lane": {"const": "makehuman_cc0_character_r6"},
+        "character_id": {"const": "makehuman_cc0_eurasian_female_arkit_v3"},
+        "armature_name": {"const": "VISTA_CC0_Hero_Rig_export"},
+        "bone_count": {"const": 53},
+        "motion_source_policy": {"const": "fresh_numeric_recipes_only"},
+        "prior_animation_artifact_dependency": {"const": "none"}
+      }
+    },
+    "rig_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["armature_name", "root_bone", "bone_count", "coordinate_system"],
+      "properties": {
+        "armature_name": {"const": "VISTA_CC0_Hero_Rig_export"},
+        "root_bone": {"const": "root"},
+        "bone_count": {"const": 53},
+        "coordinate_system": {"const": "blender_m_z_up_ue_export_minus_y_forward"}
+      }
+    },
+    "license_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["character_source_spdx", "motion_recipe_spdx", "external_binary_policy"],
+      "properties": {
+        "character_source_spdx": {"const": "CC0-1.0"},
+        "motion_recipe_spdx": {"const": "CC0-1.0"},
+        "external_binary_policy": {"const": "outside_git_only"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "motion_origin",
+        "contains_manny_derived_motion",
+        "contains_metahuman_motion",
+        "contains_city_sample_motion",
+        "contains_simworld_motion",
+        "contains_motion_capture"
+      ],
+      "properties": {
+        "motion_origin": {"const": "project_authored_numeric_keyframes"},
+        "contains_manny_derived_motion": {"const": false},
+        "contains_metahuman_motion": {"const": false},
+        "contains_city_sample_motion": {"const": false},
+        "contains_simworld_motion": {"const": false},
+        "contains_motion_capture": {"const": false}
+      }
+    },
+    "quality_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "distinct_numeric_recipe_per_clip",
+        "root_motion_forbidden",
+        "contact_height_contract_required",
+        "loop_seam_required_for_looping_clips",
+        "human_motion_review_required"
+      ],
+      "properties": {
+        "distinct_numeric_recipe_per_clip": {"const": true},
+        "root_motion_forbidden": {"const": true},
+        "contact_height_contract_required": {"const": true},
+        "loop_seam_required_for_looping_clips": {"const": true},
+        "human_motion_review_required": {"const": true}
+      }
+    },
+    "target_height_bands": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["counter", "waist", "seat"],
+      "properties": {
+        "counter": {"$ref": "#/$defs/counter_band"},
+        "waist": {"$ref": "#/$defs/waist_band"},
+        "seat": {"$ref": "#/$defs/seat_band"}
+      }
+    },
+    "clips": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {"$ref": "#/$defs/clip"}
+    },
+    "content_digest": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "counter_band": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_cm", "maximum_cm"],
+      "properties": {
+        "minimum_cm": {"const": 85},
+        "maximum_cm": {"const": 110}
+      }
+    },
+    "waist_band": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_cm", "maximum_cm"],
+      "properties": {
+        "minimum_cm": {"const": 70},
+        "maximum_cm": {"const": 100}
+      }
+    },
+    "seat_band": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_cm", "maximum_cm"],
+      "properties": {
+        "minimum_cm": {"const": 38},
+        "maximum_cm": {"const": 55}
+      }
+    },
+    "notify": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frame", "kind", "signal"],
+      "properties": {
+        "frame": {"type": "integer", "minimum": 0, "maximum": 180},
+        "kind": {"enum": ["contact", "completion"]},
+        "signal": {"type": "string", "pattern": "^vista_[a-z0-9_]{3,63}$"}
+      }
+    },
+    "phase_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "anticipation_end_frame",
+        "engagement_frame",
+        "follow_through_start_frame",
+        "completion_frame"
+      ],
+      "properties": {
+        "anticipation_end_frame": {"type": "integer", "minimum": 1, "maximum": 180},
+        "engagement_frame": {"type": "integer", "minimum": 2, "maximum": 180},
+        "follow_through_start_frame": {"type": "integer", "minimum": 3, "maximum": 180},
+        "completion_frame": {"type": "integer", "minimum": 4, "maximum": 180}
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semantic_types",
+        "interaction_point",
+        "height_band",
+        "height_cm",
+        "actor_hand",
+        "hand_bone",
+        "primary_contact_bone",
+        "secondary_contact_bones"
+      ],
+      "properties": {
+        "semantic_types": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "stove_control",
+              "faucet_control",
+              "washer_button",
+              "cabinet_door",
+              "drawer",
+              "chair_seat",
+              "held_container"
+            ]
+          }
+        },
+        "interaction_point": {
+          "enum": [
+            "rotary_control_center",
+            "start_button_center",
+            "primary_pull_handle",
+            "seat_surface_center",
+            "held_container_grip"
+          ]
+        },
+        "height_band": {"enum": ["counter", "waist", "seat"]},
+        "height_cm": {"type": "integer", "minimum": 38, "maximum": 110},
+        "actor_hand": {"enum": ["right", "none"]},
+        "hand_bone": {"enum": ["hand_r", "none"]},
+        "primary_contact_bone": {"enum": ["hand_r", "pelvis"]},
+        "secondary_contact_bones": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"enum": ["thigh_l", "thigh_r", "foot_l", "foot_r"]}
+        }
+      }
+    },
+    "runtime_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend_status",
+        "contact_signal_authority",
+        "completion_signal_authority",
+        "runtime_execution_authorized"
+      ],
+      "properties": {
+        "backend_status": {"enum": ["typed_backend_available", "source_only_unimplemented"]},
+        "contact_signal_authority": {
+          "enum": ["UVistaAnimationComponent::ContactSignalFor", "r15_source_contract_only"]
+        },
+        "completion_signal_authority": {
+          "enum": ["UVistaAnimationComponent::CompletionSignalFor", "r15_source_contract_only"]
+        },
+        "runtime_execution_authorized": {"const": false}
+      }
+    },
+    "clip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clip_id",
+        "event_action",
+        "action_name",
+        "ue_sequence_name",
+        "ue_montage_name",
+        "frame_start",
+        "frame_end",
+        "fps",
+        "loop",
+        "root_motion_policy",
+        "target",
+        "phase_contract",
+        "typed_notifies",
+        "runtime_binding",
+        "recipe_id"
+      ],
+      "properties": {
+        "clip_id": {
+          "enum": [
+            "rotary_turn_on_right",
+            "rotary_turn_off_right",
+            "button_press_right",
+            "cabinet_drawer_open_right",
+            "cabinet_drawer_close_right",
+            "sit_down_chair",
+            "seated_idle_loop",
+            "stand_up_chair",
+            "pour_right"
+          ]
+        },
+        "event_action": {
+          "enum": ["turn_on", "turn_off", "press", "open", "close", "sit", "seated_idle", "stand", "pour"]
+        },
+        "action_name": {"type": "string", "pattern": "^VISTA_CC0_[A-Za-z0-9_]{3,63}_R15$"},
+        "ue_sequence_name": {"type": "string", "pattern": "^AS_VistaCC0[A-Za-z0-9_]{2,63}_R15$"},
+        "ue_montage_name": {"type": "string", "pattern": "^AM_VistaCC0[A-Za-z0-9_]{2,63}_R15$"},
+        "frame_start": {"const": 0},
+        "frame_end": {"type": "integer", "minimum": 60, "maximum": 150},
+        "fps": {"const": 30},
+        "loop": {"type": "boolean"},
+        "root_motion_policy": {"const": "forbidden"},
+        "target": {"$ref": "#/$defs/target"},
+        "phase_contract": {"$ref": "#/$defs/phase_contract"},
+        "typed_notifies": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": {"$ref": "#/$defs/notify"}
+        },
+        "runtime_binding": {"$ref": "#/$defs/runtime_binding"},
+        "recipe_id": {"type": "string", "pattern": "^cc0_numeric_[a-z0-9_]{3,63}_r15$"}
+      }
+    }
+  }
+}
