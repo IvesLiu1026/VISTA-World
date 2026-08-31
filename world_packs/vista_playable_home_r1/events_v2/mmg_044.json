@@ -1,0 +1,138 @@
+{
+  "schema_version": "simworld.vista.playable-event/v2",
+  "event_id": "mmg_044",
+  "title": "Keys left in the living room",
+  "compatible_house": {
+    "house_id": "home.r1",
+    "revision": "vista_playable_home_r1",
+    "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+  },
+  "participating_room_ids": [
+    "home.r1/room.entry_hall",
+    "home.r1/room.living_room"
+  ],
+  "participating_entity_ids": [
+    "home.r1/room.entry_hall/entity.exit_door.01",
+    "home.r1/room.living_room/entity.keys.01"
+  ],
+  "initial_operations": [
+    {
+      "op_id": "op.01",
+      "op": "set_transform",
+      "target_id": "home.r1/room.living_room/entity.keys.01",
+      "room_id": "home.r1/room.living_room",
+      "transform": {
+        "location_m": [
+          -0.35,
+          0.3,
+          0.5
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          15
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "op_id": "op.02",
+      "op": "set_portable",
+      "target_id": "home.r1/room.living_room/entity.keys.01",
+      "portable": true
+    },
+    {
+      "op_id": "op.03",
+      "op": "set_goal",
+      "goal_id": "bring_keys",
+      "enabled": true
+    },
+    {
+      "op_id": "op.04",
+      "op": "set_npc_queue",
+      "npc_id": "npc.resident",
+      "actions": [
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.living_room"
+        },
+        {
+          "action": "inspect",
+          "target_id": "home.r1/room.living_room/entity.keys.01"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.living_room/entity.keys.01"
+        },
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.entry_hall"
+        },
+        {
+          "action": "drop"
+        }
+      ]
+    }
+  ],
+  "public_goals": [
+    {
+      "goal_id": "bring_keys",
+      "description": "Bring the keys from the living room to the entry before opening the exit door.",
+      "success_condition_ids": [
+        "keys_at_entry"
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "condition_id": "player_at_entry",
+      "type": "player_room",
+      "room_id": "home.r1/room.entry_hall"
+    }
+  ],
+  "success_conditions": [
+    {
+      "condition_id": "keys_at_entry",
+      "type": "entity_room",
+      "target_id": "home.r1/room.living_room/entity.keys.01",
+      "room_id": "home.r1/room.entry_hall"
+    }
+  ],
+  "failure_conditions": [
+    {
+      "condition_id": "exit_opened_without_keys",
+      "type": "interaction",
+      "target_id": "home.r1/room.entry_hall/entity.exit_door.01",
+      "affordance": "open"
+    }
+  ],
+  "timeout_s": 600,
+  "reset_policy": {
+    "mode": "restore_baseline",
+    "reset_npc_queues": true,
+    "release_held_items": true
+  },
+  "source": {
+    "dataset": "VISTA",
+    "sample_id": "mmg_044",
+    "verification": "verified",
+    "public_reference": "vista://assist-step/mmg_044"
+  },
+  "content_digest": "7016f46cc55dde9b9ae8c4e4506090711333fa68da427505582f979ec2467508",
+  "action_catalog": {
+    "schema_version": "vista.playable-action-catalog/v2",
+    "catalog_id": "vista_indoor_actions",
+    "catalog_revision": "vista_indoor_actions_r2",
+    "content_digest": "07eb0a4740ea214c15fa59504b0b923787c23fa0b9232adfc18a0efc0cec7e35"
+  },
+  "derivation": {
+    "base_event_schema_version": "simworld.vista.playable-event/v1",
+    "base_event_id": "mmg_044",
+    "base_event_content_digest": "6d7487760faed67dba961d8c7acbd07476af1c4d197160263f4b413bd9a60340",
+    "change_scope": "append_catalog_bound_npc_action_queue"
+  }
+}
