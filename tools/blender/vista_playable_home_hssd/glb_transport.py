@@ -492,6 +492,27 @@ def rehydrate_core_png_materials(
     # glTF permits this for opaque image payloads. Newly emitted GLB views are
     # still held to the stricter 4-byte alignment contract below.
     _validate_buffer_graph(source, source_bin, "source", require_view_alignment=False)
+    # Blender's material-index surrogate preserves opaque image payload views
+    # from the HSSD source.  Those source views may be byte-packed even though
+    # every view in the UE-bound derivative must be 4-byte aligned.  Repack
+    # each view independently, keep its index stable for accessors, and only
+    # then append the decoded PNG payloads.
+    _validate_buffer_graph(
+        output,
+        output_bin,
+        "normalized surrogate",
+        require_view_alignment=False,
+    )
+    aligned_output_bin = bytearray()
+    for view in output.get("bufferViews", []):
+        while len(aligned_output_bin) % 4:
+            aligned_output_bin.append(0)
+        source_offset = view.get("byteOffset", 0)
+        source_end = source_offset + view["byteLength"]
+        view["byteOffset"] = len(aligned_output_bin)
+        aligned_output_bin.extend(output_bin[source_offset:source_end])
+    output_bin = bytes(aligned_output_bin)
+    output["buffers"] = [{"byteLength": len(output_bin)}]
     decoder = _decoder_identity(node_path, transcoder_js_path, transcoder_wasm_path)
     mapped_material_count = _restore_material_indices(source, output)
     if "samplers" in source:

@@ -424,14 +424,17 @@ def test_basisu_surrogate_transcodes_to_self_contained_core_png(tmp_path: Path, 
 
     normalized_document = {
         "asset": {"version": "2.0"},
-        "buffers": [{"byteLength": 4}],
-        "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 4}],
+        "buffers": [{"byteLength": 7}],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": 3},
+            {"buffer": 0, "byteOffset": 3, "byteLength": 4},
+        ],
         "materials": [{"name": "VISTA_HSSD_MAT_0000__Fabric", "pbrMetallicRoughness": {}}],
         "accessors": [{"count": 300, "componentType": 5123, "type": "SCALAR"}],
         "meshes": [{"primitives": [{"attributes": {}, "indices": 0, "material": 0}]}],
     }
     normalized = tmp_path / "normalized.glb"
-    write_glb(normalized, normalized_document, b"GEOM")
+    write_glb(normalized, normalized_document, b"PADGEOM")
     output = tmp_path / "output.glb"
     decoder = _decoder_receipt()
     monkeypatch.setattr(glb_transport, "_decoder_identity", lambda *_args: decoder)
@@ -477,6 +480,12 @@ def test_basisu_surrogate_transcodes_to_self_contained_core_png(tmp_path: Path, 
     assert output_document["textures"] == [{"sampler": 0, "source": 0}]
     assert "KHR_texture_basisu" not in output_document.get("extensionsRequired", [])
     assert output_document["meshes"][0]["primitives"][0]["material"] == 0
+    assert all(
+        view.get("byteOffset", 0) % 4 == 0
+        for view in output_document["bufferViews"]
+    )
+    assert output_binary[0:3] == b"PAD"
+    assert output_binary[4:8] == b"GEOM"
     image_view = output_document["bufferViews"][output_document["images"][0]["bufferView"]]
     start = image_view["byteOffset"]
     png_payload = output_binary[start : start + image_view["byteLength"]]
