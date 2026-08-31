@@ -1,0 +1,138 @@
+{
+  "schema_version": "simworld.vista.playable-event/v2",
+  "event_id": "mmg_045",
+  "title": "Phone left in the bedroom",
+  "compatible_house": {
+    "house_id": "home.r1",
+    "revision": "vista_playable_home_r1",
+    "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+  },
+  "participating_room_ids": [
+    "home.r1/room.bedroom",
+    "home.r1/room.entry_hall"
+  ],
+  "participating_entity_ids": [
+    "home.r1/room.bedroom/entity.phone.01",
+    "home.r1/room.entry_hall/entity.exit_door.01"
+  ],
+  "initial_operations": [
+    {
+      "op_id": "op.01",
+      "op": "set_transform",
+      "target_id": "home.r1/room.bedroom/entity.phone.01",
+      "room_id": "home.r1/room.bedroom",
+      "transform": {
+        "location_m": [
+          0.6,
+          1.2,
+          0.64
+        ],
+        "rotation_deg": [
+          0,
+          0,
+          10
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    {
+      "op_id": "op.02",
+      "op": "set_portable",
+      "target_id": "home.r1/room.bedroom/entity.phone.01",
+      "portable": true
+    },
+    {
+      "op_id": "op.03",
+      "op": "set_goal",
+      "goal_id": "bring_phone",
+      "enabled": true
+    },
+    {
+      "op_id": "op.04",
+      "op": "set_npc_queue",
+      "npc_id": "npc.resident",
+      "actions": [
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.bedroom"
+        },
+        {
+          "action": "inspect",
+          "target_id": "home.r1/room.bedroom/entity.phone.01"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.bedroom/entity.phone.01"
+        },
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.entry_hall"
+        },
+        {
+          "action": "drop"
+        }
+      ]
+    }
+  ],
+  "public_goals": [
+    {
+      "goal_id": "bring_phone",
+      "description": "Bring the phone from the bedroom to the entry before opening the exit door.",
+      "success_condition_ids": [
+        "phone_at_entry"
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "condition_id": "player_reaches_entry",
+      "type": "player_room",
+      "room_id": "home.r1/room.entry_hall"
+    }
+  ],
+  "success_conditions": [
+    {
+      "condition_id": "phone_at_entry",
+      "type": "entity_room",
+      "target_id": "home.r1/room.bedroom/entity.phone.01",
+      "room_id": "home.r1/room.entry_hall"
+    }
+  ],
+  "failure_conditions": [
+    {
+      "condition_id": "exit_opened_without_phone",
+      "type": "interaction",
+      "target_id": "home.r1/room.entry_hall/entity.exit_door.01",
+      "affordance": "open"
+    }
+  ],
+  "timeout_s": 600,
+  "reset_policy": {
+    "mode": "restore_baseline",
+    "reset_npc_queues": true,
+    "release_held_items": true
+  },
+  "source": {
+    "dataset": "VISTA",
+    "sample_id": "mmg_045",
+    "verification": "verified",
+    "public_reference": "vista://assist-step/mmg_045"
+  },
+  "content_digest": "6329fedd4625ed61ec94f7b278fe3d2736c3f82178d36cb16f6121c7531c1fdf",
+  "action_catalog": {
+    "schema_version": "vista.playable-action-catalog/v2",
+    "catalog_id": "vista_indoor_actions",
+    "catalog_revision": "vista_indoor_actions_r2",
+    "content_digest": "07eb0a4740ea214c15fa59504b0b923787c23fa0b9232adfc18a0efc0cec7e35"
+  },
+  "derivation": {
+    "base_event_schema_version": "simworld.vista.playable-event/v1",
+    "base_event_id": "mmg_045",
+    "base_event_content_digest": "3d41cf13b10855541a1d6fd67a56773f1639176b986154d28fc957c9c073fcc4",
+    "change_scope": "append_catalog_bound_npc_action_queue"
+  }
+}
