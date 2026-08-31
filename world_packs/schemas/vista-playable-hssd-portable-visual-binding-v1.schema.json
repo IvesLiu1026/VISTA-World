@@ -91,6 +91,7 @@
         "semantic_id",
         "room_id",
         "hssd_instance_id",
+        "shell_disposition",
         "source_asset_id",
         "hssd_mesh_object_path",
         "shell_actor_class_path",
@@ -111,6 +112,12 @@
         "semantic_id": {"type": "string", "pattern": "^home\\.r1/room\\.[a-z_]+/entity\\.[a-z0-9_.]+$"},
         "room_id": {"type": "string", "pattern": "^home\\.r1/room\\.[a-z_]+$"},
         "hssd_instance_id": {"type": "string", "pattern": "^hssd\\.r1/[a-z_]+\\.[a-z0-9_.]+$"},
+        "shell_disposition": {
+          "enum": [
+            "already_absent_source_shell",
+            "exact_visual_shell_to_delete"
+          ]
+        },
         "source_asset_id": {"enum": ["hssd.static.coffee_cup", "hssd.static.flip_flops"]},
         "hssd_mesh_object_path": {"type": "string", "pattern": "^/Game/VISTA/PlayableHome/.+\\..+$"},
         "shell_actor_class_path": {"const": "/Script/Engine.StaticMeshActor"},
