@@ -46,6 +46,11 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VISTA|NPC")
     bool ReplaceActionQueue(const TArray<FVistaNpcAction>& Actions, FName& OutCode);
 
+    /** Validate queue shape, target identity, affordances, and inventory read-only. */
+    UFUNCTION(BlueprintPure, Category = "VISTA|NPC")
+    bool PreflightActionQueue(const TArray<FVistaNpcAction>& Actions,
+                              FName& OutCode) const;
+
     UFUNCTION(BlueprintCallable, Category = "VISTA|NPC")
     bool EnqueueAction(const FVistaNpcAction& Action, FName& OutCode);
 
@@ -89,6 +94,11 @@ private:
     FAIRequestID ActiveNavigationRequestId = FAIRequestID::InvalidRequest;
 
     bool ValidateAction(const FVistaNpcAction& Action, FName& OutCode) const;
+    bool ValidateQueueShape(const TArray<FVistaNpcAction>& Actions,
+                            FName& OutCode) const;
+    bool ValidateActionTargetReadOnly(const FVistaNpcAction& Action,
+                                      AActor*& InOutSimulatedHeldItem,
+                                      FName& OutCode) const;
     void StopControlledMotion();
     void EnterCommandedIdle(bool bMotionAlreadyStopped = false);
     void StartNextAction();

@@ -14,11 +14,13 @@
 #include "RHIStrings.h"
 #include "VistaAnimationComponent.h"
 #include "VistaActionExecutorComponent.h"
+#include "VistaEventDefinitionActor.h"
 #include "VistaEventSubsystem.h"
 #include "VistaHomeNpcCharacter.h"
 #include "VistaHomeNpcController.h"
 #include "VistaInteractable.h"
 #include "VistaPickupActor.h"
+#include "VistaPlayableHomeGameMode.h"
 
 namespace
 {
@@ -46,6 +48,65 @@ constexpr const TCHAR* RendererCVarNames[] = {
     TEXT("sg.FoliageQuality"),
     TEXT("sg.ShadingQuality"),
 };
+
+bool IsLowerHexDigest(const FString& Value)
+{
+    if (Value.Len() != 64)
+    {
+        return false;
+    }
+    for (const TCHAR Character : Value)
+    {
+        if (!((Character >= TEXT('0') && Character <= TEXT('9')) ||
+              (Character >= TEXT('a') && Character <= TEXT('f'))))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool IsClosedIdentifier(const FString& Value)
+{
+    if (Value.IsEmpty() || Value.Len() > 80)
+    {
+        return false;
+    }
+    for (const TCHAR Character : Value)
+    {
+        if (!((Character >= TEXT('a') && Character <= TEXT('z')) ||
+              (Character >= TEXT('0') && Character <= TEXT('9')) ||
+              Character == TEXT('.') || Character == TEXT('_') ||
+              Character == TEXT('-')))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool IsClosedActionId(const FString& Value)
+{
+    const auto IsAsciiAlnum = [](TCHAR Character)
+    {
+        return (Character >= TEXT('A') && Character <= TEXT('Z')) ||
+               (Character >= TEXT('a') && Character <= TEXT('z')) ||
+               (Character >= TEXT('0') && Character <= TEXT('9'));
+    };
+    if (Value.IsEmpty() || Value.Len() > 80 || !IsAsciiAlnum(Value[0]))
+    {
+        return false;
+    }
+    for (const TCHAR Character : Value)
+    {
+        if (!(IsAsciiAlnum(Character) || Character == TEXT('.') ||
+              Character == TEXT('_') || Character == TEXT('-')))
+        {
+            return false;
+        }
+    }
+    return true;
+}
 } // namespace
 
 EVistaPhysicalCommandClaimOutcome
@@ -582,6 +643,175 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteNpcQueue(
     return Output;
 }
 
+FVistaLiveNpcQueuePreflightResult
+UVistaPlayableHomeRuntimeSubsystem::PreflightNpcQueue(
+    const FVistaLiveNpcQueuePreflightCommand& Command) const
+{
+    check(IsInGameThread());
+    FVistaLiveNpcQueuePreflightResult Output;
+    Output.CommandId = Command.Envelope.CommandId;
+    Output.QueueId = Command.QueueId;
+    Output.TargetSemanticId = Command.NpcSemanticId;
+    for (const FVistaNpcAction& Action : Command.Actions)
+    {
+        Output.ActionIds.Add(Action.ActionId);
+    }
+
+    FVistaLiveCommandResult EnvelopeResult;
+    if (!ValidateEnvelope(Command.Envelope, EnvelopeResult))
+    {
+        Output.SessionGeneration = EnvelopeResult.SessionGeneration;
+        Output.Code = EnvelopeResult.Code;
+        return Output;
+    }
+    Output.SessionGeneration = EnvelopeResult.SessionGeneration;
+
+    const UVistaEventSubsystem* Events =
+        GetWorld()->GetSubsystem<UVistaEventSubsystem>();
+    if (!IsValid(Events) ||
+        Events->GetEventStatus() != EVistaEventStatus::Inactive ||
+        !Events->GetActiveEventId().IsNone())
+    {
+        Output.Code = TEXT("RUNTIME_NOT_IDLE");
+        return Output;
+    }
+    if (!IsClosedIdentifier(Command.EventId.ToString()))
+    {
+        Output.Code = TEXT("EVENT_ID_INVALID");
+        return Output;
+    }
+    if (!IsLowerHexDigest(Command.EventContentDigest))
+    {
+        Output.Code = TEXT("EVENT_CONTENT_DIGEST_INVALID");
+        return Output;
+    }
+    if (!IsLowerHexDigest(Command.SidecarContentDigest))
+    {
+        Output.Code = TEXT("SIDECAR_CONTENT_DIGEST_INVALID");
+        return Output;
+    }
+    if (!IsClosedIdentifier(Command.QueueId))
+    {
+        Output.Code = TEXT("QUEUE_ID_INVALID");
+        return Output;
+    }
+    if (!Command.bReplace)
+    {
+        Output.Code = TEXT("QUEUE_REPLACE_REQUIRED");
+        return Output;
+    }
+    if (Command.Actions.IsEmpty() || Command.Actions.Num() > 32)
+    {
+        Output.Code = Command.Actions.IsEmpty()
+            ? FName(TEXT("QUEUE_EMPTY"))
+            : FName(TEXT("QUEUE_DEPTH_EXCEEDED"));
+        return Output;
+    }
+    TSet<FName> ActionIds;
+    for (const FVistaNpcAction& Action : Command.Actions)
+    {
+        if (!IsClosedActionId(Action.ActionId.ToString()))
+        {
+            Output.Code = TEXT("ACTION_ID_INVALID");
+            return Output;
+        }
+        if (ActionIds.Contains(Action.ActionId))
+        {
+            Output.Code = TEXT("DUPLICATE_ACTION_ID");
+            return Output;
+        }
+        ActionIds.Add(Action.ActionId);
+    }
+
+    FName EventCode;
+    if (!IsKnownEventForRevision(
+            Command.EventId, Command.Envelope.ExpectedRevision, EventCode))
+    {
+        Output.Code = EventCode;
+        return Output;
+    }
+
+    AVistaHomeNpcCharacter* Npc =
+        Cast<AVistaHomeNpcCharacter>(ResolveSemanticActor(Command.NpcSemanticId));
+    AVistaHomeNpcController* Controller = IsValid(Npc)
+        ? Cast<AVistaHomeNpcController>(Npc->GetController())
+        : nullptr;
+    if (!IsValid(Controller))
+    {
+        Output.Code = TEXT("NPC_CONTROLLER_NOT_FOUND");
+        return Output;
+    }
+    FName QueueCode;
+    if (!Controller->PreflightActionQueue(Command.Actions, QueueCode))
+    {
+        Output.Code = QueueCode.IsNone()
+            ? FName(TEXT("QUEUE_PREFLIGHT_REJECTED")) : QueueCode;
+        return Output;
+    }
+
+    // Loaded map actors currently carry no independent EventSpec or sidecar
+    // content digests. These caller-bound identities are validated but never
+    // echoed or promoted to authorization; the dispatcher must keep
+    // runtime_execution_authorized=false.
+    Output.bSucceeded = true;
+    Output.Code = TEXT("QUEUE_PREFLIGHT_OK");
+    return Output;
+}
+
+bool UVistaPlayableHomeRuntimeSubsystem::IsKnownEventForRevision(
+    FName EventId,
+    FName Revision,
+    FName& OutCode) const
+{
+    if (EventId.IsNone() || Revision.IsNone() || !GetWorld())
+    {
+        OutCode = TEXT("EVENT_IDENTITY_INVALID");
+        return false;
+    }
+    int32 MatchCount = 0;
+    bool bRevisionMatches = true;
+    const auto ObserveDefinitions =
+        [EventId, Revision, &MatchCount, &bRevisionMatches](
+            const TArray<FVistaEventDefinition>& Definitions)
+        {
+            for (const FVistaEventDefinition& Definition : Definitions)
+            {
+                if (Definition.EventId == EventId)
+                {
+                    ++MatchCount;
+                    bRevisionMatches = bRevisionMatches &&
+                        Definition.CompatibleRevision == Revision;
+                }
+            }
+        };
+    if (const AVistaPlayableHomeGameMode* GameMode =
+            GetWorld()->GetAuthGameMode<AVistaPlayableHomeGameMode>())
+    {
+        ObserveDefinitions(GameMode->EventDefinitions);
+    }
+    for (TActorIterator<AVistaEventDefinitionActor> It(GetWorld()); It; ++It)
+    {
+        ObserveDefinitions(It->Definitions);
+    }
+    if (MatchCount == 0)
+    {
+        OutCode = TEXT("EVENT_NOT_REGISTERED");
+        return false;
+    }
+    if (MatchCount != 1)
+    {
+        OutCode = TEXT("EVENT_IDENTITY_AMBIGUOUS");
+        return false;
+    }
+    if (!bRevisionMatches)
+    {
+        OutCode = TEXT("EVENT_REVISION_INCOMPATIBLE");
+        return false;
+    }
+    OutCode = TEXT("EVENT_IDENTITY_KNOWN");
+    return true;
+}
+
 FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteNpcCancel(
     const FVistaLiveNpcCancelCommand& Command)
 {
@@ -675,14 +905,25 @@ AActor* UVistaPlayableHomeRuntimeSubsystem::ResolveSemanticActor(
     }
     const FName Tag(*SemanticId);
     const FName StableTag(*(FString(TEXT("VistaSemanticId=")) + SemanticId));
+    AActor* Match = nullptr;
     for (TActorIterator<AActor> It(GetWorld()); It; ++It)
     {
         if (It->ActorHasTag(Tag) || It->ActorHasTag(StableTag))
         {
-            return *It;
+            if (Match != nullptr)
+            {
+                return nullptr;
+            }
+            Match = *It;
         }
     }
-    return nullptr;
+    if (IsValid(Match) &&
+        Match->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()) &&
+        IVistaInteractable::Execute_VistaGetSemanticId(Match) != SemanticId)
+    {
+        return nullptr;
+    }
+    return Match;
 }
 
 UVistaActionExecutorComponent*
