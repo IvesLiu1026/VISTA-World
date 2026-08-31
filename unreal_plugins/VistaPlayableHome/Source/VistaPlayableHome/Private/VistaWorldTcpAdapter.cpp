@@ -145,6 +145,25 @@ bool IsSemanticId(const FString& Value)
     return true;
 }
 
+bool IsPlacementAnchorId(const FString& Value)
+{
+    if (Value.IsEmpty() || Value.Len() > 96 ||
+        Value[0] < TEXT('a') || Value[0] > TEXT('z'))
+    {
+        return false;
+    }
+    for (const TCHAR Character : Value)
+    {
+        if (!((Character >= TEXT('a') && Character <= TEXT('z')) ||
+              (Character >= TEXT('0') && Character <= TEXT('9')) ||
+              Character == TEXT('_')))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool ReadString(const TSharedPtr<FJsonObject>& Object,
                 const TCHAR* Field,
                 FString& Output)
@@ -630,8 +649,10 @@ TOptional<EVistaNpcActionType> ParseNpcAction(const FString& Value)
     if (Value == TEXT("look_at")) return EVistaNpcActionType::LookAt;
     if (Value == TEXT("pick_up")) return EVistaNpcActionType::PickUp;
     if (Value == TEXT("place")) return EVistaNpcActionType::Place;
+    if (Value == TEXT("drop")) return EVistaNpcActionType::Drop;
     if (Value == TEXT("open_door")) return EVistaNpcActionType::OpenDoor;
     if (Value == TEXT("close_door")) return EVistaNpcActionType::CloseDoor;
+    if (Value == TEXT("inspect")) return EVistaNpcActionType::Inspect;
     if (Value == TEXT("sit")) return EVistaNpcActionType::Sit;
     if (Value == TEXT("wait")) return EVistaNpcActionType::Wait;
     if (Value == TEXT("speak")) return EVistaNpcActionType::Speak;
@@ -806,6 +827,7 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
                 !ExactKeys(*ActionObject,
                     KeySet({TEXT("action_id"), TEXT("type")}),
                     KeySet({TEXT("target_semantic_id"), TEXT("target_location_cm"),
+                            TEXT("placement_anchor_id"),
                             TEXT("duration_sec"), TEXT("timeout_sec"), TEXT("speech"),
                             TEXT("distance_cm"), TEXT("height_cm"), TEXT("hand"),
                             TEXT("foot"), TEXT("direction")})))
@@ -834,6 +856,37 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
                  !IsSemanticId(Action.TargetSemanticId)))
             {
                 return ErrorResponse(CommandId, TEXT("NPC_TARGET_INVALID"));
+            }
+            if ((*ActionObject)->HasField(TEXT("placement_anchor_id")) &&
+                (!ReadString(*ActionObject, TEXT("placement_anchor_id"),
+                             Action.PlacementAnchorId) ||
+                 !IsPlacementAnchorId(Action.PlacementAnchorId)))
+            {
+                return ErrorResponse(
+                    CommandId,
+                    TEXT("NPC_PLACEMENT_ANCHOR_INVALID"));
+            }
+            if (Action.Type == EVistaNpcActionType::Place &&
+                Action.PlacementAnchorId.IsEmpty())
+            {
+                return ErrorResponse(
+                    CommandId,
+                    TEXT("NPC_PLACEMENT_ANCHOR_REQUIRED"));
+            }
+            if (Action.Type != EVistaNpcActionType::Place &&
+                !Action.PlacementAnchorId.IsEmpty())
+            {
+                return ErrorResponse(
+                    CommandId,
+                    TEXT("NPC_PLACEMENT_ANCHOR_UNEXPECTED"));
+            }
+            if (Action.Type == EVistaNpcActionType::Drop &&
+                (!Action.TargetSemanticId.IsEmpty() ||
+                 (*ActionObject)->HasField(TEXT("target_location_cm"))))
+            {
+                return ErrorResponse(
+                    CommandId,
+                    TEXT("NPC_DROP_TARGET_UNEXPECTED"));
             }
             const TArray<TSharedPtr<FJsonValue>>* Location = nullptr;
             if ((*ActionObject)->HasField(TEXT("target_location_cm")))

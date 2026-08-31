@@ -335,7 +335,11 @@ enum class EVistaNpcActionType : uint8
     LiftFoot,
     Pause,
     Fall,
-    Recover
+    Recover,
+    /** Release the requester's currently held portable item without a target. */
+    Drop,
+    /** Read-only semantic inspection; intentionally distinct from LookAt. */
+    Inspect
 };
 
 UENUM(BlueprintType)
@@ -388,6 +392,14 @@ struct VISTAPLAYABLEHOME_API FVistaNpcAction
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
     FString TargetSemanticId;
+
+    /**
+     * Owner-local HouseSpec placement anchor id (for example
+     * "place_setting").  Only Place accepts this value; the controller binds
+     * it to TargetSemanticId and resolves the stable semantic anchor actor.
+     */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
+    FString PlacementAnchorId;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
     FVector TargetLocation = FVector::ZeroVector;

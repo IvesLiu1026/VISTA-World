@@ -31,6 +31,8 @@ UVistaAnimationComponent::UVistaAnimationComponent()
 
     MontageByAction.Add(EVistaNpcActionType::LookAt,
         Montage(TEXT("/Game/VISTA/Animations/V1/Montages/AM_VistaLookAt.AM_VistaLookAt")));
+    MontageByAction.Add(EVistaNpcActionType::Inspect,
+        Montage(TEXT("/Game/VISTA/Animations/V1/Montages/AM_VistaInspect.AM_VistaInspect")));
     MontageByAction.Add(EVistaNpcActionType::PickUp,
         Montage(TEXT("/Game/VISTA/Animations/V1/Montages/AM_VistaPickup.AM_VistaPickup")));
     MontageByAction.Add(EVistaNpcActionType::Place,
@@ -58,8 +60,10 @@ bool UVistaAnimationComponent::SupportsAction(EVistaNpcActionType Type)
     switch (Type)
     {
     case EVistaNpcActionType::LookAt:
+    case EVistaNpcActionType::Inspect:
     case EVistaNpcActionType::PickUp:
     case EVistaNpcActionType::Place:
+    case EVistaNpcActionType::Drop:
     case EVistaNpcActionType::OpenDoor:
     case EVistaNpcActionType::CloseDoor:
     case EVistaNpcActionType::Brace:
@@ -86,11 +90,14 @@ bool UVistaAnimationComponent::HasApprovedMutationAnimation(
     FName& OutCode) const
 {
     if (Type == EVistaNpcActionType::PickUp ||
-        Type == EVistaNpcActionType::Place)
+        Type == EVistaNpcActionType::Place ||
+        Type == EVistaNpcActionType::Drop)
     {
         // ue_5_7_3_animation_v1 remains blocked_on_license.  Only the exact
         // MakeHuman R8 provider may select the separately authored CC0
-        // montages; package-path presence alone never opens this gate.
+        // pickup/place release montages; package-path presence alone never
+        // opens this gate. Drop has its own typed action/receipt while sharing
+        // the reviewed release motion until a dedicated clip is accepted.
         const UVistaCharacterProviderComponent* Provider = IsValid(GetOwner())
             ? GetOwner()->FindComponentByClass<UVistaCharacterProviderComponent>()
             : nullptr;
@@ -112,7 +119,8 @@ bool UVistaAnimationComponent::ResolveMontage(
     FName& OutCode) const
 {
     if (Type == EVistaNpcActionType::PickUp ||
-        Type == EVistaNpcActionType::Place)
+        Type == EVistaNpcActionType::Place ||
+        Type == EVistaNpcActionType::Drop)
     {
         const UVistaCharacterProviderComponent* Provider = IsValid(GetOwner())
             ? GetOwner()->FindComponentByClass<UVistaCharacterProviderComponent>()
@@ -162,8 +170,10 @@ FName UVistaAnimationComponent::CompletionSignalFor(EVistaNpcActionType Type)
     switch (Type)
     {
     case EVistaNpcActionType::LookAt: return TEXT("vista_look_at_completed");
+    case EVistaNpcActionType::Inspect: return TEXT("vista_inspect_completed");
     case EVistaNpcActionType::PickUp: return TEXT("vista_pickup_completed");
-    case EVistaNpcActionType::Place: return TEXT("vista_drop_completed");
+    case EVistaNpcActionType::Place:
+    case EVistaNpcActionType::Drop: return TEXT("vista_drop_completed");
     case EVistaNpcActionType::OpenDoor:
     case EVistaNpcActionType::CloseDoor: return TEXT("vista_door_completed");
     case EVistaNpcActionType::Brace: return TEXT("vista_brace_contact_verified");
@@ -181,7 +191,8 @@ FName UVistaAnimationComponent::ContactSignalFor(EVistaNpcActionType Type)
     switch (Type)
     {
     case EVistaNpcActionType::PickUp: return TEXT("vista_pickup_contact");
-    case EVistaNpcActionType::Place: return TEXT("vista_drop_release");
+    case EVistaNpcActionType::Place:
+    case EVistaNpcActionType::Drop: return TEXT("vista_drop_release");
     case EVistaNpcActionType::OpenDoor:
     case EVistaNpcActionType::CloseDoor: return TEXT("vista_door_handle_contact");
     default: return NAME_None;
@@ -221,7 +232,8 @@ bool UVistaAnimationComponent::StartNpcAction(
     }
     const FString RequiredRoot =
         Action.Type == EVistaNpcActionType::PickUp ||
-            Action.Type == EVistaNpcActionType::Place
+            Action.Type == EVistaNpcActionType::Place ||
+            Action.Type == EVistaNpcActionType::Drop
         ? FString(MakeHumanCc0MontageRoot)
         : FString(ProjectAnimationRoot);
     UAnimMontage* ResolvedMontage = MontageReference.LoadSynchronous();
