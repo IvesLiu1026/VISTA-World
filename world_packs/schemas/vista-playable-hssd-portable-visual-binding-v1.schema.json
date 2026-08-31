@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/IvesLiu1026/VISTA-World/world_packs/schemas/vista-playable-hssd-portable-visual-binding-v1.schema.json",
+  "title": "VISTA HSSD Portable Visual Binding V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "contract_id",
+    "house_binding",
+    "source_profile_binding",
+    "source_policy",
+    "pickup_actor_class_path",
+    "bindings",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "vista.playable-hssd-portable-visual-binding/v1"},
+    "contract_id": {"const": "hssd_portable_pickups_r1"},
+    "house_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["house_id", "revision", "content_digest"],
+      "properties": {
+        "house_id": {"const": "home.r1"},
+        "revision": {"const": "vista_playable_home_r1"},
+        "content_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "source_profile_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "profile_id", "content_digest"],
+      "properties": {
+        "schema_version": {"const": "simworld.vista.playable-home-hssd-private-research-profile/v1"},
+        "profile_id": {"const": "hssd_private_research_r1"},
+        "content_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "source_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_map_role",
+        "new_level_from_template_required",
+        "source_map_read_only",
+        "delete_visual_shell_only",
+        "preserve_pickup_authority",
+        "external_assets_outside_git"
+      ],
+      "properties": {
+        "source_map_role": {"const": "completed_articulated_fridge_dev_derivative"},
+        "new_level_from_template_required": {"const": true},
+        "source_map_read_only": {"const": true},
+        "delete_visual_shell_only": {"const": true},
+        "preserve_pickup_authority": {"const": true},
+        "external_assets_outside_git": {"const": true}
+      }
+    },
+    "pickup_actor_class_path": {"const": "/Script/VistaPlayableHome.VistaPickupActor"},
+    "bindings": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {"$ref": "#/$defs/binding"}
+    },
+    "content_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "vector": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"type": "number"}
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["location_cm", "rotation_deg", "scale"],
+      "properties": {
+        "location_cm": {"$ref": "#/$defs/vector"},
+        "rotation_deg": {"$ref": "#/$defs/vector"},
+        "scale": {"$ref": "#/$defs/vector"}
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "semantic_id",
+        "room_id",
+        "hssd_instance_id",
+        "source_asset_id",
+        "hssd_mesh_object_path",
+        "shell_actor_class_path",
+        "shell_actor_label",
+        "shell_required_tags",
+        "shell_semantic_target_tag",
+        "shell_world_transform_cm",
+        "pickup_actor_label",
+        "pickup_required_tags",
+        "pickup_world_transform_cm",
+        "pickup_root_component_name",
+        "pickup_root_mesh_object_path",
+        "presentation_component_name",
+        "presentation_relative_transform",
+        "presentation_policy"
+      ],
+      "properties": {
+        "semantic_id": {"type": "string", "pattern": "^home\\.r1/room\\.[a-z_]+/entity\\.[a-z0-9_.]+$"},
+        "room_id": {"type": "string", "pattern": "^home\\.r1/room\\.[a-z_]+$"},
+        "hssd_instance_id": {"type": "string", "pattern": "^hssd\\.r1/[a-z_]+\\.[a-z0-9_.]+$"},
+        "source_asset_id": {"enum": ["hssd.static.coffee_cup", "hssd.static.flip_flops"]},
+        "hssd_mesh_object_path": {"type": "string", "pattern": "^/Game/VISTA/PlayableHome/.+\\..+$"},
+        "shell_actor_class_path": {"const": "/Script/Engine.StaticMeshActor"},
+        "shell_actor_label": {"type": "string", "pattern": "^VISTA_HSSD_R7_[A-Za-z0-9_]+$"},
+        "shell_required_tags": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 12,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 3, "maxLength": 240}
+        },
+        "shell_semantic_target_tag": {
+          "oneOf": [
+            {"type": "string", "pattern": "^VistaHssdSemanticTargetId=home\\.r1/room\\."},
+            {"type": "null"}
+          ]
+        },
+        "shell_world_transform_cm": {"$ref": "#/$defs/transform"},
+        "pickup_actor_label": {"type": "string", "pattern": "^VISTA_home_r1_room_[A-Za-z0-9_]+$"},
+        "pickup_required_tags": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 3, "maxLength": 240}
+        },
+        "pickup_world_transform_cm": {"$ref": "#/$defs/transform"},
+        "pickup_root_component_name": {"const": "PickupMesh"},
+        "pickup_root_mesh_object_path": {"type": "string", "pattern": "^/Game/VISTA/PlayableHome/.+\\..+$"},
+        "presentation_component_name": {"const": "PresentationMesh"},
+        "presentation_relative_transform": {"$ref": "#/$defs/transform"},
+        "presentation_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["visible", "collision_mode", "collision_profile", "simulate_physics", "generate_overlap_events", "can_ever_affect_navigation", "root_mesh_visible"],
+          "properties": {
+            "visible": {"const": true},
+            "collision_mode": {"const": "NoCollision"},
+            "collision_profile": {"const": "NoCollision"},
+            "simulate_physics": {"const": false},
+            "generate_overlap_events": {"const": false},
+            "can_ever_affect_navigation": {"const": false},
+            "root_mesh_visible": {"const": false}
+          }
+        }
+      }
+    }
+  }
+}
