@@ -1,0 +1,131 @@
+{
+  "schema_version": "vista.playable-hssd-portable-visual-binding/v1",
+  "contract_id": "hssd_portable_pickups_r1",
+  "house_binding": {
+    "house_id": "home.r1",
+    "revision": "vista_playable_home_r1",
+    "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+  },
+  "source_profile_binding": {
+    "schema_version": "simworld.vista.playable-home-hssd-private-research-profile/v1",
+    "profile_id": "hssd_private_research_r1",
+    "content_digest": "f4d761968ba38582888e52ea208c6c38bb404cda749fd05e54cf90d5d32eda03"
+  },
+  "source_policy": {
+    "source_map_role": "completed_articulated_fridge_dev_derivative",
+    "new_level_from_template_required": true,
+    "source_map_read_only": true,
+    "delete_visual_shell_only": true,
+    "preserve_pickup_authority": true,
+    "external_assets_outside_git": true
+  },
+  "pickup_actor_class_path": "/Script/VistaPlayableHome.VistaPickupActor",
+  "bindings": [
+    {
+      "semantic_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+      "room_id": "home.r1/room.kitchen_dining",
+      "hssd_instance_id": "hssd.r1/kitchen_dining.coffee_cup.01",
+      "source_asset_id": "hssd.static.coffee_cup",
+      "hssd_mesh_object_path": "/Game/VISTA/PlayableHome/hssd_private_research_r5_phase1_diagnostic/HSSDPrivateResearch/Assets/hssd_static_coffee_cup/hssd_static_coffee_cup.hssd_static_coffee_cup",
+      "shell_actor_class_path": "/Script/Engine.StaticMeshActor",
+      "shell_actor_label": "VISTA_HSSD_R7_hssd_r1_kitchen_dining_coffee_cup_01",
+      "shell_required_tags": [
+        "VistaRole=hssd_visual_shell",
+        "VistaHssdInstanceId=hssd.r1/kitchen_dining.coffee_cup.01",
+        "VistaHssdSourceAssetId=hssd.static.coffee_cup",
+        "VistaRoomId=home.r1/room.kitchen_dining",
+        "VistaHssdSemanticTargetId=home.r1/room.kitchen_dining/entity.coffee_cup.01",
+        "VistaHssdDiagnosticOnly=true",
+        "VistaHssdFullMaterialFidelity=false",
+        "VistaHssdPromotable=false",
+        "VistaHssdInteractionAuthority=hidden_r1_proxy_query_authority_repaired"
+      ],
+      "shell_semantic_target_tag": "VistaHssdSemanticTargetId=home.r1/room.kitchen_dining/entity.coffee_cup.01",
+      "shell_world_transform_cm": {
+        "location_cm": [345, -220, 76.9894],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "pickup_actor_label": "VISTA_home_r1_room_kitchen_dining_entity_coffee_cup_01",
+      "pickup_required_tags": [
+        "VistaRole=pickup",
+        "VistaSemanticId=home.r1/room.kitchen_dining/entity.coffee_cup.01"
+      ],
+      "pickup_world_transform_cm": {
+        "location_cm": [345, -220, 78],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "pickup_root_component_name": "PickupMesh",
+      "pickup_root_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_prop_coffee_cup/asset_prop_coffee_cup.asset_prop_coffee_cup",
+      "presentation_component_name": "PresentationMesh",
+      "presentation_relative_transform": {
+        "location_cm": [0, 0, 0],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "presentation_policy": {
+        "visible": true,
+        "collision_mode": "NoCollision",
+        "collision_profile": "NoCollision",
+        "simulate_physics": false,
+        "generate_overlap_events": false,
+        "can_ever_affect_navigation": false,
+        "root_mesh_visible": false
+      }
+    },
+    {
+      "semantic_id": "home.r1/room.living_room/entity.slipper.01",
+      "room_id": "home.r1/room.living_room",
+      "hssd_instance_id": "hssd.r1/living_room.slipper.01",
+      "source_asset_id": "hssd.static.flip_flops",
+      "hssd_mesh_object_path": "/Game/VISTA/PlayableHome/hssd_private_research_r5_phase1_diagnostic/HSSDPrivateResearch/Assets/hssd_static_flip_flops/hssd_static_flip_flops.hssd_static_flip_flops",
+      "shell_actor_class_path": "/Script/Engine.StaticMeshActor",
+      "shell_actor_label": "VISTA_HSSD_R7_hssd_r1_living_room_slipper_01",
+      "shell_required_tags": [
+        "VistaRole=hssd_visual_shell",
+        "VistaHssdInstanceId=hssd.r1/living_room.slipper.01",
+        "VistaHssdSourceAssetId=hssd.static.flip_flops",
+        "VistaRoomId=home.r1/room.living_room",
+        "VistaHssdDiagnosticOnly=true",
+        "VistaHssdFullMaterialFidelity=false",
+        "VistaHssdPromotable=false",
+        "VistaHssdInteractionAuthority=none_visual_dressing"
+      ],
+      "shell_semantic_target_tag": null,
+      "shell_world_transform_cm": {
+        "location_cm": [-260, -280, 3],
+        "rotation_deg": [0, 0, 25],
+        "scale": [1, 1, 1]
+      },
+      "pickup_actor_label": "VISTA_home_r1_room_living_room_entity_slipper_01",
+      "pickup_required_tags": [
+        "VistaRole=pickup",
+        "VistaSemanticId=home.r1/room.living_room/entity.slipper.01"
+      ],
+      "pickup_world_transform_cm": {
+        "location_cm": [-260, -250, 3],
+        "rotation_deg": [0, 0, 25],
+        "scale": [1, 1, 1]
+      },
+      "pickup_root_component_name": "PickupMesh",
+      "pickup_root_mesh_object_path": "/Game/VISTA/PlayableHome/vista_playable_home_r1/Assets/asset_prop_slipper/asset_prop_slipper.asset_prop_slipper",
+      "presentation_component_name": "PresentationMesh",
+      "presentation_relative_transform": {
+        "location_cm": [0, 0, 0],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "presentation_policy": {
+        "visible": true,
+        "collision_mode": "NoCollision",
+        "collision_profile": "NoCollision",
+        "simulate_physics": false,
+        "generate_overlap_events": false,
+        "can_ever_affect_navigation": false,
+        "root_mesh_visible": false
+      }
+    }
+  ],
+  "content_digest": "924bedcfbea04f6ec7f8fdbdf2871157c3b64c66b4874f68466ebb4d42bda185"
+}
