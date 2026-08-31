@@ -110,9 +110,15 @@ def test_plan_seals_completed_fridge_source_and_two_closed_bindings(
     assert execution["policy"]["source_map_read_only"] is True
     assert execution["policy"]["new_level_from_template_required"] is True
     assert execution["policy"]["asset_import_or_replacement_forbidden"] is True
+    assert execution["policy"]["declared_absent_shell_must_be_proved"] is True
+    assert execution["policy"]["exact_one_visual_shell_may_be_deleted"] is True
     assert execution["policy"]["launch_ue"] is False
     assert [row["semantic_id"] for row in execution["bindings"]] == list(
         module.binding_contract.EXPECTED_SEMANTIC_IDS
+    )
+    assert tuple(row["shell_disposition"] for row in execution["bindings"]) == (
+        module.binding_contract.ABSENT_SHELL_DISPOSITION,
+        module.binding_contract.DELETE_SHELL_DISPOSITION,
     )
     assert (
         paths["attempt"] / "inputs/hssd-portable-visual-binding-contract.json"

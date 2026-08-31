@@ -25,6 +25,7 @@
       "semantic_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
       "room_id": "home.r1/room.kitchen_dining",
       "hssd_instance_id": "hssd.r1/kitchen_dining.coffee_cup.01",
+      "shell_disposition": "already_absent_source_shell",
       "source_asset_id": "hssd.static.coffee_cup",
       "hssd_mesh_object_path": "/Game/VISTA/PlayableHome/hssd_private_research_r5_phase1_diagnostic/HSSDPrivateResearch/Assets/hssd_static_coffee_cup/hssd_static_coffee_cup.hssd_static_coffee_cup",
       "shell_actor_class_path": "/Script/Engine.StaticMeshActor",
@@ -78,6 +79,7 @@
       "semantic_id": "home.r1/room.living_room/entity.slipper.01",
       "room_id": "home.r1/room.living_room",
       "hssd_instance_id": "hssd.r1/living_room.slipper.01",
+      "shell_disposition": "exact_visual_shell_to_delete",
       "source_asset_id": "hssd.static.flip_flops",
       "hssd_mesh_object_path": "/Game/VISTA/PlayableHome/hssd_private_research_r5_phase1_diagnostic/HSSDPrivateResearch/Assets/hssd_static_flip_flops/hssd_static_flip_flops.hssd_static_flip_flops",
       "shell_actor_class_path": "/Script/Engine.StaticMeshActor",
@@ -127,5 +129,5 @@
       }
     }
   ],
-  "content_digest": "924bedcfbea04f6ec7f8fdbdf2871157c3b64c66b4874f68466ebb4d42bda185"
+  "content_digest": "ac3f53d70481e4565e777e50757006a70a105e3b3c7c1fb3a27725c39453e1bd"
 }
