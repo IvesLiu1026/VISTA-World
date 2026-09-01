@@ -525,11 +525,13 @@ def mesh_snapshot(component):
 
 
 def actor_snapshot(actor, *, mesh=None):
+    hidden = actor.get_editor_property("hidden")
+    require(type(hidden) is bool, "actor hidden state is unavailable")
     result = {
         "actor_path": str(actor.get_path_name()),
         "actor_label": str(actor.get_actor_label()),
         "actor_class_path": class_path(actor),
-        "actor_hidden_in_game": bool(actor.is_hidden()),
+        "actor_hidden_in_game": hidden,
         "actor_collision_enabled": bool(actor.get_actor_enable_collision()),
         "world_transform_cm": transform_record(actor),
         "tags": tags(actor),
