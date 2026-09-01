@@ -95,7 +95,7 @@ def test_source_debit_and_compensation_mutate_only_liquid_state() -> None:
         assert physical_mutator not in restore
 
 
-def test_two_target_reservation_rolls_back_source_when_receiver_is_busy() -> None:
+def test_two_target_reservation_checks_receiver_before_claiming_source() -> None:
     receiver = _source(PRIVATE / "VistaLiquidReceiverActor.cpp")
     reserve = _between(
         receiver,
@@ -104,17 +104,86 @@ def test_two_target_reservation_rolls_back_source_when_receiver_is_busy() -> Non
     )
 
     assert "Source->CapturePourTransactionState(" in reserve
-    assert "Source->TryReserveTransaction(Executor, CommandId)" in reserve
-    assert "ActiveTransactionExecutor.IsValid()" in reserve
-    assert "Source->ReleaseTransaction(Executor, CommandId);" in reserve
-    assert reserve.index("Source->TryReserveTransaction") < reserve.index(
-        "ActiveTransactionExecutor.IsValid()"
+    assert "Source->TryReservePourTransaction(" in reserve
+    assert "if (IsReserved())" in reserve
+    assert reserve.index("if (IsReserved())") < reserve.index(
+        "Source->TryReservePourTransaction("
     )
-    assert reserve.index("ActiveTransactionExecutor.IsValid()") < reserve.index(
-        "Source->ReleaseTransaction"
-    )
+    assert "Source->ReleasePourTransactionReservation(" in reserve
+    assert "ClearReceiverReservationIfOwned(" in reserve
     assert "LIQUID_RECEIVER_RESERVED" in reserve
+    assert "POUR_RESERVATION_BIND_FAILED" in reserve
     assert "POUR_TARGETS_RESERVED" in reserve
+
+
+def test_release_is_source_first_verifiable_idempotent_and_retry_safe() -> None:
+    pickup = _source(PRIVATE / "VistaPickupActor.cpp")
+    receiver = _source(PRIVATE / "VistaLiquidReceiverActor.cpp")
+    release = _between(
+        receiver,
+        "bool AVistaLiquidReceiverActor::ReleasePourTransaction(",
+        "bool AVistaLiquidReceiverActor::ApplyLiquidStateForTransaction(",
+    )
+    source_release = _between(
+        pickup,
+        "bool AVistaPickupActor::ReleasePourTransactionReservation(",
+        "bool AVistaPickupActor::ReleasePourReservationForReceiverEndPlay(",
+    )
+    generic_release = _between(
+        pickup,
+        "void AVistaPickupActor::ReleaseTransaction(",
+        "bool AVistaPickupActor::IsTransactionReservedBy(",
+    )
+
+    assert "IsReceiverReservationOwnedBy(" in release
+    assert "WasTransactionReleasedBy(" in release
+    assert "POUR_TARGETS_ALREADY_RELEASED" in release
+    assert "Source->ReleasePourTransactionReservation(" in release
+    assert "Source->IsTransactionUnreserved()" in release
+    assert "ClearReceiverReservationIfOwned(" in release
+    assert release.index("Source->ReleasePourTransactionReservation(") < release.index(
+        "ClearReceiverReservationIfOwned("
+    )
+    assert "POUR_SOURCE_RESERVATION_RELEASE_FAILED" in release
+    assert "POUR_SOURCE_RESERVATION_DRIFT" in release
+    assert "POUR_RECEIVER_RELEASE_FINALIZE_INJECTED_FAILURE" in release
+    assert "POUR_TARGETS_RELEASED" in release
+    assert "!ActivePourReceiver.IsValid()" in generic_release
+
+    assert "IsPourTransactionReservedBy(" in source_release
+    assert "bFailNextPourRelease" in source_release
+    assert source_release.index("bFailNextPourRelease") < source_release.index(
+        "ActivePourReceiver.Reset();"
+    )
+
+
+def test_authority_endplay_cleanup_uses_exact_transaction_identity() -> None:
+    pickup_header = _source(PUBLIC / "VistaPickupActor.h")
+    receiver_header = _source(PUBLIC / "VistaLiquidReceiverActor.h")
+    pickup = _source(PRIVATE / "VistaPickupActor.cpp")
+    receiver = _source(PRIVATE / "VistaLiquidReceiverActor.cpp")
+    pickup_endplay = _between(
+        pickup,
+        "void AVistaPickupActor::EndPlay(",
+        "void AVistaPickupActor::GetLifetimeReplicatedProps(",
+    )
+    receiver_endplay = _between(
+        receiver,
+        "void AVistaLiquidReceiverActor::EndPlay(",
+        "void AVistaLiquidReceiverActor::GetLifetimeReplicatedProps(",
+    )
+
+    assert "virtual void EndPlay(" in pickup_header
+    assert "virtual void EndPlay(" in receiver_header
+    assert "if (HasAuthority())" in pickup_endplay
+    assert "ActiveTransactionExecutor.Get()" in pickup_endplay
+    assert "ActiveTransactionCommandId" in pickup_endplay
+    assert "ReleaseReservationForSourceEndPlay(" in pickup_endplay
+    assert "if (HasAuthority())" in receiver_endplay
+    assert "ActiveTransactionExecutor.Get()" in receiver_endplay
+    assert "ActiveTransactionCommandId" in receiver_endplay
+    assert "ReleasePourReservationForReceiverEndPlay(" in receiver_endplay
+    assert "ClearReceiverReservationIfOwned(" in receiver_endplay
 
 
 def test_second_mutation_failure_compensates_both_liquids_and_verifies_physics() -> (
@@ -186,6 +255,11 @@ def test_editor_proof_uses_transient_actors_and_exercises_real_primitives() -> N
         "LIQUID_RECEIVER_RESERVED",
         "POUR_SECOND_MUTATION_FAILED_ROLLED_BACK",
         "POUR_COMMITTED",
+        "POUR_SOURCE_RESERVATION_RELEASE_FAILED",
+        "POUR_RECEIVER_RELEASE_FINALIZE_INJECTED_FAILURE",
+        "POUR_TARGETS_ALREADY_RELEASED",
+        "receiver EndPlay releases the exact source reservation",
+        "source EndPlay releases the exact receiver reservation",
     ):
         assert contract in proof
     assert "SourceB.IsReservedForDevAutomation(" in proof

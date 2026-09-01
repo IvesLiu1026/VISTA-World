@@ -150,6 +150,7 @@ public:
         const UVistaActionExecutorComponent* Executor,
         FName CommandId) const;
     void FailNextReceiveCommitForDevAutomation();
+    void FailNextReleaseFinalizeForDevAutomation();
 #endif
 
     virtual FVistaEntityRuntimeState VistaGetRuntimeState_Implementation() const override;
@@ -162,8 +163,10 @@ public:
 
 protected:
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+    friend class AVistaPickupActor;
     friend class UVistaActionExecutorComponent;
 
     UPROPERTY(ReplicatedUsing = OnRep_LiquidState)
@@ -173,9 +176,13 @@ private:
     FName ActiveTransactionCommandId = NAME_None;
     TWeakObjectPtr<AActor> ReservedRequester;
     TWeakObjectPtr<AVistaPickupActor> ReservedSource;
+    TWeakObjectPtr<UVistaActionExecutorComponent> LastReleasedExecutor;
+    FName LastReleasedCommandId = NAME_None;
+    TWeakObjectPtr<AVistaPickupActor> LastReleasedSource;
 
 #if WITH_DEV_AUTOMATION_TESTS
     bool bFailNextReceiveCommit = false;
+    bool bFailNextReleaseFinalize = false;
 #endif
 
     UFUNCTION()
@@ -205,6 +212,23 @@ private:
         const UVistaActionExecutorComponent* Executor,
         FName CommandId,
         const AVistaPickupActor* Source) const;
+    bool IsReceiverReservationOwnedBy(
+        const UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        const AVistaPickupActor* Source) const;
+    bool WasTransactionReleasedBy(
+        const UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        const AVistaPickupActor* Source) const;
+    bool ClearReceiverReservationIfOwned(
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        AVistaPickupActor* Source,
+        bool bRecordRelease);
+    bool ReleaseReservationForSourceEndPlay(
+        AVistaPickupActor* Source,
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId);
     bool CanReceive(
         const FVistaLiquidStateSnapshot& Source,
         FName& OutCode) const;
