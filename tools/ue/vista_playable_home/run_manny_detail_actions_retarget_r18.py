@@ -805,7 +805,7 @@ def bwrap_command(plan: Plan, execution_sha: str, mode: str) -> list[str]:
         "-NoAssetRegistryCache",
         "-NoHotReloadFromIDE",
         "-NoEngineChanges",
-        "-DDC-ForceMemoryCache",
+        "-ddc=InstalledNoZenLocalFallback",
         "-EnablePlugins=VistaPlayableHome",
         "-ExecutePythonScript=/vista/source/" + str(worker_relative),
         "-AbsLog=/vista/work/evidence/" + log_name,
