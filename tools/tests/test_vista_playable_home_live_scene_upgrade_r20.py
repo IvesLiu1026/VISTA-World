@@ -287,6 +287,41 @@ def test_dry_run_validates_every_pin_without_writing(tmp_path: Path) -> None:
     assert "execution" in plan.report["overlays"]["fridge"]
 
 
+def test_bwrap_creates_private_mountpoints_before_binding(tmp_path: Path) -> None:
+    binding, digest, _ = _fixture(tmp_path)
+    plan = runner.build_plan("live-scene-upgrade-r20-bwrap", binding, digest)
+    command = runner._bwrap_command(plan, "0" * 64, contract.AUTHOR_MODE)
+
+    tmpfs_index = next(
+        index
+        for index in range(len(command) - 1)
+        if command[index : index + 2] == ["--tmpfs", "/vista"]
+    )
+    dev_bind_index = next(
+        index
+        for index in range(len(command) - 2)
+        if command[index : index + 3] == ["--dev-bind", "/", "/"]
+    )
+    assert dev_bind_index < tmpfs_index
+    for destination, bind_flag in (
+        ("/vista/engine", "--ro-bind"),
+        ("/vista/repository", "--ro-bind"),
+        ("/vista/source-r6", "--ro-bind"),
+        ("/vista/work", "--bind"),
+    ):
+        directory_index = next(
+            index
+            for index in range(len(command) - 1)
+            if command[index : index + 2] == ["--dir", destination]
+        )
+        bind_index = next(
+            index
+            for index in range(len(command) - 2)
+            if command[index] == bind_flag and command[index + 2] == destination
+        )
+        assert tmpfs_index < directory_index < bind_index
+
+
 def test_pin_drift_and_missing_fridge_execution_fail_closed(tmp_path: Path) -> None:
     binding, digest, _ = _fixture(tmp_path)
     with pytest.raises(runner.RunnerError, match="bindings pin differs"):
