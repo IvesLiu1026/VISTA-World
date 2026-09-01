@@ -10,6 +10,7 @@
     "compatible_house",
     "action_catalog",
     "interaction_bindings",
+    "typed_scene_profile",
     "derivation",
     "npc_action_queues",
     "content_digest"
@@ -20,6 +21,7 @@
     "compatible_house": {"$ref": "#/$defs/house_binding"},
     "action_catalog": {"$ref": "#/$defs/catalog_binding"},
     "interaction_bindings": {"$ref": "#/$defs/interaction_binding"},
+    "typed_scene_profile": {"$ref": "#/$defs/typed_scene_binding"},
     "derivation": {"$ref": "#/$defs/derivation"},
     "npc_action_queues": {
       "type": "array",
@@ -85,6 +87,20 @@
         "content_digest": {"$ref": "#/$defs/digest"}
       }
     },
+    "typed_scene_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "profile_id", "content_digest"],
+      "properties": {
+        "schema_version": {
+          "const": "simworld.vista.playable-home-typed-scene-composition/v1"
+        },
+        "profile_id": {"const": "vista_home_typed_scene_r18"},
+        "content_digest": {
+          "const": "2267f918ea41102f8450609171570b35d2a2c7d310b16a574b15202786058666"
+        }
+      }
+    },
     "source_v3": {
       "type": "object",
       "additionalProperties": false,
@@ -101,7 +117,9 @@
       "required": ["source_v3_event", "change_scope"],
       "properties": {
         "source_v3_event": {"$ref": "#/$defs/source_v3"},
-        "change_scope": {"const": "append_closed_posture_and_two_target_actions"}
+        "change_scope": {
+          "const": "append_closed_posture_and_typed_scene_actions"
+        }
       }
     },
     "queue": {
