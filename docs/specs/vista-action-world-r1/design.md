@@ -74,8 +74,8 @@ than dropping the returned `FVistaInteractionResult`.
 R18 replaces that hidden priority as the only player path with a deterministic
 context-action projection. The character derives executable actions from the
 focused actor, held item, posture and current authoritative state. A lightweight
-selection control cycles that closed list while `E` executes the selected entry;
-the existing one-tap default remains available for fast interaction. The HUD
+`R`/mouse-wheel control cycles that closed list while `F` executes the selected
+entry; `E` remains the one-tap contextual default for fast interaction. The HUD
 shows ordinary game verbs and key hints, never model/provider language. The
 selector owns no mutation and cannot manufacture an affordance that the shared
 executor would reject.
