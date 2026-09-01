@@ -259,6 +259,38 @@ Acceptance notes:
 - Player input, TCP commands and EventSpec actions expose the same terminal
   action/interaction receipt identity even when their presentation differs.
 
+### R14. Detailed actions are selectable, stateful and chainable
+
+WHEN a focused object exposes more than one currently valid affordance THEN the
+player SHALL be able to inspect a deterministic action list, select one action
+and execute it through the shared executor without relying on a hidden priority
+order.
+
+WHEN an item is inserted into or removed from a container THEN the item and
+container SHALL reserve as one typed tuple, mutate only at the animation contact
+signal and publish one receipt containing both semantic identities and both
+before/contact/after states.
+
+IF any step after contact fails THEN the system SHALL restore the exact item
+physical state, carrier inventory and container contents before releasing either
+reservation.
+
+WHEN a new detailed action is exposed to VISTA events THEN it SHALL enter a new
+versioned EventSpec and ActionCatalog beside the frozen prior version; an enum,
+montage route or unaccepted schema entry alone SHALL never make the action
+runtime-authorized.
+
+Acceptance notes:
+- The first detailed-action lab exposes explicit choices for Inspect,
+  PickUp/Place/Drop, Open/Close, Press/TurnOn/TurnOff, Sit/Stand and Pour.
+- The first chainable storage slice is `open -> insert -> close -> open ->
+  remove`; a closed, busy, full or mismatched container rejects before mutation.
+- Insert and Remove require dedicated contact/completion animation authority or
+  remain fail-closed; silently aliasing them to Place/PickUp is not acceptance.
+- Appliance state changes require visible presentation such as door/drawer
+  articulation, water, flame, drum motion, indicator light or sound as
+  appropriate to the semantic target.
+
 ## Edge Cases
 
 - A queue is replaced between contact commit and montage completion.

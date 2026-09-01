@@ -71,6 +71,39 @@ Inspect is therefore bound separately and remains reachable on multi-affordance
 objects. Every rejected path publishes its typed code to the player HUD rather
 than dropping the returned `FVistaInteractionResult`.
 
+R18 replaces that hidden priority as the only player path with a deterministic
+context-action projection. The character derives executable actions from the
+focused actor, held item, posture and current authoritative state. A lightweight
+selection control cycles that closed list while `E` executes the selected entry;
+the existing one-tap default remains available for fast interaction. The HUD
+shows ordinary game verbs and key hints, never model/provider language. The
+selector owns no mutation and cannot manufacture an affordance that the shared
+executor would reject.
+
+### Chainable container transfer
+
+Insert and Remove use one two-authority transaction rather than treating a
+container anchor as an ordinary tabletop placement:
+
+```text
+requester + exact pickup + exact open container
+  -> validate inventory, contents slot and typed identities
+  -> reserve pickup and container as one tuple
+  -> approach container contents/contact anchor
+  -> play dedicated insert/remove montage
+  -> typed contact notify
+  -> update pickup disposition and container contents together
+  -> typed completion notify
+  -> publish one terminal receipt and one VISTA observation
+```
+
+The container owns a replicated contents identity and an authored contents
+anchor. The pickup remains the sole physical/attachment authority. A post-contact
+failure restores container contents first and then the exact retained pickup and
+inventory snapshot before either reservation is released. Load/Unload may map to
+the same primitive only through a versioned target policy for an appliance
+container; they are not unconditional string aliases.
+
 An articulated appliance is represented as one semantic authority with separate
 body and movable leaf components. The HSSD mesh may remain a private-research
 visual shell, but a hidden query proxy cannot be the visible state presentation.
@@ -315,6 +348,9 @@ receipt. Visual builds expose source/placement digests and performance metrics.
 - R12 -> isolated worktree and append-only run rollout
 - R13 -> explicit Inspect input/presentation, visible typed result state,
   articulated appliance contact commit and exactly-once EventSpec observation
+- R14 -> deterministic player action selector, typed container-transfer
+  transaction, dedicated animation authority and a versioned EventSpec/catalog
+  expansion
 
 ## Open Questions
 
