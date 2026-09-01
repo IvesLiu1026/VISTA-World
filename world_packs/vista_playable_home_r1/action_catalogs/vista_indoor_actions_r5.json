@@ -1,0 +1,1177 @@
+{
+  "schema_version": "vista.playable-action-catalog/v5",
+  "catalog_id": "vista_indoor_actions",
+  "catalog_revision": "vista_indoor_actions_r5",
+  "source_catalog_binding": {
+    "schema_version": "vista.playable-action-catalog/v4",
+    "catalog_id": "vista_indoor_actions",
+    "catalog_revision": "vista_indoor_actions_r4",
+    "content_digest": "0865991e4ee97da51c62a593f3cce34275316b3b025c994cb66fbb245b342107"
+  },
+  "candidate_animation_sources": [
+    {
+      "source_id": "makehuman_cc0_r8",
+      "profile_schema_version": "vista.makehuman-cc0-animation-profile/v1",
+      "profile_id": "makehuman_cc0_animation_vertical_slice_r1",
+      "content_digest": "3a596cb3088f1e2439b70c5c3c099e6ecbc521c7658af7eb52804fe5811654f2",
+      "acceptance_state": "candidate_unaccepted",
+      "action_ids": [
+        "idle",
+        "walk",
+        "jog",
+        "sprint",
+        "pick_up",
+        "place"
+      ]
+    },
+    {
+      "source_id": "makehuman_cc0_r14",
+      "profile_schema_version": "vista.makehuman-cc0-detail-actions-profile/v1",
+      "profile_id": "makehuman_cc0_detail_actions_r14",
+      "content_digest": "eccf9da1ca7283efc08cffabe1d52ba020578e3d7c04d423cb2356f25b320d43",
+      "acceptance_state": "candidate_unaccepted",
+      "action_ids": [
+        "inspect",
+        "articulation.open",
+        "close"
+      ]
+    },
+    {
+      "source_id": "makehuman_cc0_r15",
+      "profile_schema_version": "vista.makehuman-cc0-detail-actions-r15-profile/v1",
+      "profile_id": "makehuman_cc0_detail_actions_r15",
+      "content_digest": "fb88d2cdfe810226d84b9111cbe99ad7c13842cab0e60c4af48354fe5bc02384",
+      "acceptance_state": "candidate_unaccepted",
+      "action_ids": [
+        "turn_on",
+        "turn_off",
+        "press_button",
+        "articulation.open",
+        "close",
+        "sit_down",
+        "seated_idle",
+        "stand_up",
+        "pour"
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "action_id": "idle",
+      "source_action_id": "idle",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "walk",
+      "source_action_id": "walk",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "jog",
+      "source_action_id": "jog",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "sprint",
+      "source_action_id": "sprint",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "turn_in_place",
+      "source_action_id": "turn_in_place",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "crouch",
+      "source_action_id": "crouch",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "look_at",
+      "source_action_id": "look_at",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "inspect",
+      "source_action_id": "inspect",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "pause",
+      "source_action_id": "pause",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "pick_up",
+      "source_action_id": "pick_up",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "carry",
+      "source_action_id": "carry",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "place",
+      "source_action_id": "place",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "drop",
+      "source_action_id": "drop",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "insert",
+      "source_action_id": "insert",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "pour",
+      "source_action_id": "pour",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "push",
+      "source_action_id": "push",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "pull_drag",
+      "source_action_id": "pull_drag",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "equip",
+      "source_action_id": "equip",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "articulation.open",
+      "source_action_id": "articulation.open",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "close",
+      "source_action_id": "close",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "appliance.toggle_rotary",
+      "source_action_id": "appliance.toggle_rotary",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "press_button",
+      "source_action_id": "press_button",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "load",
+      "source_action_id": "load",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "unload",
+      "source_action_id": "unload",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "contact.brace",
+      "source_action_id": "contact.brace",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "step_up",
+      "source_action_id": "step_up",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "sit_down",
+      "source_action_id": "sit_down",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "seated_idle",
+      "source_action_id": "seated_idle",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "stand_up",
+      "source_action_id": "stand_up",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "stumble",
+      "source_action_id": "stumble",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "slip",
+      "source_action_id": "slip",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "fall",
+      "source_action_id": "fall",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "impact",
+      "source_action_id": "impact",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "spill",
+      "source_action_id": "spill",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "recover",
+      "source_action_id": "recover",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "use",
+      "source_action_id": "use",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "turn_on",
+      "source_action_id": "turn_on",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "turn_off",
+      "source_action_id": "turn_off",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "storage.insert",
+      "source_action_id": null,
+      "native_definition": {
+        "family": "storage_transaction",
+        "aliases": [],
+        "target_policy": "required",
+        "secondary_target_policy": "required",
+        "target_roles": {
+          "target_id": "storage_item",
+          "secondary_target_id": "storage_container"
+        },
+        "approach_policy": "align_secondary_target",
+        "parameters": {
+          "required": ["target_id", "secondary_target_id"],
+          "optional": []
+        },
+        "effect": {
+          "effect_id": "multi_entity_state",
+          "commit_phase": "contact"
+        },
+        "rollback_policy": "restore_actor_and_target",
+        "dispatch_policy": "direct",
+        "runtime_binding": {
+          "wire_action": "insert",
+          "backend_action": "Insert",
+          "runtime_type": "insert"
+        },
+        "animation_acceptance": {
+          "status": "blocked",
+          "montage_policy": "dedicated_action_montage_required",
+          "contact_signal": "required",
+          "completion_signal": "required",
+          "prohibited_reuse_action_ids": ["pick_up", "place"]
+        }
+      },
+      "readiness": {
+        "backend": {"status": "candidate", "evidence_digest": null},
+        "animation": {"status": "blocked", "evidence_digest": null},
+        "object_state": {"status": "candidate", "evidence_digest": null},
+        "event_mapping": {"status": "candidate", "evidence_digest": null},
+        "runtime_acceptance": {"status": "blocked", "evidence_digest": null}
+      }
+    },
+    {
+      "action_id": "storage.remove",
+      "source_action_id": null,
+      "native_definition": {
+        "family": "storage_transaction",
+        "aliases": [],
+        "target_policy": "required",
+        "secondary_target_policy": "required",
+        "target_roles": {
+          "target_id": "storage_item",
+          "secondary_target_id": "storage_container"
+        },
+        "approach_policy": "align_secondary_target",
+        "parameters": {
+          "required": ["target_id", "secondary_target_id"],
+          "optional": []
+        },
+        "effect": {
+          "effect_id": "multi_entity_state",
+          "commit_phase": "contact"
+        },
+        "rollback_policy": "restore_actor_and_target",
+        "dispatch_policy": "direct",
+        "runtime_binding": {
+          "wire_action": "remove",
+          "backend_action": "Remove",
+          "runtime_type": "remove"
+        },
+        "animation_acceptance": {
+          "status": "blocked",
+          "montage_policy": "dedicated_action_montage_required",
+          "contact_signal": "required",
+          "completion_signal": "required",
+          "prohibited_reuse_action_ids": ["pick_up", "place"]
+        }
+      },
+      "readiness": {
+        "backend": {"status": "candidate", "evidence_digest": null},
+        "animation": {"status": "blocked", "evidence_digest": null},
+        "object_state": {"status": "candidate", "evidence_digest": null},
+        "event_mapping": {"status": "candidate", "evidence_digest": null},
+        "runtime_acceptance": {"status": "blocked", "evidence_digest": null}
+      }
+    }
+  ],
+  "accepted": false,
+  "runtime_execution_authorized": false,
+  "content_digest": "9669e2d797347155d3eb024b69f2451a81a8bd9dcb45346e10d56cfd7965028c"
+}

@@ -1,0 +1,135 @@
+{
+  "schema_version": "simworld.vista.playable-event/v5",
+  "event_id": "mmg_013",
+  "compatible_house": {
+    "house_id": "home.r1",
+    "revision": "vista_playable_home_r1",
+    "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+  },
+  "action_catalog": {
+    "schema_version": "vista.playable-action-catalog/v5",
+    "catalog_id": "vista_indoor_actions",
+    "catalog_revision": "vista_indoor_actions_r5",
+    "content_digest": "9669e2d797347155d3eb024b69f2451a81a8bd9dcb45346e10d56cfd7965028c"
+  },
+  "interaction_bindings": {
+    "schema_version": "vista.playable-interaction-bindings/v1",
+    "binding_id": "vista_home_interactions",
+    "binding_revision": "vista_home_interactions_r1",
+    "content_digest": "261543543ee5370f0ef784a4d44c96351d4e367447046dfd4e40192f955ea0a0"
+  },
+  "typed_scene_profile": {
+    "schema_version": "simworld.vista.playable-home-typed-scene-composition/v1",
+    "profile_id": "vista_home_typed_scene_r18",
+    "content_digest": "2267f918ea41102f8450609171570b35d2a2c7d310b16a574b15202786058666"
+  },
+  "derivation": {
+    "source_v4_event": {
+      "schema_version": "simworld.vista.playable-event/v4",
+      "event_id": "mmg_013",
+      "content_digest": "af9421a1912bb8b92e6827e0b92834274899381ec4a80cdfac739c35a7af4b72"
+    },
+    "change_scope": "append_closed_storage_transaction_chain"
+  },
+  "npc_action_queues": [
+    {
+      "queue_id": "op.05",
+      "npc_id": "npc.resident",
+      "replace": true,
+      "actions": [
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.kitchen_dining"
+        },
+        {
+          "action": "inspect",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "place",
+          "target_id": "home.r1/room.kitchen_dining/entity.dining_table.01",
+          "placement_anchor_id": "place_setting"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "drop"
+        },
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.living_room"
+        },
+        {
+          "action": "inspect",
+          "target_id": "home.r1/room.living_room/entity.slipper.01"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.living_room/entity.slipper.01"
+        },
+        {
+          "action": "drop"
+        },
+        {
+          "action": "sit",
+          "target_id": "home.r1/room.living_room/entity.sofa.01"
+        },
+        {
+          "action": "stand",
+          "target_id": "home.r1/room.living_room/entity.sofa.01"
+        },
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.kitchen_dining"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.kitchen_dining/entity.water_jug.18"
+        },
+        {
+          "action": "pour",
+          "target_id": "home.r1/room.kitchen_dining/entity.water_jug.18",
+          "secondary_target_id": "home.r1/room.kitchen_dining/entity.drinking_glass.18"
+        },
+        {
+          "action": "drop"
+        },
+        {
+          "action": "open",
+          "target_id": "home.r1/room.kitchen_dining/entity.fridge.01"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "insert",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+          "secondary_target_id": "home.r1/room.kitchen_dining/entity.fridge.01"
+        },
+        {
+          "action": "close",
+          "target_id": "home.r1/room.kitchen_dining/entity.fridge.01"
+        },
+        {
+          "action": "open",
+          "target_id": "home.r1/room.kitchen_dining/entity.fridge.01"
+        },
+        {
+          "action": "remove",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+          "secondary_target_id": "home.r1/room.kitchen_dining/entity.fridge.01"
+        }
+      ]
+    }
+  ],
+  "accepted": false,
+  "runtime_execution_authorized": false,
+  "content_digest": "60867d416cb69682bdbfced8825bceab32805bb8f9e58ee817457a392c2e7f8d"
+}
