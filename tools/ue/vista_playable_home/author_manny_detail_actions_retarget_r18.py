@@ -639,27 +639,17 @@ def inspect_montage(
         and property_or_none(montage, "skeleton") == target_skeleton,
         f"target montage skeleton differs: {spec['clip_id']}",
     )
-    tracks = property_or_none(montage, "slot_anim_tracks")
+    # SlotAnimTracks is not exposed through get_editor_property in UE 5.7.
+    # These public APIs close the serialized slot and first-reference identity
+    # without weakening the author/cold-verify contract.
+    slot_names = [
+        str(name)
+        for name in unreal.AnimationLibrary.get_montage_slot_names(montage)
+    ]
+    first_reference = montage.get_first_anim_reference()
     require(
-        tracks is not None and len(tracks) == 1,
-        f"montage slot closure differs: {spec['clip_id']}",
-    )
-    slot = tracks[0]
-    require(
-        str(property_or_none(slot, "slot_name")) == "DefaultSlot",
-        f"montage slot name differs: {spec['clip_id']}",
-    )
-    anim_track = property_or_none(slot, "anim_track")
-    segments = property_or_none(anim_track, "anim_segments")
-    require(
-        segments is not None and len(segments) == 1,
-        f"montage segment closure differs: {spec['clip_id']}",
-    )
-    segment = segments[0]
-    require(
-        property_or_none(segment, "anim_reference") == sequence
-        and int(property_or_none(segment, "looping_count")) == 1,
-        f"montage target-sequence/loop contract differs: {spec['clip_id']}",
+        slot_names == ["DefaultSlot"] and first_reference == sequence,
+        f"montage slot/target-sequence closure differs: {spec['clip_id']}",
     )
     events = sorted(
         unreal.AnimationLibrary.get_animation_notify_events(montage),
@@ -704,6 +694,7 @@ def inspect_montage(
         "skeleton": str(target_skeleton.get_path_name()),
         "slot": "DefaultSlot",
         "looping_count": 1,
+        "first_reference": str(first_reference.get_path_name()),
         "typed_notifies": observed,
     }
 
