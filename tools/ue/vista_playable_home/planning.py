@@ -90,6 +90,60 @@ PRESENTATION_ROOT_TRANSFORM_POLICY = "room_local_geometry_identity_root"
 PRESENTATION_SEMANTIC_POLICY = "presentation_only_preserve_r1_authority"
 PRESENTATION_COLLISION_POLICY = "presentation_no_collision_use_hidden_r1_proxies"
 PRESENTATION_UNREAL_COLLISION_PROFILE = "NoCollision"
+TYPED_SCENE_PROFILE_SCHEMA = (
+    "simworld.vista.playable-home-typed-scene-composition/v1"
+)
+TYPED_SCENE_PROFILE_KEYS = frozenset({
+    "schema_version",
+    "profile_id",
+    "house_binding",
+    "external_asset_policy",
+    "animation_dependency_policy",
+    "seat_bindings",
+    "liquid_sources",
+    "liquid_receivers",
+    "runtime_acceptance",
+    "content_digest",
+})
+TYPED_SCENE_EXTERNAL_ASSET_POLICY = {
+    "payloads_in_git": False,
+    "binding_mode": "external_receipt_required",
+    "proxy_assets_are_acceptance_evidence": False,
+}
+TYPED_SCENE_ANIMATION_DEPENDENCY_POLICY = {
+    "detail_action_uassets": {
+        "status": "required_not_materialized_in_live_r6",
+        "source_skeleton": "makehuman_cc0_53_bone",
+        "exact_uasset_materialization_required": True,
+        "profiles": [
+            {
+                "profile_id": "makehuman_cc0_detail_actions_r14",
+                "content_digest": (
+                    "eccf9da1ca7283efc08cffabe1d52ba020578e3d7c04d423cb2356f25b320d43"
+                ),
+                "ue_content_namespace": "/Game/VISTA/MakeHumanCC0/R14/DetailActions",
+            },
+            {
+                "profile_id": "makehuman_cc0_detail_actions_r15",
+                "content_digest": (
+                    "fb88d2cdfe810226d84b9111cbe99ad7c13842cab0e60c4af48354fe5bc02384"
+                ),
+                "ue_content_namespace": "/Game/VISTA/MakeHumanCC0/R15/DetailActions",
+            },
+        ],
+    },
+    "citysample_retarget_authority": {
+        "status": "required_not_authored",
+        "source_skeleton": "makehuman_cc0_53_bone",
+        "target_skeleton": "citysample_hidden_manny",
+        "separate_retarget_assets_required": True,
+        "original_cc0_montages_citysample_playable": False,
+    },
+}
+SEAT_ACTOR_CLASS = "/Script/VistaPlayableHome.VistaSeatActor"
+LIQUID_RECEIVER_ACTOR_CLASS = (
+    "/Script/VistaPlayableHome.VistaLiquidReceiverActor"
+)
 PRESENTATION_EXECUTION_BINDING_KEYS = frozenset({
     "artifact_id",
     "artifact_kind",
@@ -573,6 +627,532 @@ def _binding(binding: Any, assets: Mapping[str, Mapping[str, Any]], label: str) 
     return value
 
 
+def _typed_scene_number(
+    value: Any,
+    label: str,
+    *,
+    minimum: float,
+    maximum: float,
+) -> float:
+    _require(
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+        and minimum <= float(value) <= maximum,
+        "VISTA_HOME_TYPED_SCENE_INVALID",
+        f"{label} is outside its closed range",
+    )
+    return float(value)
+
+
+def _typed_scene_local_transform(value: Any, label: str) -> dict[str, list[float]]:
+    result = _transform(value, label)
+    _require(
+        result["scale"] == [1.0, 1.0, 1.0],
+        "VISTA_HOME_TYPED_SCENE_INVALID",
+        f"{label} cannot scale an authoritative interaction target",
+    )
+    return result
+
+
+def _compose_planar_local_transform(
+    parent: Mapping[str, Any],
+    local: Mapping[str, Any],
+    label: str,
+) -> dict[str, list[float]]:
+    """Compose the exact planar transforms supported by the R18 profile.
+
+    Existing VISTA home furniture is floor-aligned and yaw-only.  Refusing
+    non-planar input is safer than silently approximating Unreal transform
+    composition for a future tilted or non-uniformly-scaled seat.
+    """
+
+    parent_value = _transform(parent, f"{label}.parent")
+    local_value = _typed_scene_local_transform(local, f"{label}.local")
+    _require(
+        parent_value["rotation_deg"][:2] == [0.0, 0.0]
+        and local_value["rotation_deg"][:2] == [0.0, 0.0],
+        "VISTA_HOME_TYPED_SCENE_INVALID",
+        f"{label} requires yaw-only parent and local transforms",
+    )
+    yaw_radians = math.radians(parent_value["rotation_deg"][2])
+    local_location = local_value["location_cm"]
+    scaled_x = local_location[0] * parent_value["scale"][0]
+    scaled_y = local_location[1] * parent_value["scale"][1]
+    parent_location = parent_value["location_cm"]
+    return {
+        "location_cm": [
+            parent_location[0]
+            + math.cos(yaw_radians) * scaled_x
+            - math.sin(yaw_radians) * scaled_y,
+            parent_location[1]
+            + math.sin(yaw_radians) * scaled_x
+            + math.cos(yaw_radians) * scaled_y,
+            parent_location[2]
+            + local_location[2] * parent_value["scale"][2],
+        ],
+        "rotation_deg": [
+            0.0,
+            0.0,
+            parent_value["rotation_deg"][2]
+            + local_value["rotation_deg"][2],
+        ],
+        "scale": list(parent_value["scale"]),
+    }
+
+
+def _compile_typed_scene_profile(
+    profile: Mapping[str, Any],
+    *,
+    house: Mapping[str, Any],
+    rooms_by_id: Mapping[str, Mapping[str, Any]],
+    entities_by_id: Mapping[str, Mapping[str, Any]],
+    declared_assets: Mapping[str, Mapping[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]], set[str]]:
+    """Compile one closed R18 semantic composition overlay.
+
+    The overlay cannot alter the frozen HouseSpec.  It may upgrade exact
+    seating entities to their native actor class and append typed liquid
+    actors whose render meshes are explicitly non-acceptance proxies.
+    """
+
+    value = dict(_mapping(profile, "typed scene profile"))
+    _require(
+        set(value) == TYPED_SCENE_PROFILE_KEYS,
+        "VISTA_HOME_TYPED_SCENE_INVALID",
+        "typed scene profile fields differ",
+    )
+    _require(
+        value["schema_version"] == TYPED_SCENE_PROFILE_SCHEMA,
+        "VISTA_HOME_TYPED_SCENE_INVALID",
+        "typed scene profile schema differs",
+    )
+    _safe_id(value["profile_id"], "typed scene profile profile_id")
+    content_digest = _sha(
+        value["content_digest"], "typed scene profile content_digest"
+    )
+    digest_body = dict(value)
+    digest_body.pop("content_digest")
+    _require(
+        hashlib.sha256(canonical_json(digest_body)).hexdigest() == content_digest,
+        "VISTA_HOME_TYPED_SCENE_INVALID",
+        "typed scene profile content digest differs",
+    )
+    house_binding = dict(
+        _mapping(value["house_binding"], "typed scene profile house_binding")
+    )
+    _require(
+        set(house_binding) == {"house_id", "revision", "content_digest"}
+        and house_binding == dict(house),
+        "VISTA_HOME_TYPED_SCENE_HOUSE_MISMATCH",
+        "typed scene profile is not bound to this exact house",
+    )
+    _require(
+        value["external_asset_policy"] == TYPED_SCENE_EXTERNAL_ASSET_POLICY
+        and value["animation_dependency_policy"]
+        == TYPED_SCENE_ANIMATION_DEPENDENCY_POLICY
+        and value["runtime_acceptance"] is False,
+        "VISTA_HOME_TYPED_SCENE_INVALID",
+        "typed scene profile must keep external visuals, animation gates, "
+        "and acceptance open",
+    )
+
+    seat_bindings: dict[str, dict[str, Any]] = {}
+    seat_anchor_operations: list[dict[str, Any]] = []
+    expected_seat_ids = {
+        entity_id
+        for entity_id, entity in entities_by_id.items()
+        if "sit" in entity.get("affordances", [])
+    }
+    for index, raw_binding in enumerate(
+        _array(value["seat_bindings"], "typed scene profile seat_bindings")
+    ):
+        binding = dict(_mapping(raw_binding, f"seat_bindings[{index}]"))
+        _require(
+            set(binding)
+            == {
+                "entity_id",
+                "interaction_target_local_cm",
+                "exit_target_local_cm",
+            },
+            "VISTA_HOME_TYPED_SCENE_INVALID",
+            f"seat binding {index} fields differ",
+        )
+        entity_id = _safe_id(binding["entity_id"], f"seat_bindings[{index}].entity_id")
+        entity = entities_by_id.get(entity_id)
+        _require(
+            entity is not None
+            and entity.get("component_role") == "static_furniture"
+            and "sit" in entity.get("affordances", [])
+            and entity.get("baseline_state", {}).get("occupied") is False
+            and entity_id not in seat_bindings,
+            "VISTA_HOME_TYPED_SCENE_SEAT_INVALID",
+            f"seat binding {entity_id} is not one free HouseSpec seat",
+        )
+        interaction_local = _typed_scene_local_transform(
+            binding["interaction_target_local_cm"],
+            f"seat binding {entity_id}.interaction_target_local_cm",
+        )
+        exit_local = _typed_scene_local_transform(
+            binding["exit_target_local_cm"],
+            f"seat binding {entity_id}.exit_target_local_cm",
+        )
+        actor_transform = entity["world_transform_cm"]
+        interaction_semantic_id = entity_id + "/anchor.seat_target"
+        exit_semantic_id = entity_id + "/anchor.exit_target"
+        compiled_binding = {
+            "interaction_target_local_cm": interaction_local,
+            "exit_target_local_cm": exit_local,
+            "interaction_anchor_semantic_id": interaction_semantic_id,
+            "exit_anchor_semantic_id": exit_semantic_id,
+        }
+        interaction_world = _compose_planar_local_transform(
+            actor_transform,
+            interaction_local,
+            f"seat binding {entity_id}.seat_interaction",
+        )
+        exit_world = _compose_planar_local_transform(
+            actor_transform,
+            exit_local,
+            f"seat binding {entity_id}.seat_exit",
+        )
+        room_bounds = rooms_by_id[entity["room_id"]]["world_bounds_cm"]
+        _require(
+            _point_in_bounds(interaction_world["location_cm"], room_bounds)
+            and _point_in_bounds(exit_world["location_cm"], room_bounds),
+            "VISTA_HOME_TYPED_SCENE_SEAT_INVALID",
+            f"seat binding {entity_id} anchor leaves its room bounds",
+        )
+        seat_bindings[entity_id] = compiled_binding
+        for anchor_role, semantic_id, world_transform in (
+            ("seat_interaction", interaction_semantic_id, interaction_world),
+            ("seat_exit", exit_semantic_id, exit_world),
+        ):
+            seat_anchor_operations.append(
+                _operation(
+                    "place_entities",
+                    "place_typed_anchor",
+                    {
+                        "semantic_id": semantic_id,
+                        "owner_entity_id": entity_id,
+                        "anchor_role": anchor_role,
+                        "transform": world_transform,
+                        "tags": [
+                            TAG_PREFIX + semantic_id,
+                            "VistaOwner=" + entity_id,
+                            "VistaAnchorRole=" + anchor_role,
+                        ],
+                    },
+                )
+            )
+    _require(
+        set(seat_bindings) == expected_seat_ids and bool(expected_seat_ids),
+        "VISTA_HOME_TYPED_SCENE_SEAT_INVALID",
+        "typed scene profile must cover every and only HouseSpec sit target",
+    )
+
+    occupied_semantic_ids = set(entities_by_id)
+    extension_operations: list[dict[str, Any]] = []
+    visual_binding_ids: set[str] = set()
+    source_liquid_types: set[str] = set()
+    source_values = _array(
+        value["liquid_sources"], "typed scene profile liquid_sources"
+    )
+    _require(
+        bool(source_values),
+        "VISTA_HOME_TYPED_SCENE_LIQUID_INVALID",
+        "typed scene profile needs at least one liquid source",
+    )
+    for index, raw_source in enumerate(source_values):
+        source = dict(_mapping(raw_source, f"liquid_sources[{index}]"))
+        _require(
+            set(source)
+            == {
+                "semantic_id",
+                "room_id",
+                "category",
+                "proxy_asset_id",
+                "world_transform_cm",
+                "capacity_ml",
+                "initial_level",
+                "liquid_type",
+                "visual_binding_id",
+                "external_asset_required",
+            },
+            "VISTA_HOME_TYPED_SCENE_LIQUID_INVALID",
+            f"liquid source {index} fields differ",
+        )
+        semantic_id = _safe_id(
+            source["semantic_id"], f"liquid_sources[{index}].semantic_id"
+        )
+        room_id = _safe_id(source["room_id"], f"liquid_sources[{index}].room_id")
+        category = _safe_id(source["category"], f"liquid_sources[{index}].category")
+        proxy_asset_id = _safe_id(
+            source["proxy_asset_id"], f"liquid_sources[{index}].proxy_asset_id"
+        )
+        liquid_type = _safe_id(
+            source["liquid_type"], f"liquid_sources[{index}].liquid_type"
+        )
+        visual_binding_id = _safe_id(
+            source["visual_binding_id"],
+            f"liquid_sources[{index}].visual_binding_id",
+        )
+        source_transform = _transform(
+            source["world_transform_cm"],
+            f"liquid source {semantic_id}.world_transform_cm",
+        )
+        _require(
+            semantic_id.startswith(room_id + "/entity.")
+            and (
+                category in {"jug", "bottle"}
+                or category.endswith(("_jug", "_bottle"))
+            )
+            and semantic_id not in occupied_semantic_ids
+            and room_id in rooms_by_id
+            and proxy_asset_id in declared_assets
+            and visual_binding_id not in visual_binding_ids
+            and source["external_asset_required"] is True
+            and _point_in_bounds(
+                source_transform["location_cm"],
+                rooms_by_id[room_id]["world_bounds_cm"],
+            ),
+            "VISTA_HOME_TYPED_SCENE_LIQUID_INVALID",
+            f"liquid source {semantic_id} identity or binding is invalid",
+        )
+        capacity = _typed_scene_number(
+            source["capacity_ml"],
+            f"liquid source {semantic_id}.capacity_ml",
+            minimum=1.0,
+            maximum=100000.0,
+        )
+        initial_level = _typed_scene_number(
+            source["initial_level"],
+            f"liquid source {semantic_id}.initial_level",
+            minimum=0.01,
+            maximum=1.0,
+        )
+        occupied_semantic_ids.add(semantic_id)
+        visual_binding_ids.add(visual_binding_id)
+        source_liquid_types.add(liquid_type)
+        extension_operations.append(
+            _operation(
+                "place_entities",
+                "place_typed_liquid_source",
+                {
+                    "semantic_id": semantic_id,
+                    "room_id": room_id,
+                    "category": category,
+                    "actor_class": ROLE_CLASSES["pickup"],
+                    "asset": _binding(
+                        declared_assets[proxy_asset_id],
+                        declared_assets,
+                        f"liquid source {semantic_id}.proxy_asset",
+                    ),
+                    "transform": source_transform,
+                    "component_role": "pickup",
+                    "typed_role": "liquid_source",
+                    "mobility": "simulated",
+                    "collision_policy": "pickup_physics",
+                    "collision": COLLISION_SETTINGS["pickup_physics"],
+                    "nav_obstacle": False,
+                    "affordances": ["pick_up", "drop", "place", "inspect", "pour"],
+                    "baseline_state": {"portable": True, "visible": True},
+                    "liquid_binding": {
+                        "pourable": True,
+                        "capacity_ml": capacity,
+                        "initial_level": initial_level,
+                        "initial_liquid_type": liquid_type,
+                    },
+                    "visual_binding": {
+                        "binding_id": visual_binding_id,
+                        "external_asset_required": True,
+                        "proxy_asset_id": proxy_asset_id,
+                        "proxy_is_acceptance_evidence": False,
+                    },
+                    "tags": [
+                        TAG_PREFIX + semantic_id,
+                        "VistaRoom=" + room_id,
+                        "VistaTypedRole=liquid_source",
+                        "VistaExternalVisualBinding=" + visual_binding_id,
+                    ],
+                },
+            )
+        )
+
+    receiver_values = _array(
+        value["liquid_receivers"], "typed scene profile liquid_receivers"
+    )
+    _require(
+        len(receiver_values) >= 2,
+        "VISTA_HOME_TYPED_SCENE_LIQUID_INVALID",
+        "typed scene profile needs at least two liquid receivers",
+    )
+    receiver_kinds: set[str] = set()
+    for index, raw_receiver in enumerate(receiver_values):
+        receiver = dict(_mapping(raw_receiver, f"liquid_receivers[{index}]"))
+        _require(
+            set(receiver)
+            == {
+                "semantic_id",
+                "room_id",
+                "category",
+                "receiver_kind",
+                "proxy_asset_id",
+                "world_transform_cm",
+                "accepted_liquid_type",
+                "capacity_ml",
+                "initial_level",
+                "initial_liquid_type",
+                "pour_target_local_cm",
+                "visual_binding_id",
+                "external_asset_required",
+            },
+            "VISTA_HOME_TYPED_SCENE_LIQUID_INVALID",
+            f"liquid receiver {index} fields differ",
+        )
+        semantic_id = _safe_id(
+            receiver["semantic_id"], f"liquid_receivers[{index}].semantic_id"
+        )
+        room_id = _safe_id(
+            receiver["room_id"], f"liquid_receivers[{index}].room_id"
+        )
+        category = _safe_id(
+            receiver["category"], f"liquid_receivers[{index}].category"
+        )
+        receiver_kind = _safe_id(
+            receiver["receiver_kind"],
+            f"liquid_receivers[{index}].receiver_kind",
+        )
+        proxy_asset_id = _safe_id(
+            receiver["proxy_asset_id"],
+            f"liquid_receivers[{index}].proxy_asset_id",
+        )
+        accepted_liquid_type = _safe_id(
+            receiver["accepted_liquid_type"],
+            f"liquid_receivers[{index}].accepted_liquid_type",
+        )
+        initial_liquid_type = _safe_id(
+            receiver["initial_liquid_type"],
+            f"liquid_receivers[{index}].initial_liquid_type",
+        )
+        visual_binding_id = _safe_id(
+            receiver["visual_binding_id"],
+            f"liquid_receivers[{index}].visual_binding_id",
+        )
+        receiver_transform = _transform(
+            receiver["world_transform_cm"],
+            f"liquid receiver {semantic_id}.world_transform_cm",
+        )
+        pour_target = _typed_scene_local_transform(
+            receiver["pour_target_local_cm"],
+            f"liquid receiver {semantic_id}.pour_target_local_cm",
+        )
+        capacity = _typed_scene_number(
+            receiver["capacity_ml"],
+            f"liquid receiver {semantic_id}.capacity_ml",
+            minimum=1.0,
+            maximum=100000.0,
+        )
+        initial_level = _typed_scene_number(
+            receiver["initial_level"],
+            f"liquid receiver {semantic_id}.initial_level",
+            minimum=0.0,
+            maximum=1.0,
+        )
+        _require(
+            semantic_id.startswith(room_id + "/entity.")
+            and semantic_id not in occupied_semantic_ids
+            and room_id in rooms_by_id
+            and proxy_asset_id in declared_assets
+            and visual_binding_id not in visual_binding_ids
+            and receiver["external_asset_required"] is True
+            and accepted_liquid_type in source_liquid_types
+            and (
+                (initial_level == 0.0 and initial_liquid_type == "none")
+                or (
+                    initial_level > 0.0
+                    and initial_liquid_type == accepted_liquid_type
+                )
+            )
+            and _point_in_bounds(
+                receiver_transform["location_cm"],
+                rooms_by_id[room_id]["world_bounds_cm"],
+            ),
+            "VISTA_HOME_TYPED_SCENE_LIQUID_INVALID",
+            f"liquid receiver {semantic_id} identity or binding is invalid",
+        )
+        occupied_semantic_ids.add(semantic_id)
+        visual_binding_ids.add(visual_binding_id)
+        receiver_kinds.add(receiver_kind)
+        extension_operations.append(
+            _operation(
+                "place_entities",
+                "place_typed_liquid_receiver",
+                {
+                    "semantic_id": semantic_id,
+                    "room_id": room_id,
+                    "category": category,
+                    "actor_class": LIQUID_RECEIVER_ACTOR_CLASS,
+                    "asset": _binding(
+                        declared_assets[proxy_asset_id],
+                        declared_assets,
+                        f"liquid receiver {semantic_id}.proxy_asset",
+                    ),
+                    "transform": receiver_transform,
+                    "component_role": "liquid_receiver",
+                    "typed_role": "liquid_receiver",
+                    "mobility": "movable",
+                    "collision_policy": "furniture",
+                    "collision": COLLISION_SETTINGS["furniture"],
+                    "nav_obstacle": False,
+                    "affordances": ["inspect", "pour"],
+                    "baseline_state": {"visible": True},
+                    "liquid_binding": {
+                        "receiver_kind": receiver_kind,
+                        "accepted_liquid_type": accepted_liquid_type,
+                        "capacity_ml": capacity,
+                        "initial_level": initial_level,
+                        "initial_liquid_type": initial_liquid_type,
+                        "pour_target_local_cm": pour_target,
+                    },
+                    "visual_binding": {
+                        "binding_id": visual_binding_id,
+                        "external_asset_required": True,
+                        "proxy_asset_id": proxy_asset_id,
+                        "proxy_is_acceptance_evidence": False,
+                    },
+                    "tags": [
+                        TAG_PREFIX + semantic_id,
+                        "VistaRoom=" + room_id,
+                        "VistaTypedRole=liquid_receiver",
+                        "VistaReceiverKind=" + receiver_kind,
+                        "VistaExternalVisualBinding=" + visual_binding_id,
+                    ],
+                },
+            )
+        )
+    _require(
+        {"glass", "bowl"}.issubset(receiver_kinds),
+        "VISTA_HOME_TYPED_SCENE_LIQUID_INVALID",
+        "typed scene profile must contain glass and bowl receivers",
+    )
+    return (
+        seat_bindings,
+        sorted(
+            seat_anchor_operations + extension_operations,
+            key=lambda operation: (
+                operation["kind"],
+                operation["semantic_id"],
+            ),
+        ),
+        (occupied_semantic_ids - set(entities_by_id))
+        | {
+            operation["semantic_id"]
+            for operation in seat_anchor_operations
+        },
+    )
+
+
 def _validate_graph(room_ids: set[str], portals: Sequence[Mapping[str, Any]]) -> None:
     adjacency = {room_id: set() for room_id in room_ids}
     for portal in portals:
@@ -800,12 +1380,16 @@ def build_composition_spec(
     plan: Mapping[str, Any],
     visual_profile: Mapping[str, Any] | None = None,
     presentation_bindings: Sequence[Mapping[str, Any]] | None = None,
+    typed_scene_profile: Mapping[str, Any] | None = None,
 ) -> CompositionSpec:
     """Validate critical invariants and compile stable Editor operations.
 
     ``visual_profile=None`` is the accepted r1 compatibility path.  The r2
     path is additive and replaces only materialized review cameras here; it
     does not mutate the HouseSpec semantic, collision, or gameplay records.
+    The optional typed scene profile is a separate exact-house overlay: it
+    upgrades existing sit targets and appends typed liquid actors without
+    extending or rewriting the frozen build-plan schema.
     """
 
     value = dict(_mapping(plan, "build plan"))
@@ -958,6 +1542,22 @@ def build_composition_spec(
         _require(entity.get("room_id") in room_ids, "VISTA_HOME_PLAN_ENTITY_INVALID", f"entity {entity_id} room absent")
         entities_by_id[entity_id] = entity
 
+    typed_seat_bindings: dict[str, dict[str, Any]] = {}
+    typed_scene_operations: list[dict[str, Any]] = []
+    typed_scene_semantic_ids: set[str] = set()
+    if typed_scene_profile is not None:
+        (
+            typed_seat_bindings,
+            typed_scene_operations,
+            typed_scene_semantic_ids,
+        ) = _compile_typed_scene_profile(
+            _mapping(typed_scene_profile, "typed scene profile"),
+            house=house,
+            rooms_by_id=rooms_by_id,
+            entities_by_id=entities_by_id,
+            declared_assets=declared_assets,
+        )
+
     runtime = _mapping(value["runtime_profile"], "runtime_profile")
     navigation_agent = _mapping(runtime.get("navigation_agent"),
                                 "runtime_profile.navigation_agent")
@@ -1008,6 +1608,9 @@ def build_composition_spec(
                  f"entity {entity_id} needs a typed gameplay actor")
         tags = [TAG_PREFIX + entity_id, "VistaRoom=" + entity["room_id"], "VistaRole=" + role]
         tags.extend("VistaTag=" + tag for tag in sorted(entity.get("tags", [])))
+        seat_binding = typed_seat_bindings.get(entity_id)
+        if seat_binding is not None:
+            tags.append("VistaTypedRole=seat")
         entity_transform = _transform(entity.get("world_transform_cm"),
                                       f"entity {entity_id}.transform")
         if role == "npc":
@@ -1018,7 +1621,7 @@ def build_composition_spec(
             "semantic_id": entity_id,
             "room_id": entity["room_id"],
             "category": entity.get("category"),
-            "actor_class": ROLE_CLASSES[role],
+            "actor_class": SEAT_ACTOR_CLASS if seat_binding is not None else ROLE_CLASSES[role],
             "asset": _binding(entity.get("asset"), declared_assets, f"entity {entity_id}.asset"),
             "transform": entity_transform,
             "component_role": role,
@@ -1030,6 +1633,9 @@ def build_composition_spec(
             "baseline_state": dict(entity.get("baseline_state", {})),
             "tags": tags,
         }
+        if seat_binding is not None:
+            entity_operation["typed_role"] = "seat"
+            entity_operation["seat_binding"] = seat_binding
         if role == "npc":
             entity_operation["floor_contact_offset_cm"] = capsule_half_height_cm
             entity_operation["npc_profile"] = npc_profiles_by_entity[entity_id]
@@ -1042,6 +1648,8 @@ def build_composition_spec(
                 "transform": _transform(anchor.get("world_transform_cm"), "placement anchor transform"),
                 "tags": [TAG_PREFIX + entity_id + "/anchor." + anchor_id, "VistaOwner=" + entity_id],
             }))
+
+    operations.extend(typed_scene_operations)
 
     player_start = _mapping(runtime.get("player_start"), "runtime_profile.player_start")
     _require(player_start.get("room_id") in room_ids, "VISTA_HOME_PLAN_RUNTIME_INVALID", "PlayerStart room absent")
@@ -1102,7 +1710,12 @@ def build_composition_spec(
         }),
         _operation("save_reload_verify", "save_reload_verify", {
             "map_path": map_path,
-            "expected_semantic_ids": sorted(room_ids | portal_ids | set(entities_by_id)),
+            "expected_semantic_ids": sorted(
+                room_ids
+                | portal_ids
+                | set(entities_by_id)
+                | typed_scene_semantic_ids
+            ),
             "expected_npc_entity_ids": sorted(profile["entity_id"] for profile in runtime.get("npc_profiles", [])),
         }),
     ])
@@ -1123,5 +1736,10 @@ def build_composition_spec(
     if visual is not None:
         compiled["visual_profile_id"] = visual["visual_profile_id"]
         compiled["visual_profile_content_digest"] = visual["content_digest"]
+    if typed_scene_profile is not None:
+        compiled["typed_scene_profile_id"] = typed_scene_profile["profile_id"]
+        compiled["typed_scene_profile_content_digest"] = typed_scene_profile[
+            "content_digest"
+        ]
     raw = canonical_json(compiled)
     return CompositionSpec(compiled, raw, hashlib.sha256(raw).hexdigest())
