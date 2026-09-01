@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vista-world.local/schemas/vista-playable-event-v5.schema.json",
+  "title": "VISTA Playable Event v5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "compatible_house",
+    "action_catalog",
+    "interaction_bindings",
+    "typed_scene_profile",
+    "derivation",
+    "npc_action_queues",
+    "accepted",
+    "runtime_execution_authorized",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "simworld.vista.playable-event/v5"},
+    "event_id": {"$ref": "#/$defs/short_id"},
+    "compatible_house": {"$ref": "#/$defs/house_binding"},
+    "action_catalog": {"$ref": "#/$defs/catalog_binding"},
+    "interaction_bindings": {"$ref": "#/$defs/interaction_binding"},
+    "typed_scene_profile": {"$ref": "#/$defs/typed_scene_binding"},
+    "derivation": {"$ref": "#/$defs/derivation"},
+    "npc_action_queues": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/queue"}
+    },
+    "accepted": {"const": false},
+    "runtime_execution_authorized": {"const": false},
+    "content_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "short_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 96,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "semantic_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "house_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["house_id", "revision", "content_digest"],
+      "properties": {
+        "house_id": {"$ref": "#/$defs/short_id"},
+        "revision": {"$ref": "#/$defs/short_id"},
+        "content_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "catalog_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "catalog_id",
+        "catalog_revision",
+        "content_digest"
+      ],
+      "properties": {
+        "schema_version": {"const": "vista.playable-action-catalog/v5"},
+        "catalog_id": {"const": "vista_indoor_actions"},
+        "catalog_revision": {"const": "vista_indoor_actions_r5"},
+        "content_digest": {
+          "const": "9669e2d797347155d3eb024b69f2451a81a8bd9dcb45346e10d56cfd7965028c"
+        }
+      }
+    },
+    "interaction_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "binding_id",
+        "binding_revision",
+        "content_digest"
+      ],
+      "properties": {
+        "schema_version": {"const": "vista.playable-interaction-bindings/v1"},
+        "binding_id": {"const": "vista_home_interactions"},
+        "binding_revision": {"const": "vista_home_interactions_r1"},
+        "content_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "typed_scene_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "profile_id", "content_digest"],
+      "properties": {
+        "schema_version": {
+          "const": "simworld.vista.playable-home-typed-scene-composition/v1"
+        },
+        "profile_id": {"const": "vista_home_typed_scene_r18"},
+        "content_digest": {
+          "const": "2267f918ea41102f8450609171570b35d2a2c7d310b16a574b15202786058666"
+        }
+      }
+    },
+    "source_v4": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "event_id", "content_digest"],
+      "properties": {
+        "schema_version": {"const": "simworld.vista.playable-event/v4"},
+        "event_id": {"$ref": "#/$defs/short_id"},
+        "content_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_v4_event", "change_scope"],
+      "properties": {
+        "source_v4_event": {"$ref": "#/$defs/source_v4"},
+        "change_scope": {
+          "const": "append_closed_storage_transaction_chain"
+        }
+      }
+    },
+    "queue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queue_id", "npc_id", "replace", "actions"],
+      "properties": {
+        "queue_id": {"$ref": "#/$defs/short_id"},
+        "npc_id": {"$ref": "#/$defs/short_id"},
+        "replace": {"const": true},
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 40,
+          "items": {"$ref": "#/$defs/action"}
+        }
+      }
+    },
+    "target_action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "target_id"],
+      "properties": {
+        "action": {
+          "enum": [
+            "inspect",
+            "pick_up",
+            "open",
+            "close",
+            "toggle",
+            "press",
+            "turn_on",
+            "turn_off",
+            "sit",
+            "stand",
+            "use"
+          ]
+        },
+        "target_id": {"$ref": "#/$defs/semantic_id"}
+      }
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "room_id"],
+          "properties": {
+            "action": {"const": "navigate_to"},
+            "room_id": {"$ref": "#/$defs/semantic_id"}
+          }
+        },
+        {"$ref": "#/$defs/target_action"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "target_id", "secondary_target_id"],
+          "properties": {
+            "action": {"const": "pour"},
+            "target_id": {"$ref": "#/$defs/semantic_id"},
+            "secondary_target_id": {"$ref": "#/$defs/semantic_id"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "target_id", "secondary_target_id"],
+          "properties": {
+            "action": {"enum": ["insert", "remove"]},
+            "target_id": {"$ref": "#/$defs/semantic_id"},
+            "secondary_target_id": {"$ref": "#/$defs/semantic_id"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "target_id", "placement_anchor_id"],
+          "properties": {
+            "action": {"const": "place"},
+            "target_id": {"$ref": "#/$defs/semantic_id"},
+            "placement_anchor_id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,95}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action"],
+          "properties": {"action": {"const": "drop"}}
+        }
+      ]
+    }
+  }
+}
