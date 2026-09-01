@@ -146,6 +146,17 @@ def test_worker_uses_public_ue57_montage_identity_apis() -> None:
     assert '"first_reference": str(first_reference.get_path_name())' in worker
 
 
+def test_worker_uses_public_ue57_notify_trigger_time_api() -> None:
+    worker = text(TOOLS / "author_manny_detail_actions_retarget_r18.py")
+    notify_time = worker.split("def notify_time", 1)[1].split(
+        "def _transform_values", 1
+    )[0]
+    assert "AnimationLibrary.get_anim_notify_event_trigger_time(event)" in notify_time
+    assert 'property_or_none(event, "trigger_time")' not in notify_time
+    assert 'property_or_none(event, "time")' not in notify_time
+    assert '"notify trigger time is non-finite"' in notify_time
+
+
 def test_runner_dry_run_contract_is_zero_write_and_execution_is_external() -> None:
     source = text(TOOLS / "run_manny_detail_actions_retarget_r18.py")
     ast.parse(source)
