@@ -18,13 +18,18 @@
     "binding_revision": "vista_home_interactions_r1",
     "content_digest": "261543543ee5370f0ef784a4d44c96351d4e367447046dfd4e40192f955ea0a0"
   },
+  "typed_scene_profile": {
+    "schema_version": "simworld.vista.playable-home-typed-scene-composition/v1",
+    "profile_id": "vista_home_typed_scene_r18",
+    "content_digest": "2267f918ea41102f8450609171570b35d2a2c7d310b16a574b15202786058666"
+  },
   "derivation": {
     "source_v3_event": {
       "schema_version": "simworld.vista.playable-event/v3",
       "event_id": "mmg_013",
       "content_digest": "81d947ee1b8dcbbf8f28a62bd061fc8bbbd5edb157dba9bf6064b9d93a906832"
     },
-    "change_scope": "append_closed_posture_and_two_target_actions"
+    "change_scope": "append_closed_posture_and_typed_scene_actions"
   },
   "npc_action_queues": [
     {
@@ -85,19 +90,15 @@
         },
         {
           "action": "pick_up",
-          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
-        },
-        {
-          "action": "navigate_to",
-          "room_id": "home.r1/room.bathroom_laundry"
+          "target_id": "home.r1/room.kitchen_dining/entity.water_jug.18"
         },
         {
           "action": "pour",
-          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
-          "secondary_target_id": "home.r1/room.bathroom_laundry/entity.bathtub.01"
+          "target_id": "home.r1/room.kitchen_dining/entity.water_jug.18",
+          "secondary_target_id": "home.r1/room.kitchen_dining/entity.drinking_glass.18"
         }
       ]
     }
   ],
-  "content_digest": "9a0730a70b204a45b669aac6c314e32df893373662a788cf1f050a775c09d9fc"
+  "content_digest": "af9421a1912bb8b92e6827e0b92834274899381ec4a80cdfac739c35a7af4b72"
 }

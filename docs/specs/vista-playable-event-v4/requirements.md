@@ -11,7 +11,8 @@ without changing any v1-v3 authority or claiming runtime readiness.
 ## Goals
 
 - Define a closed, digest-bound EventSpec v4 that derives from an exact validated v3
-  event and preserves every v3 queue action as an exact prefix.
+  event, binds the exact R18 typed-scene profile, and preserves every v3 queue action
+  as an exact prefix.
 - Add wire actions `sit`, `stand`, and two-target `pour`.
 - Make `pour.target_id` the exact primary/source entity and
   `pour.secondary_target_id` the exact receiver entity.
@@ -56,14 +57,17 @@ The v4 JSON Schema shall keep every object closed and add exactly these shapes:
 Acceptance criteria:
 
 - Missing, unknown, malformed, or extra keys fail schema validation.
-- Source and receiver IDs must differ and both resolve exactly in the bound house.
+- Source and receiver IDs must differ and resolve exactly as compatible typed liquid
+  roles in the bound R18 scene profile.
 
 ### REQ-003 — typed sequence preflight
 
 The preflight shall track one actor posture/seat claim and one held-item slot per NPC.
 Sit requires a seat target and standing state; Stand requires the same active seat;
-Pour requires the exact primary source to occupy the held slot and a distinct exact
-receiver. These are contract checks only and do not imply UE capability.
+Pour requires the exact typed liquid source to occupy the held slot and a distinct,
+liquid-compatible typed receiver. The source and receiver must be entities compiled by
+the exact digest-bound R18 scene profile. These are contract checks only and do not
+imply UE capability.
 
 ### REQ-004 — action catalog v4 overlay
 
@@ -90,6 +94,13 @@ An NLP system may propose only JSON matching the ActionPlan/EventSpec v4 grammar
 Free-form text is never executable. Proposed IDs must resolve against an enumerated,
 digest-bound entity set and the result must pass schema validation and preflight before
 it can reach the compiler. Any unknown intent, key, ID, or path is rejected.
+
+### REQ-007 — exact typed-scene authority
+
+The event, compiler sidecar, and dispatcher preflight shall bind profile
+`vista_home_typed_scene_r18` at its exact content digest. A plain HouseSpec prop may
+not substitute for the water-jug source or glass/bowl receiver, and a changed profile
+must fail before compilation.
 
 ## Quality requirements
 

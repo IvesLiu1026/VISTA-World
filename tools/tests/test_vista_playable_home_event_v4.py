@@ -17,10 +17,18 @@ PACK = ROOT / "world_packs/vista_playable_home_r1"
 HOUSE = base.load_json(PACK / "house.json")
 CATALOG = base.load_json(PACK / "action_catalogs/vista_indoor_actions_r4.json")
 BINDINGS = base.load_json(PACK / "interaction_bindings/vista_home_interactions_r1.json")
+TYPED_SCENE_PROFILE = base.load_json(
+    PACK / "composition_profiles/vista_home_typed_scene_r18.json"
+)
 BASE = {item["event_id"]: item for item in base.load_events(PACK / "events")}["mmg_013"]
-V2 = {item["event_id"]: item for item in base.load_events(PACK / "events_v2")}["mmg_013"]
+V2 = {item["event_id"]: item for item in base.load_events(PACK / "events_v2")}[
+    "mmg_013"
+]
 V3 = event_v3.load_event(PACK / "events_v3/mmg_013.json")
-EVENT = contract.load_event(ROOT / "tools/tests/fixtures/vista_playable_event_v4/mmg_013_contract_extension.json")
+EVENT = contract.load_event(
+    ROOT
+    / "tools/tests/fixtures/vista_playable_event_v4/mmg_013_contract_extension.json"
+)
 
 
 def validate(event: dict) -> None:
@@ -31,6 +39,7 @@ def validate(event: dict) -> None:
         bindings=BINDINGS,
         base_event=BASE,
         source_event_v3=V3,
+        typed_scene_profile=TYPED_SCENE_PROFILE,
         source_event_v2=V2,
     )
 
@@ -65,8 +74,13 @@ def test_event_schema_is_meta_valid_and_closed() -> None:
 def test_contract_fixture_validates_and_preserves_exact_v3_prefix() -> None:
     validate(EVENT)
     source_actions = V3["npc_action_queues"][0]["actions"]
-    assert EVENT["npc_action_queues"][0]["actions"][: len(source_actions)] == source_actions
-    assert EVENT["derivation"]["source_v3_event"]["content_digest"] == V3["content_digest"]
+    assert (
+        EVENT["npc_action_queues"][0]["actions"][: len(source_actions)]
+        == source_actions
+    )
+    assert (
+        EVENT["derivation"]["source_v3_event"]["content_digest"] == V3["content_digest"]
+    )
 
 
 def test_projection_types_sit_stand_and_two_target_pour() -> None:
@@ -77,9 +91,14 @@ def test_projection_types_sit_stand_and_two_target_pour() -> None:
         bindings=BINDINGS,
         base_event=BASE,
         source_event_v3=V3,
+        typed_scene_profile=TYPED_SCENE_PROFILE,
         source_event_v2=V2,
     )[0]["actions"]
-    by_wire = {action["action"]: action for action in projected if action["action"] in contract.NEW_WIRE_ACTIONS}
+    by_wire = {
+        action["action"]: action
+        for action in projected
+        if action["action"] in contract.NEW_WIRE_ACTIONS
+    }
     assert by_wire["sit"]["concrete_action_id"] == "sit_down"
     assert by_wire["sit"]["identity_roles"] == {"target_id": "seat"}
     assert by_wire["stand"]["concrete_action_id"] == "stand_up"
@@ -107,28 +126,85 @@ def test_pour_requires_exact_distinct_held_source_and_receiver() -> None:
 
     reversed_targets = copy.deepcopy(EVENT)
     pour = reversed_targets["npc_action_queues"][0]["actions"][-1]
-    pour["target_id"], pour["secondary_target_id"] = pour["secondary_target_id"], pour["target_id"]
-    assert_error("VISTA_HOME_EVENT_V4_POUR_SOURCE_NOT_HELD", reseal(reversed_targets))
+    pour["target_id"], pour["secondary_target_id"] = (
+        pour["secondary_target_id"],
+        pour["target_id"],
+    )
+    assert_error(
+        "VISTA_HOME_EVENT_V4_POUR_SOURCE_TYPE_INVALID", reseal(reversed_targets)
+    )
 
     unknown_receiver = copy.deepcopy(EVENT)
-    unknown_receiver["npc_action_queues"][0]["actions"][-1]["secondary_target_id"] = "home.r1/room.kitchen_dining/entity.receiver.unknown"
+    unknown_receiver["npc_action_queues"][0]["actions"][-1]["secondary_target_id"] = (
+        "home.r1/room.kitchen_dining/entity.receiver.unknown"
+    )
     assert_error("VISTA_HOME_EVENT_V4_RECEIVER_UNKNOWN", reseal(unknown_receiver))
 
     unheld = copy.deepcopy(EVENT)
     actions = unheld["npc_action_queues"][0]["actions"]
-    actions.pop(-3)  # remove the appended PickUp while retaining navigation and Pour
+    actions.pop(-2)  # remove the appended PickUp while retaining navigation and Pour
     assert_error("VISTA_HOME_EVENT_V4_POUR_SOURCE_NOT_HELD", reseal(unheld))
+
+
+def test_pour_requires_exact_typed_scene_source_receiver_and_profile() -> None:
+    house_source = copy.deepcopy(EVENT)
+    actions = house_source["npc_action_queues"][0]["actions"]
+    pick_up = actions[-2]
+    pour = actions[-1]
+    pick_up["target_id"] = "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+    pour["target_id"] = pick_up["target_id"]
+    assert_error("VISTA_HOME_EVENT_V4_PICKUP_SOURCE_TYPE_INVALID", reseal(house_source))
+
+    house_receiver = copy.deepcopy(EVENT)
+    house_receiver["npc_action_queues"][0]["actions"][-1]["secondary_target_id"] = (
+        "home.r1/room.bathroom_laundry/entity.bathtub.01"
+    )
+    assert_error(
+        "VISTA_HOME_EVENT_V4_POUR_RECEIVER_TYPE_INVALID",
+        reseal(house_receiver),
+    )
+
+    forged_binding = copy.deepcopy(EVENT)
+    forged_binding["typed_scene_profile"]["content_digest"] = "f" * 64
+    assert_error(
+        "VISTA_HOME_EVENT_V4_SCHEMA_INVALID",
+        reseal(forged_binding),
+    )
+
+    forged_profile = copy.deepcopy(TYPED_SCENE_PROFILE)
+    forged_profile["liquid_receivers"][0]["accepted_liquid_type"] = "juice"
+    forged_profile = base.seal_document(forged_profile)
+    with pytest.raises(contract.PlayableHomeContractError) as caught:
+        contract.validate_event(
+            EVENT,
+            house=HOUSE,
+            action_catalog=CATALOG,
+            bindings=BINDINGS,
+            base_event=BASE,
+            source_event_v3=V3,
+            typed_scene_profile=forged_profile,
+            source_event_v2=V2,
+        )
+    assert caught.value.code == "VISTA_HOME_EVENT_V4_TYPED_SCENE_PROFILE_MISMATCH"
 
 
 def test_posture_sequence_is_fail_closed() -> None:
     stand_first = copy.deepcopy(EVENT)
-    suffix = stand_first["npc_action_queues"][0]["actions"][len(V3["npc_action_queues"][0]["actions"]):]
+    suffix = stand_first["npc_action_queues"][0]["actions"][
+        len(V3["npc_action_queues"][0]["actions"]) :
+    ]
     suffix[0], suffix[1] = suffix[1], suffix[0]
-    stand_first["npc_action_queues"][0]["actions"][len(V3["npc_action_queues"][0]["actions"]):] = suffix
+    stand_first["npc_action_queues"][0]["actions"][
+        len(V3["npc_action_queues"][0]["actions"]) :
+    ] = suffix
     assert_error("VISTA_HOME_EVENT_V4_POSTURE_PRECONDITION_FAILED", reseal(stand_first))
 
     wrong_seat = copy.deepcopy(EVENT)
-    stand = next(action for action in wrong_seat["npc_action_queues"][0]["actions"] if action["action"] == "stand")
+    stand = next(
+        action
+        for action in wrong_seat["npc_action_queues"][0]["actions"]
+        if action["action"] == "stand"
+    )
     stand["target_id"] = "home.r1/room.bedroom/entity.bed.01"
     assert_error("VISTA_HOME_EVENT_V4_POSTURE_PRECONDITION_FAILED", reseal(wrong_seat))
 

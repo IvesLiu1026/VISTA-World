@@ -5,6 +5,7 @@
 ```text
 frozen v3 catalog --exact digest--> v4 readiness overlay --R15 candidate-->
 frozen EventSpec v3 --exact digest/prefix--> EventSpec v4 --> validated projection
+R18 typed profile --exact digest/roles------^          |
                                                       --> source-only compiler
                                                       --> closed preflight envelopes
 ```
@@ -30,9 +31,10 @@ actions are separately validated.
 ## Event model
 
 Each v4 event contains the same house and interaction binding identities as v3, a v4
-catalog binding, and `derivation.source_v3_event`. Queue IDs and NPC IDs must match the
-source v3 event. Each v4 action list begins with the exact source v3 action list and may
-append closed v4 actions.
+catalog binding, an exact R18 typed-scene binding, and
+`derivation.source_v3_event`. Queue IDs and NPC IDs must match the source v3 event.
+Each v4 action list begins with the exact source v3 action list and may append only the
+closed typed-scene suffix.
 
 The fixture appends a contract exercise only: Sit/Stand on an exact seat entity and
 PickUp/Pour using an exact source and receiver. It remains labeled
@@ -40,21 +42,25 @@ PickUp/Pour using an exact source and receiver. It remains labeled
 
 ## Typed identities
 
-- `sit.target_id`: `seat` role, exact house entity, `sit` affordance.
+- `sit.target_id`: `seat` role, exact house entity promoted by the typed profile.
 - `stand.target_id`: `seat` role, exact current seated target.
-- `pour.target_id`: `primary_source` role, exact held house entity.
-- `pour.secondary_target_id`: `secondary_receiver` role, exact distinct house entity.
+- `pour.target_id`: `primary_source` role, exact held typed liquid source.
+- `pour.secondary_target_id`: `secondary_receiver` role, exact compatible typed
+  liquid receiver.
 
-The current house lacks an authoritative liquid receiver taxonomy. Therefore receiver
-existence and distinctness are checked, but liquid capacity/state effects are deferred
-to the UE adapter milestone and no acceptance is promoted.
+The frozen house lacks liquid receiver taxonomy, so v4 separately binds the exact R18
+typed-scene profile. The appended PickUp must name its water-jug source and Pour must
+name a distinct glass/bowl receiver with a compatible liquid type and positive
+capacity. Runtime liquid mutation remains deferred to the UE adapter milestone, and
+no acceptance is promoted.
 
 ## Sequence state
 
-Projection begins by replaying the exact v3 queue through the v3 validator. For the
-appended suffix it tracks `held_target_id`, `posture`, and `seat_target_id` per NPC.
-Legacy PickUp/Place/Drop update the held slot. Sit/Stand update the posture claim.
-Pour consumes neither identity and does not invent liquid-state changes.
+Projection begins by replaying only the exact v3 prefix through the v3 validator. The
+closed suffix permits typed-scene Sit/Stand, navigation inside the NPC patrol set,
+PickUp of the exact typed liquid source, and two-target Pour. It tracks
+`held_target_id`, `posture`, and `seat_target_id` per NPC. Pour consumes neither
+identity and does not invent liquid-state changes.
 
 ## Compiler contract
 
