@@ -130,6 +130,12 @@ FString BuildInteractionLabel(
             return FString::Printf(TEXT("Drop %s"), *TargetName);
         case EVistaAffordance::Place:
             return FString::Printf(TEXT("Place %s"), *TargetName);
+        case EVistaAffordance::Press:
+            return FString::Printf(TEXT("Press %s control"), *TargetName);
+        case EVistaAffordance::TurnOn:
+            return FString::Printf(TEXT("Turn On %s"), *TargetName);
+        case EVistaAffordance::TurnOff:
+            return FString::Printf(TEXT("Turn Off %s"), *TargetName);
         case EVistaAffordance::Toggle:
             return IsToggleEnabled(Target)
                 ? FString::Printf(TEXT("Turn Off %s"), *TargetName)
@@ -141,6 +147,44 @@ FString BuildInteractionLabel(
         case EVistaAffordance::Inspect:
         default:
             return FString::Printf(TEXT("Inspect %s"), *TargetName);
+    }
+}
+
+FString BuildSelectedActionLabel(const FVistaPlayerActionOption& Action)
+{
+    const FString TargetName = FriendlyNameForActor(Action.Target);
+    switch (Action.Affordance)
+    {
+        case EVistaAffordance::Press:
+            return FString::Printf(TEXT("Press %s control"), *TargetName);
+        case EVistaAffordance::TurnOn:
+            return FString::Printf(TEXT("Turn On %s"), *TargetName);
+        case EVistaAffordance::TurnOff:
+            return FString::Printf(TEXT("Turn Off %s"), *TargetName);
+        case EVistaAffordance::Open:
+            return FString::Printf(TEXT("Open %s"), *TargetName);
+        case EVistaAffordance::Close:
+            return FString::Printf(TEXT("Close %s"), *TargetName);
+        case EVistaAffordance::Inspect:
+            return FString::Printf(TEXT("Inspect %s"), *TargetName);
+        case EVistaAffordance::Sit:
+            return FString::Printf(TEXT("Sit on %s"), *TargetName);
+        case EVistaAffordance::Stand:
+            return FString::Printf(TEXT("Stand up from %s"), *TargetName);
+        case EVistaAffordance::Pour:
+            return FString::Printf(
+                TEXT("Pour %s into %s"),
+                *TargetName,
+                *FriendlyNameForActor(Action.SecondaryTarget));
+        case EVistaAffordance::PickUp:
+            return FString::Printf(TEXT("Pick Up %s"), *TargetName);
+        case EVistaAffordance::Place:
+            return FString::Printf(
+                TEXT("Place %s on %s"),
+                *TargetName,
+                *FriendlyNameForActor(Action.SecondaryTarget));
+        default:
+            return FString();
     }
 }
 
@@ -218,6 +262,10 @@ FString AffordanceLabel(EVistaAffordance Affordance)
         case EVistaAffordance::Sit: return TEXT("Sit");
         case EVistaAffordance::Stand: return TEXT("Stand");
         case EVistaAffordance::Inspect: return TEXT("Inspect");
+        case EVistaAffordance::Press: return TEXT("Press");
+        case EVistaAffordance::TurnOn: return TEXT("Turn on");
+        case EVistaAffordance::TurnOff: return TEXT("Turn off");
+        case EVistaAffordance::Pour: return TEXT("Pour");
         default: return TEXT("Unknown");
     }
 }
@@ -419,6 +467,52 @@ void AVistaPlayableHomeHUD::DrawHUD()
                  PanelX + (PanelWidth - TextWidth) * 0.5f,
                  PanelY + (PanelHeight - TextHeight) * 0.5f,
                  Font, UiScale, false);
+    }
+
+    FVistaPlayerActionOption SelectedAction;
+    if (!Character->IsInspectionActive() &&
+        Character->GetSelectedPlayerAction(SelectedAction))
+    {
+        const FString SelectedLabel = BuildSelectedActionLabel(SelectedAction);
+        const int32 ActionCount =
+            Character->GetExecutablePlayerActions().Num();
+        const int32 SelectedNumber =
+            Character->GetSelectedPlayerActionIndex() + 1;
+        const FString CycleHint = ActionCount > 1
+            ? FString::Printf(
+                TEXT("      [R / WHEEL]  SELECT  %d/%d"),
+                SelectedNumber,
+                ActionCount)
+            : FString();
+        const FString SelectorPrompt = FString::Printf(
+            TEXT("[F]  %s%s"),
+            *SelectedLabel,
+            *CycleHint);
+        float SelectorWidth = 0.0f;
+        float SelectorHeight = 0.0f;
+        GetTextSize(
+            SelectorPrompt,
+            SelectorWidth,
+            SelectorHeight,
+            Font,
+            0.88f * UiScale);
+        const float PanelWidth = FMath::Clamp(
+            SelectorWidth + 46.0f * UiScale,
+            260.0f * UiScale,
+            820.0f * UiScale);
+        const float PanelHeight = 38.0f * UiScale;
+        const float PanelX = (Canvas->ClipX - PanelWidth) * 0.5f;
+        const float PanelY = Canvas->ClipY - 120.0f * UiScale;
+        DrawRect(Panel, PanelX, PanelY, PanelWidth, PanelHeight);
+        DrawRect(Accent, PanelX, PanelY, 3.0f * UiScale, PanelHeight);
+        DrawText(
+            SelectorPrompt,
+            Primary,
+            PanelX + (PanelWidth - SelectorWidth) * 0.5f,
+            PanelY + (PanelHeight - SelectorHeight) * 0.5f,
+            Font,
+            0.88f * UiScale,
+            false);
     }
 
     const FVistaInspectionPresentation& Inspection =
