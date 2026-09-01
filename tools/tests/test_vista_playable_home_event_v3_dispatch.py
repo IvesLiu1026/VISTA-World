@@ -271,6 +271,22 @@ def test_prepare_defense_in_depth_rejects_non_house_target(
     assert caught.value.code == "ACTION_TARGET_UNKNOWN"
 
 
+def test_prepare_defense_in_depth_rejects_forged_pour_runtime_type(
+    sidecar: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    forged = copy.deepcopy(sidecar)
+    action = forged["event_plans"][0]["runtime_queues"][0]["actions"][0]
+    action["runtime_type"] = "pour"
+    action["wire_action"] = "pour"
+    forged = compiler.seal_document(forged)
+    monkeypatch.setattr(
+        compiler, "validate_runtime_sidecar", lambda *_args, **_kwargs: None
+    )
+    with pytest.raises(dispatch.EventV3DispatchError) as caught:
+        prepare(forged)
+    assert caught.value.code == "ACTION_TYPE_INVALID"
+
+
 def test_dry_run_never_claims_runtime_support(
     prepared: dispatch.PreparedDispatch,
 ) -> None:

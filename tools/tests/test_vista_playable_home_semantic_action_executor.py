@@ -27,7 +27,7 @@ def test_open_close_and_inspect_use_one_animation_gated_executor_contract() -> N
     assert "EVistaAffordance::Open" in source
     assert "EVistaAffordance::Close" in source
     assert "EVistaAffordance::Inspect" in source
-    assert "vista.semantic-command/v1" in source
+    assert "vista.semantic-command/v2" in source
     assert "HasApprovedMutationAnimation" in source
     assert 'FName(TEXT("VistaDoorHandleTarget"))' in source
     assert "ACTION_CONTACT_TARGET_AMBIGUOUS" in source

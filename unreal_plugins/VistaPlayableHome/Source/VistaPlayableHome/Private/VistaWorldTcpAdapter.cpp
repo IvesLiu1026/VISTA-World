@@ -316,6 +316,7 @@ const TCHAR* AffordanceText(const EVistaAffordance Affordance)
     case EVistaAffordance::Press: return TEXT("press");
     case EVistaAffordance::TurnOn: return TEXT("turn_on");
     case EVistaAffordance::TurnOff: return TEXT("turn_off");
+    case EVistaAffordance::Pour: return TEXT("pour");
     case EVistaAffordance::Stand:
         return TEXT("stand");
     default: return TEXT("inspect");
@@ -349,6 +350,18 @@ TSharedRef<FJsonObject> ActionTransactionJson(
     Output->SetStringField(
         TEXT("requester_semantic_id"), Transaction.RequesterSemanticId);
     Output->SetStringField(TEXT("target_semantic_id"), Transaction.TargetSemanticId);
+    if (Transaction.SecondaryTargetSemanticId.IsEmpty())
+    {
+        Output->SetField(
+            TEXT("secondary_target_semantic_id"),
+            MakeShared<FJsonValueNull>());
+    }
+    else
+    {
+        Output->SetStringField(
+            TEXT("secondary_target_semantic_id"),
+            Transaction.SecondaryTargetSemanticId);
+    }
     if (Transaction.PlacementAnchorSemanticId.IsEmpty())
     {
         Output->SetField(
@@ -374,12 +387,20 @@ TSharedRef<FJsonObject> ActionTransactionJson(
         TEXT("physical_mutation_count"), Transaction.PhysicalMutationCount);
     Output->SetNumberField(
         TEXT("state_mutation_count"), Transaction.StateMutationCount);
+    Output->SetNumberField(
+        TEXT("liquid_transfer_ml"), Transaction.LiquidTransferMilliliters);
     Output->SetBoolField(
         TEXT("target_reservation_acquired"),
         Transaction.bTargetReservationAcquired);
     Output->SetBoolField(
         TEXT("target_reservation_released"),
         Transaction.bTargetReservationReleased);
+    Output->SetBoolField(
+        TEXT("secondary_target_reservation_acquired"),
+        Transaction.bSecondaryTargetReservationAcquired);
+    Output->SetBoolField(
+        TEXT("secondary_target_reservation_released"),
+        Transaction.bSecondaryTargetReservationReleased);
     Output->SetBoolField(TEXT("rollback_attempted"), Transaction.bRollbackAttempted);
     Output->SetBoolField(TEXT("rolled_back"), Transaction.bRolledBack);
     Output->SetBoolField(
@@ -429,6 +450,39 @@ TSharedRef<FJsonObject> ActionTransactionJson(
     else
     {
         Output->SetField(TEXT("after_state"), MakeShared<FJsonValueNull>());
+    }
+    if (Transaction.bHasBeforeSecondaryState)
+    {
+        Output->SetObjectField(
+            TEXT("before_secondary_state"),
+            RuntimeStateJson(Transaction.BeforeSecondaryState));
+    }
+    else
+    {
+        Output->SetField(
+            TEXT("before_secondary_state"), MakeShared<FJsonValueNull>());
+    }
+    if (Transaction.bHasContactSecondaryState)
+    {
+        Output->SetObjectField(
+            TEXT("contact_secondary_state"),
+            RuntimeStateJson(Transaction.ContactSecondaryState));
+    }
+    else
+    {
+        Output->SetField(
+            TEXT("contact_secondary_state"), MakeShared<FJsonValueNull>());
+    }
+    if (Transaction.bHasAfterSecondaryState)
+    {
+        Output->SetObjectField(
+            TEXT("after_secondary_state"),
+            RuntimeStateJson(Transaction.AfterSecondaryState));
+    }
+    else
+    {
+        Output->SetField(
+            TEXT("after_secondary_state"), MakeShared<FJsonValueNull>());
     }
     if (Transaction.bHasBeforePhysicalState)
     {
@@ -532,6 +586,18 @@ FString ResultResponse(const FVistaLiveCommandResult& Result,
         Npc->SetStringField(TEXT("status"), ActionStatus);
         Npc->SetStringField(
             TEXT("target_semantic_id"), Result.NpcActionResult.TargetSemanticId);
+        if (Result.NpcActionResult.SecondaryTargetSemanticId.IsEmpty())
+        {
+            Npc->SetField(
+                TEXT("secondary_target_semantic_id"),
+                MakeShared<FJsonValueNull>());
+        }
+        else
+        {
+            Npc->SetStringField(
+                TEXT("secondary_target_semantic_id"),
+                Result.NpcActionResult.SecondaryTargetSemanticId);
+        }
         Npc->SetNumberField(TEXT("queued_action_count"), Result.QueuedActionCount);
         Npc->SetStringField(TEXT("current_room_id"), Result.NpcCurrentRoomId);
 
@@ -556,6 +622,18 @@ FString ResultResponse(const FVistaLiveCommandResult& Result,
             LastJson->SetStringField(TEXT("status"), LastStatus);
             LastJson->SetStringField(
                 TEXT("target_semantic_id"), Last.TargetSemanticId);
+            if (Last.SecondaryTargetSemanticId.IsEmpty())
+            {
+                LastJson->SetField(
+                    TEXT("secondary_target_semantic_id"),
+                    MakeShared<FJsonValueNull>());
+            }
+            else
+            {
+                LastJson->SetStringField(
+                    TEXT("secondary_target_semantic_id"),
+                    Last.SecondaryTargetSemanticId);
+            }
             LastJson->SetStringField(
                 TEXT("completed_room_id"), Result.LastCompletedNpcRoomId);
             Npc->SetObjectField(TEXT("last_completed_action"), LastJson);
@@ -710,6 +788,7 @@ TOptional<EVistaAffordance> ParseAffordance(const FString& Value)
     if (Value == TEXT("press")) return EVistaAffordance::Press;
     if (Value == TEXT("turn_on")) return EVistaAffordance::TurnOn;
     if (Value == TEXT("turn_off")) return EVistaAffordance::TurnOff;
+    if (Value == TEXT("pour")) return EVistaAffordance::Pour;
     if (Value == TEXT("stand")) return EVistaAffordance::Stand;
     return {};
 }
@@ -728,6 +807,7 @@ TOptional<EVistaNpcActionType> ParseNpcAction(const FString& Value)
     if (Value == TEXT("press")) return EVistaNpcActionType::Press;
     if (Value == TEXT("turn_on")) return EVistaNpcActionType::TurnOn;
     if (Value == TEXT("turn_off")) return EVistaNpcActionType::TurnOff;
+    if (Value == TEXT("pour")) return EVistaNpcActionType::Pour;
     if (Value == TEXT("sit")) return EVistaNpcActionType::Sit;
     if (Value == TEXT("stand")) return EVistaNpcActionType::StandUp;
     if (Value == TEXT("wait")) return EVistaNpcActionType::Wait;
@@ -827,6 +907,7 @@ bool ReadNpcQueueAction(
         Object,
         KeySet({TEXT("action_id"), TEXT("type")}),
         KeySet({TEXT("target_semantic_id"), TEXT("target_location_cm"),
+                TEXT("secondary_target_semantic_id"),
                 TEXT("placement_anchor_id"), TEXT("duration_sec"),
                 TEXT("timeout_sec"), TEXT("speech"), TEXT("distance_cm"),
                 TEXT("height_cm"), TEXT("hand"), TEXT("foot"),
@@ -845,6 +926,40 @@ bool ReadNpcQueueAction(
          !IsSemanticId(OutAction.TargetSemanticId)))
     {
         OutCode = TEXT("NPC_TARGET_INVALID");
+        return false;
+    }
+    if (Object->HasField(TEXT("secondary_target_semantic_id")) &&
+        (!ReadString(
+             Object,
+             TEXT("secondary_target_semantic_id"),
+             OutAction.SecondaryTargetSemanticId) ||
+         !IsSemanticId(OutAction.SecondaryTargetSemanticId)))
+    {
+        OutCode = TEXT("NPC_SECONDARY_TARGET_INVALID");
+        return false;
+    }
+    if (OutAction.Type == EVistaNpcActionType::Pour &&
+        OutAction.SecondaryTargetSemanticId.IsEmpty())
+    {
+        OutCode = TEXT("NPC_SECONDARY_TARGET_REQUIRED");
+        return false;
+    }
+    if (OutAction.Type == EVistaNpcActionType::Pour &&
+        OutAction.SecondaryTargetSemanticId == OutAction.TargetSemanticId)
+    {
+        OutCode = TEXT("NPC_POUR_TARGETS_MUST_DIFFER");
+        return false;
+    }
+    if (OutAction.Type == EVistaNpcActionType::Pour &&
+        Object->HasField(TEXT("target_location_cm")))
+    {
+        OutCode = TEXT("NPC_POUR_LOCATION_UNEXPECTED");
+        return false;
+    }
+    if (OutAction.Type != EVistaNpcActionType::Pour &&
+        !OutAction.SecondaryTargetSemanticId.IsEmpty())
+    {
+        OutCode = TEXT("NPC_SECONDARY_TARGET_UNEXPECTED");
         return false;
     }
     if (Object->HasField(TEXT("placement_anchor_id")) &&
@@ -1158,7 +1273,9 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
             TEXT("operation"), TEXT("command_id"), TEXT("expected_revision"),
             TEXT("session_generation"), TEXT("requester_semantic_id"),
             TEXT("target_semantic_id"), TEXT("affordance")});
-        const TSet<FString> Optional = KeySet({TEXT("placement_anchor_semantic_id")});
+        const TSet<FString> Optional = KeySet({
+            TEXT("placement_anchor_semantic_id"),
+            TEXT("secondary_target_semantic_id")});
         if (!ExactKeys(Params, Required, Optional))
         {
             return ErrorResponse(TEXT(""), TEXT("INTERACTION_SHAPE_INVALID"));
@@ -1180,6 +1297,34 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
             return ErrorResponse(CommandId, TEXT("AFFORDANCE_UNSUPPORTED"));
         }
         Command.Affordance = Parsed.GetValue();
+        if (Params->HasField(TEXT("secondary_target_semantic_id")) &&
+            (!ReadString(
+                 Params,
+                 TEXT("secondary_target_semantic_id"),
+                 Command.SecondaryTargetSemanticId) ||
+             !IsSemanticId(Command.SecondaryTargetSemanticId)))
+        {
+            return ErrorResponse(
+                CommandId, TEXT("SECONDARY_TARGET_INVALID"));
+        }
+        if (Command.Affordance == EVistaAffordance::Pour &&
+            Command.SecondaryTargetSemanticId.IsEmpty())
+        {
+            return ErrorResponse(
+                CommandId, TEXT("POUR_RECEIVER_REQUIRED"));
+        }
+        if (Command.Affordance == EVistaAffordance::Pour &&
+            Command.SecondaryTargetSemanticId == Command.TargetSemanticId)
+        {
+            return ErrorResponse(
+                CommandId, TEXT("POUR_TARGETS_MUST_DIFFER"));
+        }
+        if (Command.Affordance != EVistaAffordance::Pour &&
+            !Command.SecondaryTargetSemanticId.IsEmpty())
+        {
+            return ErrorResponse(
+                CommandId, TEXT("SECONDARY_TARGET_UNEXPECTED"));
+        }
         if (Params->HasField(TEXT("placement_anchor_semantic_id")) &&
             (!ReadString(Params, TEXT("placement_anchor_semantic_id"),
                          Command.PlacementAnchorSemanticId) ||

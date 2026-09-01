@@ -151,6 +151,7 @@ public:
         FName CommandId) const;
     void FailNextReceiveCommitForDevAutomation();
     void FailNextReleaseFinalizeForDevAutomation();
+    void ReleasePourReservationForEndPlayForDevAutomation();
 #endif
 
     virtual FVistaEntityRuntimeState VistaGetRuntimeState_Implementation() const override;
@@ -225,6 +226,7 @@ private:
         FName CommandId,
         AVistaPickupActor* Source,
         bool bRecordRelease);
+    void ReleaseActivePourReservationForEndPlay();
     bool ReleaseReservationForSourceEndPlay(
         AVistaPickupActor* Source,
         UVistaActionExecutorComponent* Executor,

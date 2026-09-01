@@ -13,6 +13,7 @@
 #include "VistaHomeNpcCharacter.h"
 #include "VistaInteractable.h"
 #include "VistaItemCarrier.h"
+#include "VistaLiquidReceiverActor.h"
 #include "VistaPickupActor.h"
 #include "VistaPostureComponent.h"
 #include "VistaSeatActor.h"
@@ -61,6 +62,7 @@ TOptional<EVistaAffordance> AffordanceForAction(EVistaNpcActionType Type)
     case EVistaNpcActionType::Press: return EVistaAffordance::Press;
     case EVistaNpcActionType::TurnOn: return EVistaAffordance::TurnOn;
     case EVistaNpcActionType::TurnOff: return EVistaAffordance::TurnOff;
+    case EVistaNpcActionType::Pour: return EVistaAffordance::Pour;
     case EVistaNpcActionType::Sit: return EVistaAffordance::Sit;
     case EVistaNpcActionType::StandUp:
         return EVistaAffordance::Stand;
@@ -137,6 +139,24 @@ bool AVistaHomeNpcController::ValidateAction(
         OutCode = TEXT("DROP_TARGET_UNEXPECTED");
         return false;
     }
+    if (Action.Type == EVistaNpcActionType::Pour &&
+        (Action.SecondaryTargetSemanticId.IsEmpty() ||
+         Action.SecondaryTargetSemanticId == Action.TargetSemanticId ||
+         !Action.TargetLocation.IsNearlyZero()))
+    {
+        OutCode = !Action.TargetLocation.IsNearlyZero()
+            ? FName(TEXT("POUR_LOCATION_UNEXPECTED"))
+            : Action.SecondaryTargetSemanticId.IsEmpty()
+                ? FName(TEXT("POUR_SECONDARY_TARGET_REQUIRED"))
+                : FName(TEXT("POUR_TARGETS_MUST_DIFFER"));
+        return false;
+    }
+    if (Action.Type != EVistaNpcActionType::Pour &&
+        !Action.SecondaryTargetSemanticId.IsEmpty())
+    {
+        OutCode = TEXT("SECONDARY_TARGET_UNEXPECTED");
+        return false;
+    }
     if (Action.Type == EVistaNpcActionType::Place)
     {
         if (!IsPlacementAnchorId(Action.PlacementAnchorId))
@@ -193,6 +213,7 @@ bool AVistaHomeNpcController::ValidateAction(
         Action.Type == EVistaNpcActionType::Press ||
         Action.Type == EVistaNpcActionType::TurnOn ||
         Action.Type == EVistaNpcActionType::TurnOff ||
+        Action.Type == EVistaNpcActionType::Pour ||
         Action.Type == EVistaNpcActionType::Sit ||
         Action.Type == EVistaNpcActionType::StandUp)
     {
@@ -292,6 +313,8 @@ bool AVistaHomeNpcController::PreflightActionQueue(
     }
     FString SimulatedSeatSemanticId =
         IsValid(Posture->GetActiveSeat()) ? Posture->GetActiveSeat()->SemanticId : FString();
+    TMap<FString, FVistaLiquidStateSnapshot> SimulatedSourceLiquids;
+    TMap<FString, FVistaLiquidStateSnapshot> SimulatedReceiverLiquids;
     for (const FVistaNpcAction& Action : Actions)
     {
         if (!ValidateActionTargetReadOnly(
@@ -299,6 +322,8 @@ bool AVistaHomeNpcController::PreflightActionQueue(
                 SimulatedHeldItem,
                 SimulatedPosture,
                 SimulatedSeatSemanticId,
+                SimulatedSourceLiquids,
+                SimulatedReceiverLiquids,
                 OutCode))
         {
             return false;
@@ -313,6 +338,8 @@ bool AVistaHomeNpcController::ValidateActionTargetReadOnly(
     AActor*& InOutSimulatedHeldItem,
     EVistaPostureState& InOutSimulatedPosture,
     FString& InOutSimulatedSeatSemanticId,
+    TMap<FString, FVistaLiquidStateSnapshot>& InOutSimulatedSourceLiquids,
+    TMap<FString, FVistaLiquidStateSnapshot>& InOutSimulatedReceiverLiquids,
     FName& OutCode) const
 {
     if (!IsValid(GetPawn()))
@@ -354,6 +381,14 @@ bool AVistaHomeNpcController::ValidateActionTargetReadOnly(
     if (!Action.TargetSemanticId.IsEmpty() && !IsValid(Target))
     {
         OutCode = TEXT("TARGET_NOT_FOUND_OR_AMBIGUOUS");
+        return false;
+    }
+    AActor* SecondaryTarget = Action.SecondaryTargetSemanticId.IsEmpty()
+        ? nullptr : ResolveSemanticActor(Action.SecondaryTargetSemanticId);
+    if (!Action.SecondaryTargetSemanticId.IsEmpty() &&
+        !IsValid(SecondaryTarget))
+    {
+        OutCode = TEXT("SECONDARY_TARGET_NOT_FOUND_OR_AMBIGUOUS");
         return false;
     }
     if (Action.Type == EVistaNpcActionType::NavigateTo)
@@ -480,6 +515,67 @@ bool AVistaHomeNpcController::ValidateActionTargetReadOnly(
             return false;
         }
         InOutSimulatedHeldItem = nullptr;
+        OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
+        return true;
+    }
+
+    if (Action.Type == EVistaNpcActionType::Pour)
+    {
+        AVistaPickupActor* Source = Cast<AVistaPickupActor>(Target);
+        AVistaLiquidReceiverActor* Receiver =
+            Cast<AVistaLiquidReceiverActor>(SecondaryTarget);
+        if (!IsValid(Source) || InOutSimulatedHeldItem != Source)
+        {
+            OutCode = TEXT("POUR_SOURCE_NOT_SIMULATED_HELD_ITEM");
+            return false;
+        }
+        if (!IsValid(Receiver) || Receiver->IsReserved() ||
+            !SupportsAffordanceReadOnly(Source, EVistaAffordance::Pour) ||
+            !SupportsAffordanceReadOnly(Receiver, EVistaAffordance::Pour))
+        {
+            OutCode = IsValid(Receiver) && Receiver->IsReserved()
+                ? FName(TEXT("LIQUID_RECEIVER_RESERVED"))
+                : FName(TEXT("POUR_RECEIVER_REQUIRED"));
+            return false;
+        }
+        FVistaLiquidStateSnapshot PlannedSource;
+        FVistaLiquidStateSnapshot PlannedReceiver;
+        float TransferMilliliters = 0.0f;
+        const FVistaLiquidStateSnapshot SourceBefore =
+            InOutSimulatedSourceLiquids.Contains(Source->SemanticId)
+            ? InOutSimulatedSourceLiquids.FindChecked(Source->SemanticId)
+            : Source->GetLiquidState();
+        const FVistaLiquidStateSnapshot ReceiverBefore =
+            InOutSimulatedReceiverLiquids.Contains(Receiver->SemanticId)
+            ? InOutSimulatedReceiverLiquids.FindChecked(Receiver->SemanticId)
+            : Receiver->GetLiquidState();
+        if (!AVistaLiquidReceiverActor::PlanPourTransition(
+                SourceBefore,
+                ReceiverBefore,
+                Receiver->AcceptedLiquidType,
+                PlannedSource,
+                PlannedReceiver,
+                TransferMilliliters,
+                OutCode))
+        {
+            return false;
+        }
+        InOutSimulatedSourceLiquids.Add(
+            Source->SemanticId, PlannedSource);
+        InOutSimulatedReceiverLiquids.Add(
+            Receiver->SemanticId, PlannedReceiver);
+        const UVistaAnimationComponent* Animation =
+            GetPawn()->FindComponentByClass<UVistaAnimationComponent>();
+        if (!IsValid(Animation) ||
+            !Animation->HasApprovedMutationAnimation(
+                Action.Type, Receiver, OutCode))
+        {
+            if (!IsValid(Animation))
+            {
+                OutCode = TEXT("ANIMATION_COMPONENT_UNAVAILABLE");
+            }
+            return false;
+        }
         OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
         return true;
     }
@@ -690,6 +786,8 @@ void AVistaHomeNpcController::StartNextAction()
     CurrentResult.Status = EVistaNpcActionStatus::Running;
     CurrentResult.Code = TEXT("ACTION_RUNNING");
     CurrentResult.TargetSemanticId = CurrentAction->TargetSemanticId;
+    CurrentResult.SecondaryTargetSemanticId =
+        CurrentAction->SecondaryTargetSemanticId;
     ActionStartedAt = GetWorld()->GetTimeSeconds();
     bActionStarted = false;
     StartCurrentAction();
@@ -718,6 +816,7 @@ void AVistaHomeNpcController::StartCurrentAction()
         Action.Type == EVistaNpcActionType::Press ||
         Action.Type == EVistaNpcActionType::TurnOn ||
         Action.Type == EVistaNpcActionType::TurnOff ||
+        Action.Type == EVistaNpcActionType::Pour ||
         Action.Type == EVistaNpcActionType::Sit ||
         Action.Type == EVistaNpcActionType::StandUp)
     {
@@ -909,6 +1008,7 @@ bool AVistaHomeNpcController::StartPhysicalAction(
         Action.Type == EVistaNpcActionType::Press ||
         Action.Type == EVistaNpcActionType::TurnOn ||
         Action.Type == EVistaNpcActionType::TurnOff ||
+        Action.Type == EVistaNpcActionType::Pour ||
         Action.Type == EVistaNpcActionType::Sit ||
         Action.Type == EVistaNpcActionType::StandUp)
     {
@@ -923,6 +1023,20 @@ bool AVistaHomeNpcController::StartPhysicalAction(
         Request.CommandId = Action.ActionId;
         Request.Requester = GetPawn();
         Request.Target = Target;
+        AActor* SecondaryTarget = Action.SecondaryTargetSemanticId.IsEmpty()
+            ? nullptr
+            : ResolveSemanticActor(Action.SecondaryTargetSemanticId);
+        if (Action.Type == EVistaNpcActionType::Pour &&
+            !IsValid(SecondaryTarget))
+        {
+            CompleteCurrent(
+                EVistaNpcActionStatus::Failed,
+                TEXT("POUR_RECEIVER_NOT_FOUND"));
+            return false;
+        }
+        Request.SecondaryTarget = SecondaryTarget;
+        Request.SecondaryTargetSemanticId =
+            Action.SecondaryTargetSemanticId;
         switch (Action.Type)
         {
         case EVistaNpcActionType::OpenDoor:
@@ -945,6 +1059,9 @@ bool AVistaHomeNpcController::StartPhysicalAction(
             break;
         case EVistaNpcActionType::TurnOff:
             Request.Affordance = EVistaAffordance::TurnOff;
+            break;
+        case EVistaNpcActionType::Pour:
+            Request.Affordance = EVistaAffordance::Pour;
             break;
         case EVistaNpcActionType::Sit:
             Request.Affordance = EVistaAffordance::Sit;
@@ -1063,6 +1180,7 @@ bool AVistaHomeNpcController::PollPhysicalAction()
          CurrentAction->Type != EVistaNpcActionType::Press &&
          CurrentAction->Type != EVistaNpcActionType::TurnOn &&
          CurrentAction->Type != EVistaNpcActionType::TurnOff &&
+         CurrentAction->Type != EVistaNpcActionType::Pour &&
          CurrentAction->Type != EVistaNpcActionType::Sit &&
          CurrentAction->Type != EVistaNpcActionType::StandUp))
     {

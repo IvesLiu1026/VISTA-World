@@ -141,6 +141,7 @@ public:
         const UVistaActionExecutorComponent* Executor,
         FName CommandId) const;
     void FailNextPourReleaseForDevAutomation();
+    void ReleasePourReservationForEndPlayForDevAutomation();
 #endif
 
     virtual FVistaEntityRuntimeState VistaGetRuntimeState_Implementation() const override;
@@ -209,6 +210,7 @@ private:
         FName CommandId,
         const AVistaLiquidReceiverActor* Receiver) const;
     bool IsTransactionUnreserved() const;
+    void ReleaseActivePourReservationForEndPlay();
     /** The only gameplay pickup/place/drop mutation entry; called at contact. */
     FVistaInteractionResult CommitTransactionalInteraction(
         UVistaActionExecutorComponent* Executor,
