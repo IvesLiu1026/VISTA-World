@@ -413,10 +413,11 @@ def source_assets() -> list[Any]:
         for key in ("source_sequence_object_path", "source_montage_object_path")
     ]
     assets = [unreal.EditorAssetLibrary.find_asset_data(path) for path in paths]
+    observed_paths = [str(asset.get_soft_object_path()) for asset in assets]
     require(
         all(asset.is_valid() for asset in assets)
-        and len({str(asset.get_object_path_string()) for asset in assets})
-        == len(paths),
+        and len(set(observed_paths)) == len(paths)
+        and set(observed_paths) == set(paths),
         "source sequence/montage asset data closure differs",
     )
     return assets

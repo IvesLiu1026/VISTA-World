@@ -121,8 +121,10 @@ def test_worker_uses_closed_ue57_retarget_api_and_false_success_checks() -> None
         "IKRetargetBatchOperation.duplicate_and_retarget",
         "include_referenced_assets=False",
         "overwrite_existing_files=False",
+        "get_soft_object_path()",
     ):
         assert authority in worker
+    assert "get_object_path_string" not in worker
     assert 'EXPECTED_ENGINE = "5.7.3-50162420+++UE5+Release-5.7"' in worker
     assert "tracks == expected_tracks" in worker
     assert "is_root_motion_lock_forced(sequence) is True" in worker
@@ -141,6 +143,8 @@ def test_runner_dry_run_contract_is_zero_write_and_execution_is_external() -> No
     assert '"external_only": True' in source
     assert "if args.execute else plan.report" in source
     assert "--unshare-net" in source
+    assert '"-ddc=InstalledNoZenLocalFallback"' in source
+    assert '"-DDC-ForceMemoryCache"' not in source
     assert '"/vista/source"' in source
     assert '"/vista/work"' in source
     assert "source_assets_byte_identical_after_author_and_verify" in source
