@@ -243,7 +243,8 @@ TSharedRef<FJsonObject> RuntimeStateJson(const FVistaEntityRuntimeState& State)
 }
 
 TSharedRef<FJsonObject> PhysicalStateJson(
-    const FVistaPickupPhysicalStateSnapshot& State)
+    const FVistaPickupPhysicalStateSnapshot& State,
+    const bool bIncludeContainerIdentity = false)
 {
     const TSharedRef<FJsonObject> Output = MakeShared<FJsonObject>();
     Output->SetObjectField(TEXT("world_transform"), TransformJson(State.WorldTransform));
@@ -284,6 +285,14 @@ TSharedRef<FJsonObject> PhysicalStateJson(
         State.InventoryItemSemanticId);
     Output->SetStringField(
         TEXT("placed_at_semantic_id"), State.PlacedAtSemanticId);
+    // Keep the pre-R19 receipt projection byte-for-byte stable. The new field
+    // exists only on Insert/Remove; older EventSpec actions do not gain even an
+    // empty JSON member.
+    if (bIncludeContainerIdentity)
+    {
+        Output->SetStringField(
+            TEXT("contained_in_semantic_id"), State.ContainedInSemanticId);
+    }
     return Output;
 }
 
@@ -317,6 +326,8 @@ const TCHAR* AffordanceText(const EVistaAffordance Affordance)
     case EVistaAffordance::TurnOn: return TEXT("turn_on");
     case EVistaAffordance::TurnOff: return TEXT("turn_off");
     case EVistaAffordance::Pour: return TEXT("pour");
+    case EVistaAffordance::Insert: return TEXT("insert");
+    case EVistaAffordance::Remove: return TEXT("remove");
     case EVistaAffordance::Stand:
         return TEXT("stand");
     default: return TEXT("inspect");
@@ -340,6 +351,9 @@ TSharedRef<FJsonObject> ActionTransactionJson(
     const FVistaActionTransactionRecord& Transaction)
 {
     const TSharedRef<FJsonObject> Output = MakeShared<FJsonObject>();
+    const bool bStorageTransfer =
+        Transaction.Affordance == EVistaAffordance::Insert ||
+        Transaction.Affordance == EVistaAffordance::Remove;
     Output->SetStringField(TEXT("phase"), ActionPhaseText(Transaction.Phase));
     Output->SetStringField(
         TEXT("transaction_status"),
@@ -488,7 +502,8 @@ TSharedRef<FJsonObject> ActionTransactionJson(
     {
         Output->SetObjectField(
             TEXT("before_physical_state"),
-            PhysicalStateJson(Transaction.BeforePhysicalState));
+            PhysicalStateJson(
+                Transaction.BeforePhysicalState, bStorageTransfer));
     }
     else
     {
@@ -499,7 +514,8 @@ TSharedRef<FJsonObject> ActionTransactionJson(
     {
         Output->SetObjectField(
             TEXT("contact_physical_state"),
-            PhysicalStateJson(Transaction.ContactPhysicalState));
+            PhysicalStateJson(
+                Transaction.ContactPhysicalState, bStorageTransfer));
     }
     else
     {
@@ -510,7 +526,8 @@ TSharedRef<FJsonObject> ActionTransactionJson(
     {
         Output->SetObjectField(
             TEXT("after_physical_state"),
-            PhysicalStateJson(Transaction.AfterPhysicalState));
+            PhysicalStateJson(
+                Transaction.AfterPhysicalState, bStorageTransfer));
     }
     else
     {
@@ -789,6 +806,8 @@ TOptional<EVistaAffordance> ParseAffordance(const FString& Value)
     if (Value == TEXT("turn_on")) return EVistaAffordance::TurnOn;
     if (Value == TEXT("turn_off")) return EVistaAffordance::TurnOff;
     if (Value == TEXT("pour")) return EVistaAffordance::Pour;
+    if (Value == TEXT("insert")) return EVistaAffordance::Insert;
+    if (Value == TEXT("remove")) return EVistaAffordance::Remove;
     if (Value == TEXT("stand")) return EVistaAffordance::Stand;
     return {};
 }
@@ -808,6 +827,8 @@ TOptional<EVistaNpcActionType> ParseNpcAction(const FString& Value)
     if (Value == TEXT("turn_on")) return EVistaNpcActionType::TurnOn;
     if (Value == TEXT("turn_off")) return EVistaNpcActionType::TurnOff;
     if (Value == TEXT("pour")) return EVistaNpcActionType::Pour;
+    if (Value == TEXT("insert")) return EVistaNpcActionType::Insert;
+    if (Value == TEXT("remove")) return EVistaNpcActionType::Remove;
     if (Value == TEXT("sit")) return EVistaNpcActionType::Sit;
     if (Value == TEXT("stand")) return EVistaNpcActionType::StandUp;
     if (Value == TEXT("wait")) return EVistaNpcActionType::Wait;
@@ -938,25 +959,31 @@ bool ReadNpcQueueAction(
         OutCode = TEXT("NPC_SECONDARY_TARGET_INVALID");
         return false;
     }
-    if (OutAction.Type == EVistaNpcActionType::Pour &&
+    const bool bTwoTargetAction =
+        OutAction.Type == EVistaNpcActionType::Pour ||
+        OutAction.Type == EVistaNpcActionType::Insert ||
+        OutAction.Type == EVistaNpcActionType::Remove;
+    if (bTwoTargetAction &&
         OutAction.SecondaryTargetSemanticId.IsEmpty())
     {
         OutCode = TEXT("NPC_SECONDARY_TARGET_REQUIRED");
         return false;
     }
-    if (OutAction.Type == EVistaNpcActionType::Pour &&
+    if (bTwoTargetAction &&
         OutAction.SecondaryTargetSemanticId == OutAction.TargetSemanticId)
     {
-        OutCode = TEXT("NPC_POUR_TARGETS_MUST_DIFFER");
+        OutCode = OutAction.Type == EVistaNpcActionType::Pour
+            ? FName(TEXT("NPC_POUR_TARGETS_MUST_DIFFER"))
+            : FName(TEXT("NPC_STORAGE_TARGETS_MUST_DIFFER"));
         return false;
     }
-    if (OutAction.Type == EVistaNpcActionType::Pour &&
+    if (bTwoTargetAction &&
         Object->HasField(TEXT("target_location_cm")))
     {
-        OutCode = TEXT("NPC_POUR_LOCATION_UNEXPECTED");
+        OutCode = TEXT("NPC_TWO_TARGET_LOCATION_UNEXPECTED");
         return false;
     }
-    if (OutAction.Type != EVistaNpcActionType::Pour &&
+    if (!bTwoTargetAction &&
         !OutAction.SecondaryTargetSemanticId.IsEmpty())
     {
         OutCode = TEXT("NPC_SECONDARY_TARGET_UNEXPECTED");
@@ -1307,19 +1334,29 @@ FString DispatchTyped(const TSharedPtr<FJsonObject>& Params)
             return ErrorResponse(
                 CommandId, TEXT("SECONDARY_TARGET_INVALID"));
         }
-        if (Command.Affordance == EVistaAffordance::Pour &&
+        const bool bTwoTarget =
+            Command.Affordance == EVistaAffordance::Pour ||
+            Command.Affordance == EVistaAffordance::Insert ||
+            Command.Affordance == EVistaAffordance::Remove;
+        if (bTwoTarget &&
             Command.SecondaryTargetSemanticId.IsEmpty())
         {
             return ErrorResponse(
-                CommandId, TEXT("POUR_RECEIVER_REQUIRED"));
+                CommandId,
+                Command.Affordance == EVistaAffordance::Pour
+                    ? TEXT("POUR_RECEIVER_REQUIRED")
+                    : TEXT("STORAGE_CONTAINER_REQUIRED"));
         }
-        if (Command.Affordance == EVistaAffordance::Pour &&
+        if (bTwoTarget &&
             Command.SecondaryTargetSemanticId == Command.TargetSemanticId)
         {
             return ErrorResponse(
-                CommandId, TEXT("POUR_TARGETS_MUST_DIFFER"));
+                CommandId,
+                Command.Affordance == EVistaAffordance::Pour
+                    ? TEXT("POUR_TARGETS_MUST_DIFFER")
+                    : TEXT("STORAGE_TARGETS_MUST_DIFFER"));
         }
-        if (Command.Affordance != EVistaAffordance::Pour &&
+        if (!bTwoTarget &&
             !Command.SecondaryTargetSemanticId.IsEmpty())
         {
             return ErrorResponse(
