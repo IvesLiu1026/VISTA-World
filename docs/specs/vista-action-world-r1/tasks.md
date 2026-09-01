@@ -169,6 +169,23 @@ Depends on: requirements.md, design.md
   - Rollout: preserve the current City Sample R6 service as rollback and launch a
     separately named candidate service only after offline and UE gates pass
 
+- [ ] T16. Integrate transactional seat/posture actions
+  - Files: seat/posture authorities, shared executor, animation adapter,
+    player/NPC/TCP/Event adapters and focused UE/Python proofs
+  - Depends on: T3-T5, T13 as narrowed to the approved R15 CC0 posture clips
+  - Requirements: R2-R5, R11-R13
+  - Selected actions: sit, authoritative seated idle and stand
+  - Validation: occupancy commits only on `vista_sit_completed`; vacancy commits
+    only on `vista_stand_completed`; post-contact failure restores the exact
+    standing or seated snapshot; a terminal receipt and session generation
+    finalize atomically; seated movement is gated while camera look remains
+    available; player, NPC and typed TCP use the shared executor
+  - Progress: source integration, 71 focused Python tests, a fresh UE 5.7.3
+    Editor/Game/Shipping plugin build and the NullRHI automation test
+    `VISTA.PlayableHome.SeatPosture.ActionExecutorIntegration` pass. Composition
+    of the four semantic seats, a fresh package and a Sunshine human playtest
+    remain open, so this task is intentionally not checked.
+
 ## Current Iteration
 
 - Completed: T2 commanded-idle baseline; the current 698-test tool suite plus
@@ -188,6 +205,11 @@ Depends on: requirements.md, design.md
   action authority and the Epic/City Sample human-operated visual lane remain
   separately labeled; neither is promoted as dataset/VLM evidence without its
   own acceptance receipt.
+- Completed in source and offline UE automation: T16 wires the seat/posture
+  authority through player, NPC, animation, TCP, VISTA-event reset and the shared
+  action ledger. Sit/stand now compensate exact retained snapshots when terminal
+  finalization fails, and pickup/place/drop use the same game-thread atomic
+  terminal finalizer. This is not yet a packaged or Sunshine-accepted demo.
 - Golden Room R2 smoke evidence: append-only accepted forge
   `golden-room-r2-smoke-20260827T212250Z` contains 45 placements, 40 external
   dressing instances, 211 components and seven GLBs. All 424 vertical-slice

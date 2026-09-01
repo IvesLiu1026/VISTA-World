@@ -13,6 +13,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FVistaNpcSpoke,
                                              const FString&, Speech);
 
 class UVistaActionExecutorComponent;
+enum class EVistaPostureState : uint8;
 
 UCLASS(Blueprintable)
 class VISTAPLAYABLEHOME_API AVistaHomeNpcController final : public AAIController
@@ -98,6 +99,8 @@ private:
                             FName& OutCode) const;
     bool ValidateActionTargetReadOnly(const FVistaNpcAction& Action,
                                       AActor*& InOutSimulatedHeldItem,
+                                      EVistaPostureState& InOutSimulatedPosture,
+                                      FString& InOutSimulatedSeatSemanticId,
                                       FName& OutCode) const;
     void StopControlledMotion();
     void EnterCommandedIdle(bool bMotionAlreadyStopped = false);

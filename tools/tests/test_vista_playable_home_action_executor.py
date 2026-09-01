@@ -307,11 +307,24 @@ def test_transaction_captures_before_contact_after_and_rolls_back_failure() -> N
     assert "Record.AfterPhysicalState" in complete
     assert "AFTER_STATE_INVALID" in complete
     assert "AFTER_STATE_EFFECT_MISMATCH" in complete
-    assert complete.index("Record.AfterState") < complete.index(
+    assert complete.index("Record.AfterState") < complete.index("FinalizeActive(")
+    assert complete.index("FinalizeActive(") < complete.index(
+        "RecordSuccessfulInteraction("
+    )
+    runtime = _source(PRIVATE / "VistaPlayableHomeRuntimeSubsystem.cpp")
+    finalize = _between(
+        runtime,
+        "bool UVistaPlayableHomeRuntimeSubsystem::FinalizePhysicalCommand",
+        "bool UVistaPlayableHomeRuntimeSubsystem::GetPhysicalCommandRecord",
+    )
+    assert finalize.index("GetSessionGeneration()") < finalize.index(
+        "ReleaseReservations()"
+    )
+    assert finalize.index("ReleaseReservations()") < finalize.index(
         "CommitCommandGeneration("
     )
-    assert complete.index("CommitCommandGeneration(") < complete.index(
-        "RecordSuccessfulInteraction("
+    assert finalize.index("CommitCommandGeneration(") < finalize.index(
+        "Entry->bTerminal = true"
     )
 
     failure = _between(
@@ -432,8 +445,9 @@ def test_command_id_replay_is_idempotent_and_collision_is_rejected() -> None:
         "bool UVistaActionExecutorComponent::FinalizeActive",
         "void UVistaActionExecutorComponent::AbandonActiveAfterPublishFailure",
     )
-    assert "Pickup->ReleaseTransaction(this, Record.CommandId)" in finalize
-    assert "PublishRecord(true)" in finalize
+    assert "Pickup->ReleaseTransaction(" in finalize
+    assert "Runtime->FinalizePhysicalCommand(" in finalize
+    assert "Pickup->IsTransactionReservedBy(" in finalize
 
     claim = _between(
         runtime,
@@ -1024,7 +1038,7 @@ def test_publish_side_effects_survive_shipping_and_fail_closed() -> None:
         "const bool bAttemptPublished = PublishRecord(false);",
         "const bool bContactPublished = PublishRecord(false);",
         "const bool bPublished = PublishRecord(false);",
-        "const bool bPublished = PublishRecord(true);",
+        "Runtime->FinalizePhysicalCommand(",
         "ACTION_LEDGER_PUBLISH_FAILED",
         "ACTION_LEDGER_TERMINAL_PUBLISH_FAILED",
         "AbandonActiveAfterPublishFailure",

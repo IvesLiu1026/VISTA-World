@@ -190,6 +190,60 @@ bool UVistaPlayableHomeRuntimeSubsystem::PublishPhysicalCommand(
     return true;
 }
 
+bool UVistaPlayableHomeRuntimeSubsystem::FinalizePhysicalCommand(
+    const FName CommandId,
+    const FString& CanonicalRequestHex,
+    UVistaActionExecutorComponent* Owner,
+    FVistaActionTransactionRecord& InOutRecord,
+    const bool bCommitSessionGeneration,
+    const int32 ExpectedGeneration,
+    TFunctionRef<bool()> ReleaseReservations,
+    FName& OutCode)
+{
+    check(IsInGameThread());
+    FPhysicalCommandLedgerEntry* Entry = PhysicalCommandLedger.Find(CommandId);
+    if (Entry == nullptr ||
+        Entry->CanonicalRequestHex != CanonicalRequestHex ||
+        Entry->Owner.Get() != Owner ||
+        Entry->bTerminal)
+    {
+        OutCode = TEXT("ACTION_LEDGER_TERMINAL_PRECONDITION_FAILED");
+        return false;
+    }
+
+    UVistaEventSubsystem* Events = GetWorld()
+        ? GetWorld()->GetSubsystem<UVistaEventSubsystem>()
+        : nullptr;
+    if (bCommitSessionGeneration &&
+        (!IsValid(Events) || Events->GetSessionGeneration() != ExpectedGeneration))
+    {
+        OutCode = TEXT("SESSION_GENERATION_COMMIT_FAILED");
+        return false;
+    }
+    if (!ReleaseReservations())
+    {
+        OutCode = TEXT("TARGET_RESERVATION_RELEASE_FAILED");
+        return false;
+    }
+
+    if (bCommitSessionGeneration)
+    {
+        int32 CommittedGeneration = ExpectedGeneration;
+        const bool bCommitted = Events->CommitCommandGeneration(
+            ExpectedGeneration,
+            CommittedGeneration);
+        checkf(
+            bCommitted,
+            TEXT("VISTA generation changed during non-reentrant terminal finalize"));
+        InOutRecord.SessionGeneration = CommittedGeneration;
+    }
+    Entry->Record = InOutRecord;
+    Entry->bTerminal = true;
+    Entry->Owner.Reset();
+    OutCode = TEXT("ACTION_TERMINAL_PUBLISHED");
+    return true;
+}
+
 bool UVistaPlayableHomeRuntimeSubsystem::GetPhysicalCommandRecord(
     FName CommandId,
     FVistaActionTransactionRecord& OutRecord) const

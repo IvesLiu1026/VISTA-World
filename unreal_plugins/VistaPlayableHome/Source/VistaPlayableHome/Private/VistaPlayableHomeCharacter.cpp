@@ -32,6 +32,8 @@
 #include "VistaInteractionComponent.h"
 #include "VistaPickupActor.h"
 #include "VistaPlayableHomeRuntimeSubsystem.h"
+#include "VistaPostureComponent.h"
+#include "VistaSeatActor.h"
 #include "VistaStatefulApplianceActor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogVistaPlayableHomeCamera, Log, All);
@@ -272,6 +274,8 @@ AVistaPlayableHomeCharacter::AVistaPlayableHomeCharacter()
     ActionExecutorComponent =
         CreateDefaultSubobject<UVistaActionExecutorComponent>(
             TEXT("VistaActionExecutorComponent"));
+    PostureComponent =
+        CreateDefaultSubobject<UVistaPostureComponent>(TEXT("VistaPostureComponent"));
     CharacterProviderComponent =
         CreateDefaultSubobject<UVistaCharacterProviderComponent>(
             TEXT("VistaCharacterProviderComponent"));
@@ -287,6 +291,10 @@ void AVistaPlayableHomeCharacter::BeginPlay()
     if (!SemanticId.IsEmpty())
     {
         Tags.AddUnique(FName(*SemanticId));
+    }
+    if (IsValid(PostureComponent))
+    {
+        PostureComponent->OccupantSemanticId = SemanticId;
     }
 
     ApplyRequestedCameraProfile();
@@ -685,7 +693,7 @@ void AVistaPlayableHomeCharacter::SetupPlayerInputComponent(UInputComponent* Pla
 
 void AVistaPlayableHomeCharacter::Move(const FInputActionValue& Value)
 {
-    if (InspectionPresentation.bActive)
+    if (InspectionPresentation.bActive || !HasStandingControlAuthority())
     {
         return;
     }
@@ -709,7 +717,10 @@ void AVistaPlayableHomeCharacter::Look(const FInputActionValue& Value)
 
 void AVistaPlayableHomeCharacter::MoveForwardLegacy(float Value)
 {
-    if (!InspectionPresentation.bActive && Controller && !FMath::IsNearlyZero(Value))
+    if (!InspectionPresentation.bActive &&
+        HasStandingControlAuthority() &&
+        Controller &&
+        !FMath::IsNearlyZero(Value))
     {
         const FRotator Yaw(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
         AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::X), Value);
@@ -718,7 +729,10 @@ void AVistaPlayableHomeCharacter::MoveForwardLegacy(float Value)
 
 void AVistaPlayableHomeCharacter::MoveRightLegacy(float Value)
 {
-    if (!InspectionPresentation.bActive && Controller && !FMath::IsNearlyZero(Value))
+    if (!InspectionPresentation.bActive &&
+        HasStandingControlAuthority() &&
+        Controller &&
+        !FMath::IsNearlyZero(Value))
     {
         const FRotator Yaw(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
         AddMovementInput(FRotationMatrix(Yaw).GetUnitAxis(EAxis::Y), Value);
@@ -743,13 +757,13 @@ void AVistaPlayableHomeCharacter::LookPitchLegacy(float Value)
 
 void AVistaPlayableHomeCharacter::SetSprinting(bool bEnabled)
 {
-    bSprinting = bEnabled;
+    bSprinting = bEnabled && HasStandingControlAuthority();
     GetCharacterMovement()->MaxWalkSpeed = bSprinting ? SprintSpeed : WalkSpeed;
 }
 
 void AVistaPlayableHomeCharacter::BeginSprint()
 {
-    if (InspectionPresentation.bActive)
+    if (InspectionPresentation.bActive || !HasStandingControlAuthority())
     {
         return;
     }
@@ -771,17 +785,35 @@ void AVistaPlayableHomeCharacter::EndSprint()
 
 void AVistaPlayableHomeCharacter::ServerSetSprinting_Implementation(bool bEnabled)
 {
-    SetSprinting(bEnabled);
+    SetSprinting(bEnabled && HasStandingControlAuthority());
 }
 
 void AVistaPlayableHomeCharacter::BeginCrouch()
 {
-    if (!InspectionPresentation.bActive)
+    if (!InspectionPresentation.bActive && HasStandingControlAuthority())
     {
         Crouch();
     }
 }
-void AVistaPlayableHomeCharacter::EndCrouch() { UnCrouch(); }
+void AVistaPlayableHomeCharacter::EndCrouch()
+{
+    UnCrouch();
+}
+
+bool AVistaPlayableHomeCharacter::HasStandingControlAuthority() const
+{
+    return !IsValid(PostureComponent) || PostureComponent->GetPostureState() == EVistaPostureState::Standing;
+}
+
+bool AVistaPlayableHomeCharacter::CanCrouch() const
+{
+    return HasStandingControlAuthority() && Super::CanCrouch();
+}
+
+bool AVistaPlayableHomeCharacter::CanJumpInternal_Implementation() const
+{
+    return HasStandingControlAuthority() && Super::CanJumpInternal_Implementation();
+}
 
 void AVistaPlayableHomeCharacter::InteractPressed()
 {
@@ -1268,6 +1300,21 @@ void AVistaPlayableHomeCharacter::PresentCompletedInspection(
 
 FVistaInteractionResult AVistaPlayableHomeCharacter::PerformDefaultInteraction()
 {
+    if (IsValid(PostureComponent) && PostureComponent->GetPostureState() == EVistaPostureState::Seated)
+    {
+        AVistaSeatActor* ActiveSeat = PostureComponent->GetActiveSeat();
+        if (IsValid(ActiveSeat))
+        {
+            return BeginSemanticInteraction(ActiveSeat, EVistaAffordance::Stand);
+        }
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::InvalidState,
+            TEXT("POSTURE_ACTIVE_SEAT_LOST"));
+    }
+    if (IsValid(PostureComponent) && PostureComponent->GetPostureState() != EVistaPostureState::Standing)
+    {
+        return FVistaInteractionResult::Failure(EVistaInteractionStatus::Busy, TEXT("POSTURE_TRANSITION_ACTIVE"));
+    }
     AActor* Target = InteractionComponent->GetFocusedActor();
     if (!IsValid(Target))
     {
@@ -1331,6 +1378,12 @@ AVistaPlayableHomeCharacter::PerformFocusedApplianceInteraction(
 EVistaAffordance AVistaPlayableHomeCharacter::GetDefaultInteractionAffordance(
     AActor* Target) const
 {
+    if (IsValid(PostureComponent) &&
+        PostureComponent->GetPostureState() == EVistaPostureState::Seated &&
+        PostureComponent->GetActiveSeat() == Target)
+    {
+        return EVistaAffordance::Stand;
+    }
     if (!IsValid(Target) || !Target->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()))
     {
         return EVistaAffordance::Inspect;
@@ -1378,6 +1431,10 @@ EVistaAffordance AVistaPlayableHomeCharacter::GetDefaultInteractionAffordance(
     if (Affordances.Contains(EVistaAffordance::Sit))
     {
         return EVistaAffordance::Sit;
+    }
+    if (Affordances.Contains(EVistaAffordance::Stand))
+    {
+        return EVistaAffordance::Stand;
     }
     return EVistaAffordance::Inspect;
 }
@@ -1497,6 +1554,11 @@ FVistaInteractionResult AVistaPlayableHomeCharacter::BeginSemanticInteraction(
         return FVistaInteractionResult::Failure(
             EVistaInteractionStatus::InvalidState,
             TEXT("SEMANTIC_ACTION_EXECUTOR_UNAVAILABLE"));
+    }
+    if (Affordance == EVistaAffordance::Sit)
+    {
+        EndSprint();
+        EndCrouch();
     }
     UVistaPlayableHomeRuntimeSubsystem* Runtime = IsValid(GetWorld())
         ? GetWorld()->GetSubsystem<UVistaPlayableHomeRuntimeSubsystem>()

@@ -181,8 +181,16 @@ def test_cancel_and_post_contact_failure_restore_then_release() -> None:
         "bool UVistaActionExecutorComponent::FinalizeSemantic",
         "bool UVistaActionExecutorComponent::ReleaseSemanticTargetReservation",
     )
-    assert finalize.index("ReleaseSemanticTargetReservation()") < finalize.index(
-        "PublishSemanticRecord(true)"
+    assert "Runtime->FinalizePhysicalCommand(" in finalize
+    assert "[this]() { return ReleaseSemanticTargetReservation(); }" in finalize
+    runtime = _text(RUNTIME / "Private" / "VistaPlayableHomeRuntimeSubsystem.cpp")
+    atomic = _body(
+        runtime,
+        "bool UVistaPlayableHomeRuntimeSubsystem::FinalizePhysicalCommand",
+        "bool UVistaPlayableHomeRuntimeSubsystem::GetPhysicalCommandRecord",
+    )
+    assert atomic.index("ReleaseReservations()") < atomic.index(
+        "Entry->bTerminal = true"
     )
     release = _body(
         executor,
@@ -211,12 +219,12 @@ def test_r15_provider_gate_is_target_aware_and_fail_closed() -> None:
         "if (IsApplianceCandidateAction(Type))",
         "if (Type == EVistaNpcActionType::PickUp",
     )
-    assert candidate_block.index("ANIMATION_CC0_PROVIDER_REQUIRED") < candidate_block.index(
-        "ANIMATION_CC0_SOURCE_APPROVED"
-    )
-    assert candidate_block.index("ANIMATION_APPLIANCE_TARGET_REQUIRED") < candidate_block.index(
-        "ANIMATION_CC0_SOURCE_APPROVED"
-    )
+    assert candidate_block.index(
+        "ANIMATION_CC0_PROVIDER_REQUIRED"
+    ) < candidate_block.index("ANIMATION_CC0_SOURCE_APPROVED")
+    assert candidate_block.index(
+        "ANIMATION_APPLIANCE_TARGET_REQUIRED"
+    ) < candidate_block.index("ANIMATION_CC0_SOURCE_APPROVED")
     for action in ("Toggle", "Press", "TurnOn", "TurnOff"):
         assert f"EVistaNpcActionType::{action}" in animation
 

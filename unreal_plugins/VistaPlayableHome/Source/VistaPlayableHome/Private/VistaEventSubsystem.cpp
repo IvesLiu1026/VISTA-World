@@ -8,8 +8,11 @@
 #include "VistaHomeNpcCharacter.h"
 #include "VistaHomeNpcController.h"
 #include "VistaInteractable.h"
+#include "VistaLiquidReceiverActor.h"
 #include "VistaPickupActor.h"
 #include "VistaPlayableHomeCharacter.h"
+#include "VistaPostureComponent.h"
+#include "VistaSeatActor.h"
 #include "VistaSemanticActor.h"
 
 namespace
@@ -711,6 +714,8 @@ bool UVistaEventSubsystem::EnsurePhysicalActionsQuiescent(FName& OutCode) const
         OutCode = TEXT("EVENT_WORLD_UNAVAILABLE");
         return false;
     }
+    // Active executors have precedence over their target reservations so reset
+    // produces one stable reason independent of actor iteration order.
     for (TActorIterator<AActor> It(GetWorld()); It; ++It)
     {
         TArray<UVistaActionExecutorComponent*> Executors;
@@ -723,12 +728,48 @@ bool UVistaEventSubsystem::EnsurePhysicalActionsQuiescent(FName& OutCode) const
                 return false;
             }
         }
+    }
+    for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+    {
         if (const AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(*It);
             IsValid(Pickup) &&
             (Pickup->ActiveTransactionExecutor.IsValid() ||
              !Pickup->ActiveTransactionCommandId.IsNone()))
         {
             OutCode = TEXT("EVENT_RESET_TARGET_RESERVED");
+            return false;
+        }
+        if (const AVistaLiquidReceiverActor* Receiver = Cast<AVistaLiquidReceiverActor>(*It);
+            IsValid(Receiver) && Receiver->IsReserved())
+        {
+            OutCode = TEXT("EVENT_RESET_TARGET_RESERVED");
+            return false;
+        }
+        if (const AVistaSeatActor* Seat = Cast<AVistaSeatActor>(*It); IsValid(Seat) && Seat->IsReserved())
+        {
+            OutCode = TEXT("EVENT_RESET_TARGET_RESERVED");
+            return false;
+        }
+    }
+    // A committed seated posture is quiescent from the executor's perspective
+    // but still owns durable attachment and occupancy. Require an explicit
+    // Stand transaction before event reset instead of partially restoring only
+    // the seat actor and leaving its occupant attached.
+    for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+    {
+        TArray<UVistaPostureComponent*> Postures;
+        It->GetComponents<UVistaPostureComponent>(Postures);
+        for (const UVistaPostureComponent* Posture : Postures)
+        {
+            if (IsValid(Posture) && Posture->GetPostureState() != EVistaPostureState::Standing)
+            {
+                OutCode = TEXT("EVENT_RESET_POSTURE_ACTIVE");
+                return false;
+            }
+        }
+        if (const AVistaSeatActor* Seat = Cast<AVistaSeatActor>(*It); IsValid(Seat) && Seat->IsOccupied())
+        {
+            OutCode = TEXT("EVENT_RESET_POSTURE_ACTIVE");
             return false;
         }
     }

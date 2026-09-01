@@ -33,10 +33,22 @@ void UVistaPostureComponent::BeginPlay()
         PostureState = EVistaPostureState::Standing;
         ActiveSeat = nullptr;
         ActiveCommandId = NAME_None;
+        bStandCommitPendingFinalization = false;
         StandingSnapshot = FVistaPosturePhysicalSnapshot{};
         SeatedSnapshot = FVistaPosturePhysicalSnapshot{};
     }
     OnPostureStateChanged(PostureState);
+}
+
+void UVistaPostureComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    if (AActor* Owner = GetOwner(); IsValid(Owner) && Owner->HasAuthority() && IsValid(ActiveSeat))
+    {
+        ActiveSeat->ReleaseForPostureEndPlay(this, Owner, OccupantSemanticId);
+    }
+    ClearStandingTransaction();
+    PostureState = EVistaPostureState::Standing;
+    Super::EndPlay(EndPlayReason);
 }
 
 void UVistaPostureComponent::GetLifetimeReplicatedProps(
@@ -362,15 +374,12 @@ UVistaPostureComponent::CommitStandAtCompletion(const FName CommandId)
             Rollback.bSucceeded);
     }
 
-    const FString SeatId = Seat.SemanticId;
-    ClearStandingTransaction();
+    bStandCommitPendingFinalization = true;
     SetPostureState(EVistaPostureState::Standing);
     return Result(
         true,
-        TEXT("POSTURE_STAND_COMMITTED"),
-        true,
-        false,
-        SeatId);
+        TEXT("POSTURE_STAND_COMMITTED_PENDING_FINALIZE"),
+        true);
 }
 
 FVistaPostureTransitionResult
@@ -412,6 +421,97 @@ UVistaPostureComponent::RollbackStandTransition(const FName CommandId)
         TEXT("POSTURE_STAND_ROLLED_BACK_TO_SEATED"),
         true,
         true);
+}
+
+FVistaPostureTransitionResult UVistaPostureComponent::FinalizeCommittedStand(const FName CommandId)
+{
+    FName Code;
+    if (!ValidateAuthorityAndIdentity(Code) || PostureState != EVistaPostureState::Standing ||
+        !bStandCommitPendingFinalization || !IsValid(ActiveSeat) || ActiveCommandId != CommandId ||
+        !StandingSnapshot.bCaptured || !SeatedSnapshot.bCaptured)
+    {
+        return Result(false, TEXT("POSTURE_COMMITTED_STAND_REQUIRED"));
+    }
+    AActor& Owner = *GetOwner();
+    AVistaSeatActor& Seat = *ActiveSeat;
+    if (Seat.IsOccupied() || Seat.IsReserved() || !PhysicalStateMatchesSnapshot(Owner, StandingSnapshot))
+    {
+        return Result(false, TEXT("POSTURE_COMMITTED_STAND_DRIFT"));
+    }
+    const FString SeatId = Seat.SemanticId;
+    ClearStandingTransaction();
+    return Result(true, TEXT("POSTURE_STAND_FINALIZED"), false, false, SeatId);
+}
+
+FVistaPostureTransitionResult UVistaPostureComponent::RollbackCommittedStand(const FName CommandId)
+{
+    FName Code;
+    if (!ValidateAuthorityAndIdentity(Code) || PostureState != EVistaPostureState::Standing ||
+        !bStandCommitPendingFinalization || !IsValid(ActiveSeat) || ActiveCommandId != CommandId ||
+        !StandingSnapshot.bCaptured || !SeatedSnapshot.bCaptured)
+    {
+        return Result(false, TEXT("POSTURE_COMMITTED_STAND_REQUIRED"));
+    }
+
+    AActor& Owner = *GetOwner();
+    AVistaSeatActor& Seat = *ActiveSeat;
+    if (Seat.IsOccupied() || Seat.IsReserved() || !PhysicalStateMatchesSnapshot(Owner, StandingSnapshot))
+    {
+        return Result(false, TEXT("POSTURE_COMMITTED_STAND_DRIFT"));
+    }
+    if (!Seat.TryReserveForSit(this, CommandId, &Owner, OccupantSemanticId, Code))
+    {
+        return Result(false, Code);
+    }
+    if (!RestorePhysicalSnapshot(Owner, SeatedSnapshot, Code))
+    {
+        FName StandingCode;
+        FName ReleaseCode;
+        const bool bStandingRestored = RestorePhysicalSnapshot(Owner, StandingSnapshot, StandingCode);
+        const bool bReleased =
+            bStandingRestored && Seat.ReleaseReservation(this, CommandId, &Owner, OccupantSemanticId, ReleaseCode);
+        return Result(false, bReleased ? FName(TEXT("POSTURE_COMMITTED_STAND_ROLLBACK_RESTORED"))
+                                       : FName(TEXT("POSTURE_COMMITTED_STAND_ROLLBACK_FAILED")));
+    }
+    if (!Seat.CommitSitOccupancy(this, CommandId, &Owner, OccupantSemanticId, Code))
+    {
+        FName StandingCode;
+        FName ReleaseCode;
+        const bool bStandingRestored = RestorePhysicalSnapshot(Owner, StandingSnapshot, StandingCode);
+        const bool bReleased =
+            bStandingRestored && Seat.ReleaseReservation(this, CommandId, &Owner, OccupantSemanticId, ReleaseCode);
+        return Result(false, bReleased ? FName(TEXT("POSTURE_COMMITTED_STAND_OCCUPANCY_RESTORED"))
+                                       : FName(TEXT("POSTURE_COMMITTED_STAND_OCCUPANCY_FAILED")));
+    }
+
+    ActiveCommandId = NAME_None;
+    bStandCommitPendingFinalization = false;
+    SetPostureState(EVistaPostureState::Seated);
+    if (!Seat.IsOccupiedBy(&Owner, OccupantSemanticId) || !PhysicalStateMatchesSnapshot(Owner, SeatedSnapshot))
+    {
+        return Result(false, TEXT("POSTURE_COMMITTED_STAND_RESTORE_MISMATCH"));
+    }
+    return Result(true, TEXT("POSTURE_COMMITTED_STAND_ROLLED_BACK"), true, true);
+}
+
+void UVistaPostureComponent::HandleSeatEndPlay(AVistaSeatActor* Seat)
+{
+    if (!IsValid(Seat) || ActiveSeat.Get() != Seat)
+    {
+        return;
+    }
+    AActor* Owner = GetOwner();
+    if (IsValid(Owner) && Owner->HasAuthority() && StandingSnapshot.bCaptured)
+    {
+        FName RestoreCode;
+        if (!RestorePhysicalSnapshot(*Owner, StandingSnapshot, RestoreCode))
+        {
+            UE_LOG(LogTemp, Error, TEXT("VISTA_POSTURE_SEAT_ENDPLAY_RESTORE_FAILED owner=%s code=%s"),
+                   *Owner->GetName(), *RestoreCode.ToString());
+        }
+    }
+    ClearStandingTransaction();
+    SetPostureState(EVistaPostureState::Standing);
 }
 
 bool UVistaPostureComponent::SnapshotsEquivalent(
@@ -534,6 +634,7 @@ void UVistaPostureComponent::ClearStandingTransaction()
 {
     ActiveSeat = nullptr;
     ActiveCommandId = NAME_None;
+    bStandCommitPendingFinalization = false;
     StandingSnapshot = FVistaPosturePhysicalSnapshot{};
     SeatedSnapshot = FVistaPosturePhysicalSnapshot{};
 }

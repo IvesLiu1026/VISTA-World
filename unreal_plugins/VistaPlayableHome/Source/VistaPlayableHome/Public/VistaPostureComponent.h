@@ -7,6 +7,7 @@
 class AVistaSeatActor;
 class UMovementComponent;
 class USceneComponent;
+class UVistaActionExecutorComponent;
 
 /** Closed authoritative posture state machine. */
 UENUM(BlueprintType)
@@ -170,16 +171,30 @@ public:
         const FVistaPosturePhysicalSnapshot& Left,
         const FVistaPosturePhysicalSnapshot& Right);
 
+#if WITH_DEV_AUTOMATION_TESTS
+    bool HasCommittedStandForDevAutomation() const
+    {
+        return bStandCommitPendingFinalization;
+    }
+    FVistaPostureTransitionResult FinalizeCommittedStandForDevAutomation(FName CommandId)
+    {
+        return FinalizeCommittedStand(CommandId);
+    }
+#endif
+
     virtual void GetLifetimeReplicatedProps(
         TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 protected:
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
     UFUNCTION(BlueprintImplementableEvent, Category = "VISTA|Posture")
     void OnPostureStateChanged(EVistaPostureState NewState);
 
 private:
+    friend class AVistaSeatActor;
+    friend class UVistaActionExecutorComponent;
     UPROPERTY(ReplicatedUsing = OnRep_PostureState)
     EVistaPostureState PostureState = EVistaPostureState::Standing;
 
@@ -187,6 +202,7 @@ private:
     TObjectPtr<AVistaSeatActor> ActiveSeat = nullptr;
 
     FName ActiveCommandId = NAME_None;
+    bool bStandCommitPendingFinalization = false;
 
     UPROPERTY(Transient)
     FVistaPosturePhysicalSnapshot StandingSnapshot;
@@ -210,6 +226,9 @@ private:
         FName& OutCode) const;
     void SetPostureState(EVistaPostureState NewState);
     void ClearStandingTransaction();
+    FVistaPostureTransitionResult FinalizeCommittedStand(FName CommandId);
+    FVistaPostureTransitionResult RollbackCommittedStand(FName CommandId);
+    void HandleSeatEndPlay(AVistaSeatActor* Seat);
 
     static bool CapturePhysicalSnapshot(
         AActor& Owner,

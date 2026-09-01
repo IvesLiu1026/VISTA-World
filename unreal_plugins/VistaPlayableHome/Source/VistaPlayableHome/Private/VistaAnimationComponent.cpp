@@ -9,6 +9,8 @@
 #include "VistaArticulatedFridgeActor.h"
 #include "VistaCharacterProviderComponent.h"
 #include "VistaContainerActor.h"
+#include "VistaPostureComponent.h"
+#include "VistaSeatActor.h"
 #include "VistaStatefulApplianceActor.h"
 
 namespace
@@ -52,6 +54,15 @@ constexpr const TCHAR* MakeHumanCc0CabinetCloseMontage =
     TEXT("/Game/VISTA/MakeHumanCC0/R15/DetailActions/Montages/"
          "AM_VistaCC0CabinetDrawerCloseRight_R15."
          "AM_VistaCC0CabinetDrawerCloseRight_R15");
+constexpr const TCHAR* MakeHumanCc0SitMontage =
+    TEXT("/Game/VISTA/MakeHumanCC0/R15/DetailActions/Montages/"
+         "AM_VistaCC0SitDownChair_R15.AM_VistaCC0SitDownChair_R15");
+constexpr const TCHAR* MakeHumanCc0SeatedIdleMontage =
+    TEXT("/Game/VISTA/MakeHumanCC0/R15/DetailActions/Montages/"
+         "AM_VistaCC0SeatedIdleLoop_R15.AM_VistaCC0SeatedIdleLoop_R15");
+constexpr const TCHAR* MakeHumanCc0StandMontage =
+    TEXT("/Game/VISTA/MakeHumanCC0/R15/DetailActions/Montages/"
+         "AM_VistaCC0StandUpChair_R15.AM_VistaCC0StandUpChair_R15");
 
 TSoftObjectPtr<UAnimMontage> Montage(const TCHAR* ObjectPath)
 {
@@ -81,6 +92,12 @@ bool IsApplianceCandidateAction(const EVistaNpcActionType Type)
         Type == EVistaNpcActionType::TurnOff;
 }
 
+bool IsPostureCandidateAction(const EVistaNpcActionType Type)
+{
+    return Type == EVistaNpcActionType::Sit || Type == EVistaNpcActionType::SeatedIdle ||
+           Type == EVistaNpcActionType::StandUp;
+}
+
 bool ResolveAuthoredInteractionPoint(
     const AActor* Target,
     FVector& OutLocation)
@@ -96,7 +113,8 @@ bool ResolveAuthoredInteractionPoint(
     {
         if (!IsValid(Component) ||
             (!Component->ComponentHasTag(TEXT("VistaInteractionTarget")) &&
-             !Component->ComponentHasTag(TEXT("VistaDoorHandleTarget"))))
+             !Component->ComponentHasTag(TEXT("VistaDoorHandleTarget")) &&
+             !Component->ComponentHasTag(TEXT("VistaSeatTarget"))))
         {
             continue;
         }
@@ -153,6 +171,9 @@ bool UVistaAnimationComponent::SupportsAction(EVistaNpcActionType Type)
     case EVistaNpcActionType::Press:
     case EVistaNpcActionType::TurnOn:
     case EVistaNpcActionType::TurnOff:
+    case EVistaNpcActionType::Sit:
+    case EVistaNpcActionType::SeatedIdle:
+    case EVistaNpcActionType::StandUp:
     case EVistaNpcActionType::PickUp:
     case EVistaNpcActionType::Place:
     case EVistaNpcActionType::Drop:
@@ -189,6 +210,48 @@ bool UVistaAnimationComponent::HasApprovedMutationAnimation(
     const AActor* Target,
     FName& OutCode) const
 {
+    if (IsPostureCandidateAction(Type))
+    {
+        if (!IsMakeHumanCc0R8Active(GetOwner()))
+        {
+            OutCode = TEXT("ANIMATION_CC0_PROVIDER_REQUIRED");
+            return false;
+        }
+        if (!IsValid(Target))
+        {
+            OutCode = TEXT("ANIMATION_TARGET_PREFLIGHT_DEFERRED");
+            return true;
+        }
+        const AVistaSeatActor* Seat = Cast<AVistaSeatActor>(Target);
+        const UVistaPostureComponent* Posture =
+            IsValid(GetOwner()) ? GetOwner()->FindComponentByClass<UVistaPostureComponent>() : nullptr;
+        if (!IsValid(Seat) || !IsValid(Seat->SeatTarget) || !Seat->SeatTarget->ComponentHasTag(TEXT("VistaSeatTarget")))
+        {
+            OutCode = TEXT("ANIMATION_SEAT_TARGET_REQUIRED");
+            return false;
+        }
+        if (!IsValid(Posture))
+        {
+            OutCode = TEXT("ANIMATION_POSTURE_AUTHORITY_REQUIRED");
+            return false;
+        }
+        if (Type == EVistaNpcActionType::SeatedIdle &&
+            (!Posture->IsSeatedLoopAuthorized() || Posture->GetActiveSeat() != Seat))
+        {
+            OutCode = TEXT("ANIMATION_SEATED_LOOP_UNAUTHORIZED");
+            return false;
+        }
+        if (Type == EVistaNpcActionType::StandUp &&
+            ((Posture->GetPostureState() != EVistaPostureState::Seated &&
+              Posture->GetPostureState() != EVistaPostureState::StandingTransition) ||
+             Posture->GetActiveSeat() != Seat))
+        {
+            OutCode = TEXT("ANIMATION_STAND_AUTHORITY_REQUIRED");
+            return false;
+        }
+        OutCode = TEXT("ANIMATION_CC0_SOURCE_APPROVED");
+        return true;
+    }
     if (IsApplianceCandidateAction(Type))
     {
         if (!IsMakeHumanCc0R8Active(GetOwner()))
@@ -274,6 +337,26 @@ bool UVistaAnimationComponent::ResolveMontage(
     TSoftObjectPtr<UAnimMontage>& OutMontage,
     FName& OutCode) const
 {
+    if (IsPostureCandidateAction(Type))
+    {
+        if (!IsValid(Cast<AVistaSeatActor>(Target)) || !IsMakeHumanCc0R8Active(GetOwner()))
+        {
+            OutCode = TEXT("ANIMATION_POSTURE_BINDING_UNAVAILABLE");
+            return false;
+        }
+        const TCHAR* ObjectPath = Type == EVistaNpcActionType::Sit          ? MakeHumanCc0SitMontage
+                                  : Type == EVistaNpcActionType::SeatedIdle ? MakeHumanCc0SeatedIdleMontage
+                                                                            : MakeHumanCc0StandMontage;
+        OutMontage = Montage(ObjectPath);
+        if (!OutMontage.ToSoftObjectPath().ToString().StartsWith(MakeHumanCc0R15DetailMontageRoot,
+                                                                 ESearchCase::CaseSensitive))
+        {
+            OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
+            return false;
+        }
+        OutCode = TEXT("ANIMATION_MONTAGE_RESOLVED");
+        return true;
+    }
     if (IsApplianceCandidateAction(Type))
     {
         const AVistaStatefulApplianceActor* Appliance =
@@ -398,6 +481,12 @@ FName UVistaAnimationComponent::CompletionSignalFor(EVistaNpcActionType Type)
     case EVistaNpcActionType::Press: return TEXT("vista_appliance_press_completed");
     case EVistaNpcActionType::TurnOn: return TEXT("vista_appliance_turn_on_completed");
     case EVistaNpcActionType::TurnOff: return TEXT("vista_appliance_turn_off_completed");
+    case EVistaNpcActionType::Sit:
+        return TEXT("vista_sit_completed");
+    case EVistaNpcActionType::SeatedIdle:
+        return TEXT("vista_seated_idle_cycle_completed");
+    case EVistaNpcActionType::StandUp:
+        return TEXT("vista_stand_completed");
     case EVistaNpcActionType::PickUp: return TEXT("vista_pickup_completed");
     case EVistaNpcActionType::Place:
     case EVistaNpcActionType::Drop: return TEXT("vista_drop_completed");
@@ -426,6 +515,14 @@ FName UVistaAnimationComponent::ContactSignalFor(EVistaNpcActionType Type)
     case EVistaNpcActionType::Press: return TEXT("vista_appliance_button_contact");
     case EVistaNpcActionType::TurnOn:
     case EVistaNpcActionType::TurnOff: return TEXT("vista_appliance_power_contact");
+    // Seat occupancy changes only at the reviewed completion notify. Reusing
+    // that exact typed signal as the executor's commit edge preserves the
+    // normal animation/contact transaction without inventing an earlier seat
+    // contact that the R15 source does not contain.
+    case EVistaNpcActionType::Sit:
+        return TEXT("vista_sit_completed");
+    case EVistaNpcActionType::StandUp:
+        return TEXT("vista_stand_completed");
     default: return NAME_None;
     }
 }
@@ -638,6 +735,39 @@ void UVistaAnimationComponent::HandleMontageEnded(UAnimMontage* Montage, bool bI
     {
         SetTerminal(EVistaAnimationPlaybackStatus::Failed,
             TEXT("ANIMATION_COMPLETION_NOTIFY_MISSING"));
+    }
+    else if (ActiveAction->Type == EVistaNpcActionType::SeatedIdle)
+    {
+        UVistaPostureComponent* Posture =
+            IsValid(GetOwner()) ? GetOwner()->FindComponentByClass<UVistaPostureComponent>() : nullptr;
+        AVistaSeatActor* Seat = IsValid(Posture) ? Posture->GetActiveSeat() : nullptr;
+        FName AuthorityCode;
+        ACharacter* Character = Cast<ACharacter>(GetOwner());
+        UAnimInstance* AnimInstance =
+            IsValid(Character) && IsValid(Character->GetMesh()) ? Character->GetMesh()->GetAnimInstance() : nullptr;
+        if (!HasApprovedMutationAnimation(EVistaNpcActionType::SeatedIdle, Seat, AuthorityCode) ||
+            !IsValid(AnimInstance))
+        {
+            SetTerminal(EVistaAnimationPlaybackStatus::Failed,
+                        AuthorityCode.IsNone() ? FName(TEXT("ANIMATION_SEATED_LOOP_UNAUTHORIZED")) : AuthorityCode);
+            return;
+        }
+        const float PlayedDuration = AnimInstance->Montage_Play(ActiveMontage, 1.0f);
+        if (!FMath::IsFinite(PlayedDuration) || PlayedDuration <= 0.0f)
+        {
+            SetTerminal(EVistaAnimationPlaybackStatus::Failed, TEXT("ANIMATION_SEATED_LOOP_RESTART_FAILED"));
+            return;
+        }
+        StartedAtSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+        bCompletionObserved = false;
+        bContactPending = false;
+        PlaybackResult.Status = EVistaAnimationPlaybackStatus::Running;
+        PlaybackResult.Code = TEXT("ANIMATION_SEATED_IDLE_LOOPING");
+        PlaybackResult.ElapsedSeconds = 0.0f;
+        PlaybackResult.bContactObserved = false;
+        FOnMontageEnded EndDelegate;
+        EndDelegate.BindUObject(this, &UVistaAnimationComponent::HandleMontageEnded);
+        AnimInstance->Montage_SetEndDelegate(EndDelegate, ActiveMontage);
     }
     else
     {

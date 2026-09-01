@@ -17,6 +17,7 @@ class UVistaActionExecutorComponent;
 class UVistaAnimationComponent;
 class UVistaCharacterProviderComponent;
 class UVistaInteractionComponent;
+class UVistaPostureComponent;
 struct FMinimalViewInfo;
 struct FInputActionValue;
 
@@ -158,6 +159,10 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     TObjectPtr<UVistaActionExecutorComponent> ActionExecutorComponent;
 
+    /** Shared authority for sit, seated-idle, and stand transitions. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Posture")
+    TObjectPtr<UVistaPostureComponent> PostureComponent;
+
     /**
      * Visual-only provider. Gameplay, collision and input remain on this
      * character while the reviewed Vivian assembly mirrors the Manny pose.
@@ -273,6 +278,8 @@ protected:
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void UnPossessed() override;
     virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+    virtual bool CanCrouch() const override;
+    virtual bool CanJumpInternal_Implementation() const override;
 
 private:
     UPROPERTY(Replicated)
@@ -309,6 +316,7 @@ private:
 
     void Move(const FInputActionValue& Value);
     void Look(const FInputActionValue& Value);
+    bool HasStandingControlAuthority() const;
     void SetSprinting(bool bEnabled);
     void BeginSprint();
     void EndSprint();

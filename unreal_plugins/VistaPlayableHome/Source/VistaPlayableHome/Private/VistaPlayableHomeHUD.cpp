@@ -8,6 +8,8 @@
 #include "VistaInteractionComponent.h"
 #include "VistaPickupActor.h"
 #include "VistaPlayableHomeCharacter.h"
+#include "VistaPostureComponent.h"
+#include "VistaSeatActor.h"
 
 namespace
 {
@@ -125,6 +127,8 @@ FString BuildInteractionLabel(
                 : FString::Printf(TEXT("Turn On %s"), *TargetName);
         case EVistaAffordance::Sit:
             return FString::Printf(TEXT("Sit on %s"), *TargetName);
+        case EVistaAffordance::Stand:
+            return FString::Printf(TEXT("Stand up from %s"), *TargetName);
         case EVistaAffordance::Inspect:
         default:
             return FString::Printf(TEXT("Inspect %s"), *TargetName);
@@ -203,6 +207,7 @@ FString AffordanceLabel(EVistaAffordance Affordance)
         case EVistaAffordance::Place: return TEXT("Place");
         case EVistaAffordance::Toggle: return TEXT("Toggle");
         case EVistaAffordance::Sit: return TEXT("Sit");
+        case EVistaAffordance::Stand: return TEXT("Stand");
         case EVistaAffordance::Inspect: return TEXT("Inspect");
         default: return TEXT("Unknown");
     }
@@ -367,6 +372,12 @@ void AVistaPlayableHomeHUD::DrawHUD()
     AActor* FocusedActor = IsValid(Interaction)
         ? Interaction->GetFocusedActor()
         : nullptr;
+    if (IsValid(Character->PostureComponent) &&
+        Character->PostureComponent->GetPostureState() == EVistaPostureState::Seated &&
+        IsValid(Character->PostureComponent->GetActiveSeat()))
+    {
+        FocusedActor = Character->PostureComponent->GetActiveSeat();
+    }
     const FString InteractionLabel = BuildInteractionLabel(
         *Character, FocusedActor);
     FString Prompt;

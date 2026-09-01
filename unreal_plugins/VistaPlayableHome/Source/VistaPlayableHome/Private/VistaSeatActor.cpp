@@ -30,7 +30,8 @@ AVistaSeatActor::AVistaSeatActor()
 
     AllowedAffordances = {
         EVistaAffordance::Inspect,
-        EVistaAffordance::Sit};
+        EVistaAffordance::Sit,
+        EVistaAffordance::Stand};
 }
 
 void AVistaSeatActor::BeginPlay()
@@ -45,6 +46,36 @@ void AVistaSeatActor::BeginPlay()
     {
         SyncOccupancyRuntimeValues();
     }
+}
+
+void AVistaSeatActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+    if (HasAuthority())
+    {
+        TArray<UVistaPostureComponent*> AffectedPostures;
+        if (ReservedPosture.IsValid())
+        {
+            AffectedPostures.AddUnique(ReservedPosture.Get());
+        }
+        if (IsValid(Occupancy.OccupiedBy))
+        {
+            if (UVistaPostureComponent* OccupiedPosture =
+                    Occupancy.OccupiedBy->FindComponentByClass<UVistaPostureComponent>())
+            {
+                AffectedPostures.AddUnique(OccupiedPosture);
+            }
+        }
+        for (UVistaPostureComponent* Posture : AffectedPostures)
+        {
+            if (IsValid(Posture))
+            {
+                Posture->HandleSeatEndPlay(this);
+            }
+        }
+        ClearReservation();
+        SetOccupancy(FVistaSeatOccupancyState{});
+    }
+    Super::EndPlay(EndPlayReason);
 }
 
 void AVistaSeatActor::GetLifetimeReplicatedProps(
@@ -67,6 +98,32 @@ bool AVistaSeatActor::IsOccupiedBy(
         IsValid(Occupant) && Occupancy.OccupiedBy == Occupant &&
         !OccupantSemanticId.IsEmpty() &&
         Occupancy.OccupiedBySemanticId == OccupantSemanticId;
+}
+
+void AVistaSeatActor::ReleaseForPostureEndPlay(
+    UVistaPostureComponent* Posture,
+    AActor* Occupant,
+    const FString& OccupantSemanticId)
+{
+    if (!HasAuthority() || !IsValid(Posture) || !IsValid(Occupant))
+    {
+        return;
+    }
+    if (ReservedPosture.Get() == Posture || ReservedOccupant.Get() == Occupant)
+    {
+        ClearReservation();
+    }
+    if (IsOccupiedBy(Occupant, OccupantSemanticId))
+    {
+        SetOccupancy(FVistaSeatOccupancyState{});
+    }
+}
+
+TArray<EVistaAffordance> AVistaSeatActor::VistaGetAffordances_Implementation() const
+{
+    return Occupancy.bOccupied
+        ? TArray<EVistaAffordance>{EVistaAffordance::Inspect, EVistaAffordance::Stand}
+        : TArray<EVistaAffordance>{EVistaAffordance::Inspect, EVistaAffordance::Sit};
 }
 
 FVistaEntityRuntimeState
@@ -148,7 +205,8 @@ FVistaInteractionResult AVistaSeatActor::VistaInteract_Implementation(
             TEXT("AUTHORITY_REQUIRED"),
             SemanticId);
     }
-    if (Request.Affordance == EVistaAffordance::Sit)
+    if (Request.Affordance == EVistaAffordance::Sit ||
+        Request.Affordance == EVistaAffordance::Stand)
     {
         return FVistaInteractionResult::Failure(
             EVistaInteractionStatus::Rejected,

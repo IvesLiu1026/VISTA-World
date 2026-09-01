@@ -9,6 +9,8 @@
 #include "VistaEventSubsystem.h"
 #include "VistaInteractable.h"
 #include "VistaPlayableHomeRuntimeSubsystem.h"
+#include "VistaPostureComponent.h"
+#include "VistaSeatActor.h"
 #include "VistaStatefulApplianceActor.h"
 
 namespace
@@ -78,6 +80,10 @@ EVistaNpcActionType AnimationTypeFor(const EVistaAffordance Affordance)
     case EVistaAffordance::Press: return EVistaNpcActionType::Press;
     case EVistaAffordance::TurnOn: return EVistaNpcActionType::TurnOn;
     case EVistaAffordance::TurnOff: return EVistaNpcActionType::TurnOff;
+    case EVistaAffordance::Sit:
+        return EVistaNpcActionType::Sit;
+    case EVistaAffordance::Stand:
+        return EVistaNpcActionType::StandUp;
     default: return EVistaNpcActionType::Wait;
     }
 }
@@ -86,11 +92,43 @@ bool StateMatchesSemanticEffect(
     const FVistaEntityRuntimeState& Before,
     const FVistaEntityRuntimeState& After,
     const EVistaAffordance Affordance,
-    const AActor* Target)
+    const AActor* Target,
+    const AActor* Requester,
+    const FString& RequesterSemanticId)
 {
     if (Affordance == EVistaAffordance::Inspect)
     {
         return RuntimeStatesEquivalent(Before, After);
+    }
+    if (Affordance == EVistaAffordance::Sit || Affordance == EVistaAffordance::Stand)
+    {
+        const AVistaSeatActor* Seat = Cast<AVistaSeatActor>(Target);
+        const FString* BeforeOccupied = Before.Values.Find(TEXT("occupied"));
+        const FString* BeforeOccupant = Before.Values.Find(TEXT("occupied_by"));
+        const FString* AfterOccupied = After.Values.Find(TEXT("occupied"));
+        const FString* AfterOccupant = After.Values.Find(TEXT("occupied_by"));
+        if (!IsValid(Seat) ||
+            !IsValid(Requester) ||
+            RequesterSemanticId.IsEmpty() ||
+            BeforeOccupied == nullptr ||
+            BeforeOccupant == nullptr ||
+            AfterOccupied == nullptr ||
+            AfterOccupant == nullptr)
+        {
+            return false;
+        }
+        if (Affordance == EVistaAffordance::Sit)
+        {
+            return BeforeOccupied->Equals(TEXT("false"), ESearchCase::CaseSensitive) &&
+                AfterOccupied->Equals(TEXT("true"), ESearchCase::CaseSensitive) &&
+                AfterOccupant->Equals(RequesterSemanticId, ESearchCase::CaseSensitive) &&
+                Seat->IsOccupiedBy(Requester, RequesterSemanticId);
+        }
+        return BeforeOccupied->Equals(TEXT("true"), ESearchCase::CaseSensitive) &&
+            BeforeOccupant->Equals(RequesterSemanticId, ESearchCase::CaseSensitive) &&
+            AfterOccupied->Equals(TEXT("false"), ESearchCase::CaseSensitive) &&
+            AfterOccupant->IsEmpty() &&
+            !Seat->IsOccupied();
     }
     if (AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
             Affordance))
@@ -125,7 +163,8 @@ bool ResolveContactLocation(const AActor* Target, FVector& OutLocation)
             (!Component->ComponentHasTag(
                  FName(TEXT("VistaDoorHandleTarget"))) &&
              !Component->ComponentHasTag(
-                 FName(TEXT("VistaInteractionTarget")))))
+                 FName(TEXT("VistaInteractionTarget"))) &&
+             !Component->ComponentHasTag(FName(TEXT("VistaSeatTarget")))))
         {
             continue;
         }
@@ -148,6 +187,8 @@ bool UVistaActionExecutorComponent::IsAnimatedSemanticAffordance(
     return Affordance == EVistaAffordance::Open ||
         Affordance == EVistaAffordance::Close ||
         Affordance == EVistaAffordance::Inspect ||
+        Affordance == EVistaAffordance::Sit ||
+        Affordance == EVistaAffordance::Stand ||
         AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
             Affordance);
 }
@@ -319,6 +360,8 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
         (InputRequest.Affordance == EVistaAffordance::Open ||
          InputRequest.Affordance == EVistaAffordance::Close) &&
         IsValid(Cast<AVistaContainerActor>(Target));
+    const bool bPostureMutation = InputRequest.Affordance == EVistaAffordance::Sit ||
+        InputRequest.Affordance == EVistaAffordance::Stand;
     AVistaStatefulApplianceActor* Appliance =
         Cast<AVistaStatefulApplianceActor>(Target);
     if (bApplianceMutation && !IsValid(Appliance))
@@ -327,6 +370,18 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
             InputRequest,
             CanonicalRequest,
             TEXT("APPLIANCE_TARGET_REQUIRED"),
+            OutRecord);
+    }
+    AVistaSeatActor* Seat = Cast<AVistaSeatActor>(Target);
+    UVistaPostureComponent* Posture = Requester->FindComponentByClass<UVistaPostureComponent>();
+    if (bPostureMutation && (!IsValid(Seat) || !IsValid(Posture)))
+    {
+        return RejectSemanticRequest(
+            InputRequest,
+            CanonicalRequest,
+            !IsValid(Seat)
+                ? FName(TEXT("SEAT_TARGET_REQUIRED"))
+                : FName(TEXT("POSTURE_COMPONENT_REQUIRED")),
             OutRecord);
     }
     if (!IsValid(GetWorld()) || Requester->GetWorld() != GetWorld() ||
@@ -412,6 +467,7 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
     Active.Requester = Requester;
     Active.Target = Target;
     Active.Animation = Animation;
+    Active.Posture = Posture;
     Active.StartedAtSeconds = GetWorld()->GetTimeSeconds();
     Active.Record.CommandId = Request.CommandId;
     Active.Record.Affordance = Request.Affordance;
@@ -638,16 +694,61 @@ void UVistaActionExecutorComponent::AdvanceSemanticAlign()
             TEXT("ACTION_CONTACT_TARGET_AMBIGUOUS"));
         return;
     }
-    FVector Direction = ContactLocation - Requester->GetActorLocation();
-    Direction.Z = 0.0f;
     ActiveSemanticAction->bAlignmentApplied = true;
-    if (!Direction.IsNearlyZero() &&
-        !Requester->SetActorRotation(Direction.Rotation()))
+    const bool bPostureMutation =
+        ActiveSemanticAction->Request.Affordance == EVistaAffordance::Sit ||
+        ActiveSemanticAction->Request.Affordance == EVistaAffordance::Stand;
+    if (bPostureMutation)
     {
-        FinishSemanticFailure(
-            EVistaActionTransactionStatus::Failed,
-            TEXT("ACTION_ALIGNMENT_FAILED"));
-        return;
+        UVistaPostureComponent* Posture = ActiveSemanticAction->Posture.Get();
+        AVistaSeatActor* Seat = Cast<AVistaSeatActor>(Target);
+        if (!IsValid(Posture) || !IsValid(Seat))
+        {
+            FinishSemanticFailure(EVistaActionTransactionStatus::Failed, TEXT("POSTURE_PARTICIPANT_LOST"));
+            return;
+        }
+        const FVistaPostureTransitionResult PostureResult =
+            ActiveSemanticAction->Request.Affordance == EVistaAffordance::Sit
+                ? Posture->BeginSitTransition(Seat, ActiveSemanticAction->Record.CommandId)
+                : Posture->BeginStandTransition(ActiveSemanticAction->Record.CommandId);
+        if (!PostureResult.bSucceeded)
+        {
+            const bool bTransitionStillActive =
+                Posture->GetPostureState() == EVistaPostureState::SittingTransition ||
+                Posture->GetPostureState() == EVistaPostureState::StandingTransition ||
+                Seat->IsReserved();
+            if (bTransitionStillActive)
+            {
+                ActiveSemanticAction->bPostureTransitionStarted = true;
+                ActiveSemanticAction->bTargetReserved = Seat->IsReserved();
+                ActiveSemanticAction->Record.bTargetReservationAcquired = Seat->IsReserved();
+            }
+            FinishSemanticFailure(EVistaActionTransactionStatus::Failed, PostureResult.Code);
+            return;
+        }
+        ActiveSemanticAction->bPostureTransitionStarted = true;
+        ActiveSemanticAction->bTargetReserved = true;
+        ActiveSemanticAction->Record.bTargetReservationAcquired = true;
+        if (ActiveSemanticAction->Request.Affordance == EVistaAffordance::Stand)
+        {
+            if (UVistaAnimationComponent* Animation = ActiveSemanticAction->Animation.Get())
+            {
+                Animation->StopActiveAction(TEXT("POSTURE_STAND_REQUESTED"));
+            }
+        }
+    }
+    else
+    {
+        FVector Direction = ContactLocation - Requester->GetActorLocation();
+        Direction.Z = 0.0f;
+        if (!Direction.IsNearlyZero() &&
+            !Requester->SetActorRotation(Direction.Rotation()))
+        {
+            FinishSemanticFailure(
+                EVistaActionTransactionStatus::Failed,
+                TEXT("ACTION_ALIGNMENT_FAILED"));
+            return;
+        }
     }
     if (!TransitionSemantic(EVistaActionPhase::Animate, TEXT("ACTION_ANIMATE")))
     {
@@ -821,18 +922,38 @@ bool UVistaActionExecutorComponent::CommitSemanticContact(FName& OutCode)
          ActiveSemanticAction->Request.Affordance == EVistaAffordance::Close) &&
         IsValid(Cast<AVistaContainerActor>(Target));
     AVistaContainerActor* Container = Cast<AVistaContainerActor>(Target);
-    const FVistaInteractionResult Result =
-        bApplianceMutation && IsValid(Appliance)
-        ? Appliance->CommitTransactionalInteraction(
-            this,
-            Interaction,
-            ActiveSemanticAction->Record.CommandId)
-        : bContainerMutation && IsValid(Container)
-            ? Container->CommitTransactionalInteraction(
+    FVistaInteractionResult Result;
+    if (ActiveSemanticAction->bPostureTransitionStarted)
+    {
+        UVistaPostureComponent* Posture = ActiveSemanticAction->Posture.Get();
+        const FVistaPostureTransitionResult PostureResult =
+            !IsValid(Posture) ? FVistaPostureTransitionResult()
+            : ActiveSemanticAction->Request.Affordance == EVistaAffordance::Sit
+                ? Posture->CommitSitAtCompletion(ActiveSemanticAction->Record.CommandId)
+                : Posture->CommitStandAtCompletion(ActiveSemanticAction->Record.CommandId);
+        Result = PostureResult.bSucceeded
+                     ? FVistaInteractionResult::Success(ActiveSemanticAction->Record.TargetSemanticId,
+                                                        IVistaInteractable::Execute_VistaGetRuntimeState(Target),
+                                                        PostureResult.Code)
+                     : FVistaInteractionResult::Failure(
+                           EVistaInteractionStatus::InvalidState,
+                           PostureResult.Code.IsNone() ? FName(TEXT("POSTURE_COMMIT_FAILED")) : PostureResult.Code,
+                           ActiveSemanticAction->Record.TargetSemanticId);
+    }
+    else
+    {
+        Result = bApplianceMutation && IsValid(Appliance)
+            ? Appliance->CommitTransactionalInteraction(
                 this,
                 Interaction,
                 ActiveSemanticAction->Record.CommandId)
-            : IVistaInteractable::Execute_VistaInteract(Target, Interaction);
+            : bContainerMutation && IsValid(Container)
+                ? Container->CommitTransactionalInteraction(
+                    this,
+                    Interaction,
+                    ActiveSemanticAction->Record.CommandId)
+                : IVistaInteractable::Execute_VistaInteract(Target, Interaction);
+    }
     if (!Result.IsSuccess())
     {
         OutCode = Result.Code.IsNone()
@@ -854,7 +975,9 @@ bool UVistaActionExecutorComponent::CommitSemanticContact(FName& OutCode)
             ActiveSemanticAction->Record.BeforeState,
             ContactState,
             ActiveSemanticAction->Request.Affordance,
-            Target))
+            Target,
+            Requester,
+            ActiveSemanticAction->Request.RequesterSemanticId))
     {
         OutCode = ActiveSemanticAction->Request.Affordance ==
                 EVistaAffordance::Inspect
@@ -895,7 +1018,9 @@ void UVistaActionExecutorComponent::CompleteSemanticSuccess()
             ActiveSemanticAction->Record.BeforeState,
             ActiveSemanticAction->Record.AfterState,
             ActiveSemanticAction->Request.Affordance,
-            Target) ||
+            Target,
+            ActiveSemanticAction->Requester.Get(),
+            ActiveSemanticAction->Request.RequesterSemanticId) ||
         !RuntimeStatesEquivalent(
             ActiveSemanticAction->Record.ContactState,
             ActiveSemanticAction->Record.AfterState))
@@ -909,24 +1034,6 @@ void UVistaActionExecutorComponent::CompleteSemanticSuccess()
         ActiveSemanticAction->Requester.IsValid()
             ? ActiveSemanticAction->Requester->GetActorTransform()
             : ActiveSemanticAction->Record.RequesterContactTransform;
-    if (ActiveSemanticAction->Request.bCommitSessionGenerationOnSuccess)
-    {
-        UVistaEventSubsystem* Events = GetWorld()
-            ? GetWorld()->GetSubsystem<UVistaEventSubsystem>()
-            : nullptr;
-        int32 CommittedGeneration =
-            ActiveSemanticAction->Request.SessionGeneration;
-        if (!IsValid(Events) || !Events->CommitCommandGeneration(
-                ActiveSemanticAction->Request.SessionGeneration,
-                CommittedGeneration))
-        {
-            FinishSemanticFailure(
-                EVistaActionTransactionStatus::Failed,
-                TEXT("SESSION_GENERATION_COMMIT_FAILED"));
-            return;
-        }
-        ActiveSemanticAction->Record.SessionGeneration = CommittedGeneration;
-    }
     if (!TransitionSemantic(
             EVistaActionPhase::Complete,
             ActiveSemanticAction->ContactResultCode.IsNone()
@@ -949,11 +1056,38 @@ void UVistaActionExecutorComponent::CompleteSemanticSuccess()
             TEXT("ACTION_LEDGER_PUBLISH_FAILED"));
         return;
     }
+    const bool bStartSeatedIdle = ActiveSemanticAction->Request.Affordance == EVistaAffordance::Sit;
+    TWeakObjectPtr<UVistaAnimationComponent> CompletedAnimation = ActiveSemanticAction->Animation;
+    TWeakObjectPtr<UVistaPostureComponent> CompletedPosture = ActiveSemanticAction->Posture;
+    TWeakObjectPtr<AActor> CompletedTarget = ActiveSemanticAction->Target;
     FVistaActionTransactionRecord FinalRecord;
     if (!FinalizeSemantic(&FinalRecord))
     {
-        AbandonSemanticAfterPublishFailure();
+        if (ActiveSemanticAction.IsSet())
+        {
+            FinishSemanticFailure(EVistaActionTransactionStatus::Failed,
+                                  ActiveSemanticAction->Record.Code.IsNone()
+                                      ? FName(TEXT("ACTION_LEDGER_TERMINAL_PUBLISH_FAILED"))
+                                      : ActiveSemanticAction->Record.Code);
+        }
         return;
+    }
+    if (bStartSeatedIdle && CompletedAnimation.IsValid() && CompletedPosture.IsValid() &&
+        CompletedPosture->IsSeatedLoopAuthorized())
+    {
+        FVistaNpcAction IdleAction;
+        IdleAction.ActionId = FName(*FString::Printf(
+            TEXT("%s.seated_idle"),
+            *FinalRecord.CommandId.ToString()));
+        IdleAction.Type = EVistaNpcActionType::SeatedIdle;
+        IdleAction.TargetSemanticId = FinalRecord.TargetSemanticId;
+        IdleAction.TimeoutSeconds = 300.0f;
+        FName IdleCode;
+        if (!CompletedAnimation->StartNpcAction(IdleAction, CompletedTarget.Get(), IdleCode))
+        {
+            UE_LOG(LogTemp, Error, TEXT("VISTA_SEATED_IDLE_START_FAILED command=%s code=%s"),
+                   *FinalRecord.CommandId.ToString(), *IdleCode.ToString());
+        }
     }
     if (UVistaEventSubsystem* Events = GetWorld()
             ? GetWorld()->GetSubsystem<UVistaEventSubsystem>()
@@ -976,6 +1110,9 @@ void UVistaActionExecutorComponent::FinishSemanticFailure(
     const bool bRollbackRequired =
         ActiveSemanticAction->bAlignmentApplied ||
         ActiveSemanticAction->Record.bContactMutationAttempted;
+    const bool bPostureMutation = ActiveSemanticAction->bPostureTransitionStarted &&
+                                  (ActiveSemanticAction->Request.Affordance == EVistaAffordance::Sit ||
+                                   ActiveSemanticAction->Request.Affordance == EVistaAffordance::Stand);
     bool bRollbackSucceeded = true;
     if (bRollbackRequired)
     {
@@ -984,7 +1121,7 @@ void UVistaActionExecutorComponent::FinishSemanticFailure(
             TEXT("ACTION_ROLLING_BACK"));
         ActiveSemanticAction->Record.bRollbackAttempted = true;
     }
-    if (ActiveSemanticAction->bAlignmentApplied)
+    if (ActiveSemanticAction->bAlignmentApplied && !bPostureMutation)
     {
         AActor* Requester = ActiveSemanticAction->Requester.Get();
         const bool bRestored = IsValid(Requester) &&
@@ -1000,7 +1137,81 @@ void UVistaActionExecutorComponent::FinishSemanticFailure(
         bRollbackSucceeded =
             ActiveSemanticAction->Record.bRequesterTransformRestored;
     }
-    if (ActiveSemanticAction->Record.bContactMutationAttempted)
+    if (bPostureMutation)
+    {
+        UVistaPostureComponent* Posture = ActiveSemanticAction->Posture.Get();
+        AVistaSeatActor* Seat = Cast<AVistaSeatActor>(ActiveSemanticAction->Target.Get());
+        FVistaPostureTransitionResult Restore;
+        if (!IsValid(Posture) || !IsValid(Seat))
+        {
+            Restore.Code = TEXT("POSTURE_ROLLBACK_PARTICIPANT_LOST");
+        }
+        else if (ActiveSemanticAction->Request.Affordance == EVistaAffordance::Sit)
+        {
+            if (Posture->GetPostureState() == EVistaPostureState::SittingTransition)
+            {
+                Restore = Posture->RollbackSitTransition(ActiveSemanticAction->Record.CommandId);
+            }
+            else if (Posture->GetPostureState() == EVistaPostureState::Seated)
+            {
+                const FVistaPostureTransitionResult BeginCompensation =
+                    Posture->BeginStandTransition(ActiveSemanticAction->Record.CommandId);
+                if (BeginCompensation.bSucceeded)
+                {
+                    const FVistaPostureTransitionResult CommitCompensation =
+                        Posture->CommitStandAtCompletion(ActiveSemanticAction->Record.CommandId);
+                    Restore = CommitCompensation.bSucceeded
+                                  ? Posture->FinalizeCommittedStand(ActiveSemanticAction->Record.CommandId)
+                                  : CommitCompensation;
+                }
+                else
+                {
+                    Restore = BeginCompensation;
+                }
+            }
+            else
+            {
+                Restore.Code = TEXT("POSTURE_SIT_ROLLBACK_STATE_INVALID");
+            }
+        }
+        else if (Posture->GetPostureState() == EVistaPostureState::StandingTransition)
+        {
+            Restore = Posture->RollbackStandTransition(ActiveSemanticAction->Record.CommandId);
+        }
+        else if (Posture->GetPostureState() == EVistaPostureState::Standing)
+        {
+            Restore = Posture->RollbackCommittedStand(ActiveSemanticAction->Record.CommandId);
+        }
+        else
+        {
+            Restore.Code = TEXT("POSTURE_STAND_ROLLBACK_STATE_INVALID");
+        }
+
+        AActor* Requester = ActiveSemanticAction->Requester.Get();
+        const FVistaEntityRuntimeState RestoredState =
+            IsValid(Seat) ? IVistaInteractable::Execute_VistaGetRuntimeState(Seat) : FVistaEntityRuntimeState();
+        const bool bTargetRestored = Restore.bSucceeded && IsValid(Seat) &&
+                                     RuntimeStatesEquivalent(ActiveSemanticAction->Record.BeforeState, RestoredState);
+        ActiveSemanticAction->Record.bRequesterTransformRestored =
+            IsValid(Requester) &&
+            Requester->GetActorTransform().Equals(ActiveSemanticAction->Record.RequesterBeforeTransform, 0.01f);
+        ActiveSemanticAction->Record.AfterState = RestoredState;
+        ActiveSemanticAction->Record.bHasAfterState = IsValid(Seat);
+        ActiveSemanticAction->Record.RollbackCode =
+            bTargetRestored && ActiveSemanticAction->Record.bRequesterTransformRestored
+            ? FName(TEXT("POSTURE_STATE_RESTORED"))
+            : (Restore.Code.IsNone()
+                ? FName(TEXT("POSTURE_STATE_RESTORE_FAILED"))
+                : Restore.Code);
+        bRollbackSucceeded =
+            bRollbackSucceeded && bTargetRestored && ActiveSemanticAction->Record.bRequesterTransformRestored;
+        if (IsValid(Seat) && !Seat->IsReserved())
+        {
+            ActiveSemanticAction->bTargetReserved = false;
+            ActiveSemanticAction->Record.bTargetReservationReleased = true;
+        }
+    }
+    if (ActiveSemanticAction->Record.bContactMutationAttempted && !bPostureMutation)
     {
         AActor* Target = ActiveSemanticAction->Target.Get();
         AVistaStatefulApplianceActor* Appliance =
@@ -1103,21 +1314,29 @@ bool UVistaActionExecutorComponent::FinalizeSemantic(
     FVistaActionTransactionRecord* OutFinalRecord)
 {
     check(ActiveSemanticAction.IsSet());
-    if (!ReleaseSemanticTargetReservation())
+    UVistaPlayableHomeRuntimeSubsystem* Runtime =
+        IsValid(GetWorld()) ? GetWorld()->GetSubsystem<UVistaPlayableHomeRuntimeSubsystem>() : nullptr;
+    FName FinalizeCode;
+    const bool bTerminalPublished = IsValid(Runtime) &&
+        Runtime->FinalizePhysicalCommand(
+            ActiveSemanticAction->Record.CommandId,
+            ActiveSemanticAction->CanonicalRequest,
+            this,
+            ActiveSemanticAction->Record,
+            ActiveSemanticAction->Record.Status == EVistaActionTransactionStatus::Succeeded &&
+                ActiveSemanticAction->Request.bCommitSessionGenerationOnSuccess,
+            ActiveSemanticAction->Request.SessionGeneration,
+            [this]() { return ReleaseSemanticTargetReservation(); },
+            FinalizeCode);
+    if (!bTerminalPublished)
     {
-        ActiveSemanticAction->Record.Status =
-            EVistaActionTransactionStatus::Failed;
-        ActiveSemanticAction->Record.Code =
-            TEXT("TARGET_RESERVATION_RELEASE_FAILED");
-        PublishSemanticRecord(true);
+        ActiveSemanticAction->Record.Code = FinalizeCode.IsNone()
+            ? FName(TEXT("ACTION_LEDGER_TERMINAL_PUBLISH_FAILED"))
+            : FinalizeCode;
         if (OutFinalRecord != nullptr)
         {
             *OutFinalRecord = ActiveSemanticAction->Record;
         }
-        return false;
-    }
-    if (!PublishSemanticRecord(true))
-    {
         return false;
     }
     if (OutFinalRecord != nullptr)
@@ -1140,6 +1359,8 @@ bool UVistaActionExecutorComponent::ReleaseSemanticTargetReservation()
             ActiveSemanticAction->Target.Get());
     AVistaContainerActor* Container = Cast<AVistaContainerActor>(
         ActiveSemanticAction->Target.Get());
+    AVistaSeatActor* Seat = Cast<AVistaSeatActor>(ActiveSemanticAction->Target.Get());
+    UVistaPostureComponent* Posture = ActiveSemanticAction->Posture.Get();
     const bool bReleased = IsValid(Appliance)
         ? Appliance->ReleaseTransaction(
             this,
@@ -1148,6 +1369,11 @@ bool UVistaActionExecutorComponent::ReleaseSemanticTargetReservation()
             ? Container->ReleaseTransaction(
                 this,
                 ActiveSemanticAction->Record.CommandId)
+        : ActiveSemanticAction->bPostureTransitionStarted
+            ? ActiveSemanticAction->Request.Affordance == EVistaAffordance::Stand
+                  ? IsValid(Posture) &&
+                        Posture->FinalizeCommittedStand(ActiveSemanticAction->Record.CommandId).bSucceeded
+                  : IsValid(Seat) && !Seat->IsReserved()
             : true;
     if (!bReleased)
     {
