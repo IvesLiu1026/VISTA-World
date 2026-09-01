@@ -205,6 +205,29 @@ Depends on: requirements.md, design.md
     schema. Scene composition, a fresh package and Sunshine human playtest remain
     open, so this task is intentionally not checked.
 
+- [ ] T18. Build the R18 playable detail lab
+  - Files: typed scene composition, player context-action selector/HUD,
+    interaction bindings, focused source and UE proofs
+  - Depends on: T15-T17
+  - Requirements: R4-R5, R11-R14
+  - Validation: four real seat actors, one pourable source and two typed
+    receivers exist in an isolated candidate; the player can select every
+    currently valid detailed action without hidden priority; all selections use
+    the shared executor; exact-tip package and Sunshine human playtest pass
+  - Progress: implementation is split into isolated selector and composition
+    worktrees. No live scene or service has been changed.
+
+- [ ] T19. Add transactional Insert and Remove storage actions
+  - Files: container/pickup authorities, shared executor, animation authority,
+    player/NPC/TCP/Event adapters and focused UE/Python proofs
+  - Depends on: T18 and dedicated R18 Insert/Remove animation materialization
+  - Requirements: R2-R5, R11-R14
+  - Validation: `open -> insert -> close -> open -> remove` changes both item
+    disposition and container contents only at contact; closed/full/busy/wrong
+    item cases fail before mutation; forced post-contact failures restore the
+    exact item, inventory and container snapshots; one successful action writes
+    one VISTA observation; package and two-client evidence pass
+
 ## Current Iteration
 
 - Completed: T2 commanded-idle baseline; the current 698-test tool suite plus
