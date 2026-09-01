@@ -128,6 +128,8 @@ PINNED_UNREAL_ENGINE_RUNTIME_VERSION = (
 )
 VISUAL_PROFILE_ATTEMPT_FILE = "visual-profile.json"
 RENDERER_REQUEST_ATTEMPT_FILE = "renderer-profile-request.json"
+TYPED_SCENE_PROFILE_ATTEMPT_FILE = "typed-scene-profile.json"
+TYPED_SCENE_PROFILE_ID = contract.TYPED_SCENE_PROFILE_ID
 PRESENTATION_MANIFEST_ATTEMPT_FILE = "presentation-manifest.json"
 PRESENTATION_ARTIFACT_RECEIPT_ATTEMPT_FILE = "presentation-artifact-receipt.json"
 PRESENTATION_VULKAN_ICD_ATTEMPT_FILE = "presentation-vulkan-icd.json"
@@ -2066,6 +2068,50 @@ def validate_visual_profile(
     return profile, raw
 
 
+def validate_typed_scene_profile(
+    path: Path,
+    expected_sha256: str,
+    plan: Mapping[str, Any],
+) -> tuple[dict[str, Any], bytes]:
+    """Load and compile one exact R18 typed-scene profile fail closed."""
+
+    profile, raw = _load_json(
+        path,
+        expected_sha256=expected_sha256,
+        label="typed scene profile",
+    )
+    if profile.get("profile_id") != TYPED_SCENE_PROFILE_ID:
+        _fail(
+            "VISTA_HOME_BUILD_TYPED_SCENE_PROFILE_INVALID",
+            "typed scene profile ID differs from the R18 runner authority",
+            pointer=str(path),
+        )
+    try:
+        composition = planning.build_composition_spec(
+            plan,
+            typed_scene_profile=profile,
+        )
+    except planning.VistaPlayableHomePlanError as exc:
+        _fail(
+            "VISTA_HOME_BUILD_TYPED_SCENE_PROFILE_INVALID",
+            str(exc),
+            pointer=str(path),
+        )
+    if (
+        profile.get("schema_version") != planning.TYPED_SCENE_PROFILE_SCHEMA
+        or composition.value.get("typed_scene_profile_id")
+        != TYPED_SCENE_PROFILE_ID
+        or composition.value.get("typed_scene_profile_content_digest")
+        != profile.get("content_digest")
+    ):
+        _fail(
+            "VISTA_HOME_BUILD_TYPED_SCENE_PROFILE_INVALID",
+            "typed scene profile identity was not preserved by composition",
+            pointer=str(path),
+        )
+    return profile, raw
+
+
 def validate_realism_r4_profile(
     path: Path,
     expected_sha256: str,
@@ -3470,6 +3516,8 @@ class BuildConfig:
     visual_binding_manifest_sha256: str | None = None
     visual_profile: Path | None = None
     visual_profile_sha256: str | None = None
+    typed_scene_profile: Path | None = None
+    typed_scene_profile_sha256: str | None = None
     realism_r4_profile: Path | None = None
     realism_r4_profile_sha256: str | None = None
     presentation_manifest: Path | None = None
@@ -3496,6 +3544,8 @@ class PlannedBuild:
     input_ini_raw: bytes
     visual_profile: dict[str, Any] | None
     visual_profile_raw: bytes | None
+    typed_scene_profile: dict[str, Any] | None
+    typed_scene_profile_raw: bytes | None
     realism_r4_profile: dict[str, Any] | None
     realism_r4_profile_raw: bytes | None
     presentation: PresentationInputs | None
@@ -3593,6 +3643,8 @@ def _planned_execution(
     visual_profile: Mapping[str, Any] | None = None,
     visual_profile_sha256: str | None = None,
     renderer_request: Mapping[str, Any] | None = None,
+    typed_scene_profile: Mapping[str, Any] | None = None,
+    typed_scene_profile_sha256: str | None = None,
     realism_r4_profile: Mapping[str, Any] | None = None,
     realism_r4_profile_sha256: str | None = None,
     presentation: PresentationInputs | None = None,
@@ -3610,6 +3662,11 @@ def _planned_execution(
         _fail(
             "VISTA_HOME_BUILD_ARGUMENT_INVALID",
             "presentation bundles require a selected visual profile",
+        )
+    if (typed_scene_profile is None) != (typed_scene_profile_sha256 is None):
+        _fail(
+            "VISTA_HOME_BUILD_ARGUMENT_INVALID",
+            "typed scene profile and SHA-256 pin must be supplied together",
         )
     if (realism_r4_profile is None) != (realism_r4_profile_sha256 is None):
         _fail(
@@ -3637,6 +3694,7 @@ def _planned_execution(
         plan,
         visual_profile,
         presentation_operation_bindings,
+        typed_scene_profile=typed_scene_profile,
     )
     if external_presentation:
         actual_material_inventories = {
@@ -3734,6 +3792,34 @@ def _planned_execution(
                 "runtime_proof": False,
             },
         })
+    if typed_scene_profile is not None:
+        typed_profile_sha = _require_sha(
+            typed_scene_profile_sha256,
+            "typed scene profile pin",
+        )
+        if (
+            typed_scene_profile.get("schema_version")
+            != planning.TYPED_SCENE_PROFILE_SCHEMA
+            or typed_scene_profile.get("profile_id")
+            != TYPED_SCENE_PROFILE_ID
+            or composition.value.get("typed_scene_profile_id")
+            != TYPED_SCENE_PROFILE_ID
+            or composition.value.get("typed_scene_profile_content_digest")
+            != typed_scene_profile.get("content_digest")
+        ):
+            _fail(
+                "VISTA_HOME_BUILD_TYPED_SCENE_PROFILE_INVALID",
+                "typed scene execution identity differs from its composition",
+            )
+        value["typed_scene_profile"] = {
+            "path": str(
+                attempt / "contracts" / TYPED_SCENE_PROFILE_ATTEMPT_FILE
+            ),
+            "sha256": typed_profile_sha,
+            "schema_version": typed_scene_profile["schema_version"],
+            "profile_id": typed_scene_profile["profile_id"],
+            "content_digest": typed_scene_profile["content_digest"],
+        }
     if realism_r4_profile is not None:
         r4_source_sha = _require_sha(
             realism_r4_profile_sha256, "R4 realism profile pin"
@@ -3820,6 +3906,27 @@ def plan_build(config: BuildConfig, *, require_editor: bool = False) -> PlannedB
         )
     elif config.visual_profile_sha256 is not None:
         _fail("VISTA_HOME_BUILD_ARGUMENT_INVALID", "visual profile pin requires a profile path")
+    selected_typed_scene_profile: dict[str, Any] | None = None
+    selected_typed_scene_profile_raw: bytes | None = None
+    if config.typed_scene_profile is not None:
+        if config.typed_scene_profile_sha256 is None:
+            _fail(
+                "VISTA_HOME_BUILD_PIN_INVALID",
+                "typed scene profile pin is required",
+            )
+        (
+            selected_typed_scene_profile,
+            selected_typed_scene_profile_raw,
+        ) = validate_typed_scene_profile(
+            config.typed_scene_profile,
+            config.typed_scene_profile_sha256,
+            plan,
+        )
+    elif config.typed_scene_profile_sha256 is not None:
+        _fail(
+            "VISTA_HOME_BUILD_ARGUMENT_INVALID",
+            "typed scene profile pin requires a profile path",
+        )
     selected_r4_profile: dict[str, Any] | None = None
     selected_r4_profile_raw: bytes | None = None
     if config.realism_r4_profile is not None:
@@ -3938,6 +4045,8 @@ def plan_build(config: BuildConfig, *, require_editor: bool = False) -> PlannedB
         visual_profile=selected_profile,
         visual_profile_sha256=config.visual_profile_sha256,
         renderer_request=renderer_request,
+        typed_scene_profile=selected_typed_scene_profile,
+        typed_scene_profile_sha256=config.typed_scene_profile_sha256,
         realism_r4_profile=selected_r4_profile,
         realism_r4_profile_sha256=config.realism_r4_profile_sha256,
         presentation=presentation,
@@ -4048,6 +4157,17 @@ def plan_build(config: BuildConfig, *, require_editor: bool = False) -> PlannedB
             "content_digest": renderer_request["content_digest"],
             "status": "staged_runtime_observation_required",
             "runtime_proof": False,
+        }
+    if selected_typed_scene_profile is not None:
+        report["inputs"]["typed_scene_profile"] = {
+            "path": str(config.typed_scene_profile),
+            "staged_path": str(
+                attempt / "contracts" / TYPED_SCENE_PROFILE_ATTEMPT_FILE
+            ),
+            "sha256": config.typed_scene_profile_sha256,
+            "schema_version": selected_typed_scene_profile["schema_version"],
+            "profile_id": selected_typed_scene_profile["profile_id"],
+            "content_digest": selected_typed_scene_profile["content_digest"],
         }
     if selected_r4_profile is not None:
         report["inputs"]["realism_r4_profile"] = {
@@ -4182,6 +4302,8 @@ def plan_build(config: BuildConfig, *, require_editor: bool = False) -> PlannedB
         input_ini_raw=input_ini_raw,
         visual_profile=selected_profile,
         visual_profile_raw=selected_profile_raw,
+        typed_scene_profile=selected_typed_scene_profile,
+        typed_scene_profile_raw=selected_typed_scene_profile_raw,
         realism_r4_profile=selected_r4_profile,
         realism_r4_profile_raw=selected_r4_profile_raw,
         presentation=presentation,
@@ -5615,6 +5737,7 @@ def _materialize_inputs(planned: PlannedBuild, *, owner_token: str | None = None
     build_plan_target = contracts_dir / "build-plan.json"
     _write_exclusive(build_plan_target, planning.canonical_json(planned.plan))
     visual_profile_target: Path | None = None
+    typed_scene_profile_target: Path | None = None
     realism_r4_profile_target: Path | None = None
     renderer_request_target: Path | None = None
     presentation_manifest_target: Path | None = None
@@ -5630,6 +5753,19 @@ def _materialize_inputs(planned: PlannedBuild, *, owner_token: str | None = None
         renderer_request_target = contracts_dir / RENDERER_REQUEST_ATTEMPT_FILE
         _write_exclusive(visual_profile_target, planned.visual_profile_raw)
         _write_exclusive(renderer_request_target, planned.renderer_request_raw)
+    if planned.typed_scene_profile is not None:
+        if planned.typed_scene_profile_raw is None:
+            _fail(
+                "VISTA_HOME_BUILD_EXECUTION_DRIFT",
+                "typed scene plan lost its pinned profile bytes",
+            )
+        typed_scene_profile_target = (
+            contracts_dir / TYPED_SCENE_PROFILE_ATTEMPT_FILE
+        )
+        _write_exclusive(
+            typed_scene_profile_target,
+            planned.typed_scene_profile_raw,
+        )
     if planned.realism_r4_profile is not None:
         if planned.realism_r4_profile_raw is None:
             _fail(
@@ -5721,6 +5857,13 @@ def _materialize_inputs(planned: PlannedBuild, *, owner_token: str | None = None
             else None
         ),
         presentation_bindings=contract_presentation_bindings,
+        typed_scene_profile=planned.typed_scene_profile,
+        typed_scene_profile_path=typed_scene_profile_target,
+        typed_scene_profile_sha256=(
+            planned.config.typed_scene_profile_sha256
+            if planned.typed_scene_profile is not None
+            else None
+        ),
     )
     if external_presentation or planned.realism_r4_profile is not None:
         generated_value, generated_raw, generated_sha = _planned_execution(
@@ -5732,6 +5875,10 @@ def _materialize_inputs(planned: PlannedBuild, *, owner_token: str | None = None
             visual_profile=planned.visual_profile,
             visual_profile_sha256=planned.config.visual_profile_sha256,
             renderer_request=planned.renderer_request,
+            typed_scene_profile=planned.typed_scene_profile,
+            typed_scene_profile_sha256=(
+                planned.config.typed_scene_profile_sha256
+            ),
             realism_r4_profile=planned.realism_r4_profile,
             realism_r4_profile_sha256=(planned.config.realism_r4_profile_sha256),
             presentation=planned.presentation,
@@ -5772,6 +5919,15 @@ def _materialize_inputs(planned: PlannedBuild, *, owner_token: str | None = None
                 "content_digest"
             ],
             "renderer_runtime_observation": "pending",
+        })
+    if planned.typed_scene_profile is not None:
+        preparation.update({
+            "typed_scene_profile_sha256": (
+                planned.config.typed_scene_profile_sha256
+            ),
+            "typed_scene_profile_content_digest": (
+                planned.typed_scene_profile["content_digest"]
+            ),
         })
     if planned.realism_r4_profile is not None:
         preparation.update(
@@ -6158,6 +6314,18 @@ def _parser() -> argparse.ArgumentParser:
         help="expected lowercase SHA-256 for --visual-profile",
     )
     parser.add_argument(
+        "--typed-scene-profile",
+        type=Path,
+        help=(
+            "absolute path to the exact vista_home_typed_scene_r18 "
+            "composition profile"
+        ),
+    )
+    parser.add_argument(
+        "--typed-scene-profile-sha256",
+        help="expected lowercase SHA-256 for --typed-scene-profile",
+    )
+    parser.add_argument(
         "--realism-r4-profile",
         type=Path,
         help=(
@@ -6232,6 +6400,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         visual_binding_manifest_sha256=args.visual_binding_manifest_sha256,
         visual_profile=args.visual_profile,
         visual_profile_sha256=args.visual_profile_sha256,
+        typed_scene_profile=args.typed_scene_profile,
+        typed_scene_profile_sha256=args.typed_scene_profile_sha256,
         realism_r4_profile=args.realism_r4_profile,
         realism_r4_profile_sha256=args.realism_r4_profile_sha256,
         presentation_manifest=args.presentation_manifest,

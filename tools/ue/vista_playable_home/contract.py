@@ -16,6 +16,7 @@ from .planning import CompositionSpec, build_composition_spec, canonical_json
 
 
 EXECUTION_SCHEMA = "simworld.vista.playable-home-ue-execution/v1"
+TYPED_SCENE_PROFILE_ID = "vista_home_typed_scene_r18"
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 FORBIDDEN_PATH_PARTS = {
     "archive", "archives", "canonical", "production", "release", "releases",
@@ -104,6 +105,9 @@ def build_execution_manifest(
     presentation_artifact_receipt_path: os.PathLike[str] | str | None = None,
     presentation_artifact_receipt_sha256: str | None = None,
     presentation_bindings: Sequence[Mapping[str, Any]] | None = None,
+    typed_scene_profile: Mapping[str, Any] | None = None,
+    typed_scene_profile_path: os.PathLike[str] | str | None = None,
+    typed_scene_profile_sha256: str | None = None,
 ) -> ExecutionManifest:
     """Pin host files without placing host paths in the world content digest."""
 
@@ -140,10 +144,36 @@ def build_execution_manifest(
             "VISTA_HOME_UE_PRESENTATION_WITHOUT_PROFILE",
             "presentation bundles require a selected visual profile",
         )
+    typed_scene_values = (
+        typed_scene_profile,
+        typed_scene_profile_path,
+        typed_scene_profile_sha256,
+    )
+    has_typed_scene_profile = any(
+        value is not None for value in typed_scene_values
+    )
+    if has_typed_scene_profile and not all(
+        value is not None for value in typed_scene_values
+    ):
+        _error(
+            "VISTA_HOME_UE_TYPED_SCENE_PIN_INCOMPLETE",
+            "typed scene profile, path, and SHA-256 pin must be supplied together",
+        )
+    if has_typed_scene_profile and (
+        not isinstance(typed_scene_profile, Mapping)
+        or typed_scene_profile.get("schema_version")
+        != planning.TYPED_SCENE_PROFILE_SCHEMA
+        or typed_scene_profile.get("profile_id") != TYPED_SCENE_PROFILE_ID
+    ):
+        _error(
+            "VISTA_HOME_UE_TYPED_SCENE_PROFILE_INVALID",
+            "typed scene profile schema or R18 profile ID differs",
+        )
     composition = build_composition_spec(
         build_plan,
         visual_profile,
         presentation_bindings,
+        typed_scene_profile=typed_scene_profile,
     )
     root = _canonical_path(attempt_root)
     plan_path = _safe_attempt_child(_canonical_path(build_plan_path), root, "build plan")
@@ -336,6 +366,48 @@ def build_execution_manifest(
                 "runtime_proof": False,
             },
         })
+    if has_typed_scene_profile:
+        typed_profile_path = _safe_attempt_child(
+            _canonical_path(typed_scene_profile_path),
+            root,
+            "typed scene profile",
+        )
+        if (
+            not isinstance(typed_scene_profile_sha256, str)
+            or SHA256.fullmatch(typed_scene_profile_sha256) is None
+            or not typed_profile_path.is_file()
+            or sha256_file(typed_profile_path) != typed_scene_profile_sha256
+        ):
+            _error(
+                "VISTA_HOME_UE_TYPED_SCENE_PIN_MISMATCH",
+                "typed scene profile bytes differ from their pin",
+            )
+        try:
+            materialized_typed_profile = json.loads(
+                typed_profile_path.read_text(encoding="utf-8", errors="strict")
+            )
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            _error(
+                "VISTA_HOME_UE_TYPED_SCENE_PIN_MISMATCH",
+                "typed scene profile is not strict JSON",
+            )
+            raise AssertionError from exc
+        if (
+            not isinstance(materialized_typed_profile, dict)
+            or materialized_typed_profile != dict(typed_scene_profile or {})
+        ):
+            _error(
+                "VISTA_HOME_UE_TYPED_SCENE_PIN_MISMATCH",
+                "typed scene profile bytes do not represent the compiled profile",
+            )
+        profile_value = dict(typed_scene_profile or {})
+        manifest["typed_scene_profile"] = {
+            "path": str(typed_profile_path),
+            "sha256": typed_scene_profile_sha256,
+            "schema_version": profile_value["schema_version"],
+            "profile_id": profile_value["profile_id"],
+            "content_digest": profile_value["content_digest"],
+        }
     if has_presentation:
         presentation_manifest = _safe_attempt_child(
             _canonical_path(presentation_manifest_path),
