@@ -140,6 +140,7 @@ public:
     bool IsReservedForDevAutomation(
         const UVistaActionExecutorComponent* Executor,
         FName CommandId) const;
+    void FailNextPourReleaseForDevAutomation();
 #endif
 
     virtual FVistaEntityRuntimeState VistaGetRuntimeState_Implementation() const override;
@@ -154,6 +155,7 @@ public:
 protected:
     virtual void OnConstruction(const FTransform& Transform) override;
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
     friend class AVistaLiquidReceiverActor;
@@ -169,6 +171,11 @@ private:
 
     TWeakObjectPtr<UVistaActionExecutorComponent> ActiveTransactionExecutor;
     FName ActiveTransactionCommandId = NAME_None;
+    TWeakObjectPtr<AVistaLiquidReceiverActor> ActivePourReceiver;
+
+#if WITH_DEV_AUTOMATION_TESTS
+    bool bFailNextPourRelease = false;
+#endif
 
     UFUNCTION()
     void OnRep_PhysicalDisposition();
@@ -185,6 +192,23 @@ private:
     bool IsTransactionReservedBy(
         const UVistaActionExecutorComponent* Executor,
         FName CommandId) const;
+    bool TryReservePourTransaction(
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        AVistaLiquidReceiverActor* Receiver);
+    bool ReleasePourTransactionReservation(
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        AVistaLiquidReceiverActor* Receiver);
+    bool ReleasePourReservationForReceiverEndPlay(
+        AVistaLiquidReceiverActor* Receiver,
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId);
+    bool IsPourTransactionReservedBy(
+        const UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        const AVistaLiquidReceiverActor* Receiver) const;
+    bool IsTransactionUnreserved() const;
     /** The only gameplay pickup/place/drop mutation entry; called at contact. */
     FVistaInteractionResult CommitTransactionalInteraction(
         UVistaActionExecutorComponent* Executor,

@@ -23,6 +23,8 @@ const FString SourceBSemanticId(
     TEXT("home.r1/room.kitchen/entity.pour_source_b"));
 const FString ReceiverSemanticId(
     TEXT("home.r1/room.kitchen/entity.pour_receiver"));
+const FString ReceiverBSemanticId(
+    TEXT("home.r1/room.kitchen/entity.pour_receiver_b"));
 
 template <typename T>
 bool ScalarBitsEqual(const T& Left, const T& Right)
@@ -345,17 +347,60 @@ bool FVistaPourTransactionR1Proof::RunTest(const FString& Parameters)
         SourceA.GetCarrier() == &CarrierA &&
             IVistaItemCarrier::Execute_VistaGetHeldItem(&CarrierA) ==
                 &SourceA);
-    TestTrue(
-        TEXT("success releases both reservations explicitly"),
+    SourceA.FailNextPourReleaseForDevAutomation();
+    TestFalse(
+        TEXT("source release failure keeps receiver ownership for retry"),
         Receiver.ReleasePourForDevAutomation(
             ExecutorA, SuccessCommand, &SourceA, Code));
     TestEqual(
-        TEXT("success release has typed code"),
+        TEXT("source release failure has typed code"),
+        Code,
+        FName(TEXT("POUR_SOURCE_RESERVATION_RELEASE_FAILED")));
+    TestTrue(
+        TEXT("source release failure preserves source reservation"),
+        SourceA.IsReservedForDevAutomation(ExecutorA, SuccessCommand));
+    TestTrue(
+        TEXT("source release failure preserves receiver reservation"),
+        Receiver.IsReservedForDevAutomation(ExecutorA, SuccessCommand));
+
+    Receiver.FailNextReleaseFinalizeForDevAutomation();
+    TestFalse(
+        TEXT("receiver finalization failure exposes retryable split state"),
+        Receiver.ReleasePourForDevAutomation(
+            ExecutorA, SuccessCommand, &SourceA, Code));
+    TestEqual(
+        TEXT("receiver finalization failure has typed code"),
+        Code,
+        FName(TEXT("POUR_RECEIVER_RELEASE_FINALIZE_INJECTED_FAILURE")));
+    TestFalse(
+        TEXT("split-state proof has already released the exact source"),
+        SourceA.IsReservedForDevAutomation(ExecutorA, SuccessCommand));
+    TestTrue(
+        TEXT("split-state proof retains exact receiver identity"),
+        Receiver.IsReservedForDevAutomation(ExecutorA, SuccessCommand));
+
+    TestTrue(
+        TEXT("retry converges a source-released receiver-owned transaction"),
+        Receiver.ReleasePourForDevAutomation(
+            ExecutorA, SuccessCommand, &SourceA, Code));
+    TestEqual(
+        TEXT("successful retry has typed code"),
         Code,
         FName(TEXT("POUR_TARGETS_RELEASED")));
     TestFalse(
         TEXT("source is unreserved after success release"),
         SourceA.IsReservedForDevAutomation(ExecutorA, SuccessCommand));
+    TestFalse(
+        TEXT("receiver is unreserved after success release"),
+        Receiver.IsReservedForDevAutomation(ExecutorA, SuccessCommand));
+    TestTrue(
+        TEXT("duplicate exact release is idempotent"),
+        Receiver.ReleasePourForDevAutomation(
+            ExecutorA, SuccessCommand, &SourceA, Code));
+    TestEqual(
+        TEXT("duplicate exact release has typed code"),
+        Code,
+        FName(TEXT("POUR_TARGETS_ALREADY_RELEASED")));
 
     TestTrue(
         TEXT("source resets for compensation proof"),
@@ -462,6 +507,52 @@ bool FVistaPourTransactionR1Proof::RunTest(const FString& Parameters)
     TestTrue(
         TEXT("full receiver planner leaves zero transfer"),
         ScalarBitsEqual(TransferMilliliters, 0.0f));
+
+    const FName ReceiverEndPlayCommand(TEXT("pour-r1-receiver-endplay"));
+    TestTrue(
+        TEXT("receiver EndPlay proof reserves exact source"),
+        Receiver.TryReservePourForDevAutomation(
+            ExecutorA,
+            ReceiverEndPlayCommand,
+            &CarrierA,
+            &SourceA,
+            Code));
+    TestTrue(
+        TEXT("receiver destruction begins"),
+        Receiver.Destroy());
+    TestFalse(
+        TEXT("receiver EndPlay releases the exact source reservation"),
+        SourceA.IsReservedForDevAutomation(
+            ExecutorA, ReceiverEndPlayCommand));
+
+    AVistaLiquidReceiverActor& ReceiverB =
+        Spawner.SpawnActor<AVistaLiquidReceiverActor>();
+    ReceiverB.SemanticId = ReceiverBSemanticId;
+    ReceiverB.WorldRevision = ProofRevision;
+    ReceiverB.AcceptedLiquidType = WaterType;
+    ReceiverB.Tags.AddUnique(FName(*ReceiverBSemanticId));
+    ReceiverB.Tags.AddUnique(
+        FName(*(FString(TEXT("VistaSemanticId=")) + ReceiverBSemanticId)));
+    TestTrue(
+        TEXT("source EndPlay receiver configures"),
+        ReceiverB.ConfigureLiquidStateForDevAutomation(
+            ReceiverState(250.0f, 0.0f), Code));
+    const FName SourceEndPlayCommand(TEXT("pour-r1-source-endplay"));
+    TestTrue(
+        TEXT("source EndPlay proof reserves exact receiver"),
+        ReceiverB.TryReservePourForDevAutomation(
+            ExecutorB,
+            SourceEndPlayCommand,
+            &CarrierB,
+            &SourceB,
+            Code));
+    TestTrue(
+        TEXT("source destruction begins"),
+        SourceB.Destroy());
+    TestFalse(
+        TEXT("source EndPlay releases the exact receiver reservation"),
+        ReceiverB.IsReservedForDevAutomation(
+            ExecutorB, SourceEndPlayCommand));
     return true;
 }
 
