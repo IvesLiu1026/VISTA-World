@@ -186,6 +186,25 @@ Depends on: requirements.md, design.md
     of the four semantic seats, a fresh package and a Sunshine human playtest
     remain open, so this task is intentionally not checked.
 
+- [ ] T17. Integrate one transactional two-target Pour action
+  - Files: pickup/liquid receiver authorities, shared semantic executor,
+    animation adapter, player/NPC/TCP adapters and focused UE/Python proofs
+  - Depends on: T3-T5, T11, T13 as narrowed to the approved R15 CC0 Pour clip
+  - Requirements: R2-R5, R9, R11-R13
+  - Selected action: pour from the exact held source into one exact receiver
+  - Validation: source and receiver reserve as one tuple; the approved contact
+    signal commits one deterministic liquid transfer and zero direct rigid-body
+    mutations; parent-derived world pose during actor alignment is distinguished
+    from item mutation; post-contact failure restores both liquids, requester
+    transform and the exact held-item snapshot; destruction and retry release
+    both halves; player, generic NPC queue and typed TCP use the shared executor
+  - Progress: source integration and the NullRHI automation tests
+    `VISTA.PlayableHome.Pour.ActionExecutorIntegration` and
+    `VISTA.PlayableHome.PourTransactionR1.AtomicTwoTargetMutation` pass. EventSpec
+    v3 deliberately remains closed to Pour pending a separately versioned public
+    schema. Scene composition, a fresh package and Sunshine human playtest remain
+    open, so this task is intentionally not checked.
+
 ## Current Iteration
 
 - Completed: T2 commanded-idle baseline; the current 698-test tool suite plus
@@ -210,6 +229,12 @@ Depends on: requirements.md, design.md
   action ledger. Sit/stand now compensate exact retained snapshots when terminal
   finalization fails, and pickup/place/drop use the same game-thread atomic
   terminal finalizer. This is not yet a packaged or Sunshine-accepted demo.
+- Completed in source and offline UE automation: T17 wires a two-target Pour
+  transaction through the shared executor, player interaction, generic NPC
+  queue and typed TCP. The exact source/receiver pair is signed, both liquid
+  states roll back together and UE 5.7 held-item collision/lifecycle regressions
+  are closed. EventSpec v3 remains fail-closed; no Pour receiver has yet been
+  composed into or human-tested in the live package.
 - Golden Room R2 smoke evidence: append-only accepted forge
   `golden-room-r2-smoke-20260827T212250Z` contains 45 placements, 40 external
   dressing instances, 211 components and seven GLBs. All 424 vertical-slice

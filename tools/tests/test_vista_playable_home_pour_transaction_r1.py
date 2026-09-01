@@ -165,25 +165,37 @@ def test_authority_endplay_cleanup_uses_exact_transaction_identity() -> None:
     pickup_endplay = _between(
         pickup,
         "void AVistaPickupActor::EndPlay(",
+        "void AVistaPickupActor::ReleaseActivePourReservationForEndPlay()",
+    )
+    pickup_cleanup = _between(
+        pickup,
+        "void AVistaPickupActor::ReleaseActivePourReservationForEndPlay()",
         "void AVistaPickupActor::GetLifetimeReplicatedProps(",
     )
     receiver_endplay = _between(
         receiver,
         "void AVistaLiquidReceiverActor::EndPlay(",
+        "void AVistaLiquidReceiverActor::ReleaseActivePourReservationForEndPlay()",
+    )
+    receiver_cleanup = _between(
+        receiver,
+        "void AVistaLiquidReceiverActor::ReleaseActivePourReservationForEndPlay()",
         "void AVistaLiquidReceiverActor::GetLifetimeReplicatedProps(",
     )
 
     assert "virtual void EndPlay(" in pickup_header
     assert "virtual void EndPlay(" in receiver_header
-    assert "if (HasAuthority())" in pickup_endplay
-    assert "ActiveTransactionExecutor.Get()" in pickup_endplay
-    assert "ActiveTransactionCommandId" in pickup_endplay
-    assert "ReleaseReservationForSourceEndPlay(" in pickup_endplay
-    assert "if (HasAuthority())" in receiver_endplay
-    assert "ActiveTransactionExecutor.Get()" in receiver_endplay
-    assert "ActiveTransactionCommandId" in receiver_endplay
-    assert "ReleasePourReservationForReceiverEndPlay(" in receiver_endplay
-    assert "ClearReceiverReservationIfOwned(" in receiver_endplay
+    assert "ReleaseActivePourReservationForEndPlay();" in pickup_endplay
+    assert "if (!HasAuthority())" in pickup_cleanup
+    assert "ActiveTransactionExecutor.Get()" in pickup_cleanup
+    assert "ActiveTransactionCommandId" in pickup_cleanup
+    assert "ReleaseReservationForSourceEndPlay(" in pickup_cleanup
+    assert "ReleaseActivePourReservationForEndPlay();" in receiver_endplay
+    assert "if (HasAuthority())" in receiver_cleanup
+    assert "ActiveTransactionExecutor.Get()" in receiver_cleanup
+    assert "ActiveTransactionCommandId" in receiver_cleanup
+    assert "ReleasePourReservationForReceiverEndPlay(" in receiver_cleanup
+    assert "ClearReceiverReservationIfOwned(" in receiver_cleanup
 
 
 def test_second_mutation_failure_compensates_both_liquids_and_verifies_physics() -> (

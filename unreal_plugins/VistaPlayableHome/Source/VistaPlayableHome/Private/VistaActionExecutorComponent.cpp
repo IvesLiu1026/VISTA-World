@@ -234,7 +234,7 @@ bool PhysicalSnapshotMatchesEffect(
             Snapshot.CollisionEnabled ==
                 static_cast<uint8>(ECollisionEnabled::NoCollision) &&
             Snapshot.CollisionProfileName ==
-                UCollisionProfile::PhysicsActor_ProfileName &&
+                UCollisionProfile::NoCollision_ProfileName &&
             VectorBitsEqual(Snapshot.LinearVelocity, FVector::ZeroVector) &&
             VectorBitsEqual(
                 Snapshot.AngularVelocityDegrees, FVector::ZeroVector) &&

@@ -183,6 +183,12 @@ void AVistaLiquidReceiverActor::BeginPlay()
 void AVistaLiquidReceiverActor::EndPlay(
     const EEndPlayReason::Type EndPlayReason)
 {
+    ReleaseActivePourReservationForEndPlay();
+    Super::EndPlay(EndPlayReason);
+}
+
+void AVistaLiquidReceiverActor::ReleaseActivePourReservationForEndPlay()
+{
     if (HasAuthority())
     {
         UVistaActionExecutorComponent* Executor =
@@ -204,7 +210,6 @@ void AVistaLiquidReceiverActor::EndPlay(
         ReservedRequester.Reset();
         ReservedSource.Reset();
     }
-    Super::EndPlay(EndPlayReason);
 }
 
 void AVistaLiquidReceiverActor::GetLifetimeReplicatedProps(
@@ -634,9 +639,23 @@ bool AVistaLiquidReceiverActor::ReleaseReservationForSourceEndPlay(
     UVistaActionExecutorComponent* Executor,
     FName CommandId)
 {
-    return HasAuthority() &&
-        ClearReceiverReservationIfOwned(
-            Executor, CommandId, Source, false);
+    // Source is already pending kill while its EndPlay override runs. A normal
+    // TWeakObjectPtr::Get() intentionally hides that object, so the ordinary
+    // live-transaction ownership predicate cannot recognize its exact peer.
+    // Match the frozen reservation identity with the pending-kill-aware getter
+    // and clear only that tuple.
+    if (!HasAuthority() || Executor == nullptr || CommandId.IsNone() ||
+        Source == nullptr || ActiveTransactionExecutor.Get() != Executor ||
+        ActiveTransactionCommandId != CommandId ||
+        ReservedSource.Get(true) != Source)
+    {
+        return false;
+    }
+    ActiveTransactionExecutor.Reset();
+    ActiveTransactionCommandId = NAME_None;
+    ReservedRequester.Reset();
+    ReservedSource.Reset();
+    return !IsReserved();
 }
 
 bool AVistaLiquidReceiverActor::TryReservePourTransaction(
@@ -1031,5 +1050,10 @@ void AVistaLiquidReceiverActor::FailNextReceiveCommitForDevAutomation()
 void AVistaLiquidReceiverActor::FailNextReleaseFinalizeForDevAutomation()
 {
     bFailNextReleaseFinalize = true;
+}
+
+void AVistaLiquidReceiverActor::ReleasePourReservationForEndPlayForDevAutomation()
+{
+    ReleaseActivePourReservationForEndPlay();
 }
 #endif

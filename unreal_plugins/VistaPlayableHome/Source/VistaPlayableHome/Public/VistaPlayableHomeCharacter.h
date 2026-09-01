@@ -359,7 +359,8 @@ private:
         const FVector& ReleaseVelocity = FVector::ZeroVector);
     FVistaInteractionResult BeginSemanticInteraction(
         AActor* Target,
-        EVistaAffordance Affordance);
+        EVistaAffordance Affordance,
+        AActor* SecondaryTarget = nullptr);
 
     UFUNCTION(Server, Reliable)
     void ServerPerformDefaultInteraction();

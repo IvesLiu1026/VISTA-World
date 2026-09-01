@@ -9,6 +9,7 @@
 #include "VistaArticulatedFridgeActor.h"
 #include "VistaCharacterProviderComponent.h"
 #include "VistaContainerActor.h"
+#include "VistaLiquidReceiverActor.h"
 #include "VistaPostureComponent.h"
 #include "VistaSeatActor.h"
 #include "VistaStatefulApplianceActor.h"
@@ -63,6 +64,9 @@ constexpr const TCHAR* MakeHumanCc0SeatedIdleMontage =
 constexpr const TCHAR* MakeHumanCc0StandMontage =
     TEXT("/Game/VISTA/MakeHumanCC0/R15/DetailActions/Montages/"
          "AM_VistaCC0StandUpChair_R15.AM_VistaCC0StandUpChair_R15");
+constexpr const TCHAR* MakeHumanCc0PourMontage =
+    TEXT("/Game/VISTA/MakeHumanCC0/R15/DetailActions/Montages/"
+         "AM_VistaCC0PourRight_R15.AM_VistaCC0PourRight_R15");
 
 TSoftObjectPtr<UAnimMontage> Montage(const TCHAR* ObjectPath)
 {
@@ -96,6 +100,11 @@ bool IsPostureCandidateAction(const EVistaNpcActionType Type)
 {
     return Type == EVistaNpcActionType::Sit || Type == EVistaNpcActionType::SeatedIdle ||
            Type == EVistaNpcActionType::StandUp;
+}
+
+bool IsPourCandidateAction(const EVistaNpcActionType Type)
+{
+    return Type == EVistaNpcActionType::Pour;
 }
 
 bool ResolveAuthoredInteractionPoint(
@@ -174,6 +183,7 @@ bool UVistaAnimationComponent::SupportsAction(EVistaNpcActionType Type)
     case EVistaNpcActionType::Sit:
     case EVistaNpcActionType::SeatedIdle:
     case EVistaNpcActionType::StandUp:
+    case EVistaNpcActionType::Pour:
     case EVistaNpcActionType::PickUp:
     case EVistaNpcActionType::Place:
     case EVistaNpcActionType::Drop:
@@ -210,6 +220,30 @@ bool UVistaAnimationComponent::HasApprovedMutationAnimation(
     const AActor* Target,
     FName& OutCode) const
 {
+    if (IsPourCandidateAction(Type))
+    {
+        if (!IsMakeHumanCc0R8Active(GetOwner()))
+        {
+            OutCode = TEXT("ANIMATION_CC0_PROVIDER_REQUIRED");
+            return false;
+        }
+        if (!IsValid(Target))
+        {
+            OutCode = TEXT("ANIMATION_TARGET_PREFLIGHT_DEFERRED");
+            return true;
+        }
+        const AVistaLiquidReceiverActor* Receiver =
+            Cast<AVistaLiquidReceiverActor>(Target);
+        if (!IsValid(Receiver) || !IsValid(Receiver->PourTarget) ||
+            !Receiver->PourTarget->ComponentHasTag(
+                TEXT("VistaInteractionTarget")))
+        {
+            OutCode = TEXT("ANIMATION_POUR_TARGET_REQUIRED");
+            return false;
+        }
+        OutCode = TEXT("ANIMATION_CC0_SOURCE_APPROVED");
+        return true;
+    }
     if (IsPostureCandidateAction(Type))
     {
         if (!IsMakeHumanCc0R8Active(GetOwner()))
@@ -337,6 +371,25 @@ bool UVistaAnimationComponent::ResolveMontage(
     TSoftObjectPtr<UAnimMontage>& OutMontage,
     FName& OutCode) const
 {
+    if (IsPourCandidateAction(Type))
+    {
+        if (!IsValid(Cast<AVistaLiquidReceiverActor>(Target)) ||
+            !IsMakeHumanCc0R8Active(GetOwner()))
+        {
+            OutCode = TEXT("ANIMATION_POUR_BINDING_UNAVAILABLE");
+            return false;
+        }
+        OutMontage = Montage(MakeHumanCc0PourMontage);
+        if (!OutMontage.ToSoftObjectPath().ToString().StartsWith(
+                MakeHumanCc0R15DetailMontageRoot,
+                ESearchCase::CaseSensitive))
+        {
+            OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
+            return false;
+        }
+        OutCode = TEXT("ANIMATION_MONTAGE_RESOLVED");
+        return true;
+    }
     if (IsPostureCandidateAction(Type))
     {
         if (!IsValid(Cast<AVistaSeatActor>(Target)) || !IsMakeHumanCc0R8Active(GetOwner()))
@@ -487,6 +540,8 @@ FName UVistaAnimationComponent::CompletionSignalFor(EVistaNpcActionType Type)
         return TEXT("vista_seated_idle_cycle_completed");
     case EVistaNpcActionType::StandUp:
         return TEXT("vista_stand_completed");
+    case EVistaNpcActionType::Pour:
+        return TEXT("vista_pour_completed");
     case EVistaNpcActionType::PickUp: return TEXT("vista_pickup_completed");
     case EVistaNpcActionType::Place:
     case EVistaNpcActionType::Drop: return TEXT("vista_drop_completed");
@@ -523,6 +578,8 @@ FName UVistaAnimationComponent::ContactSignalFor(EVistaNpcActionType Type)
         return TEXT("vista_sit_completed");
     case EVistaNpcActionType::StandUp:
         return TEXT("vista_stand_completed");
+    case EVistaNpcActionType::Pour:
+        return TEXT("vista_pour_tilt_contact");
     default: return NAME_None;
     }
 }

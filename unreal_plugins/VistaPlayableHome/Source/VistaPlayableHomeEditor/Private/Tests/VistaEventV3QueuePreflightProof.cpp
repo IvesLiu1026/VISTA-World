@@ -37,7 +37,8 @@ bool ActionResultsExactlyMatch(const FVistaNpcActionResult &Left,
                                const FVistaNpcActionResult &Right) {
   return Left.ActionId == Right.ActionId && Left.Status == Right.Status &&
          Left.Code == Right.Code &&
-         Left.TargetSemanticId == Right.TargetSemanticId;
+         Left.TargetSemanticId == Right.TargetSemanticId &&
+         Left.SecondaryTargetSemanticId == Right.SecondaryTargetSemanticId;
 }
 
 struct FReadOnlySnapshot final {
@@ -222,6 +223,27 @@ bool FVistaEventV3QueuePreflightProof::RunTest(const FString &Parameters) {
             BadDigestResult.Code,
             FName(TEXT("SIDECAR_CONTENT_DIGEST_INVALID")));
   TestTrue(TEXT("digest failure is exactly read-only"),
+           SnapshotsExactlyMatch(Initial,
+                                 Snapshot(*Events, *Controller, Npc, Target)));
+
+  FVistaNpcAction UnsupportedPour;
+  UnsupportedPour.ActionId = TEXT("mmg001.pour.unsupported");
+  UnsupportedPour.Type = EVistaNpcActionType::Pour;
+  UnsupportedPour.TargetSemanticId = ProofTargetId;
+  UnsupportedPour.SecondaryTargetSemanticId =
+      TEXT("home.r1/room.living/entity.receiver.01");
+  UnsupportedPour.TimeoutSeconds = 20.0f;
+  const FVistaLiveNpcQueuePreflightResult UnsupportedPourResult =
+      Runtime->PreflightNpcQueue(PreflightCommand(
+          TEXT("vwc-000000000000000000000009"),
+          0,
+          {UnsupportedPour}));
+  TestFalse(TEXT("EventSpec v3 rejects the generic Pour extension"),
+            UnsupportedPourResult.bSucceeded);
+  TestEqual(TEXT("unsupported extension has a typed runtime code"),
+            UnsupportedPourResult.Code,
+            FName(TEXT("EVENT_V3_ACTION_UNSUPPORTED")));
+  TestTrue(TEXT("unsupported extension rejection is exactly read-only"),
            SnapshotsExactlyMatch(Initial,
                                  Snapshot(*Events, *Controller, Npc, Target)));
 

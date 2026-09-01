@@ -186,6 +186,35 @@ def test_v2_queue_drift_and_unknown_fields_are_rejected() -> None:
     assert_error("VISTA_HOME_EVENT_V3_SCHEMA_INVALID", widened)
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("action", "pour"),
+        (
+            "secondary_target_id",
+            "home.r1/room.kitchen_dining/entity.drinking_glass.01",
+        ),
+    ],
+)
+def test_eventspec_v3_stays_closed_to_pour_extensions(
+    field: str, value: str
+) -> None:
+    event = copy.deepcopy(V3_EVENTS["mmg_001"])
+    action = event["npc_action_queues"][0]["actions"][0]
+    action[field] = value
+    assert_error("VISTA_HOME_EVENT_V3_SCHEMA_INVALID", reseal(event))
+
+
+def test_pour_still_fails_the_semantic_allowlist_if_schema_is_bypassed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    event = copy.deepcopy(V3_EVENTS["mmg_001"])
+    event["npc_action_queues"][0]["actions"][0]["action"] = "pour"
+    event = reseal(event)
+    monkeypatch.setattr(contract, "_validate_schema", lambda _event: None)
+    assert_error("VISTA_HOME_EVENT_V3_ACTION_UNSUPPORTED", event)
+
+
 def test_forged_source_v2_cannot_redefine_the_preserved_queue() -> None:
     source = copy.deepcopy(V2_EVENTS["mmg_040"])
     source["initial_operations"][-1]["actions"].pop()

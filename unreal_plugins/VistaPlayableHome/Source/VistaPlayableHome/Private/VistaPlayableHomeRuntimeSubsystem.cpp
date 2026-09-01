@@ -107,6 +107,21 @@ bool IsClosedActionId(const FString& Value)
     }
     return true;
 }
+
+bool IsEventV3RuntimeAction(const EVistaNpcActionType Type)
+{
+    return Type == EVistaNpcActionType::NavigateTo ||
+        Type == EVistaNpcActionType::Inspect ||
+        Type == EVistaNpcActionType::PickUp ||
+        Type == EVistaNpcActionType::Place ||
+        Type == EVistaNpcActionType::Drop ||
+        Type == EVistaNpcActionType::OpenDoor ||
+        Type == EVistaNpcActionType::CloseDoor ||
+        Type == EVistaNpcActionType::Toggle ||
+        Type == EVistaNpcActionType::Press ||
+        Type == EVistaNpcActionType::TurnOn ||
+        Type == EVistaNpcActionType::TurnOff;
+}
 } // namespace
 
 EVistaPhysicalCommandClaimOutcome
@@ -497,6 +512,8 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteInteraction(
             SemanticRequest.CommandId = Command.Envelope.CommandId;
             SemanticRequest.RequesterSemanticId = Command.RequesterSemanticId;
             SemanticRequest.TargetSemanticId = Command.TargetSemanticId;
+            SemanticRequest.SecondaryTargetSemanticId =
+                Command.SecondaryTargetSemanticId;
             SemanticRequest.Affordance = Command.Affordance;
             SemanticRequest.ExpectedRevision = Command.Envelope.ExpectedRevision;
             SemanticRequest.SessionGeneration = Command.Envelope.SessionGeneration;
@@ -542,6 +559,33 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteInteraction(
         !Target->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()))
     {
         Output.Code = TEXT("TARGET_NOT_INTERACTABLE");
+        return Output;
+    }
+    const bool bPour = Command.Affordance == EVistaAffordance::Pour;
+    if (bPour && Command.SecondaryTargetSemanticId.IsEmpty())
+    {
+        Output.Code = TEXT("POUR_RECEIVER_REQUIRED");
+        return Output;
+    }
+    if (bPour &&
+        Command.SecondaryTargetSemanticId == Command.TargetSemanticId)
+    {
+        Output.Code = TEXT("POUR_TARGETS_MUST_DIFFER");
+        return Output;
+    }
+    if (!bPour && !Command.SecondaryTargetSemanticId.IsEmpty())
+    {
+        Output.Code = TEXT("SECONDARY_TARGET_UNEXPECTED");
+        return Output;
+    }
+    AActor* SecondaryTarget = bPour
+        ? ResolveSemanticActor(Command.SecondaryTargetSemanticId) : nullptr;
+    if (bPour &&
+        (!IsValid(SecondaryTarget) ||
+         !SecondaryTarget->GetClass()->ImplementsInterface(
+             UVistaInteractable::StaticClass())))
+    {
+        Output.Code = TEXT("POUR_RECEIVER_NOT_INTERACTABLE");
         return Output;
     }
 
@@ -599,6 +643,7 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteInteraction(
         }
         SemanticRequest.Requester = Requester;
         SemanticRequest.Target = Target;
+        SemanticRequest.SecondaryTarget = SecondaryTarget;
         SemanticRequest.TimeoutSeconds = 10.0f;
         FVistaActionTransactionRecord Transaction;
         Executor->BeginSemanticInteraction(SemanticRequest, Transaction);
@@ -764,6 +809,12 @@ UVistaPlayableHomeRuntimeSubsystem::PreflightNpcQueue(
     TSet<FName> ActionIds;
     for (const FVistaNpcAction& Action : Command.Actions)
     {
+        if (!IsEventV3RuntimeAction(Action.Type) ||
+            !Action.SecondaryTargetSemanticId.IsEmpty())
+        {
+            Output.Code = TEXT("EVENT_V3_ACTION_UNSUPPORTED");
+            return Output;
+        }
         if (!IsClosedActionId(Action.ActionId.ToString()))
         {
             Output.Code = TEXT("ACTION_ID_INVALID");

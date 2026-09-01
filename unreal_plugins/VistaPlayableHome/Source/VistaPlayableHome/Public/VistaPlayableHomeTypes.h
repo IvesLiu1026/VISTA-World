@@ -372,6 +372,10 @@ struct VISTAPLAYABLEHOME_API FVistaActionTransactionRecord
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     int32 StateMutationCount = 0;
 
+    /** Exact liquid volume transferred by a successful two-target Pour. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    float LiquidTransferMilliliters = 0.0f;
+
     /** True only after a mutable semantic target accepted this transaction. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     bool bTargetReservationAcquired = false;
@@ -543,6 +547,9 @@ struct VISTAPLAYABLEHOME_API FVistaNpcActionResult
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA")
     FString TargetSemanticId;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA")
+    FString SecondaryTargetSemanticId;
 };
 
 UENUM(BlueprintType)

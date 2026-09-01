@@ -473,31 +473,37 @@ void AVistaPickupActor::BeginPlay()
 void AVistaPickupActor::EndPlay(
     const EEndPlayReason::Type EndPlayReason)
 {
-    if (HasAuthority())
-    {
-        UVistaActionExecutorComponent* Executor =
-            ActiveTransactionExecutor.Get();
-        const FName CommandId = ActiveTransactionCommandId;
-        AVistaLiquidReceiverActor* Receiver = ActivePourReceiver.Get();
-        if (Executor != nullptr && !CommandId.IsNone() &&
-            Receiver != nullptr &&
-            IsPourTransactionReservedBy(Executor, CommandId, Receiver))
-        {
-            Receiver->ReleaseReservationForSourceEndPlay(
-                this, Executor, CommandId);
-        }
-
-        // Clear only the identity captured on entry. A different transaction
-        // can never be released as a side effect of peer teardown.
-        if (ActiveTransactionExecutor.Get() == Executor &&
-            ActiveTransactionCommandId == CommandId)
-        {
-            ActivePourReceiver.Reset();
-            ActiveTransactionExecutor.Reset();
-            ActiveTransactionCommandId = NAME_None;
-        }
-    }
+    ReleaseActivePourReservationForEndPlay();
     Super::EndPlay(EndPlayReason);
+}
+
+void AVistaPickupActor::ReleaseActivePourReservationForEndPlay()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+    UVistaActionExecutorComponent* Executor =
+        ActiveTransactionExecutor.Get();
+    const FName CommandId = ActiveTransactionCommandId;
+    AVistaLiquidReceiverActor* Receiver = ActivePourReceiver.Get();
+    if (Executor != nullptr && !CommandId.IsNone() &&
+        Receiver != nullptr &&
+        IsPourTransactionReservedBy(Executor, CommandId, Receiver))
+    {
+        Receiver->ReleaseReservationForSourceEndPlay(
+            this, Executor, CommandId);
+    }
+
+    // Clear only the identity captured on entry. A different transaction can
+    // never be released as a side effect of peer teardown.
+    if (ActiveTransactionExecutor.Get() == Executor &&
+        ActiveTransactionCommandId == CommandId)
+    {
+        ActivePourReceiver.Reset();
+        ActiveTransactionExecutor.Reset();
+        ActiveTransactionCommandId = NAME_None;
+    }
 }
 
 void AVistaPickupActor::GetLifetimeReplicatedProps(
@@ -925,8 +931,10 @@ bool AVistaPickupActor::ReleasePourReservationForReceiverEndPlay(
     UVistaActionExecutorComponent* Executor,
     FName CommandId)
 {
-    if (!HasAuthority() ||
-        !IsPourTransactionReservedBy(Executor, CommandId, Receiver))
+    if (!HasAuthority() || Receiver == nullptr || Executor == nullptr ||
+        CommandId.IsNone() || ActiveTransactionExecutor.Get() != Executor ||
+        ActiveTransactionCommandId != CommandId ||
+        ActivePourReceiver.Get(true) != Receiver)
     {
         return false;
     }
@@ -1129,6 +1137,11 @@ void AVistaPickupActor::FailNextPourReleaseForDevAutomation()
 {
     bFailNextPourRelease = true;
 }
+
+void AVistaPickupActor::ReleasePourReservationForEndPlayForDevAutomation()
+{
+    ReleaseActivePourReservationForEndPlay();
+}
 #endif
 
 FVistaInteractionResult AVistaPickupActor::CommitTransactionalInteraction(
@@ -1250,7 +1263,7 @@ FVistaInteractionResult AVistaPickupActor::TryAttachTo(AActor* Carrier)
     PhysicalDisposition.CollisionEnabled =
         static_cast<uint8>(ECollisionEnabled::NoCollision);
     PhysicalDisposition.CollisionProfileName =
-        UCollisionProfile::PhysicsActor_ProfileName;
+        UCollisionProfile::NoCollision_ProfileName;
     PhysicalDisposition.LinearVelocity = FVector::ZeroVector;
     PhysicalDisposition.AngularVelocityDegrees = FVector::ZeroVector;
     if (!ApplyPhysicalDisposition() || !CarrierInventoryHolds(Carrier, this))
@@ -1732,8 +1745,9 @@ FVistaInteractionResult AVistaPickupActor::RestorePhysicalStateTrusted(
 
     FVistaPickupReplicatedDisposition Desired;
     Desired.WorldTransform = State.Transform;
-    Desired.CollisionProfileName =
-        UCollisionProfile::PhysicsActor_ProfileName;
+    Desired.CollisionProfileName = bRestoreHeld
+        ? UCollisionProfile::NoCollision_ProfileName
+        : UCollisionProfile::PhysicsActor_ProfileName;
     Desired.CollisionEnabled = bRestoreHeld
         ? static_cast<uint8>(ECollisionEnabled::NoCollision)
         : static_cast<uint8>(ECollisionEnabled::QueryAndPhysics);

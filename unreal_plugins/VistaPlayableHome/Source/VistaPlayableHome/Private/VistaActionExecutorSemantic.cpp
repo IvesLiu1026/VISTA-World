@@ -8,6 +8,8 @@
 #include "VistaContainerActor.h"
 #include "VistaEventSubsystem.h"
 #include "VistaInteractable.h"
+#include "VistaLiquidReceiverActor.h"
+#include "VistaPickupActor.h"
 #include "VistaPlayableHomeRuntimeSubsystem.h"
 #include "VistaPostureComponent.h"
 #include "VistaSeatActor.h"
@@ -69,6 +71,50 @@ bool RuntimeStatesEquivalent(
     return true;
 }
 
+bool LiquidStatesEquivalent(
+    const FVistaLiquidStateSnapshot& Left,
+    const FVistaLiquidStateSnapshot& Right)
+{
+    return Left.bPourable == Right.bPourable &&
+        Left.LiquidType == Right.LiquidType &&
+        FPlatformMemory::Memcmp(
+            &Left.CapacityMilliliters,
+            &Right.CapacityMilliliters,
+            sizeof(float)) == 0 &&
+        FPlatformMemory::Memcmp(
+            &Left.AmountMilliliters,
+            &Right.AmountMilliliters,
+            sizeof(float)) == 0;
+}
+
+bool HeldPhysicalStateStableAcrossAlignment(
+    const FVistaPickupPhysicalStateSnapshot& Before,
+    const FVistaPickupPhysicalStateSnapshot& Aligned)
+{
+    return Before.bSimulatePhysics == Aligned.bSimulatePhysics &&
+        Before.CollisionEnabled == Aligned.CollisionEnabled &&
+        Before.CollisionProfileName == Aligned.CollisionProfileName &&
+        Before.LinearVelocity == Aligned.LinearVelocity &&
+        Before.AngularVelocityDegrees == Aligned.AngularVelocityDegrees &&
+        Before.bHasAttachmentParent == Aligned.bHasAttachmentParent &&
+        Before.AttachmentParentOwnerSemanticId ==
+            Aligned.AttachmentParentOwnerSemanticId &&
+        Before.AttachmentParentComponentName ==
+            Aligned.AttachmentParentComponentName &&
+        Before.AttachmentSocketName == Aligned.AttachmentSocketName &&
+        Before.AttachmentRelativeTransform.Equals(
+            Aligned.AttachmentRelativeTransform, 0.0f) &&
+        Before.bHeld == Aligned.bHeld &&
+        Before.CarrierSemanticId == Aligned.CarrierSemanticId &&
+        Before.InventoryCarrierSemanticId ==
+            Aligned.InventoryCarrierSemanticId &&
+        Before.bInventorySlotOccupied ==
+            Aligned.bInventorySlotOccupied &&
+        Before.InventoryItemSemanticId ==
+            Aligned.InventoryItemSemanticId &&
+        Before.PlacedAtSemanticId == Aligned.PlacedAtSemanticId;
+}
+
 EVistaNpcActionType AnimationTypeFor(const EVistaAffordance Affordance)
 {
     switch (Affordance)
@@ -84,6 +130,8 @@ EVistaNpcActionType AnimationTypeFor(const EVistaAffordance Affordance)
         return EVistaNpcActionType::Sit;
     case EVistaAffordance::Stand:
         return EVistaNpcActionType::StandUp;
+    case EVistaAffordance::Pour:
+        return EVistaNpcActionType::Pour;
     default: return EVistaNpcActionType::Wait;
     }
 }
@@ -189,6 +237,7 @@ bool UVistaActionExecutorComponent::IsAnimatedSemanticAffordance(
         Affordance == EVistaAffordance::Inspect ||
         Affordance == EVistaAffordance::Sit ||
         Affordance == EVistaAffordance::Stand ||
+        Affordance == EVistaAffordance::Pour ||
         AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
             Affordance);
 }
@@ -202,11 +251,16 @@ FString UVistaActionExecutorComponent::CanonicalSemanticRequestHex(
     const FString TargetId = Request.TargetSemanticId.IsEmpty()
         ? SemanticIdForActor(Request.Target)
         : Request.TargetSemanticId;
+    const FString SecondaryTargetId =
+        Request.SecondaryTargetSemanticId.IsEmpty()
+        ? SemanticIdForActor(Request.SecondaryTarget)
+        : Request.SecondaryTargetSemanticId;
     TArray<uint8> Bytes;
-    Bytes.Reserve(192);
-    AppendUtf8(Bytes, TEXT("vista.semantic-command/v1"));
+    Bytes.Reserve(256);
+    AppendUtf8(Bytes, TEXT("vista.semantic-command/v2"));
     AppendUtf8(Bytes, RequesterId);
     AppendUtf8(Bytes, TargetId);
+    AppendUtf8(Bytes, SecondaryTargetId);
     Bytes.Add(static_cast<uint8>(Request.Affordance));
     AppendUtf8(Bytes, Request.ExpectedRevision.ToString());
     AppendUInt32(Bytes, static_cast<uint32>(Request.SessionGeneration));
@@ -232,6 +286,10 @@ void UVistaActionExecutorComponent::SetRejectedSemanticRecord(
     OutRecord.TargetSemanticId = Request.TargetSemanticId.IsEmpty()
         ? SemanticIdForActor(Request.Target)
         : Request.TargetSemanticId;
+    OutRecord.SecondaryTargetSemanticId =
+        Request.SecondaryTargetSemanticId.IsEmpty()
+        ? SemanticIdForActor(Request.SecondaryTarget)
+        : Request.SecondaryTargetSemanticId;
     OutRecord.Status = EVistaActionTransactionStatus::Failed;
     OutRecord.Phase = EVistaActionPhase::Idle;
     OutRecord.Code = Code;
@@ -343,6 +401,9 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
     }
     AActor* Requester = InputRequest.Requester;
     AActor* Target = InputRequest.Target;
+    AActor* SecondaryTarget = InputRequest.SecondaryTarget;
+    const bool bPourMutation =
+        InputRequest.Affordance == EVistaAffordance::Pour;
     if (!IsValid(Requester) || !IsValid(Target) ||
         !Target->GetClass()->ImplementsInterface(
             UVistaInteractable::StaticClass()))
@@ -351,6 +412,34 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
             InputRequest,
             CanonicalRequest,
             TEXT("SEMANTIC_PARTICIPANT_INVALID"),
+            OutRecord);
+    }
+    AVistaPickupActor* PourSource = bPourMutation
+        ? Cast<AVistaPickupActor>(Target) : nullptr;
+    AVistaLiquidReceiverActor* PourReceiver = bPourMutation
+        ? Cast<AVistaLiquidReceiverActor>(SecondaryTarget) : nullptr;
+    if (bPourMutation &&
+        (!IsValid(PourSource) || !IsValid(PourReceiver) ||
+         Target == SecondaryTarget ||
+         !SecondaryTarget->GetClass()->ImplementsInterface(
+             UVistaInteractable::StaticClass())))
+    {
+        return RejectSemanticRequest(
+            InputRequest,
+            CanonicalRequest,
+            !IsValid(PourSource)
+                ? FName(TEXT("POUR_SOURCE_REQUIRED"))
+                : FName(TEXT("POUR_RECEIVER_REQUIRED")),
+            OutRecord);
+    }
+    if (!bPourMutation &&
+        (InputRequest.SecondaryTarget != nullptr ||
+         !InputRequest.SecondaryTargetSemanticId.IsEmpty()))
+    {
+        return RejectSemanticRequest(
+            InputRequest,
+            CanonicalRequest,
+            TEXT("SECONDARY_TARGET_FORBIDDEN"),
             OutRecord);
     }
     const bool bApplianceMutation =
@@ -385,7 +474,8 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
             OutRecord);
     }
     if (!IsValid(GetWorld()) || Requester->GetWorld() != GetWorld() ||
-        Target->GetWorld() != GetWorld())
+        Target->GetWorld() != GetWorld() ||
+        (bPourMutation && SecondaryTarget->GetWorld() != GetWorld()))
     {
         return RejectSemanticRequest(
             InputRequest,
@@ -393,7 +483,8 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
             TEXT("ACTION_WORLD_MISMATCH"),
             OutRecord);
     }
-    if (!Requester->HasAuthority() || !Target->HasAuthority())
+    if (!Requester->HasAuthority() || !Target->HasAuthority() ||
+        (bPourMutation && !SecondaryTarget->HasAuthority()))
     {
         return RejectSemanticRequest(
             InputRequest,
@@ -421,16 +512,35 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
             TEXT("AFFORDANCE_UNSUPPORTED"),
             OutRecord);
     }
+    if (bPourMutation)
+    {
+        const TArray<EVistaAffordance> SecondaryAffordances =
+            IVistaInteractable::Execute_VistaGetAffordances(SecondaryTarget);
+        if (!SecondaryAffordances.Contains(EVistaAffordance::Pour))
+        {
+            return RejectSemanticRequest(
+                InputRequest,
+                CanonicalRequest,
+                TEXT("POUR_RECEIVER_UNSUPPORTED"),
+                OutRecord);
+        }
+    }
 
     FVistaSemanticActionRequest Request = InputRequest;
     Request.RequesterSemanticId = SemanticIdForActor(Requester);
     Request.TargetSemanticId = SemanticIdForActor(Target);
+    Request.SecondaryTargetSemanticId = bPourMutation
+        ? SemanticIdForActor(SecondaryTarget) : FString();
     if (Request.RequesterSemanticId.IsEmpty() ||
         Request.TargetSemanticId.IsEmpty() ||
+        (bPourMutation && Request.SecondaryTargetSemanticId.IsEmpty()) ||
         (!InputRequest.RequesterSemanticId.IsEmpty() &&
          InputRequest.RequesterSemanticId != Request.RequesterSemanticId) ||
         (!InputRequest.TargetSemanticId.IsEmpty() &&
-         InputRequest.TargetSemanticId != Request.TargetSemanticId))
+         InputRequest.TargetSemanticId != Request.TargetSemanticId) ||
+        (!InputRequest.SecondaryTargetSemanticId.IsEmpty() &&
+         InputRequest.SecondaryTargetSemanticId !=
+             Request.SecondaryTargetSemanticId))
     {
         return RejectSemanticRequest(
             InputRequest,
@@ -446,9 +556,10 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
         : FName(TEXT("ANIMATION_COMPONENT_UNAVAILABLE"));
     const EVistaNpcActionType AnimationType =
         AnimationTypeFor(Request.Affordance);
+    AActor* AnimationTarget = bPourMutation ? SecondaryTarget : Target;
     bool bAnimationReady = IsValid(Animation) &&
         Animation->HasApprovedMutationAnimation(
-            AnimationType, Target, AnimationCode);
+            AnimationType, AnimationTarget, AnimationCode);
 #if WITH_DEV_AUTOMATION_TESTS
     bAnimationReady = bAnimationReady ||
         bDevAutomationBypassesAnimationReadiness;
@@ -466,6 +577,9 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
     Active.CanonicalRequest = CanonicalRequest;
     Active.Requester = Requester;
     Active.Target = Target;
+    Active.SecondaryTarget = SecondaryTarget;
+    Active.PourSource = PourSource;
+    Active.PourReceiver = PourReceiver;
     Active.Animation = Animation;
     Active.Posture = Posture;
     Active.StartedAtSeconds = GetWorld()->GetTimeSeconds();
@@ -473,6 +587,8 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
     Active.Record.Affordance = Request.Affordance;
     Active.Record.RequesterSemanticId = Request.RequesterSemanticId;
     Active.Record.TargetSemanticId = Request.TargetSemanticId;
+    Active.Record.SecondaryTargetSemanticId =
+        Request.SecondaryTargetSemanticId;
     Active.Record.Status = EVistaActionTransactionStatus::Running;
     Active.Record.Code = TEXT("ACTION_ACCEPTED");
     Active.Record.SessionGeneration = Request.SessionGeneration;
@@ -489,7 +605,51 @@ bool UVistaActionExecutorComponent::BeginSemanticInteractionImpl(
             TEXT("BEFORE_STATE_INVALID"),
             OutRecord);
     }
-    if (bApplianceMutation)
+    if (bPourMutation)
+    {
+        Active.Record.BeforeSecondaryState =
+            IVistaInteractable::Execute_VistaGetRuntimeState(SecondaryTarget);
+        Active.Record.bHasBeforeSecondaryState = true;
+        FName PourCode;
+        if (Active.Record.BeforeSecondaryState.SemanticId !=
+                Request.SecondaryTargetSemanticId ||
+            Active.Record.BeforeSecondaryState.Transform.ContainsNaN() ||
+            !PourSource->CapturePourTransactionState(
+                Requester,
+                Active.PourSourceBefore,
+                Active.Record.BeforePhysicalState,
+                PourCode))
+        {
+            return RejectSemanticRequest(
+                InputRequest,
+                CanonicalRequest,
+                PourCode.IsNone()
+                    ? FName(TEXT("POUR_BEFORE_STATE_INVALID")) : PourCode,
+                OutRecord);
+        }
+        Active.PourReceiverBefore = PourReceiver->GetLiquidState();
+        Active.bHasPourSnapshots = true;
+        Active.Record.bHasBeforePhysicalState = true;
+        if (!PourReceiver->TryReservePourTransaction(
+                this,
+                Request.CommandId,
+                Requester,
+                PourSource,
+                PourCode))
+        {
+            return RejectSemanticRequest(
+                InputRequest,
+                CanonicalRequest,
+                PourCode.IsNone()
+                    ? FName(TEXT("POUR_TARGETS_BUSY")) : PourCode,
+                OutRecord);
+        }
+        Active.bTargetReserved = true;
+        Active.bSecondaryTargetReserved = true;
+        Active.Record.bTargetReservationAcquired = true;
+        Active.Record.bSecondaryTargetReservationAcquired = true;
+    }
+    else if (bApplianceMutation)
     {
         if (!Appliance->TryReserveTransaction(this, Request.CommandId))
         {
@@ -603,9 +763,13 @@ bool UVistaActionExecutorComponent::DriveSemanticInteractionForDevAutomation(
     return bFailAfterContact
         ? OutRecord.Status == EVistaActionTransactionStatus::Failed &&
             OutRecord.bRollbackAttempted && OutRecord.bRolledBack &&
-            OutRecord.bTargetReservationReleased
+            OutRecord.bTargetReservationReleased &&
+            (OutRecord.Affordance != EVistaAffordance::Pour ||
+             OutRecord.bSecondaryTargetReservationReleased)
         : OutRecord.Status == EVistaActionTransactionStatus::Succeeded &&
-            OutRecord.bTargetReservationReleased;
+            OutRecord.bTargetReservationReleased &&
+            (OutRecord.Affordance != EVistaAffordance::Pour ||
+             OutRecord.bSecondaryTargetReservationReleased);
 }
 #endif
 
@@ -643,8 +807,11 @@ void UVistaActionExecutorComponent::TickSemanticAction()
 void UVistaActionExecutorComponent::AdvanceSemanticApproach()
 {
     AActor* Requester = ActiveSemanticAction->Requester.Get();
-    AActor* Target = ActiveSemanticAction->Target.Get();
-    if (!IsValid(Requester) || !IsValid(Target))
+    AActor* InteractionTarget =
+        ActiveSemanticAction->Request.Affordance == EVistaAffordance::Pour
+        ? ActiveSemanticAction->SecondaryTarget.Get()
+        : ActiveSemanticAction->Target.Get();
+    if (!IsValid(Requester) || !IsValid(InteractionTarget))
     {
         FinishSemanticFailure(
             EVistaActionTransactionStatus::Failed,
@@ -652,7 +819,7 @@ void UVistaActionExecutorComponent::AdvanceSemanticApproach()
         return;
     }
     FVector ContactLocation;
-    if (!ResolveContactLocation(Target, ContactLocation))
+    if (!ResolveContactLocation(InteractionTarget, ContactLocation))
     {
         FinishSemanticFailure(
             EVistaActionTransactionStatus::Failed,
@@ -679,7 +846,11 @@ void UVistaActionExecutorComponent::AdvanceSemanticAlign()
 {
     AActor* Requester = ActiveSemanticAction->Requester.Get();
     AActor* Target = ActiveSemanticAction->Target.Get();
-    if (!IsValid(Requester) || !IsValid(Target))
+    AActor* InteractionTarget =
+        ActiveSemanticAction->Request.Affordance == EVistaAffordance::Pour
+        ? ActiveSemanticAction->SecondaryTarget.Get() : Target;
+    if (!IsValid(Requester) || !IsValid(Target) ||
+        !IsValid(InteractionTarget))
     {
         FinishSemanticFailure(
             EVistaActionTransactionStatus::Failed,
@@ -687,7 +858,7 @@ void UVistaActionExecutorComponent::AdvanceSemanticAlign()
         return;
     }
     FVector ContactLocation;
-    if (!ResolveContactLocation(Target, ContactLocation))
+    if (!ResolveContactLocation(InteractionTarget, ContactLocation))
     {
         FinishSemanticFailure(
             EVistaActionTransactionStatus::Failed,
@@ -749,6 +920,38 @@ void UVistaActionExecutorComponent::AdvanceSemanticAlign()
                 TEXT("ACTION_ALIGNMENT_FAILED"));
             return;
         }
+        if (ActiveSemanticAction->Request.Affordance ==
+            EVistaAffordance::Pour)
+        {
+            AVistaPickupActor* Source =
+                ActiveSemanticAction->PourSource.Get();
+            FVistaLiquidStateSnapshot AlignedLiquid;
+            FVistaPickupPhysicalStateSnapshot AlignedPhysical;
+            FName PourCode;
+            if (!IsValid(Source) ||
+                !Source->CapturePourTransactionState(
+                    Requester,
+                    AlignedLiquid,
+                    AlignedPhysical,
+                    PourCode) ||
+                !LiquidStatesEquivalent(
+                    AlignedLiquid,
+                    ActiveSemanticAction->PourSourceBefore) ||
+                !HeldPhysicalStateStableAcrossAlignment(
+                    ActiveSemanticAction->Record.BeforePhysicalState,
+                    AlignedPhysical))
+            {
+                FinishSemanticFailure(
+                    EVistaActionTransactionStatus::Failed,
+                    PourCode.IsNone()
+                        ? FName(TEXT("POUR_ALIGNMENT_SOURCE_DRIFT"))
+                        : PourCode);
+                return;
+            }
+            ActiveSemanticAction->PourSourceAlignedPhysical =
+                AlignedPhysical;
+            ActiveSemanticAction->bHasPourAlignedPhysical = true;
+        }
     }
     if (!TransitionSemantic(EVistaActionPhase::Animate, TEXT("ACTION_ANIMATE")))
     {
@@ -762,8 +965,11 @@ bool UVistaActionExecutorComponent::StartSemanticAnimation(FName& OutCode)
 {
     UVistaAnimationComponent* Animation =
         ActiveSemanticAction->Animation.Get();
-    AActor* Target = ActiveSemanticAction->Target.Get();
-    if (!IsValid(Animation) || !IsValid(Target))
+    AActor* AnimationTarget =
+        ActiveSemanticAction->Request.Affordance == EVistaAffordance::Pour
+        ? ActiveSemanticAction->SecondaryTarget.Get()
+        : ActiveSemanticAction->Target.Get();
+    if (!IsValid(Animation) || !IsValid(AnimationTarget))
     {
         OutCode = TEXT("ANIMATION_COMPONENT_OR_TARGET_UNAVAILABLE");
         return false;
@@ -772,9 +978,11 @@ bool UVistaActionExecutorComponent::StartSemanticAnimation(FName& OutCode)
     Action.ActionId = ActiveSemanticAction->Record.CommandId;
     Action.Type = AnimationTypeFor(ActiveSemanticAction->Request.Affordance);
     Action.TargetSemanticId = ActiveSemanticAction->Record.TargetSemanticId;
+    Action.SecondaryTargetSemanticId =
+        ActiveSemanticAction->Record.SecondaryTargetSemanticId;
     Action.Hand = EVistaAnimationHand::Right;
     Action.TimeoutSeconds = ActiveSemanticAction->Request.TimeoutSeconds;
-    return Animation->StartNpcAction(Action, Target, OutCode);
+    return Animation->StartNpcAction(Action, AnimationTarget, OutCode);
 }
 
 void UVistaActionExecutorComponent::AdvanceSemanticAnimation()
@@ -890,9 +1098,14 @@ bool UVistaActionExecutorComponent::CommitSemanticContact(FName& OutCode)
     }
     AActor* Requester = ActiveSemanticAction->Requester.Get();
     AActor* Target = ActiveSemanticAction->Target.Get();
+    const bool bPourMutation =
+        ActiveSemanticAction->Request.Affordance == EVistaAffordance::Pour;
+    AActor* InteractionTarget = bPourMutation
+        ? ActiveSemanticAction->SecondaryTarget.Get() : Target;
     FVector ContactLocation;
     if (!IsValid(Requester) || !IsValid(Target) ||
-        !ResolveContactLocation(Target, ContactLocation) ||
+        !IsValid(InteractionTarget) ||
+        !ResolveContactLocation(InteractionTarget, ContactLocation) ||
         FVector::Dist(Requester->GetActorLocation(), ContactLocation) >
             MaximumSemanticContactDistanceCm)
     {
@@ -901,6 +1114,7 @@ bool UVistaActionExecutorComponent::CommitSemanticContact(FName& OutCode)
     }
     FVistaInteractionRequest Interaction;
     Interaction.Requester = Requester;
+    Interaction.SecondaryTarget = ActiveSemanticAction->SecondaryTarget.Get();
     Interaction.Affordance = ActiveSemanticAction->Request.Affordance;
     Interaction.ExpectedRevision =
         ActiveSemanticAction->Request.ExpectedRevision;
@@ -911,6 +1125,111 @@ bool UVistaActionExecutorComponent::CommitSemanticContact(FName& OutCode)
     {
         OutCode = TEXT("ACTION_LEDGER_PUBLISH_FAILED");
         return false;
+    }
+    if (bPourMutation)
+    {
+        AVistaPickupActor* Source = ActiveSemanticAction->PourSource.Get();
+        AVistaLiquidReceiverActor* Receiver =
+            ActiveSemanticAction->PourReceiver.Get();
+        if (!IsValid(Source) || !IsValid(Receiver) ||
+            !ActiveSemanticAction->bHasPourSnapshots ||
+            !ActiveSemanticAction->bHasPourAlignedPhysical ||
+            !Source->PourStateMatches(
+                ActiveSemanticAction->PourSourceBefore,
+                ActiveSemanticAction->PourSourceAlignedPhysical) ||
+            !LiquidStatesEquivalent(
+                Receiver->GetLiquidState(),
+                ActiveSemanticAction->PourReceiverBefore))
+        {
+            OutCode = TEXT("POUR_CONTACT_STATE_DRIFT");
+            return false;
+        }
+        const FVistaPourTransactionResult PourResult =
+            Receiver->CommitPourTransaction(
+                this,
+                ActiveSemanticAction->Record.CommandId,
+                Requester,
+                Source);
+        if (!PourResult.bSucceeded)
+        {
+            OutCode = PourResult.Code.IsNone()
+                ? FName(TEXT("POUR_CONTACT_FAILED")) : PourResult.Code;
+            return false;
+        }
+
+        const FVistaEntityRuntimeState SourceContact =
+            IVistaInteractable::Execute_VistaGetRuntimeState(Source);
+        const FVistaEntityRuntimeState ReceiverContact =
+            IVistaInteractable::Execute_VistaGetRuntimeState(Receiver);
+        const bool bEvidenceValid =
+            PourResult.SourceSemanticId ==
+                ActiveSemanticAction->Record.TargetSemanticId &&
+            PourResult.ReceiverSemanticId ==
+                ActiveSemanticAction->Record.SecondaryTargetSemanticId &&
+            PourResult.bSourceMutationCommitted &&
+            PourResult.bReceiverMutationCommitted &&
+            FMath::IsFinite(PourResult.TransferMilliliters) &&
+            PourResult.TransferMilliliters > 0.0f &&
+            LiquidStatesEquivalent(
+                PourResult.SourceBefore,
+                ActiveSemanticAction->PourSourceBefore) &&
+            LiquidStatesEquivalent(
+                PourResult.ReceiverBefore,
+                ActiveSemanticAction->PourReceiverBefore) &&
+            PhysicalSnapshotsEquivalent(
+                PourResult.SourcePhysicalBefore,
+                ActiveSemanticAction->PourSourceAlignedPhysical) &&
+            PhysicalSnapshotsEquivalent(
+                PourResult.SourcePhysicalAfter,
+                ActiveSemanticAction->PourSourceAlignedPhysical) &&
+            Receiver->StateMatchesTransition(
+                ActiveSemanticAction->PourSourceBefore,
+                ActiveSemanticAction->PourReceiverBefore,
+                PourResult.SourceAfter,
+                PourResult.ReceiverAfter) &&
+            Source->PourStateMatches(
+                PourResult.SourceAfter,
+                ActiveSemanticAction->PourSourceAlignedPhysical) &&
+            LiquidStatesEquivalent(
+                Receiver->GetLiquidState(),
+                PourResult.ReceiverAfter) &&
+            SourceContact.SemanticId ==
+                ActiveSemanticAction->Record.TargetSemanticId &&
+            ReceiverContact.SemanticId ==
+                ActiveSemanticAction->Record.SecondaryTargetSemanticId &&
+            !RuntimeStatesEquivalent(
+                ActiveSemanticAction->Record.BeforeState,
+                SourceContact) &&
+            !RuntimeStatesEquivalent(
+                ActiveSemanticAction->Record.BeforeSecondaryState,
+                ReceiverContact);
+        if (!bEvidenceValid)
+        {
+            OutCode = TEXT("POUR_CONTACT_EVIDENCE_INVALID");
+            return false;
+        }
+        ActiveSemanticAction->Record.ContactState = SourceContact;
+        ActiveSemanticAction->Record.ContactSecondaryState = ReceiverContact;
+        ActiveSemanticAction->Record.ContactPhysicalState =
+            PourResult.SourcePhysicalAfter;
+        ActiveSemanticAction->Record.bHasContactState = true;
+        ActiveSemanticAction->Record.bHasContactSecondaryState = true;
+        ActiveSemanticAction->Record.bHasContactPhysicalState = true;
+        ActiveSemanticAction->Record.StateMutationCount = 2;
+        ActiveSemanticAction->Record.PhysicalMutationCount = 0;
+        ActiveSemanticAction->Record.LiquidTransferMilliliters =
+            PourResult.TransferMilliliters;
+        ActiveSemanticAction->Record.bContactCommitted = true;
+        ActiveSemanticAction->Record.RequesterContactTransform =
+            Requester->GetActorTransform();
+        ActiveSemanticAction->ContactResultCode = PourResult.Code;
+        if (!PublishSemanticRecord(false))
+        {
+            OutCode = TEXT("ACTION_LEDGER_PUBLISH_FAILED");
+            return false;
+        }
+        OutCode = PourResult.Code;
+        return true;
     }
     const bool bApplianceMutation =
         AVistaStatefulApplianceActor::IsTransactionalApplianceAffordance(
@@ -1003,7 +1322,14 @@ bool UVistaActionExecutorComponent::CommitSemanticContact(FName& OutCode)
 void UVistaActionExecutorComponent::CompleteSemanticSuccess()
 {
     AActor* Target = ActiveSemanticAction->Target.Get();
+    const bool bPourMutation =
+        ActiveSemanticAction->Request.Affordance == EVistaAffordance::Pour;
+    AVistaPickupActor* PourSource = ActiveSemanticAction->PourSource.Get();
+    AVistaLiquidReceiverActor* PourReceiver =
+        ActiveSemanticAction->PourReceiver.Get();
     if (!IsValid(Target) ||
+        (bPourMutation &&
+         (!IsValid(PourSource) || !IsValid(PourReceiver))) ||
         !ActiveSemanticAction->Record.bContactCommitted)
     {
         FinishSemanticFailure(
@@ -1014,16 +1340,60 @@ void UVistaActionExecutorComponent::CompleteSemanticSuccess()
     ActiveSemanticAction->Record.AfterState =
         IVistaInteractable::Execute_VistaGetRuntimeState(Target);
     ActiveSemanticAction->Record.bHasAfterState = true;
-    if (!StateMatchesSemanticEffect(
-            ActiveSemanticAction->Record.BeforeState,
-            ActiveSemanticAction->Record.AfterState,
-            ActiveSemanticAction->Request.Affordance,
-            Target,
-            ActiveSemanticAction->Requester.Get(),
-            ActiveSemanticAction->Request.RequesterSemanticId) ||
-        !RuntimeStatesEquivalent(
-            ActiveSemanticAction->Record.ContactState,
-            ActiveSemanticAction->Record.AfterState))
+    bool bAfterStateValid = false;
+    if (bPourMutation)
+    {
+        ActiveSemanticAction->Record.AfterSecondaryState =
+            IVistaInteractable::Execute_VistaGetRuntimeState(PourReceiver);
+        ActiveSemanticAction->Record.bHasAfterSecondaryState = true;
+        ActiveSemanticAction->Record.bHasAfterPhysicalState =
+            CapturePickupPhysicalState(
+                PourSource,
+                ActiveSemanticAction->Requester.Get(),
+                ActiveSemanticAction->Record.AfterPhysicalState);
+        const FVistaLiquidStateSnapshot SourceAfter =
+            PourSource->GetLiquidState();
+        const FVistaLiquidStateSnapshot ReceiverAfter =
+            PourReceiver->GetLiquidState();
+        bAfterStateValid =
+            ActiveSemanticAction->bHasPourSnapshots &&
+            ActiveSemanticAction->bHasPourAlignedPhysical &&
+            ActiveSemanticAction->Record.StateMutationCount == 2 &&
+            ActiveSemanticAction->Record.PhysicalMutationCount == 0 &&
+            ActiveSemanticAction->Record.LiquidTransferMilliliters > 0.0f &&
+            ActiveSemanticAction->Record.bHasAfterPhysicalState &&
+            RuntimeStatesEquivalent(
+                ActiveSemanticAction->Record.ContactState,
+                ActiveSemanticAction->Record.AfterState) &&
+            RuntimeStatesEquivalent(
+                ActiveSemanticAction->Record.ContactSecondaryState,
+                ActiveSemanticAction->Record.AfterSecondaryState) &&
+            PhysicalSnapshotsEquivalent(
+                ActiveSemanticAction->PourSourceAlignedPhysical,
+                ActiveSemanticAction->Record.AfterPhysicalState) &&
+            PourSource->PourStateMatches(
+                SourceAfter,
+                ActiveSemanticAction->PourSourceAlignedPhysical) &&
+            PourReceiver->StateMatchesTransition(
+                ActiveSemanticAction->PourSourceBefore,
+                ActiveSemanticAction->PourReceiverBefore,
+                SourceAfter,
+                ReceiverAfter);
+    }
+    else
+    {
+        bAfterStateValid = StateMatchesSemanticEffect(
+                ActiveSemanticAction->Record.BeforeState,
+                ActiveSemanticAction->Record.AfterState,
+                ActiveSemanticAction->Request.Affordance,
+                Target,
+                ActiveSemanticAction->Requester.Get(),
+                ActiveSemanticAction->Request.RequesterSemanticId) &&
+            RuntimeStatesEquivalent(
+                ActiveSemanticAction->Record.ContactState,
+                ActiveSemanticAction->Record.AfterState);
+    }
+    if (!bAfterStateValid)
     {
         FinishSemanticFailure(
             EVistaActionTransactionStatus::Failed,
@@ -1094,7 +1464,9 @@ void UVistaActionExecutorComponent::CompleteSemanticSuccess()
             : nullptr)
     {
         Events->RecordSuccessfulInteraction(
-            FinalRecord.TargetSemanticId,
+            FinalRecord.Affordance == EVistaAffordance::Pour
+                ? FinalRecord.SecondaryTargetSemanticId
+                : FinalRecord.TargetSemanticId,
             FinalRecord.Affordance);
     }
 }
@@ -1113,6 +1485,8 @@ void UVistaActionExecutorComponent::FinishSemanticFailure(
     const bool bPostureMutation = ActiveSemanticAction->bPostureTransitionStarted &&
                                   (ActiveSemanticAction->Request.Affordance == EVistaAffordance::Sit ||
                                    ActiveSemanticAction->Request.Affordance == EVistaAffordance::Stand);
+    const bool bPourMutation =
+        ActiveSemanticAction->Request.Affordance == EVistaAffordance::Pour;
     bool bRollbackSucceeded = true;
     if (bRollbackRequired)
     {
@@ -1211,7 +1585,73 @@ void UVistaActionExecutorComponent::FinishSemanticFailure(
             ActiveSemanticAction->Record.bTargetReservationReleased = true;
         }
     }
-    if (ActiveSemanticAction->Record.bContactMutationAttempted && !bPostureMutation)
+    if (ActiveSemanticAction->Record.bContactMutationAttempted && bPourMutation)
+    {
+        AVistaPickupActor* Source = ActiveSemanticAction->PourSource.Get();
+        AVistaLiquidReceiverActor* Receiver =
+            ActiveSemanticAction->PourReceiver.Get();
+        const FVistaInteractionResult ReceiverRestore =
+            IsValid(Receiver) && ActiveSemanticAction->bHasPourSnapshots
+            ? Receiver->RestoreTransactionalState(
+                this,
+                ActiveSemanticAction->Record.CommandId,
+                ActiveSemanticAction->PourReceiverBefore)
+            : FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::NotFound,
+                TEXT("POUR_ROLLBACK_RECEIVER_LOST"));
+        const FVistaInteractionResult SourceRestore =
+            IsValid(Source) && ActiveSemanticAction->bHasPourSnapshots
+            ? Source->RestorePourLiquidState(
+                this,
+                ActiveSemanticAction->Record.CommandId,
+                ActiveSemanticAction->PourSourceBefore)
+            : FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::NotFound,
+                TEXT("POUR_ROLLBACK_SOURCE_LOST"));
+        const FVistaEntityRuntimeState SourceRestoredState = IsValid(Source)
+            ? IVistaInteractable::Execute_VistaGetRuntimeState(Source)
+            : FVistaEntityRuntimeState();
+        const FVistaEntityRuntimeState ReceiverRestoredState = IsValid(Receiver)
+            ? IVistaInteractable::Execute_VistaGetRuntimeState(Receiver)
+            : FVistaEntityRuntimeState();
+        FVistaPickupPhysicalStateSnapshot RestoredPhysical;
+        const bool bPhysicalCaptured = CapturePickupPhysicalState(
+            Source,
+            ActiveSemanticAction->Requester.Get(),
+            RestoredPhysical);
+        const bool bPourRestored =
+            ReceiverRestore.IsSuccess() && SourceRestore.IsSuccess() &&
+            bPhysicalCaptured &&
+            Source->PourStateMatches(
+                ActiveSemanticAction->PourSourceBefore,
+                ActiveSemanticAction->Record.BeforePhysicalState) &&
+            LiquidStatesEquivalent(
+                Receiver->GetLiquidState(),
+                ActiveSemanticAction->PourReceiverBefore) &&
+            PhysicalSnapshotsEquivalent(
+                RestoredPhysical,
+                ActiveSemanticAction->Record.BeforePhysicalState) &&
+            RuntimeStatesEquivalent(
+                SourceRestoredState,
+                ActiveSemanticAction->Record.BeforeState) &&
+            RuntimeStatesEquivalent(
+                ReceiverRestoredState,
+                ActiveSemanticAction->Record.BeforeSecondaryState);
+        ActiveSemanticAction->Record.AfterState = SourceRestoredState;
+        ActiveSemanticAction->Record.AfterSecondaryState =
+            ReceiverRestoredState;
+        ActiveSemanticAction->Record.AfterPhysicalState = RestoredPhysical;
+        ActiveSemanticAction->Record.bHasAfterState = IsValid(Source);
+        ActiveSemanticAction->Record.bHasAfterSecondaryState =
+            IsValid(Receiver);
+        ActiveSemanticAction->Record.bHasAfterPhysicalState = bPhysicalCaptured;
+        ActiveSemanticAction->Record.RollbackCode = bPourRestored
+            ? FName(TEXT("POUR_STATES_RESTORED"))
+            : FName(TEXT("POUR_STATE_RESTORE_FAILED"));
+        bRollbackSucceeded = bRollbackSucceeded && bPourRestored;
+    }
+    if (ActiveSemanticAction->Record.bContactMutationAttempted &&
+        !bPostureMutation && !bPourMutation)
     {
         AActor* Target = ActiveSemanticAction->Target.Get();
         AVistaStatefulApplianceActor* Appliance =
@@ -1350,8 +1790,31 @@ bool UVistaActionExecutorComponent::FinalizeSemantic(
 bool UVistaActionExecutorComponent::ReleaseSemanticTargetReservation()
 {
     if (!ActiveSemanticAction.IsSet() ||
-        !ActiveSemanticAction->bTargetReserved)
+        (!ActiveSemanticAction->bTargetReserved &&
+         !ActiveSemanticAction->bSecondaryTargetReserved))
     {
+        return true;
+    }
+    if (ActiveSemanticAction->Request.Affordance == EVistaAffordance::Pour)
+    {
+        AVistaPickupActor* Source = ActiveSemanticAction->PourSource.Get();
+        AVistaLiquidReceiverActor* Receiver =
+            ActiveSemanticAction->PourReceiver.Get();
+        FName ReleaseCode;
+        if (!IsValid(Source) || !IsValid(Receiver) ||
+            !Receiver->ReleasePourTransaction(
+                this,
+                ActiveSemanticAction->Record.CommandId,
+                Source,
+                ReleaseCode))
+        {
+            return false;
+        }
+        ActiveSemanticAction->bTargetReserved = false;
+        ActiveSemanticAction->bSecondaryTargetReserved = false;
+        ActiveSemanticAction->Record.bTargetReservationReleased = true;
+        ActiveSemanticAction->Record.bSecondaryTargetReservationReleased =
+            true;
         return true;
     }
     AVistaStatefulApplianceActor* Appliance =
