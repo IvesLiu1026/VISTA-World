@@ -46,6 +46,7 @@ const FName RealisticInteriorR2CameraProfileId(TEXT("realistic_interior_r2"));
 const TCHAR* CameraProfileCommandLineKey = TEXT("VistaCameraProfile=");
 constexpr float IndoorViewPitchMinDegrees = -60.0f;
 constexpr float IndoorViewPitchMaxDegrees = 45.0f;
+constexpr float FirstPersonEyeHeightCm = 64.0f;
 constexpr double InspectionMaximumSeconds = 20.0;
 constexpr float InspectionMaximumDistanceCm = 500.0f;
 constexpr double TerminalFeedbackSeconds = 4.0;
@@ -379,6 +380,15 @@ AVistaPlayableHomeCharacter::AVistaPlayableHomeCharacter()
     FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
     FollowCamera->bUsePawnControlRotation = false;
 
+    FirstPersonCamera =
+        CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
+    FirstPersonCamera->SetupAttachment(GetCapsuleComponent());
+    FirstPersonCamera->SetRelativeLocation(
+        FVector(0.0f, 0.0f, FirstPersonEyeHeightCm));
+    FirstPersonCamera->bUsePawnControlRotation = true;
+    FirstPersonCamera->SetAutoActivate(false);
+    FirstPersonCamera->SetActive(false);
+
     CarryAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("VistaCarryAnchor"));
     CarryAnchor->SetupAttachment(GetMesh(), TEXT("hand_r"));
     CarryAnchor->SetRelativeTransform(FTransform::Identity);
@@ -513,6 +523,11 @@ void AVistaPlayableHomeCharacter::CalcCamera(
 void AVistaPlayableHomeCharacter::UpdateNearCameraVisualOcclusion(
     const FVector& CameraLocation)
 {
+    if (bFirstPersonViewEnabled && IsLocallyControlled())
+    {
+        SetNearCameraVisualHidden(true);
+        return;
+    }
     if (ActiveCameraProfileId != RealisticInteriorR2CameraProfileId ||
         !IsLocallyControlled() || !IsValid(CameraBoom) || !IsValid(FollowCamera))
     {
@@ -701,9 +716,82 @@ bool AVistaPlayableHomeCharacter::ApplyIndoorCameraProfile(
     return true;
 }
 
+bool AVistaPlayableHomeCharacter::SetFirstPersonViewEnabled(bool bEnabled)
+{
+    if (bEnabled == bFirstPersonViewEnabled)
+    {
+        return true;
+    }
+    if (!IsLocallyControlled() || !IsValid(FollowCamera) ||
+        !IsValid(FirstPersonCamera))
+    {
+        UE_LOG(
+            LogVistaPlayableHomeCamera,
+            Warning,
+            TEXT("VISTA_CAMERA_VIEW_REJECTED owner-local camera unavailable"));
+        return false;
+    }
+
+    if (!bEnabled)
+    {
+        RestoreCameraPresentation();
+        return true;
+    }
+
+    // The third-person boom, socket and FollowCamera properties are never
+    // mutated. Only active presentation components and owner-only visibility
+    // are switched, then restored from this exact local snapshot.
+    bFollowCameraWasActive = FollowCamera->IsActive();
+    bFirstPersonCameraWasActive = FirstPersonCamera->IsActive();
+    bVisualWasHiddenBeforeFirstPerson = bNearCameraVisualHidden;
+    bCameraPresentationSnapshotValid = true;
+    FollowCamera->Deactivate();
+    FirstPersonCamera->Activate(true);
+    bFirstPersonViewEnabled = true;
+    SetNearCameraVisualHidden(true);
+
+    UE_LOG(
+        LogVistaPlayableHomeCamera,
+        Display,
+        TEXT("VISTA_CAMERA_VIEW_ACTIVE mode=first_person key=V"));
+    return true;
+}
+
+void AVistaPlayableHomeCharacter::ToggleCameraView()
+{
+    SetFirstPersonViewEnabled(!bFirstPersonViewEnabled);
+}
+
+void AVistaPlayableHomeCharacter::RestoreCameraPresentation()
+{
+    if (!bCameraPresentationSnapshotValid)
+    {
+        bFirstPersonViewEnabled = false;
+        return;
+    }
+
+    bFirstPersonViewEnabled = false;
+    if (IsValid(FirstPersonCamera))
+    {
+        FirstPersonCamera->SetActive(bFirstPersonCameraWasActive, true);
+    }
+    if (IsValid(FollowCamera))
+    {
+        FollowCamera->SetActive(bFollowCameraWasActive, true);
+    }
+    SetNearCameraVisualHidden(bVisualWasHiddenBeforeFirstPerson);
+    bCameraPresentationSnapshotValid = false;
+
+    UE_LOG(
+        LogVistaPlayableHomeCamera,
+        Display,
+        TEXT("VISTA_CAMERA_VIEW_ACTIVE mode=third_person key=V"));
+}
+
 void AVistaPlayableHomeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     ExitInspection();
+    RestoreCameraPresentation();
     RestoreNearCameraVisualOcclusion();
     RestoreIndoorViewLimits();
     SetSprinting(false);
@@ -733,6 +821,7 @@ void AVistaPlayableHomeCharacter::UnPossessed()
     }
     PendingInspectionTarget.Reset();
     PendingPresentationCommandId = NAME_None;
+    RestoreCameraPresentation();
     RestoreIndoorViewLimits();
     RestoreNearCameraVisualOcclusion();
     Super::UnPossessed();
@@ -832,6 +921,11 @@ void AVistaPlayableHomeCharacter::SetupPlayerInputComponent(UInputComponent* Pla
         IE_Pressed,
         this,
         &ThisClass::ExecuteSelectedPlayerActionPressed);
+    PlayerInputComponent->BindKey(
+        EKeys::V,
+        IE_Pressed,
+        this,
+        &ThisClass::ToggleCameraViewPressed);
 }
 
 void AVistaPlayableHomeCharacter::Move(const FInputActionValue& Value)
@@ -896,6 +990,11 @@ void AVistaPlayableHomeCharacter::LookPitchLegacy(float Value)
     {
         AddControllerPitchInput(Value);
     }
+}
+
+void AVistaPlayableHomeCharacter::ToggleCameraViewPressed()
+{
+    ToggleCameraView();
 }
 
 void AVistaPlayableHomeCharacter::SetSprinting(bool bEnabled)

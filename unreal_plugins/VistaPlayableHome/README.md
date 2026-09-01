@@ -4,8 +4,9 @@ Runtime-only Unreal plugin for the VISTA Playable Home contract.
 
 ## Included runtime surface
 
-- third-person Manny pawn with Enhanced Input asset hooks and legacy
-  `WASD`/mouse, jump, sprint, crouch, interact, and drop bindings;
+- one shared Manny pawn with owner-local `V` first/third-person presentation,
+  Enhanced Input asset hooks, and legacy `WASD`/mouse, jump, sprint, crouch,
+  interact, and drop bindings;
 - typed interactable, pickup, door, container, and appliance actors;
 - visible Manny NPC with a bounded typed action queue, room-anchor patrol,
   navigation timeouts, and dynamically gated doorway links;
