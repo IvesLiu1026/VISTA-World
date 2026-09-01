@@ -31,7 +31,12 @@ CONCRETE_BINDINGS = {
     canonical: (backend, runtime)
     for canonical, backend, runtime in WIRE_BINDINGS.values()
 }
-PARAMETER_FIELDS = ("room_id", "target_id", "secondary_target_id", "placement_anchor_id")
+PARAMETER_FIELDS = (
+    "room_id",
+    "target_id",
+    "secondary_target_id",
+    "placement_anchor_id",
+)
 
 PlayableHomeContractError = base.PlayableHomeContractError
 seal_document = base.seal_document
@@ -44,7 +49,9 @@ def _fail(code: str, path: str, message: str) -> None:
 def _unique(values: Iterable[str], path: str, label: str) -> None:
     items = list(values)
     if len(items) != len(set(items)):
-        _fail("VISTA_HOME_EVENT_V4_DUPLICATE_ID", path, f"Duplicate {label} is prohibited")
+        _fail(
+            "VISTA_HOME_EVENT_V4_DUPLICATE_ID", path, f"Duplicate {label} is prohibited"
+        )
 
 
 def closed_action_mapping() -> list[dict[str, Any]]:
@@ -96,7 +103,11 @@ def _compile_action(
     if source_wire == "use":
         mapping = CONCRETE_BINDINGS.get(canonical)
         if mapping is None:
-            _fail("VISTA_HOME_EVENT_V4_USE_CONCRETE_UNMAPPED", f"$.events.{event_id}.{queue_id}[{sequence_index}]", "Resolved Use has no closed runtime mapping")
+            _fail(
+                "VISTA_HOME_EVENT_V4_USE_CONCRETE_UNMAPPED",
+                f"$.events.{event_id}.{queue_id}[{sequence_index}]",
+                "Resolved Use has no closed runtime mapping",
+            )
         backend, runtime = mapping
         resolution: dict[str, Any] | None = {
             "source_action": "use",
@@ -106,7 +117,11 @@ def _compile_action(
     else:
         expected = WIRE_BINDINGS.get(source_wire)
         if expected is None or expected[0] != canonical:
-            _fail("VISTA_HOME_EVENT_V4_MAPPING_INVALID", f"$.events.{event_id}.{queue_id}[{sequence_index}]", "Action differs from the closed v4 compiler mapping")
+            _fail(
+                "VISTA_HOME_EVENT_V4_MAPPING_INVALID",
+                f"$.events.{event_id}.{queue_id}[{sequence_index}]",
+                "Action differs from the closed v4 compiler mapping",
+            )
         _, backend, runtime = expected
         resolution = None
     materialized = catalog_v4.resolve_action(validated_catalog, canonical)
@@ -118,7 +133,11 @@ def _compile_action(
         "canonical_action_id": canonical,
         "backend_action": backend,
         "runtime_type": runtime,
-        "parameters": {field: copy.deepcopy(action[field]) for field in PARAMETER_FIELDS if field in action},
+        "parameters": {
+            field: copy.deepcopy(action[field])
+            for field in PARAMETER_FIELDS
+            if field in action
+        },
         "identity_roles": _identity_roles(action),
         "readiness": copy.deepcopy(materialized["readiness"]),
         "use_resolution": resolution,
@@ -135,6 +154,7 @@ def compile_event(
     bindings: Mapping[str, Any],
     base_event: Mapping[str, Any],
     source_event_v3: Mapping[str, Any],
+    typed_scene_profile: Mapping[str, Any],
     source_event_v2: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     authorities = {
@@ -143,6 +163,7 @@ def compile_event(
         "bindings": bindings,
         "base_event": base_event,
         "source_event_v3": source_event_v3,
+        "typed_scene_profile": typed_scene_profile,
         "source_event_v2": source_event_v2,
     }
     projection = event_v4.validated_projection(event, **authorities)
@@ -186,8 +207,10 @@ def compile_runtime_sidecar(
     base_events: Sequence[Mapping[str, Any]],
     source_events_v3: Sequence[Mapping[str, Any]],
     events_v4: Sequence[Mapping[str, Any]],
+    typed_scene_profile: Mapping[str, Any],
     source_events_v2: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
+    event_v4._validated_scene_entities(house, typed_scene_profile)
     validated_catalog = catalog_v4.validate_catalog(action_catalog)
     for label, values in (
         ("base event", base_events),
@@ -203,7 +226,11 @@ def compile_runtime_sidecar(
     for event in sorted(events_v4, key=lambda item: item["event_id"]):
         event_id = event["event_id"]
         if event_id not in base_by_id or event_id not in v3_by_id:
-            _fail("VISTA_HOME_EVENT_V4_SOURCE_MISSING", f"$.events.{event_id}", "Event lacks exact v1 or v3 authority")
+            _fail(
+                "VISTA_HOME_EVENT_V4_SOURCE_MISSING",
+                f"$.events.{event_id}",
+                "Event lacks exact v1 or v3 authority",
+            )
         plans.append(
             compile_event(
                 event,
@@ -212,6 +239,7 @@ def compile_runtime_sidecar(
                 bindings=bindings,
                 base_event=base_by_id[event_id],
                 source_event_v3=v3_by_id[event_id],
+                typed_scene_profile=typed_scene_profile,
                 source_event_v2=v2_by_id.get(event_id),
             )
         )
@@ -230,8 +258,12 @@ def compile_runtime_sidecar(
         "accepted": False,
         "runtime_execution_authorized": False,
         "live_composition_status": "pending_ue_adapter_and_visual_acceptance",
-        "house": copy.deepcopy(events_v4[0]["compatible_house"]) if events_v4 else {
-            "house_id": house["house_id"], "revision": house["revision"], "content_digest": house["content_digest"]
+        "house": copy.deepcopy(events_v4[0]["compatible_house"])
+        if events_v4
+        else {
+            "house_id": house["house_id"],
+            "revision": house["revision"],
+            "content_digest": house["content_digest"],
         },
         "action_catalog": {
             "schema_version": catalog_v4.SCHEMA_VERSION,
@@ -239,6 +271,7 @@ def compile_runtime_sidecar(
             "catalog_revision": action_catalog["catalog_revision"],
             "content_digest": validated_catalog.content_digest,
         },
+        "typed_scene_profile": event_v4._typed_scene_binding(typed_scene_profile),
         "closed_action_mapping": closed_action_mapping(),
         "required_acceptance_receipts": {
             "animation": {"action_ids": observed, "receipts": []},
@@ -254,8 +287,25 @@ def compile_runtime_sidecar(
 def validate_runtime_sidecar(sidecar: Mapping[str, Any], **authorities: Any) -> None:
     expected = compile_runtime_sidecar(**authorities)
     if sidecar != expected:
-        _fail("VISTA_HOME_EVENT_V4_SIDECAR_MISMATCH", "$", "Runtime sidecar differs from deterministic source compilation")
-    if sidecar["accepted"] is not False or sidecar["runtime_execution_authorized"] is not False:
-        _fail("VISTA_HOME_EVENT_V4_ACCEPTANCE_FORGED", "$", "Source-only sidecar cannot imply acceptance")
-    if any(group["receipts"] for group in sidecar["required_acceptance_receipts"].values()):
-        _fail("VISTA_HOME_EVENT_V4_ACCEPTANCE_FORGED", "$.required_acceptance_receipts", "Source-only sidecar cannot carry receipts")
+        _fail(
+            "VISTA_HOME_EVENT_V4_SIDECAR_MISMATCH",
+            "$",
+            "Runtime sidecar differs from deterministic source compilation",
+        )
+    if (
+        sidecar["accepted"] is not False
+        or sidecar["runtime_execution_authorized"] is not False
+    ):
+        _fail(
+            "VISTA_HOME_EVENT_V4_ACCEPTANCE_FORGED",
+            "$",
+            "Source-only sidecar cannot imply acceptance",
+        )
+    if any(
+        group["receipts"] for group in sidecar["required_acceptance_receipts"].values()
+    ):
+        _fail(
+            "VISTA_HOME_EVENT_V4_ACCEPTANCE_FORGED",
+            "$.required_acceptance_receipts",
+            "Source-only sidecar cannot carry receipts",
+        )
