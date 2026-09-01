@@ -16,6 +16,7 @@
 #include "InputAction.h"
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
+#include "InputCoreTypes.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
@@ -49,6 +50,121 @@ constexpr double InspectionMaximumSeconds = 20.0;
 constexpr float InspectionMaximumDistanceCm = 500.0f;
 constexpr double TerminalFeedbackSeconds = 4.0;
 constexpr int32 MaximumPresentationTextCharacters = 128;
+
+/** Stable cycle order; changing target state may remove entries, never reorder them. */
+constexpr EVistaAffordance PlayerActionOrder[] = {
+    EVistaAffordance::Press,
+    EVistaAffordance::TurnOn,
+    EVistaAffordance::TurnOff,
+    EVistaAffordance::Open,
+    EVistaAffordance::Close,
+    EVistaAffordance::Inspect,
+    EVistaAffordance::Sit,
+    EVistaAffordance::Stand,
+    EVistaAffordance::Pour,
+    EVistaAffordance::PickUp,
+    EVistaAffordance::Place,
+};
+
+bool ReadExactRuntimeBoolean(
+    const FVistaEntityRuntimeState& State,
+    const FName Key,
+    bool& OutValue)
+{
+    const FString* Value = State.Values.Find(Key);
+    if (Value == nullptr)
+    {
+        return false;
+    }
+    if (Value->Equals(TEXT("true"), ESearchCase::CaseSensitive))
+    {
+        OutValue = true;
+        return true;
+    }
+    if (Value->Equals(TEXT("false"), ESearchCase::CaseSensitive))
+    {
+        OutValue = false;
+        return true;
+    }
+    return false;
+}
+
+bool PlayerActionAnimationType(
+    const EVistaAffordance Affordance,
+    EVistaNpcActionType& OutType)
+{
+    switch (Affordance)
+    {
+    case EVistaAffordance::Press:
+        OutType = EVistaNpcActionType::Press;
+        return true;
+    case EVistaAffordance::TurnOn:
+        OutType = EVistaNpcActionType::TurnOn;
+        return true;
+    case EVistaAffordance::TurnOff:
+        OutType = EVistaNpcActionType::TurnOff;
+        return true;
+    case EVistaAffordance::Open:
+        OutType = EVistaNpcActionType::OpenDoor;
+        return true;
+    case EVistaAffordance::Close:
+        OutType = EVistaNpcActionType::CloseDoor;
+        return true;
+    case EVistaAffordance::Inspect:
+        OutType = EVistaNpcActionType::Inspect;
+        return true;
+    case EVistaAffordance::Sit:
+        OutType = EVistaNpcActionType::Sit;
+        return true;
+    case EVistaAffordance::Stand:
+        OutType = EVistaNpcActionType::StandUp;
+        return true;
+    case EVistaAffordance::Pour:
+        OutType = EVistaNpcActionType::Pour;
+        return true;
+    case EVistaAffordance::PickUp:
+        OutType = EVistaNpcActionType::PickUp;
+        return true;
+    case EVistaAffordance::Place:
+        OutType = EVistaNpcActionType::Place;
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool HasApprovedPlayerActionAnimation(
+    const UVistaAnimationComponent* Animation,
+    const EVistaAffordance Affordance,
+    const AActor* Target,
+    const AActor* SecondaryTarget)
+{
+    if (!IsValid(Animation))
+    {
+        return false;
+    }
+    EVistaNpcActionType AnimationType = EVistaNpcActionType::Inspect;
+    if (!PlayerActionAnimationType(Affordance, AnimationType))
+    {
+        return false;
+    }
+    FName ReadinessCode;
+    if (Affordance == EVistaAffordance::PickUp ||
+        Affordance == EVistaAffordance::Place)
+    {
+        return Animation->HasApprovedMutationAnimation(
+            AnimationType,
+            ReadinessCode);
+    }
+    const AActor* AnimationTarget = Affordance == EVistaAffordance::Pour
+        ? SecondaryTarget
+        : Target;
+    return IsValid(AnimationTarget) &&
+        Animation->HasApprovedMutationAnimation(
+            AnimationType,
+            AnimationTarget,
+            ReadinessCode);
+}
 
 FString BoundedPresentationText(const FString& Source, int32 MaximumCharacters)
 {
@@ -332,6 +448,7 @@ void AVistaPlayableHomeCharacter::Tick(float DeltaSeconds)
     {
         UpdatePendingActionFeedback();
     }
+    RefreshPlayerActionSelection();
     if (!InspectionPresentation.bActive || !IsLocallyControlled())
     {
         return;
@@ -690,6 +807,26 @@ void AVistaPlayableHomeCharacter::SetupPlayerInputComponent(UInputComponent* Pla
     PlayerInputComponent->BindAction(TEXT("Drop"), IE_Pressed, this, &ThisClass::DropPressed);
     PlayerInputComponent->BindAction(TEXT("Inspect"), IE_Pressed, this, &ThisClass::InspectPressed);
     PlayerInputComponent->BindAction(TEXT("ExitInspect"), IE_Pressed, this, &ThisClass::ExitInspectPressed);
+
+    // Direct keys keep the selector usable in generated projects without new
+    // input assets. Existing E/Q/I bindings remain untouched.
+    PlayerInputComponent->BindKey(
+        EKeys::R, IE_Pressed, this, &ThisClass::CyclePlayerActionNextPressed);
+    PlayerInputComponent->BindKey(
+        EKeys::MouseScrollDown,
+        IE_Pressed,
+        this,
+        &ThisClass::CyclePlayerActionNextPressed);
+    PlayerInputComponent->BindKey(
+        EKeys::MouseScrollUp,
+        IE_Pressed,
+        this,
+        &ThisClass::CyclePlayerActionPreviousPressed);
+    PlayerInputComponent->BindKey(
+        EKeys::F,
+        IE_Pressed,
+        this,
+        &ThisClass::ExecuteSelectedPlayerActionPressed);
 }
 
 void AVistaPlayableHomeCharacter::Move(const FInputActionValue& Value)
@@ -919,6 +1056,84 @@ void AVistaPlayableHomeCharacter::ExitInspectPressed()
     }
 }
 
+void AVistaPlayableHomeCharacter::CyclePlayerActionNextPressed()
+{
+    CyclePlayerAction(1);
+}
+
+void AVistaPlayableHomeCharacter::CyclePlayerActionPreviousPressed()
+{
+    CyclePlayerAction(-1);
+}
+
+void AVistaPlayableHomeCharacter::CyclePlayerAction(const int32 Direction)
+{
+    if (InspectionPresentation.bActive || Direction == 0)
+    {
+        return;
+    }
+    RefreshPlayerActionSelection();
+    if (ExecutablePlayerActions.Num() < 2)
+    {
+        return;
+    }
+    SelectedPlayerActionIndex =
+        (SelectedPlayerActionIndex + Direction) % ExecutablePlayerActions.Num();
+    if (SelectedPlayerActionIndex < 0)
+    {
+        SelectedPlayerActionIndex += ExecutablePlayerActions.Num();
+    }
+}
+
+void AVistaPlayableHomeCharacter::ExecuteSelectedPlayerActionPressed()
+{
+    if (InspectionPresentation.bActive)
+    {
+        PublishInteractionResult(
+            FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::Busy,
+                TEXT("INSPECTION_ACTIVE"),
+                InspectionPresentation.SemanticId));
+        return;
+    }
+
+    RefreshPlayerActionSelection();
+    FVistaPlayerActionOption Action;
+    if (!GetSelectedPlayerAction(Action))
+    {
+        PublishInteractionResult(
+            FVistaInteractionResult::Failure(
+                EVistaInteractionStatus::NotFound,
+                TEXT("NO_EXECUTABLE_PLAYER_ACTION")));
+        return;
+    }
+    if (HasAuthority())
+    {
+        PresentStartedPlayerAction(PerformPlayerAction(Action));
+    }
+    else
+    {
+        ServerPerformSelectedPlayerAction(
+            Action.Affordance,
+            Action.Target,
+            Action.SecondaryTarget);
+    }
+}
+
+void AVistaPlayableHomeCharacter::PresentStartedPlayerAction(
+    const FVistaInteractionResult& Result)
+{
+    if (Result.Code == FName(TEXT("ACTION_ACCEPTED")) &&
+        !PendingPresentationCommandId.IsNone())
+    {
+        UpdatePendingActionFeedback();
+    }
+    else
+    {
+        PublishInteractionResult(Result);
+    }
+}
+
 void AVistaPlayableHomeCharacter::ServerPerformDefaultInteraction_Implementation()
 {
     const FVistaInteractionResult Result = PerformDefaultInteraction();
@@ -966,6 +1181,15 @@ void AVistaPlayableHomeCharacter::ServerCancelPendingInspection_Implementation()
     CancelPendingAnimatedInspection(TEXT("PLAYER_INSPECT_CANCELED"));
 }
 
+void AVistaPlayableHomeCharacter::ServerPerformSelectedPlayerAction_Implementation(
+    const EVistaAffordance Affordance,
+    AActor* Target,
+    AActor* SecondaryTarget)
+{
+    PresentStartedPlayerAction(
+        PerformRequestedPlayerAction(Affordance, Target, SecondaryTarget));
+}
+
 void AVistaPlayableHomeCharacter::ClientBeginInspectionPresentation_Implementation(
     AActor* Target,
     const FVistaInspectionPresentation& Presentation)
@@ -1000,6 +1224,394 @@ bool AVistaPlayableHomeCharacter::CanInspectFocusedActor() const
     }
     return IVistaInteractable::Execute_VistaGetAffordances(
         const_cast<AActor*>(Target)).Contains(EVistaAffordance::Inspect);
+}
+
+TArray<FVistaPlayerActionOption>
+AVistaPlayableHomeCharacter::BuildExecutablePlayerActions() const
+{
+    TArray<FVistaPlayerActionOption> Options;
+    if (InspectionPresentation.bActive ||
+        !PendingPresentationCommandId.IsNone() ||
+        (IsValid(ActionExecutorComponent) &&
+         ActionExecutorComponent->HasActiveAction()))
+    {
+        return Options;
+    }
+
+    const EVistaPostureState PostureState = IsValid(PostureComponent)
+        ? PostureComponent->GetPostureState()
+        : EVistaPostureState::Standing;
+    if (PostureState != EVistaPostureState::Standing)
+    {
+        if (PostureState == EVistaPostureState::Seated &&
+            IsValid(PostureComponent))
+        {
+            AVistaSeatActor* ActiveSeat = PostureComponent->GetActiveSeat();
+            if (IsValid(ActiveSeat) && !ActiveSeat->IsReserved() &&
+                ActiveSeat->IsOccupiedBy(this, SemanticId) &&
+                IVistaInteractable::Execute_VistaGetAffordances(ActiveSeat)
+                    .Contains(EVistaAffordance::Stand) &&
+                HasApprovedPlayerActionAnimation(
+                    AnimationComponent,
+                    EVistaAffordance::Stand,
+                    ActiveSeat,
+                    nullptr))
+            {
+                FVistaPlayerActionOption Stand;
+                Stand.Affordance = EVistaAffordance::Stand;
+                Stand.Target = ActiveSeat;
+                Options.Add(Stand);
+            }
+        }
+        return Options;
+    }
+
+    AActor* FocusedTarget = IsValid(InteractionComponent)
+        ? InteractionComponent->GetFocusedActor()
+        : nullptr;
+    if (!IsValid(FocusedTarget) ||
+        !FocusedTarget->GetClass()->ImplementsInterface(
+            UVistaInteractable::StaticClass()))
+    {
+        return Options;
+    }
+
+    const TArray<EVistaAffordance> TargetAffordances =
+        IVistaInteractable::Execute_VistaGetAffordances(FocusedTarget);
+    const FVistaEntityRuntimeState TargetState =
+        IVistaInteractable::Execute_VistaGetRuntimeState(FocusedTarget);
+    if (TargetState.SemanticId.IsEmpty() ||
+        TargetState.Transform.ContainsNaN())
+    {
+        return Options;
+    }
+    AVistaStatefulApplianceActor* Appliance =
+        Cast<AVistaStatefulApplianceActor>(FocusedTarget);
+    AVistaSeatActor* Seat = Cast<AVistaSeatActor>(FocusedTarget);
+    AVistaPickupActor* FocusedPickup = Cast<AVistaPickupActor>(FocusedTarget);
+    AVistaLiquidReceiverActor* Receiver =
+        Cast<AVistaLiquidReceiverActor>(FocusedTarget);
+    AVistaPickupActor* Held = IsValid(HeldItem) ? HeldItem.Get() : nullptr;
+
+    bool bOpen = false;
+    const bool bHasOpenState =
+        ReadExactRuntimeBoolean(TargetState, TEXT("open"), bOpen);
+
+    FVistaApplianceState ApplianceBefore;
+    if (IsValid(Appliance))
+    {
+        ApplianceBefore.bPowered = Appliance->IsPowered();
+        ApplianceBefore.bActive = Appliance->IsActive();
+        ApplianceBefore.Status = Appliance->GetApplianceStatus();
+    }
+
+    for (const EVistaAffordance Affordance : PlayerActionOrder)
+    {
+        bool bExecutable = false;
+        AActor* ActionTarget = FocusedTarget;
+        AActor* SecondaryTarget = nullptr;
+        switch (Affordance)
+        {
+        case EVistaAffordance::Press:
+        case EVistaAffordance::TurnOn:
+        case EVistaAffordance::TurnOff:
+            if (IsValid(Appliance) && TargetAffordances.Contains(Affordance))
+            {
+                const bool bStateAllowsAction =
+                    Affordance == EVistaAffordance::Press
+                        ? ApplianceBefore.bPowered
+                        : Affordance == EVistaAffordance::TurnOn
+                            ? ApplianceBefore.bPowered &&
+                                !ApplianceBefore.bActive
+                            : ApplianceBefore.bActive;
+                FVistaApplianceState PlannedState;
+                bool bWouldMutate = false;
+                FName PlanCode;
+                bExecutable = bStateAllowsAction &&
+                    AVistaStatefulApplianceActor::PlanInteractionTransition(
+                        ApplianceBefore,
+                        Affordance,
+                        Appliance->ActivityProfile,
+                        Appliance->PressProfile,
+                        PlannedState,
+                        bWouldMutate,
+                        PlanCode) &&
+                    (Affordance == EVistaAffordance::Press || bWouldMutate);
+            }
+            break;
+        case EVistaAffordance::Open:
+            bExecutable = TargetAffordances.Contains(Affordance) &&
+                bHasOpenState && !bOpen;
+            break;
+        case EVistaAffordance::Close:
+            bExecutable = TargetAffordances.Contains(Affordance) &&
+                bHasOpenState && bOpen;
+            break;
+        case EVistaAffordance::Inspect:
+            bExecutable = TargetAffordances.Contains(Affordance);
+            break;
+        case EVistaAffordance::Sit:
+            bExecutable = IsValid(Seat) &&
+                TargetAffordances.Contains(Affordance) &&
+                !Seat->IsOccupied() && !Seat->IsReserved();
+            break;
+        case EVistaAffordance::Stand:
+            // Stable seated posture is handled before focused-target actions.
+            bExecutable = false;
+            break;
+        case EVistaAffordance::Pour:
+            if (IsValid(Held) && Held != FocusedTarget &&
+                IsValid(Receiver) && !Receiver->IsReserved() &&
+                Held->GetCarrier() == this &&
+                Held->GetPhysicalDisposition() ==
+                    EVistaPickupDisposition::Held &&
+                IVistaInteractable::Execute_VistaGetAffordances(Held)
+                    .Contains(EVistaAffordance::Pour) &&
+                TargetAffordances.Contains(EVistaAffordance::Pour))
+            {
+                FVistaLiquidStateSnapshot SourceAfter;
+                FVistaLiquidStateSnapshot ReceiverAfter;
+                float TransferMilliliters = 0.0f;
+                FName PlanCode;
+                bExecutable = AVistaLiquidReceiverActor::PlanPourTransition(
+                    Held->GetLiquidState(),
+                    Receiver->GetLiquidState(),
+                    Receiver->AcceptedLiquidType,
+                    SourceAfter,
+                    ReceiverAfter,
+                    TransferMilliliters,
+                    PlanCode) &&
+                    TransferMilliliters > KINDA_SMALL_NUMBER;
+                ActionTarget = Held;
+                SecondaryTarget = Receiver;
+            }
+            break;
+        case EVistaAffordance::PickUp:
+            bExecutable = !IsValid(Held) && IsValid(FocusedPickup) &&
+                FocusedPickup->bPortable &&
+                FocusedPickup->GetPhysicalDisposition() !=
+                    EVistaPickupDisposition::Held &&
+                TargetAffordances.Contains(EVistaAffordance::PickUp);
+            break;
+        case EVistaAffordance::Place:
+            if (IsValid(Held) && Held != FocusedTarget &&
+                Held->GetCarrier() == this &&
+                Held->GetPhysicalDisposition() ==
+                    EVistaPickupDisposition::Held &&
+                IVistaInteractable::Execute_VistaGetAffordances(Held)
+                    .Contains(EVistaAffordance::Place))
+            {
+                FName AnchorCode;
+                FString AnchorSemanticId;
+                bExecutable = IsValid(
+                    UVistaActionExecutorComponent::ResolveStablePlacementAnchor(
+                        const_cast<AVistaPlayableHomeCharacter*>(this),
+                        FocusedTarget,
+                        AnchorCode,
+                        AnchorSemanticId));
+                ActionTarget = Held;
+                SecondaryTarget = FocusedTarget;
+            }
+            break;
+        default:
+            break;
+        }
+
+        if (bExecutable)
+        {
+            bExecutable = HasApprovedPlayerActionAnimation(
+                AnimationComponent,
+                Affordance,
+                ActionTarget,
+                SecondaryTarget);
+        }
+        if (bExecutable)
+        {
+            FVistaPlayerActionOption Option;
+            Option.Affordance = Affordance;
+            Option.Target = ActionTarget;
+            Option.SecondaryTarget = SecondaryTarget;
+            Options.Add(MoveTemp(Option));
+        }
+    }
+    return Options;
+}
+
+int32 AVistaPlayableHomeCharacter::FindDefaultPlayerActionIndex(
+    const TArray<FVistaPlayerActionOption>& Options) const
+{
+    if (Options.IsEmpty())
+    {
+        return INDEX_NONE;
+    }
+    if (IsValid(PostureComponent) &&
+        PostureComponent->GetPostureState() == EVistaPostureState::Seated)
+    {
+        return Options.IndexOfByPredicate(
+            [](const FVistaPlayerActionOption& Option)
+            {
+                return Option.Affordance == EVistaAffordance::Stand;
+            });
+    }
+
+    AActor* FocusedTarget = IsValid(InteractionComponent)
+        ? InteractionComponent->GetFocusedActor()
+        : nullptr;
+    if (IsValid(HeldItem) && IsValid(FocusedTarget) &&
+        FocusedTarget != HeldItem)
+    {
+        const int32 PourIndex = Options.IndexOfByPredicate(
+            [](const FVistaPlayerActionOption& Option)
+            {
+                return Option.Affordance == EVistaAffordance::Pour;
+            });
+        if (PourIndex != INDEX_NONE)
+        {
+            return PourIndex;
+        }
+        const int32 PlaceIndex = Options.IndexOfByPredicate(
+            [](const FVistaPlayerActionOption& Option)
+            {
+                return Option.Affordance == EVistaAffordance::Place;
+            });
+        if (PlaceIndex != INDEX_NONE)
+        {
+            return PlaceIndex;
+        }
+    }
+    const EVistaAffordance DefaultAffordance =
+        GetDefaultInteractionAffordance(FocusedTarget);
+    const int32 DefaultIndex = Options.IndexOfByPredicate(
+        [DefaultAffordance](const FVistaPlayerActionOption& Option)
+        {
+            return Option.Affordance == DefaultAffordance;
+        });
+    return DefaultIndex != INDEX_NONE ? DefaultIndex : 0;
+}
+
+void AVistaPlayableHomeCharacter::RefreshPlayerActionSelection()
+{
+    FVistaPlayerActionOption PreviousSelection;
+    const bool bHadSelection = GetSelectedPlayerAction(PreviousSelection);
+    TArray<FVistaPlayerActionOption> NextOptions =
+        BuildExecutablePlayerActions();
+    int32 NextIndex = INDEX_NONE;
+    if (bHadSelection)
+    {
+        NextIndex = NextOptions.IndexOfByPredicate(
+            [&PreviousSelection](const FVistaPlayerActionOption& Option)
+            {
+                return Option.Matches(PreviousSelection);
+            });
+    }
+    if (NextIndex == INDEX_NONE)
+    {
+        NextIndex = FindDefaultPlayerActionIndex(NextOptions);
+    }
+    ExecutablePlayerActions = MoveTemp(NextOptions);
+    SelectedPlayerActionIndex = NextIndex;
+}
+
+bool AVistaPlayableHomeCharacter::GetSelectedPlayerAction(
+    FVistaPlayerActionOption& OutAction) const
+{
+    if (!ExecutablePlayerActions.IsValidIndex(SelectedPlayerActionIndex))
+    {
+        return false;
+    }
+    OutAction = ExecutablePlayerActions[SelectedPlayerActionIndex];
+    return IsValid(OutAction.Target);
+}
+
+FVistaInteractionResult
+AVistaPlayableHomeCharacter::PerformSelectedPlayerAction()
+{
+    if (!HasAuthority())
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("AUTHORITY_REQUIRED"));
+    }
+    RefreshPlayerActionSelection();
+    FVistaPlayerActionOption Action;
+    return GetSelectedPlayerAction(Action)
+        ? PerformPlayerAction(Action)
+        : FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::NotFound,
+            TEXT("NO_EXECUTABLE_PLAYER_ACTION"));
+}
+
+FVistaInteractionResult AVistaPlayableHomeCharacter::PerformRequestedPlayerAction(
+    const EVistaAffordance Affordance,
+    AActor* Target,
+    AActor* SecondaryTarget)
+{
+    if (!HasAuthority())
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("AUTHORITY_REQUIRED"));
+    }
+    FVistaPlayerActionOption Requested;
+    Requested.Affordance = Affordance;
+    Requested.Target = Target;
+    Requested.SecondaryTarget = SecondaryTarget;
+    const TArray<FVistaPlayerActionOption> CurrentOptions =
+        BuildExecutablePlayerActions();
+    const FVistaPlayerActionOption* Matched = CurrentOptions.FindByPredicate(
+        [&Requested](const FVistaPlayerActionOption& Option)
+        {
+            return Option.Matches(Requested);
+        });
+    if (Matched == nullptr)
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("PLAYER_ACTION_NOT_AVAILABLE"));
+    }
+    return PerformPlayerAction(*Matched);
+}
+
+FVistaInteractionResult AVistaPlayableHomeCharacter::PerformPlayerAction(
+    const FVistaPlayerActionOption& Action)
+{
+    if (!HasAuthority() || !IsValid(Action.Target))
+    {
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Rejected,
+            TEXT("AUTHORITY_OR_ACTION_TARGET_REQUIRED"));
+    }
+    switch (Action.Affordance)
+    {
+    case EVistaAffordance::PickUp:
+        return BeginPhysicalInteraction(
+            Action.Target,
+            EVistaAffordance::PickUp);
+    case EVistaAffordance::Place:
+        return BeginPhysicalInteraction(
+            Action.Target,
+            EVistaAffordance::Place,
+            Action.SecondaryTarget);
+    case EVistaAffordance::Pour:
+        return BeginSemanticInteraction(
+            Action.Target,
+            EVistaAffordance::Pour,
+            Action.SecondaryTarget);
+    case EVistaAffordance::Inspect:
+        return BeginAnimatedInspectInteraction();
+    case EVistaAffordance::Press:
+    case EVistaAffordance::TurnOn:
+    case EVistaAffordance::TurnOff:
+    case EVistaAffordance::Open:
+    case EVistaAffordance::Close:
+    case EVistaAffordance::Sit:
+    case EVistaAffordance::Stand:
+        return BeginSemanticInteraction(Action.Target, Action.Affordance);
+    default:
+        return FVistaInteractionResult::Failure(
+            EVistaInteractionStatus::Unsupported,
+            TEXT("PLAYER_ACTION_SELECTOR_AFFORDANCE_UNSUPPORTED"));
+    }
 }
 
 FVistaInteractionResult AVistaPlayableHomeCharacter::PerformInspectInteraction()
