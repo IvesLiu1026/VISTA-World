@@ -9,6 +9,7 @@
 #include "VistaActionExecutorComponent.h"
 #include "VistaHomeNpcCharacter.h"
 #include "VistaItemCarrier.h"
+#include "VistaLiquidReceiverActor.h"
 #include "VistaPlayableHomeCharacter.h"
 
 namespace
@@ -469,6 +470,36 @@ void AVistaPickupActor::BeginPlay()
     }
 }
 
+void AVistaPickupActor::EndPlay(
+    const EEndPlayReason::Type EndPlayReason)
+{
+    if (HasAuthority())
+    {
+        UVistaActionExecutorComponent* Executor =
+            ActiveTransactionExecutor.Get();
+        const FName CommandId = ActiveTransactionCommandId;
+        AVistaLiquidReceiverActor* Receiver = ActivePourReceiver.Get();
+        if (Executor != nullptr && !CommandId.IsNone() &&
+            Receiver != nullptr &&
+            IsPourTransactionReservedBy(Executor, CommandId, Receiver))
+        {
+            Receiver->ReleaseReservationForSourceEndPlay(
+                this, Executor, CommandId);
+        }
+
+        // Clear only the identity captured on entry. A different transaction
+        // can never be released as a side effect of peer teardown.
+        if (ActiveTransactionExecutor.Get() == Executor &&
+            ActiveTransactionCommandId == CommandId)
+        {
+            ActivePourReceiver.Reset();
+            ActiveTransactionExecutor.Reset();
+            ActiveTransactionCommandId = NAME_None;
+        }
+    }
+    Super::EndPlay(EndPlayReason);
+}
+
 void AVistaPickupActor::GetLifetimeReplicatedProps(
     TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -820,7 +851,8 @@ bool AVistaPickupActor::TryReserveTransaction(
         return false;
     }
     if (ActiveTransactionExecutor.IsValid() ||
-        !ActiveTransactionCommandId.IsNone())
+        !ActiveTransactionCommandId.IsNone() ||
+        ActivePourReceiver.IsValid())
     {
         return false;
     }
@@ -834,7 +866,8 @@ void AVistaPickupActor::ReleaseTransaction(
     FName CommandId)
 {
     if (ActiveTransactionExecutor.Get() == Executor &&
-        ActiveTransactionCommandId == CommandId)
+        ActiveTransactionCommandId == CommandId &&
+        !ActivePourReceiver.IsValid())
     {
         ActiveTransactionExecutor.Reset();
         ActiveTransactionCommandId = NAME_None;
@@ -848,6 +881,76 @@ bool AVistaPickupActor::IsTransactionReservedBy(
     return IsValid(Executor) && !CommandId.IsNone() &&
         ActiveTransactionExecutor.Get() == Executor &&
         ActiveTransactionCommandId == CommandId;
+}
+
+bool AVistaPickupActor::TryReservePourTransaction(
+    UVistaActionExecutorComponent* Executor,
+    FName CommandId,
+    AVistaLiquidReceiverActor* Receiver)
+{
+    if (!HasAuthority() || !IsValid(Receiver) ||
+        !TryReserveTransaction(Executor, CommandId))
+    {
+        return false;
+    }
+    ActivePourReceiver = Receiver;
+    return IsPourTransactionReservedBy(Executor, CommandId, Receiver);
+}
+
+bool AVistaPickupActor::ReleasePourTransactionReservation(
+    UVistaActionExecutorComponent* Executor,
+    FName CommandId,
+    AVistaLiquidReceiverActor* Receiver)
+{
+    if (!HasAuthority() ||
+        !IsPourTransactionReservedBy(Executor, CommandId, Receiver))
+    {
+        return false;
+    }
+#if WITH_DEV_AUTOMATION_TESTS
+    if (bFailNextPourRelease)
+    {
+        bFailNextPourRelease = false;
+        return false;
+    }
+#endif
+    ActivePourReceiver.Reset();
+    ActiveTransactionExecutor.Reset();
+    ActiveTransactionCommandId = NAME_None;
+    return IsTransactionUnreserved();
+}
+
+bool AVistaPickupActor::ReleasePourReservationForReceiverEndPlay(
+    AVistaLiquidReceiverActor* Receiver,
+    UVistaActionExecutorComponent* Executor,
+    FName CommandId)
+{
+    if (!HasAuthority() ||
+        !IsPourTransactionReservedBy(Executor, CommandId, Receiver))
+    {
+        return false;
+    }
+    ActivePourReceiver.Reset();
+    ActiveTransactionExecutor.Reset();
+    ActiveTransactionCommandId = NAME_None;
+    return IsTransactionUnreserved();
+}
+
+bool AVistaPickupActor::IsPourTransactionReservedBy(
+    const UVistaActionExecutorComponent* Executor,
+    FName CommandId,
+    const AVistaLiquidReceiverActor* Receiver) const
+{
+    return Receiver != nullptr &&
+        IsTransactionReservedBy(Executor, CommandId) &&
+        ActivePourReceiver.Get() == Receiver;
+}
+
+bool AVistaPickupActor::IsTransactionUnreserved() const
+{
+    return !ActiveTransactionExecutor.IsValid() &&
+        ActiveTransactionCommandId.IsNone() &&
+        !ActivePourReceiver.IsValid();
 }
 
 bool AVistaPickupActor::CapturePourTransactionState(
@@ -1020,6 +1123,11 @@ bool AVistaPickupActor::IsReservedForDevAutomation(
     FName CommandId) const
 {
     return IsTransactionReservedBy(Executor, CommandId);
+}
+
+void AVistaPickupActor::FailNextPourReleaseForDevAutomation()
+{
+    bFailNextPourRelease = true;
 }
 #endif
 
