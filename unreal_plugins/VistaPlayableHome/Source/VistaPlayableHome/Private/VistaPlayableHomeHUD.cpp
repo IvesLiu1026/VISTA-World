@@ -360,6 +360,26 @@ void AVistaPlayableHomeHUD::DrawHUD()
     const FLinearColor Muted(0.61f, 0.60f, 0.56f, 1.0f);
     const FLinearColor Accent(0.78f, 0.61f, 0.32f, 1.0f);
 
+    const FString CameraHint = Character->IsFirstPersonViewEnabled()
+        ? TEXT("FIRST PERSON     [V] THIRD PERSON")
+        : TEXT("THIRD PERSON     [V] FIRST PERSON");
+    float CameraHintWidth = 0.0f;
+    float CameraHintHeight = 0.0f;
+    GetTextSize(
+        CameraHint,
+        CameraHintWidth,
+        CameraHintHeight,
+        Font,
+        0.78f * UiScale);
+    DrawText(
+        CameraHint,
+        Muted,
+        Canvas->ClipX - CameraHintWidth - 32.0f * UiScale,
+        32.0f * UiScale,
+        Font,
+        0.78f * UiScale,
+        false);
+
     // A restrained reticle keeps the interaction surface game-like without
     // competing with the world or exposing implementation details.
     const float ReticleSize = 4.0f * UiScale;

@@ -174,6 +174,13 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Camera")
     TObjectPtr<UCameraComponent> FollowCamera;
 
+    /**
+     * Owner-local eye camera. It never replaces the shared pawn or changes
+     * authority; the V key only switches the active presentation component.
+     */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Camera")
+    TObjectPtr<UCameraComponent> FirstPersonCamera;
+
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Interaction")
     TObjectPtr<UVistaInteractionComponent> InteractionComponent;
 
@@ -307,6 +314,16 @@ public:
     UFUNCTION(BlueprintCallable, Category = "VISTA|Camera")
     bool ApplyIndoorCameraProfile(const FVistaIndoorCameraProfile& Profile);
 
+    /** Local presentation toggle; no RPC or replicated gameplay state changes. */
+    UFUNCTION(BlueprintCallable, Category = "VISTA|Camera")
+    bool SetFirstPersonViewEnabled(bool bEnabled);
+
+    UFUNCTION(BlueprintCallable, Category = "VISTA|Camera")
+    void ToggleCameraView();
+
+    UFUNCTION(BlueprintPure, Category = "VISTA|Camera")
+    bool IsFirstPersonViewEnabled() const { return bFirstPersonViewEnabled; }
+
     virtual USceneComponent* VistaGetCarryAnchor_Implementation() const override;
     virtual AActor* VistaGetHeldItem_Implementation() const override;
     virtual bool VistaTryClaimItem_Implementation(AActor* Item) override;
@@ -341,6 +358,11 @@ private:
     float NearCameraHideDistanceCm = 0.0f;
     float NearCameraShowDistanceCm = 0.0f;
     bool bNearCameraVisualHidden = false;
+    bool bFirstPersonViewEnabled = false;
+    bool bCameraPresentationSnapshotValid = false;
+    bool bFollowCameraWasActive = true;
+    bool bFirstPersonCameraWasActive = false;
+    bool bVisualWasHiddenBeforeFirstPerson = false;
 
     UPROPERTY(Transient)
     FVistaInspectionPresentation InspectionPresentation;
@@ -381,6 +403,7 @@ private:
     void DropPressed();
     void InspectPressed();
     void ExitInspectPressed();
+    void ToggleCameraViewPressed();
     void CyclePlayerActionNextPressed();
     void CyclePlayerActionPreviousPressed();
     void ExecuteSelectedPlayerActionPressed();
@@ -394,6 +417,7 @@ private:
     void UpdateNearCameraVisualOcclusion(const FVector& CameraLocation);
     void SetNearCameraVisualHidden(bool bHidden);
     void RestoreNearCameraVisualOcclusion();
+    void RestoreCameraPresentation();
     void BeginInspectionPresentation(
         AActor* Target,
         const FVistaInspectionPresentation& Presentation);
