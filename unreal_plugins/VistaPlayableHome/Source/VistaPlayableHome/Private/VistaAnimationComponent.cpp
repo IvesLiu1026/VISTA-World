@@ -227,13 +227,17 @@ const TCHAR* MannyR18MontageFor(
     }
     if (Type == EVistaNpcActionType::PickUp)
     {
-        return IsValid(Target) ? MannyR18PickupMontage : nullptr;
+        // Pickup/Place use one closed montage per action and do not derive the
+        // animation path from the target class.  Returning the exact path in
+        // target-free queue/player preflight prevents a missing package from
+        // appearing selectable and only failing after participants reserve.
+        return MannyR18PickupMontage;
     }
     if (Type == EVistaNpcActionType::Place || Type == EVistaNpcActionType::Drop)
     {
         // Place and Drop already share the reviewed release/completion
         // transaction: vista_drop_release at frame 34 and completion at 59.
-        return IsValid(Target) ? MannyR18PlaceMontage : nullptr;
+        return MannyR18PlaceMontage;
     }
     if (Type == EVistaNpcActionType::OpenDoor ||
         Type == EVistaNpcActionType::CloseDoor)
@@ -310,6 +314,19 @@ bool ValidateMannyR18Binding(
     }
     if (!IsValid(Target))
     {
+        if (Type == EVistaNpcActionType::PickUp ||
+            Type == EVistaNpcActionType::Place ||
+            Type == EVistaNpcActionType::Drop)
+        {
+            if (!IsExactMannyR18MontageAvailable(
+                    Owner, MannyR18MontageFor(Type, nullptr)))
+            {
+                OutCode = TEXT("ANIMATION_MANNY_R18_RETARGET_UNAVAILABLE");
+                return false;
+            }
+            OutCode = TEXT("ANIMATION_MANNY_R18_RETARGET_APPROVED");
+            return true;
+        }
         // Read-only action enumeration may defer target validation. Runtime
         // StartNpcAction rejects a missing required target before this helper.
         OutCode = TEXT("ANIMATION_TARGET_PREFLIGHT_DEFERRED");
