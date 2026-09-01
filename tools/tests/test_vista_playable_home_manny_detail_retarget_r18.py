@@ -121,10 +121,11 @@ def test_worker_uses_closed_ue57_retarget_api_and_false_success_checks() -> None
         "IKRetargetBatchOperation.duplicate_and_retarget",
         "include_referenced_assets=False",
         "overwrite_existing_files=False",
-        "get_soft_object_path()",
+        "asset.get_asset()",
     ):
         assert authority in worker
     assert "get_object_path_string" not in worker
+    assert "get_soft_object_path" not in worker
     assert 'EXPECTED_ENGINE = "5.7.3-50162420+++UE5+Release-5.7"' in worker
     assert "tracks == expected_tracks" in worker
     assert "is_root_motion_lock_forced(sequence) is True" in worker
