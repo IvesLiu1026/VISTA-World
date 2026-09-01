@@ -362,6 +362,20 @@ private:
         UVistaActionExecutorComponent* Owner,
         const FVistaActionTransactionRecord& Record,
         bool bTerminal);
+    /**
+     * Validate ledger and generation first, release transaction reservations,
+     * then commit generation and the terminal ledger record without yielding
+     * the game thread. The release callback must be closed and non-reentrant.
+     */
+    bool FinalizePhysicalCommand(
+        FName CommandId,
+        const FString& CanonicalRequestHex,
+        UVistaActionExecutorComponent* Owner,
+        FVistaActionTransactionRecord& InOutRecord,
+        bool bCommitSessionGeneration,
+        int32 ExpectedGeneration,
+        TFunctionRef<bool()> ReleaseReservations,
+        FName& OutCode);
     bool GetPhysicalCommandRecord(
         FName CommandId,
         FVistaActionTransactionRecord& OutRecord) const;

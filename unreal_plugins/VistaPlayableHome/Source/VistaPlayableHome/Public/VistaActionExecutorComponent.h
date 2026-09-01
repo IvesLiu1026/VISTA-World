@@ -9,6 +9,7 @@ class AActor;
 class AVistaPickupActor;
 class USceneComponent;
 class UVistaAnimationComponent;
+class UVistaPostureComponent;
 
 /** C++-only closed input to the physical action executor. */
 struct VISTAPLAYABLEHOME_API FVistaPhysicalActionRequest final
@@ -177,12 +178,14 @@ private:
         TWeakObjectPtr<AActor> Requester;
         TWeakObjectPtr<AActor> Target;
         TWeakObjectPtr<UVistaAnimationComponent> Animation;
+        TWeakObjectPtr<UVistaPostureComponent> Posture;
         FVistaActionTransactionRecord Record;
         FName ContactResultCode = NAME_None;
         double StartedAtSeconds = 0.0;
         bool bAnimationStarted = false;
         bool bAlignmentApplied = false;
         bool bTargetReserved = false;
+        bool bPostureTransitionStarted = false;
     };
 
     TOptional<FActivePhysicalAction> ActiveAction;

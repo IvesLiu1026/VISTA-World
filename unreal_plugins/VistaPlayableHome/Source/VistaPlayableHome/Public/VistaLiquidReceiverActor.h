@@ -102,6 +102,14 @@ public:
     UFUNCTION(BlueprintPure, Category = "VISTA|Liquid")
     float GetLiquidLevel() const { return LiquidState.GetLiquidLevel(); }
 
+    /** True whenever any half of the closed source/receiver reservation exists. */
+    UFUNCTION(BlueprintPure, Category = "VISTA|Liquid")
+    bool IsReserved() const
+    {
+        return ActiveTransactionExecutor.IsValid() || !ActiveTransactionCommandId.IsNone() ||
+               ReservedRequester.IsValid() || ReservedSource.IsValid();
+    }
+
     /** Pure deterministic planner used by the executor and automation proof. */
     static bool PlanPourTransition(
         const FVistaLiquidStateSnapshot& SourceBefore,

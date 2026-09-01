@@ -190,6 +190,10 @@ def test_stand_commit_and_rollback_preserve_seated_authority() -> None:
     ) < rollback.index("Seat.ReleaseReservation(")
     assert "SetPostureState(EVistaPostureState::Seated)" in rollback
     assert "POSTURE_STAND_ROLLED_BACK_TO_SEATED" in rollback
+    assert "FinalizeCommittedStand" in source
+    assert "RollbackCommittedStand" in source
+    assert "POSTURE_COMMITTED_STAND_ROLLED_BACK" in source
+    assert "PhysicalStateMatchesSnapshot(Owner, SeatedSnapshot)" in source
 
 
 def test_editor_proof_exercises_reservation_commit_and_both_rollbacks() -> None:

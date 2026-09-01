@@ -1666,20 +1666,6 @@ void UVistaActionExecutorComponent::CompleteSuccess()
         ActiveAction->Requester.IsValid()
             ? ActiveAction->Requester->GetActorTransform()
             : ActiveAction->Record.RequesterContactTransform;
-    if (ActiveAction->Request.bCommitSessionGenerationOnSuccess)
-    {
-        UVistaEventSubsystem* Events = GetWorld()
-            ? GetWorld()->GetSubsystem<UVistaEventSubsystem>() : nullptr;
-        int32 CommittedGeneration = ActiveAction->Request.SessionGeneration;
-        if (!IsValid(Events) || !Events->CommitCommandGeneration(
-                ActiveAction->Request.SessionGeneration, CommittedGeneration))
-        {
-            FinishFailure(EVistaActionTransactionStatus::Failed,
-                          TEXT("SESSION_GENERATION_COMMIT_FAILED"));
-            return;
-        }
-        ActiveAction->Record.SessionGeneration = CommittedGeneration;
-    }
     if (!Transition(
             EVistaActionPhase::Complete,
             ActiveAction->ContactResultCode.IsNone()
@@ -1704,7 +1690,9 @@ void UVistaActionExecutorComponent::CompleteSuccess()
     {
         FinishFailure(
             EVistaActionTransactionStatus::Failed,
-            TEXT("ACTION_LEDGER_TERMINAL_PUBLISH_FAILED"));
+            ActiveAction.IsSet() && !ActiveAction->Record.Code.IsNone()
+                ? ActiveAction->Record.Code
+                : FName(TEXT("ACTION_LEDGER_TERMINAL_PUBLISH_FAILED")));
         return;
     }
     if (UVistaEventSubsystem* Events = GetWorld()
@@ -1859,22 +1847,43 @@ bool UVistaActionExecutorComponent::FinalizeActive(
 {
     check(ActiveAction.IsSet());
     check(IsInGameThread());
-    const bool bPublished = PublishRecord(true);
+    UVistaPlayableHomeRuntimeSubsystem* Runtime =
+        IsValid(GetWorld()) ? GetWorld()->GetSubsystem<UVistaPlayableHomeRuntimeSubsystem>() : nullptr;
+    FName FinalizeCode;
+    const bool bPublished = IsValid(Runtime) &&
+        Runtime->FinalizePhysicalCommand(
+            ActiveAction->Record.CommandId,
+            ActiveAction->CanonicalRequest,
+            this,
+            ActiveAction->Record,
+            ActiveAction->Record.Status == EVistaActionTransactionStatus::Succeeded &&
+                ActiveAction->Request.bCommitSessionGenerationOnSuccess,
+            ActiveAction->Request.SessionGeneration,
+            [this]()
+            {
+                AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(ActiveAction->Target.Get());
+                if (!IsValid(Pickup))
+                {
+                    return false;
+                }
+                Pickup->ReleaseTransaction(this, ActiveAction->Record.CommandId);
+                return !Pickup->IsTransactionReservedBy(this, ActiveAction->Record.CommandId);
+            },
+            FinalizeCode);
     ensureMsgf(
         bPublished,
-        TEXT("VISTA terminal action record publish failed"));
+        TEXT("VISTA terminal action record publish failed: %s"),
+        *FinalizeCode.ToString());
     if (!bPublished)
     {
+        ActiveAction->Record.Code =
+            FinalizeCode.IsNone() ? FName(TEXT("ACTION_LEDGER_TERMINAL_PUBLISH_FAILED")) : FinalizeCode;
         return false;
     }
     const FVistaActionTransactionRecord Record = ActiveAction->Record;
     if (OutFinalRecord != nullptr)
     {
         *OutFinalRecord = Record;
-    }
-    if (AVistaPickupActor* Pickup = Cast<AVistaPickupActor>(ActiveAction->Target.Get()))
-    {
-        Pickup->ReleaseTransaction(this, Record.CommandId);
     }
     ActiveAction.Reset();
     return true;

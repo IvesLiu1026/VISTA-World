@@ -316,6 +316,8 @@ const TCHAR* AffordanceText(const EVistaAffordance Affordance)
     case EVistaAffordance::Press: return TEXT("press");
     case EVistaAffordance::TurnOn: return TEXT("turn_on");
     case EVistaAffordance::TurnOff: return TEXT("turn_off");
+    case EVistaAffordance::Stand:
+        return TEXT("stand");
     default: return TEXT("inspect");
     }
 }
@@ -708,6 +710,7 @@ TOptional<EVistaAffordance> ParseAffordance(const FString& Value)
     if (Value == TEXT("press")) return EVistaAffordance::Press;
     if (Value == TEXT("turn_on")) return EVistaAffordance::TurnOn;
     if (Value == TEXT("turn_off")) return EVistaAffordance::TurnOff;
+    if (Value == TEXT("stand")) return EVistaAffordance::Stand;
     return {};
 }
 
@@ -726,6 +729,7 @@ TOptional<EVistaNpcActionType> ParseNpcAction(const FString& Value)
     if (Value == TEXT("turn_on")) return EVistaNpcActionType::TurnOn;
     if (Value == TEXT("turn_off")) return EVistaNpcActionType::TurnOff;
     if (Value == TEXT("sit")) return EVistaNpcActionType::Sit;
+    if (Value == TEXT("stand")) return EVistaNpcActionType::StandUp;
     if (Value == TEXT("wait")) return EVistaNpcActionType::Wait;
     if (Value == TEXT("speak")) return EVistaNpcActionType::Speak;
     if (Value == TEXT("brace")) return EVistaNpcActionType::Brace;
