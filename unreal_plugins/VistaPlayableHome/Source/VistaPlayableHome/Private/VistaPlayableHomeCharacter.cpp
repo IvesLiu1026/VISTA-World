@@ -469,9 +469,9 @@ void AVistaPlayableHomeCharacter::Tick(float DeltaSeconds)
         return;
     }
 
-    UWorld* World = GetWorld();
+    UWorld* InspectionWorld = GetWorld();
     AActor* Target = InspectedTarget.Get();
-    if (!IsValid(World) || !IsValid(Target))
+    if (!IsValid(InspectionWorld) || !IsValid(Target))
     {
         const FString LostSemanticId = InspectionPresentation.SemanticId;
         ExitInspection();
@@ -482,7 +482,7 @@ void AVistaPlayableHomeCharacter::Tick(float DeltaSeconds)
                 LostSemanticId));
         return;
     }
-    if (World->GetTimeSeconds() - InspectionStartedAtSeconds >=
+    if (InspectionWorld->GetTimeSeconds() - InspectionStartedAtSeconds >=
         InspectionMaximumSeconds)
     {
         const FString TimedOutSemanticId = InspectionPresentation.SemanticId;
