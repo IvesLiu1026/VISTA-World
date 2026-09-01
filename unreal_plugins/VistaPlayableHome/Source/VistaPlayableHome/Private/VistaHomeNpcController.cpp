@@ -9,6 +9,7 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "VistaAnimationComponent.h"
 #include "VistaActionExecutorComponent.h"
+#include "VistaContainerActor.h"
 #include "VistaEventSubsystem.h"
 #include "VistaHomeNpcCharacter.h"
 #include "VistaInteractable.h"
@@ -63,6 +64,8 @@ TOptional<EVistaAffordance> AffordanceForAction(EVistaNpcActionType Type)
     case EVistaNpcActionType::TurnOn: return EVistaAffordance::TurnOn;
     case EVistaNpcActionType::TurnOff: return EVistaAffordance::TurnOff;
     case EVistaNpcActionType::Pour: return EVistaAffordance::Pour;
+    case EVistaNpcActionType::Insert: return EVistaAffordance::Insert;
+    case EVistaNpcActionType::Remove: return EVistaAffordance::Remove;
     case EVistaNpcActionType::Sit: return EVistaAffordance::Sit;
     case EVistaNpcActionType::StandUp:
         return EVistaAffordance::Stand;
@@ -139,19 +142,27 @@ bool AVistaHomeNpcController::ValidateAction(
         OutCode = TEXT("DROP_TARGET_UNEXPECTED");
         return false;
     }
-    if (Action.Type == EVistaNpcActionType::Pour &&
+    const bool bTwoTargetAction =
+        Action.Type == EVistaNpcActionType::Pour ||
+        Action.Type == EVistaNpcActionType::Insert ||
+        Action.Type == EVistaNpcActionType::Remove;
+    if (bTwoTargetAction &&
         (Action.SecondaryTargetSemanticId.IsEmpty() ||
          Action.SecondaryTargetSemanticId == Action.TargetSemanticId ||
          !Action.TargetLocation.IsNearlyZero()))
     {
         OutCode = !Action.TargetLocation.IsNearlyZero()
-            ? FName(TEXT("POUR_LOCATION_UNEXPECTED"))
+            ? FName(TEXT("TWO_TARGET_LOCATION_UNEXPECTED"))
             : Action.SecondaryTargetSemanticId.IsEmpty()
-                ? FName(TEXT("POUR_SECONDARY_TARGET_REQUIRED"))
-                : FName(TEXT("POUR_TARGETS_MUST_DIFFER"));
+                ? Action.Type == EVistaNpcActionType::Pour
+                    ? FName(TEXT("POUR_SECONDARY_TARGET_REQUIRED"))
+                    : FName(TEXT("STORAGE_CONTAINER_REQUIRED"))
+                : Action.Type == EVistaNpcActionType::Pour
+                    ? FName(TEXT("POUR_TARGETS_MUST_DIFFER"))
+                    : FName(TEXT("STORAGE_TARGETS_MUST_DIFFER"));
         return false;
     }
-    if (Action.Type != EVistaNpcActionType::Pour &&
+    if (!bTwoTargetAction &&
         !Action.SecondaryTargetSemanticId.IsEmpty())
     {
         OutCode = TEXT("SECONDARY_TARGET_UNEXPECTED");
@@ -214,6 +225,8 @@ bool AVistaHomeNpcController::ValidateAction(
         Action.Type == EVistaNpcActionType::TurnOn ||
         Action.Type == EVistaNpcActionType::TurnOff ||
         Action.Type == EVistaNpcActionType::Pour ||
+        Action.Type == EVistaNpcActionType::Insert ||
+        Action.Type == EVistaNpcActionType::Remove ||
         Action.Type == EVistaNpcActionType::Sit ||
         Action.Type == EVistaNpcActionType::StandUp)
     {
@@ -221,11 +234,16 @@ bool AVistaHomeNpcController::ValidateAction(
             ? GetPawn()->FindComponentByClass<UVistaAnimationComponent>()
             : nullptr;
         if (!IsValid(Animation) ||
+            !UVistaAnimationComponent::SupportsAction(Action.Type) ||
             !Animation->HasApprovedMutationAnimation(Action.Type, OutCode))
         {
             if (!IsValid(Animation))
             {
                 OutCode = TEXT("ANIMATION_COMPONENT_UNAVAILABLE");
+            }
+            else if (!UVistaAnimationComponent::SupportsAction(Action.Type))
+            {
+                OutCode = TEXT("ANIMATION_ACTION_UNSUPPORTED");
             }
             return false;
         }
@@ -315,6 +333,8 @@ bool AVistaHomeNpcController::PreflightActionQueue(
         IsValid(Posture->GetActiveSeat()) ? Posture->GetActiveSeat()->SemanticId : FString();
     TMap<FString, FVistaLiquidStateSnapshot> SimulatedSourceLiquids;
     TMap<FString, FVistaLiquidStateSnapshot> SimulatedReceiverLiquids;
+    TMap<FString, bool> SimulatedContainerOpen;
+    TMap<FString, FString> SimulatedContainerContents;
     for (const FVistaNpcAction& Action : Actions)
     {
         if (!ValidateActionTargetReadOnly(
@@ -324,6 +344,8 @@ bool AVistaHomeNpcController::PreflightActionQueue(
                 SimulatedSeatSemanticId,
                 SimulatedSourceLiquids,
                 SimulatedReceiverLiquids,
+                SimulatedContainerOpen,
+                SimulatedContainerContents,
                 OutCode))
         {
             return false;
@@ -340,6 +362,8 @@ bool AVistaHomeNpcController::ValidateActionTargetReadOnly(
     FString& InOutSimulatedSeatSemanticId,
     TMap<FString, FVistaLiquidStateSnapshot>& InOutSimulatedSourceLiquids,
     TMap<FString, FVistaLiquidStateSnapshot>& InOutSimulatedReceiverLiquids,
+    TMap<FString, bool>& InOutSimulatedContainerOpen,
+    TMap<FString, FString>& InOutSimulatedContainerContents,
     FName& OutCode) const
 {
     if (!IsValid(GetPawn()))
@@ -580,6 +604,126 @@ bool AVistaHomeNpcController::ValidateActionTargetReadOnly(
         return true;
     }
 
+    if (Action.Type == EVistaNpcActionType::Insert ||
+        Action.Type == EVistaNpcActionType::Remove)
+    {
+        AVistaPickupActor* Item = Cast<AVistaPickupActor>(Target);
+        AVistaContainerActor* Container =
+            Cast<AVistaContainerActor>(SecondaryTarget);
+        if (!IsValid(Item) || !IsValid(Container) ||
+            Container->IsStorageReserved() ||
+            !SupportsAffordanceReadOnly(
+                Item,
+                Action.Type == EVistaNpcActionType::Insert
+                    ? EVistaAffordance::Insert
+                    : EVistaAffordance::Remove) ||
+            !SupportsAffordanceReadOnly(
+                Container,
+                Action.Type == EVistaNpcActionType::Insert
+                    ? EVistaAffordance::Insert
+                    : EVistaAffordance::Remove))
+        {
+            OutCode = IsValid(Container) && Container->IsStorageReserved()
+                ? FName(TEXT("CONTAINER_TARGET_BUSY"))
+                : FName(TEXT("STORAGE_PARTICIPANT_INVALID"));
+            return false;
+        }
+        if (!Container->AllowedItemSemanticIds.IsEmpty() &&
+            !Container->AllowedItemSemanticIds.Contains(Item->SemanticId))
+        {
+            OutCode = TEXT("CONTAINER_ITEM_NOT_ALLOWED");
+            return false;
+        }
+        const bool bSimulatedOpen =
+            InOutSimulatedContainerOpen.Contains(Container->SemanticId)
+            ? InOutSimulatedContainerOpen.FindChecked(Container->SemanticId)
+            : Container->IsOpen();
+        const FString SimulatedContents =
+            InOutSimulatedContainerContents.Contains(Container->SemanticId)
+            ? InOutSimulatedContainerContents.FindChecked(
+                  Container->SemanticId)
+            : Container->GetContainedItemSemanticId();
+        if (!bSimulatedOpen)
+        {
+            OutCode = TEXT("CONTAINER_CLOSED");
+            return false;
+        }
+        if (Action.Type == EVistaNpcActionType::Insert)
+        {
+            if (InOutSimulatedHeldItem != Item)
+            {
+                OutCode = TEXT("INSERT_ITEM_NOT_EXACTLY_HELD");
+                return false;
+            }
+            if (!SimulatedContents.IsEmpty())
+            {
+                OutCode = TEXT("CONTAINER_FULL");
+                return false;
+            }
+            InOutSimulatedHeldItem = nullptr;
+            InOutSimulatedContainerContents.Add(
+                Container->SemanticId,
+                Item->SemanticId);
+        }
+        else
+        {
+            if (IsValid(InOutSimulatedHeldItem))
+            {
+                OutCode = TEXT("CARRIER_SLOT_UNAVAILABLE");
+                return false;
+            }
+            if (SimulatedContents != Item->SemanticId)
+            {
+                OutCode = TEXT("REMOVE_ITEM_NOT_IN_EXACT_CONTAINER");
+                return false;
+            }
+            InOutSimulatedHeldItem = Item;
+            InOutSimulatedContainerContents.Add(
+                Container->SemanticId,
+                FString());
+        }
+        const UVistaAnimationComponent* Animation =
+            GetPawn()->FindComponentByClass<UVistaAnimationComponent>();
+        if (!IsValid(Animation) ||
+            !Animation->HasApprovedMutationAnimation(
+                Action.Type, Container, OutCode))
+        {
+            if (!IsValid(Animation))
+            {
+                OutCode = TEXT("ANIMATION_COMPONENT_UNAVAILABLE");
+            }
+            return false;
+        }
+        OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
+        return true;
+    }
+
+    if (Action.Type == EVistaNpcActionType::OpenDoor ||
+        Action.Type == EVistaNpcActionType::CloseDoor)
+    {
+        if (AVistaContainerActor* Container =
+                Cast<AVistaContainerActor>(Target))
+        {
+            const bool bOpen =
+                InOutSimulatedContainerOpen.Contains(Container->SemanticId)
+                ? InOutSimulatedContainerOpen.FindChecked(
+                      Container->SemanticId)
+                : Container->IsOpen();
+            const bool bRequestedOpen =
+                Action.Type == EVistaNpcActionType::OpenDoor;
+            if (bOpen == bRequestedOpen)
+            {
+                OutCode = bOpen
+                    ? FName(TEXT("CONTAINER_ALREADY_OPEN"))
+                    : FName(TEXT("CONTAINER_ALREADY_CLOSED"));
+                return false;
+            }
+            InOutSimulatedContainerOpen.Add(
+                Container->SemanticId,
+                bRequestedOpen);
+        }
+    }
+
     const TOptional<EVistaAffordance> Affordance =
         AffordanceForAction(Action.Type);
     if (Affordance.IsSet())
@@ -817,6 +961,8 @@ void AVistaHomeNpcController::StartCurrentAction()
         Action.Type == EVistaNpcActionType::TurnOn ||
         Action.Type == EVistaNpcActionType::TurnOff ||
         Action.Type == EVistaNpcActionType::Pour ||
+        Action.Type == EVistaNpcActionType::Insert ||
+        Action.Type == EVistaNpcActionType::Remove ||
         Action.Type == EVistaNpcActionType::Sit ||
         Action.Type == EVistaNpcActionType::StandUp)
     {
@@ -1009,6 +1155,8 @@ bool AVistaHomeNpcController::StartPhysicalAction(
         Action.Type == EVistaNpcActionType::TurnOn ||
         Action.Type == EVistaNpcActionType::TurnOff ||
         Action.Type == EVistaNpcActionType::Pour ||
+        Action.Type == EVistaNpcActionType::Insert ||
+        Action.Type == EVistaNpcActionType::Remove ||
         Action.Type == EVistaNpcActionType::Sit ||
         Action.Type == EVistaNpcActionType::StandUp)
     {
@@ -1026,12 +1174,18 @@ bool AVistaHomeNpcController::StartPhysicalAction(
         AActor* SecondaryTarget = Action.SecondaryTargetSemanticId.IsEmpty()
             ? nullptr
             : ResolveSemanticActor(Action.SecondaryTargetSemanticId);
-        if (Action.Type == EVistaNpcActionType::Pour &&
+        const bool bTwoTargetAction =
+            Action.Type == EVistaNpcActionType::Pour ||
+            Action.Type == EVistaNpcActionType::Insert ||
+            Action.Type == EVistaNpcActionType::Remove;
+        if (bTwoTargetAction &&
             !IsValid(SecondaryTarget))
         {
             CompleteCurrent(
                 EVistaNpcActionStatus::Failed,
-                TEXT("POUR_RECEIVER_NOT_FOUND"));
+                Action.Type == EVistaNpcActionType::Pour
+                    ? TEXT("POUR_RECEIVER_NOT_FOUND")
+                    : TEXT("STORAGE_CONTAINER_NOT_FOUND"));
             return false;
         }
         Request.SecondaryTarget = SecondaryTarget;
@@ -1062,6 +1216,12 @@ bool AVistaHomeNpcController::StartPhysicalAction(
             break;
         case EVistaNpcActionType::Pour:
             Request.Affordance = EVistaAffordance::Pour;
+            break;
+        case EVistaNpcActionType::Insert:
+            Request.Affordance = EVistaAffordance::Insert;
+            break;
+        case EVistaNpcActionType::Remove:
+            Request.Affordance = EVistaAffordance::Remove;
             break;
         case EVistaNpcActionType::Sit:
             Request.Affordance = EVistaAffordance::Sit;
@@ -1181,6 +1341,8 @@ bool AVistaHomeNpcController::PollPhysicalAction()
          CurrentAction->Type != EVistaNpcActionType::TurnOn &&
          CurrentAction->Type != EVistaNpcActionType::TurnOff &&
          CurrentAction->Type != EVistaNpcActionType::Pour &&
+         CurrentAction->Type != EVistaNpcActionType::Insert &&
+         CurrentAction->Type != EVistaNpcActionType::Remove &&
          CurrentAction->Type != EVistaNpcActionType::Sit &&
          CurrentAction->Type != EVistaNpcActionType::StandUp))
     {

@@ -6,6 +6,7 @@
 
 class UStaticMeshComponent;
 class UStaticMesh;
+class AVistaContainerActor;
 class AVistaLiquidReceiverActor;
 class AVistaPlayableHomeCharacter;
 class UVistaActionExecutorComponent;
@@ -26,6 +27,10 @@ struct VISTAPLAYABLEHOME_API FVistaPickupReplicatedDisposition
 
     UPROPERTY()
     FString PlacementAnchorSemanticId;
+
+    /** Exact storage authority while Disposition is Contained. */
+    UPROPERTY()
+    TObjectPtr<AVistaContainerActor> StorageContainer = nullptr;
 
     UPROPERTY()
     FTransform WorldTransform = FTransform::Identity;
@@ -114,6 +119,12 @@ public:
         return PhysicalDisposition.Disposition;
     }
 
+    UFUNCTION(BlueprintPure, Category = "VISTA|Pickup")
+    FString GetContainedInSemanticId() const;
+
+    UFUNCTION(BlueprintPure, Category = "VISTA|Pickup")
+    bool IsContainedIn(const AVistaContainerActor* Container) const;
+
     UFUNCTION(BlueprintPure, Category = "VISTA|Liquid")
     FVistaLiquidStateSnapshot GetLiquidState() const { return LiquidState; }
 
@@ -142,6 +153,7 @@ public:
         FName CommandId) const;
     void FailNextPourReleaseForDevAutomation();
     void ReleasePourReservationForEndPlayForDevAutomation();
+    void ReleaseStorageReservationForEndPlayForDevAutomation();
 #endif
 
     virtual FVistaEntityRuntimeState VistaGetRuntimeState_Implementation() const override;
@@ -159,6 +171,7 @@ protected:
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+    friend class AVistaContainerActor;
     friend class AVistaLiquidReceiverActor;
     friend class AVistaPlayableHomeCharacter;
     friend class UVistaActionExecutorComponent;
@@ -173,6 +186,7 @@ private:
     TWeakObjectPtr<UVistaActionExecutorComponent> ActiveTransactionExecutor;
     FName ActiveTransactionCommandId = NAME_None;
     TWeakObjectPtr<AVistaLiquidReceiverActor> ActivePourReceiver;
+    TWeakObjectPtr<AVistaContainerActor> ActiveStorageContainer;
 
 #if WITH_DEV_AUTOMATION_TESTS
     bool bFailNextPourRelease = false;
@@ -211,6 +225,40 @@ private:
         const AVistaLiquidReceiverActor* Receiver) const;
     bool IsTransactionUnreserved() const;
     void ReleaseActivePourReservationForEndPlay();
+    bool TryReserveStorageTransaction(
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        AVistaContainerActor* Container);
+    bool ReleaseStorageTransactionReservation(
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        AVistaContainerActor* Container);
+    bool ReleaseStorageReservationForContainerEndPlay(
+        AVistaContainerActor* Container,
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId);
+    bool IsStorageTransactionReservedBy(
+        const UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        const AVistaContainerActor* Container) const;
+    void ReleaseActiveStorageReservationForEndPlay();
+    bool CaptureStorageTransactionState(
+        const AActor* ExpectedRequester,
+        const AVistaContainerActor* ExpectedContainer,
+        EVistaAffordance Affordance,
+        FVistaPickupPhysicalStateSnapshot& OutPhysical,
+        FName& OutCode) const;
+    FVistaInteractionResult CommitStorageInsert(
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        AActor* Requester,
+        AVistaContainerActor* Container,
+        USceneComponent* ContentsAnchor);
+    FVistaInteractionResult CommitStorageRemove(
+        UVistaActionExecutorComponent* Executor,
+        FName CommandId,
+        AActor* Requester,
+        AVistaContainerActor* Container);
     /** The only gameplay pickup/place/drop mutation entry; called at contact. */
     FVistaInteractionResult CommitTransactionalInteraction(
         UVistaActionExecutorComponent* Executor,

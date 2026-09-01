@@ -18,10 +18,19 @@ def test_closed_posture_actions_are_appended_and_transport_visible() -> None:
     tcp = _text(RUNTIME / "Private/VistaWorldTcpAdapter.cpp")
 
     assert "Pour,\n    /** Leave" in types
-    assert "Stand\n};" in types
+    # R16 posture values remain before any later append-only affordances.  Do
+    # not require Stand to remain the final enum member as new closed slices
+    # append values without renumbering the existing wire contract.
+    affordance_enum = types.split("enum class EVistaAffordance", 1)[1].split(
+        "};", 1
+    )[0]
+    assert affordance_enum.index("Stand,") < affordance_enum.index("Insert,")
     assert "Pour,\n    /** Internal loop" in types
     assert "SeatedIdle,\n    /** Transactional return" in types
-    assert "StandUp\n};" in types
+    npc_action_enum = types.split("enum class EVistaNpcActionType", 1)[1].split(
+        "};", 1
+    )[0]
+    assert npc_action_enum.index("StandUp,") < npc_action_enum.index("Insert,")
     assert 'Value == TEXT("stand")' in tcp
     assert "return EVistaAffordance::Stand" in tcp
     assert "return EVistaNpcActionType::StandUp" in tcp

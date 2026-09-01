@@ -6,6 +6,7 @@
 #include "VistaActionExecutorComponent.generated.h"
 
 class AActor;
+class AVistaContainerActor;
 class AVistaLiquidReceiverActor;
 class AVistaPickupActor;
 class USceneComponent;
@@ -183,6 +184,11 @@ private:
         TWeakObjectPtr<AActor> SecondaryTarget;
         TWeakObjectPtr<AVistaPickupActor> PourSource;
         TWeakObjectPtr<AVistaLiquidReceiverActor> PourReceiver;
+        TWeakObjectPtr<AVistaPickupActor> StorageItem;
+        TWeakObjectPtr<AVistaContainerActor> StorageContainer;
+        TWeakObjectPtr<USceneComponent> StorageBeforeAttachmentParent;
+        TWeakObjectPtr<AActor> StorageBeforeCarrier;
+        TWeakObjectPtr<AActor> StorageBeforeRequesterInventoryItem;
         TWeakObjectPtr<UVistaAnimationComponent> Animation;
         TWeakObjectPtr<UVistaPostureComponent> Posture;
         FVistaLiquidStateSnapshot PourSourceBefore;
@@ -197,6 +203,9 @@ private:
         bool bSecondaryTargetReserved = false;
         bool bHasPourSnapshots = false;
         bool bHasPourAlignedPhysical = false;
+        bool bHasStorageSnapshots = false;
+        bool bHasStorageAlignedPhysical = false;
+        FVistaPickupPhysicalStateSnapshot StorageAlignedPhysical;
         bool bPostureTransitionStarted = false;
     };
 
@@ -272,5 +281,6 @@ private:
     bool FinalizeSemantic(
         FVistaActionTransactionRecord* OutFinalRecord = nullptr);
     bool ReleaseSemanticTargetReservation();
+    bool RestoreAndVerifyStorageBeforeState(FName& OutCode);
     void AbandonSemanticAfterPublishFailure();
 };

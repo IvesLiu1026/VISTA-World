@@ -562,30 +562,40 @@ FVistaLiveCommandResult UVistaPlayableHomeRuntimeSubsystem::ExecuteInteraction(
         return Output;
     }
     const bool bPour = Command.Affordance == EVistaAffordance::Pour;
-    if (bPour && Command.SecondaryTargetSemanticId.IsEmpty())
+    const bool bStorageTransfer =
+        Command.Affordance == EVistaAffordance::Insert ||
+        Command.Affordance == EVistaAffordance::Remove;
+    const bool bTwoTarget = bPour || bStorageTransfer;
+    if (bTwoTarget && Command.SecondaryTargetSemanticId.IsEmpty())
     {
-        Output.Code = TEXT("POUR_RECEIVER_REQUIRED");
+        Output.Code = bPour
+            ? FName(TEXT("POUR_RECEIVER_REQUIRED"))
+            : FName(TEXT("STORAGE_CONTAINER_REQUIRED"));
         return Output;
     }
-    if (bPour &&
+    if (bTwoTarget &&
         Command.SecondaryTargetSemanticId == Command.TargetSemanticId)
     {
-        Output.Code = TEXT("POUR_TARGETS_MUST_DIFFER");
+        Output.Code = bPour
+            ? FName(TEXT("POUR_TARGETS_MUST_DIFFER"))
+            : FName(TEXT("STORAGE_TARGETS_MUST_DIFFER"));
         return Output;
     }
-    if (!bPour && !Command.SecondaryTargetSemanticId.IsEmpty())
+    if (!bTwoTarget && !Command.SecondaryTargetSemanticId.IsEmpty())
     {
         Output.Code = TEXT("SECONDARY_TARGET_UNEXPECTED");
         return Output;
     }
-    AActor* SecondaryTarget = bPour
+    AActor* SecondaryTarget = bTwoTarget
         ? ResolveSemanticActor(Command.SecondaryTargetSemanticId) : nullptr;
-    if (bPour &&
+    if (bTwoTarget &&
         (!IsValid(SecondaryTarget) ||
          !SecondaryTarget->GetClass()->ImplementsInterface(
              UVistaInteractable::StaticClass())))
     {
-        Output.Code = TEXT("POUR_RECEIVER_NOT_INTERACTABLE");
+        Output.Code = bPour
+            ? FName(TEXT("POUR_RECEIVER_NOT_INTERACTABLE"))
+            : FName(TEXT("STORAGE_CONTAINER_NOT_INTERACTABLE"));
         return Output;
     }
 

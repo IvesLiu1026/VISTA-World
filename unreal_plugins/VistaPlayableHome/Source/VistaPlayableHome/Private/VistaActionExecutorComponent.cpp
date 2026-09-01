@@ -238,7 +238,8 @@ bool PhysicalSnapshotMatchesEffect(
             VectorBitsEqual(Snapshot.LinearVelocity, FVector::ZeroVector) &&
             VectorBitsEqual(
                 Snapshot.AngularVelocityDegrees, FVector::ZeroVector) &&
-            Snapshot.PlacedAtSemanticId.IsEmpty();
+            Snapshot.PlacedAtSemanticId.IsEmpty() &&
+            Snapshot.ContainedInSemanticId.IsEmpty();
     case EVistaAffordance::Drop:
         return !Snapshot.bHeld && Snapshot.bSimulatePhysics &&
             !Snapshot.bHasAttachmentParent && CurrentParent == nullptr &&
@@ -259,7 +260,8 @@ bool PhysicalSnapshotMatchesEffect(
             VectorBitsEqual(Snapshot.LinearVelocity, Request.ReleaseVelocity) &&
             VectorBitsEqual(
                 Snapshot.AngularVelocityDegrees, FVector::ZeroVector) &&
-            Snapshot.PlacedAtSemanticId.IsEmpty();
+            Snapshot.PlacedAtSemanticId.IsEmpty() &&
+            Snapshot.ContainedInSemanticId.IsEmpty();
     case EVistaAffordance::Place:
         return !Snapshot.bHeld && !Snapshot.bSimulatePhysics &&
             !Snapshot.bHasAttachmentParent && CurrentParent == nullptr &&
@@ -284,7 +286,8 @@ bool PhysicalSnapshotMatchesEffect(
             VectorBitsEqual(Snapshot.LinearVelocity, FVector::ZeroVector) &&
             VectorBitsEqual(
                 Snapshot.AngularVelocityDegrees, FVector::ZeroVector) &&
-            Snapshot.PlacedAtSemanticId == Request.PlacementAnchorSemanticId;
+            Snapshot.PlacedAtSemanticId == Request.PlacementAnchorSemanticId &&
+            Snapshot.ContainedInSemanticId.IsEmpty();
     default:
         return false;
     }
@@ -743,7 +746,8 @@ bool UVistaActionExecutorComponent::PhysicalSnapshotsEquivalent(
             Right.InventoryCarrierSemanticId &&
         Left.bInventorySlotOccupied == Right.bInventorySlotOccupied &&
         Left.InventoryItemSemanticId == Right.InventoryItemSemanticId &&
-        Left.PlacedAtSemanticId == Right.PlacedAtSemanticId;
+        Left.PlacedAtSemanticId == Right.PlacedAtSemanticId &&
+        Left.ContainedInSemanticId == Right.ContainedInSemanticId;
 }
 
 bool UVistaActionExecutorComponent::RestoreAndVerifyBeforePhysicalState(
@@ -814,6 +818,8 @@ bool UVistaActionExecutorComponent::RestoreAndVerifyBeforePhysicalState(
             ActiveAction->BeforeRequesterInventoryItem.Get();
     const EVistaPickupDisposition BeforeDisposition = Before.bHeld
         ? EVistaPickupDisposition::Held
+        : !Before.ContainedInSemanticId.IsEmpty()
+            ? EVistaPickupDisposition::Contained
         : Before.PlacedAtSemanticId.IsEmpty()
             ? EVistaPickupDisposition::Free
             : EVistaPickupDisposition::Placed;
@@ -1028,6 +1034,15 @@ bool UVistaActionExecutorComponent::BeginPhysicalInteractionImpl(
     {
         return RejectNewRequest(
             InputRequest, InputRequest, TEXT("PHYSICAL_STATE_MISMATCH"), OutRecord);
+    }
+    if (InputRequest.Affordance == EVistaAffordance::PickUp &&
+        Pickup->GetPhysicalDisposition() == EVistaPickupDisposition::Contained)
+    {
+        return RejectNewRequest(
+            InputRequest,
+            InputRequest,
+            TEXT("ITEM_CONTAINED_REMOVE_REQUIRED"),
+            OutRecord);
     }
     AActor* RequesterInventoryItem =
         IVistaItemCarrier::Execute_VistaGetHeldItem(Requester);
