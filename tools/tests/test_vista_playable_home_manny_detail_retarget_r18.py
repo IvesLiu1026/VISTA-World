@@ -127,7 +127,8 @@ def test_worker_uses_closed_ue57_retarget_api_and_false_success_checks() -> None
     assert "get_object_path_string" not in worker
     assert "get_soft_object_path" not in worker
     assert 'EXPECTED_ENGINE = "5.7.3-50162420+++UE5+Release-5.7"' in worker
-    assert "tracks == expected_tracks" in worker
+    assert "track_keys == expected_track_keys" in worker
+    assert "name.casefold() for name in tracks" in worker
     assert "is_root_motion_lock_forced(sequence) is True" in worker
     assert "RootMotionRootLock.REF_POSE" in worker
     assert "retargeted motion is structurally static" in worker
