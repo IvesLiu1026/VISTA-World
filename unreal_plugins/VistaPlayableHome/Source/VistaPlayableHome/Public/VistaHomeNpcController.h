@@ -105,6 +105,10 @@ private:
                                           InOutSimulatedSourceLiquids,
                                       TMap<FString, FVistaLiquidStateSnapshot>&
                                           InOutSimulatedReceiverLiquids,
+                                      TMap<FString, bool>&
+                                          InOutSimulatedContainerOpen,
+                                      TMap<FString, FString>&
+                                          InOutSimulatedContainerContents,
                                       FName& OutCode) const;
     void StopControlledMotion();
     void EnterCommandedIdle(bool bMotionAlreadyStopped = false);

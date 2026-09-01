@@ -5,6 +5,7 @@
 #include "EngineUtils.h"
 #include "HAL/PlatformMemory.h"
 #include "VistaActionExecutorComponent.h"
+#include "VistaContainerActor.h"
 #include "VistaHomeNpcCharacter.h"
 #include "VistaHomeNpcController.h"
 #include "VistaInteractable.h"
@@ -745,6 +746,13 @@ bool UVistaEventSubsystem::EnsurePhysicalActionsQuiescent(FName& OutCode) const
             OutCode = TEXT("EVENT_RESET_TARGET_RESERVED");
             return false;
         }
+        if (const AVistaContainerActor* Container =
+                Cast<AVistaContainerActor>(*It);
+            IsValid(Container) && Container->IsStorageReserved())
+        {
+            OutCode = TEXT("EVENT_RESET_TARGET_RESERVED");
+            return false;
+        }
         if (const AVistaSeatActor* Seat = Cast<AVistaSeatActor>(*It); IsValid(Seat) && Seat->IsReserved())
         {
             OutCode = TEXT("EVENT_RESET_TARGET_RESERVED");
@@ -880,8 +888,11 @@ bool UVistaEventSubsystem::RestoreBaseline(FName& OutCode)
         if (Actor->GetClass()->ImplementsInterface(UVistaInteractable::StaticClass()))
         {
             const FVistaInteractionResult Result =
-                IVistaInteractable::Execute_VistaApplyRuntimeState(
-                    Actor, Pair.Value);
+                Cast<AVistaContainerActor>(Actor)
+                ? CastChecked<AVistaContainerActor>(Actor)
+                      ->RestoreBaselineStateForEvent(Pair.Value)
+                : IVistaInteractable::Execute_VistaApplyRuntimeState(
+                      Actor, Pair.Value);
             if (!Result.IsSuccess())
             {
                 OutCode = Result.Code.IsNone()

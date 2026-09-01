@@ -72,7 +72,8 @@ bool PhysicalSnapshotsBitExact(
             Right.InventoryCarrierSemanticId &&
         Left.bInventorySlotOccupied == Right.bInventorySlotOccupied &&
         Left.InventoryItemSemanticId == Right.InventoryItemSemanticId &&
-        Left.PlacedAtSemanticId == Right.PlacedAtSemanticId;
+        Left.PlacedAtSemanticId == Right.PlacedAtSemanticId &&
+        Left.ContainedInSemanticId == Right.ContainedInSemanticId;
 }
 
 bool LiquidStatesBitExact(

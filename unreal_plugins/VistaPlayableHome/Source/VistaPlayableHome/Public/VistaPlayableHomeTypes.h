@@ -29,7 +29,11 @@ enum class EVistaAffordance : uint8
     /** Transfer liquid from one held pourable pickup into one typed receiver. */
     Pour,
     /** Leave the requester's currently occupied authored seat. */
-    Stand
+    Stand,
+    /** Move the exact held pickup into one exact open storage container. */
+    Insert,
+    /** Move the exact stored pickup from one exact open container to the requester. */
+    Remove
 };
 
 UENUM(BlueprintType)
@@ -79,7 +83,7 @@ struct VISTAPLAYABLEHOME_API FVistaInteractionRequest
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
     TObjectPtr<AActor> Requester = nullptr;
 
-    /** Closed second actor for two-target actions such as Pour. */
+    /** Closed receiver/container authority for typed two-target actions. */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA")
     TObjectPtr<AActor> SecondaryTarget = nullptr;
 
@@ -151,7 +155,9 @@ enum class EVistaPickupDisposition : uint8
 {
     Free,
     Held,
-    Placed
+    Placed,
+    /** Attached to an authored contents anchor and absent from carrier inventory. */
+    Contained
 };
 
 /** Closed rollback snapshot shared by pourable sources and liquid receivers. */
@@ -239,10 +245,14 @@ struct VISTAPLAYABLEHOME_API FVistaPickupPhysicalStateSnapshot
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
     FString PlacedAtSemanticId;
+
+    /** Exact semantic identity of the storage authority for a contained pickup. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action")
+    FString ContainedInSemanticId;
 };
 
 /**
- * Closed evidence for one pickup/place/drop transaction.
+ * Closed evidence for one physical or animated semantic transaction.
  *
  * Before, contact, and after are separately captured so a caller never has to
  * infer whether a physical mutation occurred from an animation status alone.
@@ -437,7 +447,11 @@ enum class EVistaNpcActionType : uint8
     /** Internal loop used only while posture authority remains seated. */
     SeatedIdle,
     /** Transactional return from the active authored seat to standing. */
-    StandUp
+    StandUp,
+    /** Two-target transfer of the exact held item into an exact container. */
+    Insert,
+    /** Two-target transfer of the exact contained item into carrier inventory. */
+    Remove
 };
 
 UENUM(BlueprintType)
