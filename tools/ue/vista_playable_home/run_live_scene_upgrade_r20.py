@@ -1025,7 +1025,8 @@ def validate_worker_receipt(
     path: Path, mode: str, execution_sha256: str
 ) -> tuple[dict[str, Any], FileSeal]:
     value, seal = strict_json(path, f"R20 {mode} receipt")
-    gates = value.get("inspection", {}).get("gates", {})
+    inspection = value.get("inspection")
+    gates = inspection.get("gates", {}) if type(inspection) is dict else {}
     require(
         value.get("schema_version") == contract.WORKER_SCHEMA
         and value.get("status") == contract.WORKER_SUCCESS_STATUS

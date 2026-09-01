@@ -360,6 +360,8 @@ def test_commandlet_source_contains_action_critical_fail_closed_operations() -> 
     assert "EditorLoadingAndSavingUtils.save_map" in source
     assert "load_author_lineage" in source
     assert "run()" in source
+    assert 'actor.get_editor_property("hidden")' in source
+    assert "actor.is_hidden()" not in source
 
 
 def test_profile_digest_mutation_is_rejected() -> None:
