@@ -196,6 +196,13 @@ def test_runtime_selects_manny_only_for_exact_human_operated_provider() -> None:
         "Type == EVistaNpcActionType::Place || Type == EVistaNpcActionType::Drop"
         in animation
     )
+    target_free = animation.split("bool ValidateMannyR18Binding", 1)[1].split(
+        "bool ResolveAuthoredInteractionPoint", 1
+    )[0]
+    assert "MannyR18MontageFor(Type, nullptr)" in target_free
+    assert target_free.index("Type == EVistaNpcActionType::PickUp") < target_free.index(
+        "ANIMATION_TARGET_PREFLIGHT_DEFERRED"
+    )
 
 
 def test_citysample_cache_is_set_only_by_citysample_success_path() -> None:
