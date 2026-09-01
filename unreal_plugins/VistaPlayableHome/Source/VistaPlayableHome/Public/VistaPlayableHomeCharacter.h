@@ -360,6 +360,9 @@ private:
     FRotator PreInspectionControlRotation = FRotator::ZeroRotator;
     double InspectionStartedAtSeconds = 0.0;
     double ActionFeedbackExpiresAtSeconds = 0.0;
+    /** Bounds expensive target/animation availability projection to 10 Hz. */
+    double NextPlayerActionRefreshAtSeconds = 0.0;
+    static constexpr double PlayerActionRefreshIntervalSeconds = 0.1;
     FName PendingPresentationCommandId = NAME_None;
     EVistaActionPhase LastPresentedActionPhase = EVistaActionPhase::Idle;
     EVistaActionTransactionStatus LastPresentedTransactionStatus =
