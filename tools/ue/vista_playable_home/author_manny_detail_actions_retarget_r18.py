@@ -474,11 +474,14 @@ def retarget_assets(source_mesh: Any, target_mesh: Any, retargeter: Any) -> None
 
 
 def notify_time(event: Any) -> float:
-    for name in ("trigger_time", "time"):
-        value = property_or_none(event, name)
-        if value is not None:
-            return float(value)
-    raise RetargetError("notify trigger time is unavailable through UE 5.7 Python")
+    value = float(
+        unreal.AnimationLibrary.get_anim_notify_event_trigger_time(event)
+    )
+    require(
+        value == value and abs(value) != float("inf"),
+        "notify trigger time is non-finite",
+    )
+    return value
 
 
 def _transform_values(transform: Any) -> tuple[tuple[float, ...], tuple[float, ...]]:
