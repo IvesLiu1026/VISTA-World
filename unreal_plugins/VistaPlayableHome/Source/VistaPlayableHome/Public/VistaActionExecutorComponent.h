@@ -6,6 +6,7 @@
 #include "VistaActionExecutorComponent.generated.h"
 
 class AActor;
+class AVistaLiquidReceiverActor;
 class AVistaPickupActor;
 class USceneComponent;
 class UVistaAnimationComponent;
@@ -36,8 +37,10 @@ struct VISTAPLAYABLEHOME_API FVistaSemanticActionRequest final
     FName CommandId = NAME_None;
     AActor* Requester = nullptr;
     AActor* Target = nullptr;
+    AActor* SecondaryTarget = nullptr;
     FString RequesterSemanticId;
     FString TargetSemanticId;
+    FString SecondaryTargetSemanticId;
     EVistaAffordance Affordance = EVistaAffordance::Inspect;
     FName ExpectedRevision = NAME_None;
     int32 SessionGeneration = 0;
@@ -177,14 +180,23 @@ private:
         FString CanonicalRequest;
         TWeakObjectPtr<AActor> Requester;
         TWeakObjectPtr<AActor> Target;
+        TWeakObjectPtr<AActor> SecondaryTarget;
+        TWeakObjectPtr<AVistaPickupActor> PourSource;
+        TWeakObjectPtr<AVistaLiquidReceiverActor> PourReceiver;
         TWeakObjectPtr<UVistaAnimationComponent> Animation;
         TWeakObjectPtr<UVistaPostureComponent> Posture;
+        FVistaLiquidStateSnapshot PourSourceBefore;
+        FVistaLiquidStateSnapshot PourReceiverBefore;
+        FVistaPickupPhysicalStateSnapshot PourSourceAlignedPhysical;
         FVistaActionTransactionRecord Record;
         FName ContactResultCode = NAME_None;
         double StartedAtSeconds = 0.0;
         bool bAnimationStarted = false;
         bool bAlignmentApplied = false;
         bool bTargetReserved = false;
+        bool bSecondaryTargetReserved = false;
+        bool bHasPourSnapshots = false;
+        bool bHasPourAlignedPhysical = false;
         bool bPostureTransitionStarted = false;
     };
 

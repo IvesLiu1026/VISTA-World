@@ -76,6 +76,10 @@ def test_closed_mapping_includes_all_required_actions_and_compiler_only_use(side
     assert mapping["use"]["compiler_policy"] == (
         "resolve_binding_preconditions_to_concrete_or_fail"
     )
+    assert "pour" not in compiler.WIRE_BINDINGS
+    assert "secondary_target_id" not in compiler.PARAMETER_FIELDS
+    assert "pour" not in event_v3.EVENT_WIRE_ACTIONS
+    assert "pour" not in event_v3.WIRE_TO_CANONICAL.values()
 
 
 def test_required_receipts_are_empty_and_no_action_is_promoted(sidecar: dict) -> None:

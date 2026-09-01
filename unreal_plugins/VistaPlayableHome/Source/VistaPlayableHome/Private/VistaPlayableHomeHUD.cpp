@@ -6,6 +6,7 @@
 #include "VistaEventSubsystem.h"
 #include "VistaInteractable.h"
 #include "VistaInteractionComponent.h"
+#include "VistaLiquidReceiverActor.h"
 #include "VistaPickupActor.h"
 #include "VistaPlayableHomeCharacter.h"
 #include "VistaPostureComponent.h"
@@ -104,6 +105,14 @@ FString BuildInteractionLabel(
     const AVistaPickupActor* Held = Character.GetHeldPickup();
     if (IsValid(Held) && Target != Held)
     {
+        if (Held->IsPourable() &&
+            IsValid(Cast<AVistaLiquidReceiverActor>(Target)))
+        {
+            return FString::Printf(
+                TEXT("Pour %s into %s"),
+                *FriendlyNameFromSemanticId(Held->SemanticId),
+                *FriendlyNameForActor(Target));
+        }
         return FString::Printf(
             TEXT("Place %s"), *FriendlyNameFromSemanticId(Held->SemanticId));
     }

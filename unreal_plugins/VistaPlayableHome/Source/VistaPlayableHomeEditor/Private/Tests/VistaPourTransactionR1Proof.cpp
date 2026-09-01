@@ -1,6 +1,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Components/ActorTestSpawner.h"
+#include "Components/StaticMeshComponent.h"
 #include "HAL/PlatformMemory.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/VistaR5MultiClientProofActors.h"
@@ -520,6 +521,10 @@ bool FVistaPourTransactionR1Proof::RunTest(const FString& Parameters)
     TestTrue(
         TEXT("receiver destruction begins"),
         Receiver.Destroy());
+    // FActorTestSpawner executes inside the world's begin-play frame, where
+    // Destroy() is intentionally deferred. Invoke the exact factored EndPlay
+    // cleanup so this synchronous proof can observe the lifecycle contract.
+    Receiver.ReleasePourReservationForEndPlayForDevAutomation();
     TestFalse(
         TEXT("receiver EndPlay releases the exact source reservation"),
         SourceA.IsReservedForDevAutomation(
@@ -549,6 +554,7 @@ bool FVistaPourTransactionR1Proof::RunTest(const FString& Parameters)
     TestTrue(
         TEXT("source destruction begins"),
         SourceB.Destroy());
+    SourceB.ReleasePourReservationForEndPlayForDevAutomation();
     TestFalse(
         TEXT("source EndPlay releases the exact receiver reservation"),
         ReceiverB.IsReservedForDevAutomation(

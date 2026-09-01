@@ -101,6 +101,10 @@ private:
                                       AActor*& InOutSimulatedHeldItem,
                                       EVistaPostureState& InOutSimulatedPosture,
                                       FString& InOutSimulatedSeatSemanticId,
+                                      TMap<FString, FVistaLiquidStateSnapshot>&
+                                          InOutSimulatedSourceLiquids,
+                                      TMap<FString, FVistaLiquidStateSnapshot>&
+                                          InOutSimulatedReceiverLiquids,
                                       FName& OutCode) const;
     void StopControlledMotion();
     void EnterCommandedIdle(bool bMotionAlreadyStopped = false);

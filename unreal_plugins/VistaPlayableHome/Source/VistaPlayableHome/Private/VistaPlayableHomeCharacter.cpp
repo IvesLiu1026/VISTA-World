@@ -30,6 +30,7 @@
 #include "VistaIndoorSpringArmComponent.h"
 #include "VistaInteractable.h"
 #include "VistaInteractionComponent.h"
+#include "VistaLiquidReceiverActor.h"
 #include "VistaPickupActor.h"
 #include "VistaPlayableHomeRuntimeSubsystem.h"
 #include "VistaPostureComponent.h"
@@ -1324,6 +1325,14 @@ FVistaInteractionResult AVistaPlayableHomeCharacter::PerformDefaultInteraction()
 
     if (IsValid(HeldItem) && Target != HeldItem)
     {
+        if (HeldItem->IsPourable() &&
+            IsValid(Cast<AVistaLiquidReceiverActor>(Target)))
+        {
+            return BeginSemanticInteraction(
+                HeldItem,
+                EVistaAffordance::Pour,
+                Target);
+        }
         return BeginPhysicalInteraction(
             HeldItem, EVistaAffordance::Place, Target);
     }
@@ -1530,7 +1539,8 @@ FVistaInteractionResult AVistaPlayableHomeCharacter::BeginPhysicalInteraction(
 
 FVistaInteractionResult AVistaPlayableHomeCharacter::BeginSemanticInteraction(
     AActor* Target,
-    const EVistaAffordance Affordance)
+    const EVistaAffordance Affordance,
+    AActor* SecondaryTarget)
 {
     const bool bHadPendingAction = !PendingPresentationCommandId.IsNone();
     if (bHadPendingAction)
@@ -1576,6 +1586,7 @@ FVistaInteractionResult AVistaPlayableHomeCharacter::BeginSemanticInteraction(
     Request.CommandId = CommandId;
     Request.Requester = this;
     Request.Target = Target;
+    Request.SecondaryTarget = SecondaryTarget;
     Request.Affordance = Affordance;
     Request.ExpectedRevision = IsValid(InteractionComponent)
         ? InteractionComponent->GetExpectedRevision()

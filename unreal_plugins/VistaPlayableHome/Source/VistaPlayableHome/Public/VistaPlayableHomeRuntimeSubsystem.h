@@ -54,6 +54,10 @@ struct VISTAPLAYABLEHOME_API FVistaLiveInteractionCommand
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
     FString TargetSemanticId;
 
+    /** Required receiver identity for closed two-target actions such as Pour. */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
+    FString SecondaryTargetSemanticId;
+
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VISTA|Runtime")
     EVistaAffordance Affordance = EVistaAffordance::Inspect;
 
