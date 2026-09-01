@@ -140,6 +140,32 @@ def test_existing_e_q_i_controls_remain_and_selector_has_direct_fallback_keys() 
     assert "ExecuteSelectedPlayerActionPressed" in setup
 
 
+def test_passive_selector_projection_is_bounded_but_input_revalidates_now() -> None:
+    source = _source(CHARACTER_CPP)
+    header = _source(CHARACTER_H)
+    tick = _method(
+        source,
+        "void AVistaPlayableHomeCharacter::Tick(float DeltaSeconds)",
+        "void AVistaPlayableHomeCharacter::CalcCamera(",
+    )
+    refresh = _method(
+        source,
+        "void AVistaPlayableHomeCharacter::RefreshPlayerActionSelection()",
+        "bool AVistaPlayableHomeCharacter::GetSelectedPlayerAction",
+    )
+    assert "PlayerActionRefreshIntervalSeconds = 0.1" in header
+    assert "NextPlayerActionRefreshAtSeconds" in tick
+    assert "World->GetTimeSeconds() >= NextPlayerActionRefreshAtSeconds" in tick
+    assert "BuildExecutablePlayerActions()" in refresh
+    assert "NextPlayerActionRefreshAtSeconds" in refresh
+    execute = _method(
+        source,
+        "void AVistaPlayableHomeCharacter::ExecuteSelectedPlayerActionPressed()",
+        "void AVistaPlayableHomeCharacter::PresentStartedPlayerAction(",
+    )
+    assert "RefreshPlayerActionSelection();" in execute
+
+
 def test_hud_names_selected_action_and_only_offers_cycle_hint_when_useful() -> None:
     source = _source(HUD_CPP)
     assert "BuildSelectedActionLabel" in source

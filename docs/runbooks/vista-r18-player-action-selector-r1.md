@@ -57,6 +57,10 @@ This projection prevents knowingly invalid actions from being advertised. It
 is not an authority bypass: between presentation and input the world may
 change. The server therefore rebuilds the same list, matches the exact
 `(affordance, target, secondary target)` tuple, and rejects stale requests.
+Passive HUD projection is bounded to 10 Hz so target scans and animation-asset
+availability checks do not run every render frame. Selection and execution
+inputs still force an immediate rebuild, and the server performs the same exact
+revalidation before dispatch.
 
 ## Mutation authority
 
