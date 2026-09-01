@@ -2,8 +2,10 @@
 
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "Animation/Skeleton.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "VistaArticulatedFridgeActor.h"
@@ -67,6 +69,55 @@ constexpr const TCHAR* MakeHumanCc0StandMontage =
 constexpr const TCHAR* MakeHumanCc0PourMontage =
     TEXT("/Game/VISTA/MakeHumanCC0/R15/DetailActions/Montages/"
          "AM_VistaCC0PourRight_R15.AM_VistaCC0PourRight_R15");
+constexpr const TCHAR* MannyR18DetailMontageRoot =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/");
+constexpr const TCHAR* MannyR18FridgeOpenMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannyFridgeOpenRight_R18.AM_VistaMannyFridgeOpenRight_R18");
+constexpr const TCHAR* MannyR18FridgeCloseMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannyFridgeCloseRight_R18.AM_VistaMannyFridgeCloseRight_R18");
+constexpr const TCHAR* MannyR18InspectMontage = TEXT(
+    "/Game/VISTA/Manny/R18/DetailActions/Montages/"
+    "AM_VistaMannyObjectInspectRight_R18.AM_VistaMannyObjectInspectRight_R18");
+constexpr const TCHAR* MannyR18RotaryOnMontage = TEXT(
+    "/Game/VISTA/Manny/R18/DetailActions/Montages/"
+    "AM_VistaMannyRotaryTurnOnRight_R18.AM_VistaMannyRotaryTurnOnRight_R18");
+constexpr const TCHAR* MannyR18RotaryOffMontage = TEXT(
+    "/Game/VISTA/Manny/R18/DetailActions/Montages/"
+    "AM_VistaMannyRotaryTurnOffRight_R18.AM_VistaMannyRotaryTurnOffRight_R18");
+constexpr const TCHAR* MannyR18ButtonPressMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannyButtonPressRight_R18.AM_VistaMannyButtonPressRight_R18");
+constexpr const TCHAR* MannyR18CabinetOpenMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannyCabinetDrawerOpenRight_R18."
+         "AM_VistaMannyCabinetDrawerOpenRight_R18");
+constexpr const TCHAR* MannyR18CabinetCloseMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannyCabinetDrawerCloseRight_R18."
+         "AM_VistaMannyCabinetDrawerCloseRight_R18");
+constexpr const TCHAR* MannyR18SitMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannySitDownChair_R18.AM_VistaMannySitDownChair_R18");
+constexpr const TCHAR* MannyR18SeatedIdleMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannySeatedIdleLoop_R18.AM_VistaMannySeatedIdleLoop_R18");
+constexpr const TCHAR* MannyR18StandMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannyStandUpChair_R18.AM_VistaMannyStandUpChair_R18");
+constexpr const TCHAR* MannyR18PourMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannyPourRight_R18.AM_VistaMannyPourRight_R18");
+constexpr const TCHAR* MannyR18PickupMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannyMugPickupCountertop_R18."
+         "AM_VistaMannyMugPickupCountertop_R18");
+constexpr const TCHAR* MannyR18PlaceMontage =
+    TEXT("/Game/VISTA/Manny/R18/DetailActions/Montages/"
+         "AM_VistaMannyMugPlaceCountertop_R18."
+         "AM_VistaMannyMugPlaceCountertop_R18");
+TSet<FString> UnavailableMannyR18Montages;
 
 TSoftObjectPtr<UAnimMontage> Montage(const TCHAR* ObjectPath)
 {
@@ -79,6 +130,20 @@ bool IsMakeHumanCc0R8Active(const AActor* Owner)
         ? Owner->FindComponentByClass<UVistaCharacterProviderComponent>()
         : nullptr;
     return IsValid(Provider) && Provider->IsMakeHumanCc0R8Active();
+}
+
+bool IsCitySampleMannyR18Active(const AActor* Owner)
+{
+    const UVistaCharacterProviderComponent* Provider = IsValid(Owner)
+        ? Owner->FindComponentByClass<UVistaCharacterProviderComponent>()
+        : nullptr;
+    return IsValid(Provider) &&
+        Provider->IsCitySampleHumanOperatedVisualDemoActive();
+}
+
+bool IsDetailAnimationProviderActive(const AActor* Owner)
+{
+    return IsMakeHumanCc0R8Active(Owner) || IsCitySampleMannyR18Active(Owner);
 }
 
 bool IsMakeHumanCc0DetailAction(const EVistaNpcActionType Type)
@@ -105,6 +170,158 @@ bool IsPostureCandidateAction(const EVistaNpcActionType Type)
 bool IsPourCandidateAction(const EVistaNpcActionType Type)
 {
     return Type == EVistaNpcActionType::Pour;
+}
+
+bool IsMannyR18DetailAction(const EVistaNpcActionType Type)
+{
+    return IsMakeHumanCc0DetailAction(Type) ||
+        IsApplianceCandidateAction(Type) ||
+        IsPostureCandidateAction(Type) ||
+        IsPourCandidateAction(Type) ||
+        Type == EVistaNpcActionType::PickUp ||
+        Type == EVistaNpcActionType::Place ||
+        Type == EVistaNpcActionType::Drop;
+}
+
+const TCHAR* MannyR18MontageFor(
+    const EVistaNpcActionType Type,
+    const AActor* Target)
+{
+    if (Type == EVistaNpcActionType::Pour)
+    {
+        return IsValid(Cast<AVistaLiquidReceiverActor>(Target))
+            ? MannyR18PourMontage
+            : nullptr;
+    }
+    if (IsPostureCandidateAction(Type))
+    {
+        if (!IsValid(Cast<AVistaSeatActor>(Target)))
+        {
+            return nullptr;
+        }
+        return Type == EVistaNpcActionType::Sit
+            ? MannyR18SitMontage
+            : Type == EVistaNpcActionType::SeatedIdle
+                ? MannyR18SeatedIdleMontage
+                : MannyR18StandMontage;
+    }
+    if (IsApplianceCandidateAction(Type))
+    {
+        const AVistaStatefulApplianceActor* Appliance =
+            Cast<AVistaStatefulApplianceActor>(Target);
+        if (!IsValid(Appliance))
+        {
+            return nullptr;
+        }
+        if (Appliance->ControlStyle == EVistaApplianceControlStyle::Button)
+        {
+            return MannyR18ButtonPressMontage;
+        }
+        const bool bTurnOff = Type == EVistaNpcActionType::TurnOff ||
+            (Type == EVistaNpcActionType::Toggle && Appliance->IsActive());
+        return bTurnOff ? MannyR18RotaryOffMontage : MannyR18RotaryOnMontage;
+    }
+    if (Type == EVistaNpcActionType::Inspect)
+    {
+        return IsValid(Target) ? MannyR18InspectMontage : nullptr;
+    }
+    if (Type == EVistaNpcActionType::PickUp)
+    {
+        return IsValid(Target) ? MannyR18PickupMontage : nullptr;
+    }
+    if (Type == EVistaNpcActionType::Place || Type == EVistaNpcActionType::Drop)
+    {
+        // Place and Drop already share the reviewed release/completion
+        // transaction: vista_drop_release at frame 34 and completion at 59.
+        return IsValid(Target) ? MannyR18PlaceMontage : nullptr;
+    }
+    if (Type == EVistaNpcActionType::OpenDoor ||
+        Type == EVistaNpcActionType::CloseDoor)
+    {
+        if (IsValid(Cast<AVistaContainerActor>(Target)))
+        {
+            return Type == EVistaNpcActionType::OpenDoor
+                ? MannyR18CabinetOpenMontage
+                : MannyR18CabinetCloseMontage;
+        }
+        if (IsValid(Cast<AVistaArticulatedFridgeActor>(Target)))
+        {
+            return Type == EVistaNpcActionType::OpenDoor
+                ? MannyR18FridgeOpenMontage
+                : MannyR18FridgeCloseMontage;
+        }
+    }
+    return nullptr;
+}
+
+bool IsExactMannyR18MontageAvailable(
+    const AActor* Owner,
+    const TCHAR* ObjectPath)
+{
+    if (!IsCitySampleMannyR18Active(Owner) || ObjectPath == nullptr ||
+        !FString(ObjectPath).StartsWith(
+            MannyR18DetailMontageRoot,
+            ESearchCase::CaseSensitive))
+    {
+        return false;
+    }
+    const ACharacter* Character = Cast<ACharacter>(Owner);
+    const USkeletalMeshComponent* Mesh = IsValid(Character)
+        ? Character->GetMesh()
+        : nullptr;
+    USkeletalMesh* MeshAsset = IsValid(Mesh)
+        ? Mesh->GetSkeletalMeshAsset()
+        : nullptr;
+    USkeleton* Skeleton = IsValid(MeshAsset) ? MeshAsset->GetSkeleton() : nullptr;
+    TSoftObjectPtr<UAnimMontage> MontageReference = Montage(ObjectPath);
+    UAnimMontage* MontageAsset = MontageReference.Get();
+    if (!IsValid(MontageAsset))
+    {
+        const FString ExactPath(ObjectPath);
+        if (UnavailableMannyR18Montages.Contains(ExactPath))
+        {
+            return false;
+        }
+        // The selector may call this preflight every tick. Pay synchronous
+        // load cost at most once per exact path in this process. Runtime
+        // packages are immutable; integrating a new external set requires a
+        // process restart, which also clears this negative cache.
+        MontageAsset = MontageReference.LoadSynchronous();
+        if (!IsValid(MontageAsset))
+        {
+            UnavailableMannyR18Montages.Add(ExactPath);
+            return false;
+        }
+    }
+    return IsValid(MeshAsset) && IsValid(Skeleton) && IsValid(MontageAsset) &&
+        MontageAsset->GetPathName() == ObjectPath &&
+        MontageAsset->GetSkeleton() == Skeleton;
+}
+
+bool ValidateMannyR18Binding(
+    const AActor* Owner,
+    const EVistaNpcActionType Type,
+    const AActor* Target,
+    FName& OutCode)
+{
+    if (!IsCitySampleMannyR18Active(Owner))
+    {
+        return true;
+    }
+    if (!IsValid(Target))
+    {
+        // Read-only action enumeration may defer target validation. Runtime
+        // StartNpcAction rejects a missing required target before this helper.
+        OutCode = TEXT("ANIMATION_TARGET_PREFLIGHT_DEFERRED");
+        return true;
+    }
+    const TCHAR* ObjectPath = MannyR18MontageFor(Type, Target);
+    if (!IsExactMannyR18MontageAvailable(Owner, ObjectPath))
+    {
+        OutCode = TEXT("ANIMATION_MANNY_R18_RETARGET_UNAVAILABLE");
+        return false;
+    }
+    return true;
 }
 
 bool ResolveAuthoredInteractionPoint(
@@ -222,7 +439,7 @@ bool UVistaAnimationComponent::HasApprovedMutationAnimation(
 {
     if (IsPourCandidateAction(Type))
     {
-        if (!IsMakeHumanCc0R8Active(GetOwner()))
+        if (!IsDetailAnimationProviderActive(GetOwner()))
         {
             OutCode = TEXT("ANIMATION_CC0_PROVIDER_REQUIRED");
             return false;
@@ -241,12 +458,18 @@ bool UVistaAnimationComponent::HasApprovedMutationAnimation(
             OutCode = TEXT("ANIMATION_POUR_TARGET_REQUIRED");
             return false;
         }
-        OutCode = TEXT("ANIMATION_CC0_SOURCE_APPROVED");
+        if (!ValidateMannyR18Binding(GetOwner(), Type, Target, OutCode))
+        {
+            return false;
+        }
+        OutCode = IsCitySampleMannyR18Active(GetOwner())
+            ? TEXT("ANIMATION_MANNY_R18_RETARGET_APPROVED")
+            : TEXT("ANIMATION_CC0_SOURCE_APPROVED");
         return true;
     }
     if (IsPostureCandidateAction(Type))
     {
-        if (!IsMakeHumanCc0R8Active(GetOwner()))
+        if (!IsDetailAnimationProviderActive(GetOwner()))
         {
             OutCode = TEXT("ANIMATION_CC0_PROVIDER_REQUIRED");
             return false;
@@ -283,12 +506,19 @@ bool UVistaAnimationComponent::HasApprovedMutationAnimation(
             OutCode = TEXT("ANIMATION_STAND_AUTHORITY_REQUIRED");
             return false;
         }
-        OutCode = TEXT("ANIMATION_CC0_SOURCE_APPROVED");
+        if (!ValidateMannyR18Binding(GetOwner(), Type, Target, OutCode))
+        {
+            return false;
+        }
+        OutCode = IsCitySampleMannyR18Active(GetOwner())
+            ? TEXT("ANIMATION_MANNY_R18_RETARGET_APPROVED")
+            : TEXT("ANIMATION_CC0_SOURCE_APPROVED");
         return true;
     }
     if (IsApplianceCandidateAction(Type))
     {
-        if (!IsMakeHumanCc0R8Active(GetOwner()))
+        if (!IsMakeHumanCc0R8Active(GetOwner()) &&
+            !IsCitySampleMannyR18Active(GetOwner()))
         {
             OutCode = TEXT("ANIMATION_CC0_PROVIDER_REQUIRED");
             return false;
@@ -322,12 +552,18 @@ bool UVistaAnimationComponent::HasApprovedMutationAnimation(
             OutCode = TEXT("ANIMATION_CONTROL_STYLE_MISMATCH");
             return false;
         }
-        OutCode = TEXT("ANIMATION_CC0_SOURCE_APPROVED");
+        if (!ValidateMannyR18Binding(GetOwner(), Type, Target, OutCode))
+        {
+            return false;
+        }
+        OutCode = IsCitySampleMannyR18Active(GetOwner())
+            ? TEXT("ANIMATION_MANNY_R18_RETARGET_APPROVED")
+            : TEXT("ANIMATION_CC0_SOURCE_APPROVED");
         return true;
     }
     if ((Type == EVistaNpcActionType::OpenDoor ||
          Type == EVistaNpcActionType::CloseDoor) &&
-        IsMakeHumanCc0R8Active(GetOwner()))
+        IsDetailAnimationProviderActive(GetOwner()))
     {
         if (const AVistaContainerActor* Container =
                 Cast<AVistaContainerActor>(Target))
@@ -340,6 +576,20 @@ bool UVistaAnimationComponent::HasApprovedMutationAnimation(
                 return false;
             }
         }
+    }
+    if (IsMannyR18DetailAction(Type) && IsCitySampleMannyR18Active(GetOwner()))
+    {
+        if (!IsValid(Target))
+        {
+            OutCode = TEXT("ANIMATION_TARGET_PREFLIGHT_DEFERRED");
+            return true;
+        }
+        if (!ValidateMannyR18Binding(GetOwner(), Type, Target, OutCode))
+        {
+            return false;
+        }
+        OutCode = TEXT("ANIMATION_MANNY_R18_RETARGET_APPROVED");
+        return true;
     }
     if (Type == EVistaNpcActionType::PickUp ||
         Type == EVistaNpcActionType::Place ||
@@ -374,14 +624,18 @@ bool UVistaAnimationComponent::ResolveMontage(
     if (IsPourCandidateAction(Type))
     {
         if (!IsValid(Cast<AVistaLiquidReceiverActor>(Target)) ||
-            !IsMakeHumanCc0R8Active(GetOwner()))
+            !IsDetailAnimationProviderActive(GetOwner()))
         {
             OutCode = TEXT("ANIMATION_POUR_BINDING_UNAVAILABLE");
             return false;
         }
-        OutMontage = Montage(MakeHumanCc0PourMontage);
+        const bool bMannyR18 = IsCitySampleMannyR18Active(GetOwner());
+        OutMontage = Montage(
+            bMannyR18 ? MannyR18PourMontage : MakeHumanCc0PourMontage);
         if (!OutMontage.ToSoftObjectPath().ToString().StartsWith(
-                MakeHumanCc0R15DetailMontageRoot,
+                bMannyR18
+                    ? MannyR18DetailMontageRoot
+                    : MakeHumanCc0R15DetailMontageRoot,
                 ESearchCase::CaseSensitive))
         {
             OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
@@ -392,17 +646,26 @@ bool UVistaAnimationComponent::ResolveMontage(
     }
     if (IsPostureCandidateAction(Type))
     {
-        if (!IsValid(Cast<AVistaSeatActor>(Target)) || !IsMakeHumanCc0R8Active(GetOwner()))
+        if (!IsValid(Cast<AVistaSeatActor>(Target)) ||
+            !IsDetailAnimationProviderActive(GetOwner()))
         {
             OutCode = TEXT("ANIMATION_POSTURE_BINDING_UNAVAILABLE");
             return false;
         }
-        const TCHAR* ObjectPath = Type == EVistaNpcActionType::Sit          ? MakeHumanCc0SitMontage
-                                  : Type == EVistaNpcActionType::SeatedIdle ? MakeHumanCc0SeatedIdleMontage
-                                                                            : MakeHumanCc0StandMontage;
+        const bool bMannyR18 = IsCitySampleMannyR18Active(GetOwner());
+        const TCHAR* ObjectPath = bMannyR18
+            ? MannyR18MontageFor(Type, Target)
+            : Type == EVistaNpcActionType::Sit
+                ? MakeHumanCc0SitMontage
+                : Type == EVistaNpcActionType::SeatedIdle
+                    ? MakeHumanCc0SeatedIdleMontage
+                    : MakeHumanCc0StandMontage;
         OutMontage = Montage(ObjectPath);
-        if (!OutMontage.ToSoftObjectPath().ToString().StartsWith(MakeHumanCc0R15DetailMontageRoot,
-                                                                 ESearchCase::CaseSensitive))
+        if (!OutMontage.ToSoftObjectPath().ToString().StartsWith(
+                bMannyR18
+                    ? MannyR18DetailMontageRoot
+                    : MakeHumanCc0R15DetailMontageRoot,
+                ESearchCase::CaseSensitive))
         {
             OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
             return false;
@@ -414,14 +677,17 @@ bool UVistaAnimationComponent::ResolveMontage(
     {
         const AVistaStatefulApplianceActor* Appliance =
             Cast<AVistaStatefulApplianceActor>(Target);
-        if (!IsValid(Appliance) || !IsMakeHumanCc0R8Active(GetOwner()))
+        if (!IsValid(Appliance) || !IsDetailAnimationProviderActive(GetOwner()))
         {
             OutCode = TEXT("ANIMATION_APPLIANCE_BINDING_UNAVAILABLE");
             return false;
         }
-        const bool bButton =
-            Appliance->ControlStyle == EVistaApplianceControlStyle::Button;
-        if (bButton)
+        const bool bMannyR18 = IsCitySampleMannyR18Active(GetOwner());
+        if (bMannyR18)
+        {
+            OutMontage = Montage(MannyR18MontageFor(Type, Target));
+        }
+        else if (Appliance->ControlStyle == EVistaApplianceControlStyle::Button)
         {
             OutMontage = Montage(MakeHumanCc0ButtonPressMontage);
         }
@@ -434,7 +700,9 @@ bool UVistaAnimationComponent::ResolveMontage(
                          : MakeHumanCc0RotaryOnMontage);
         }
         if (!OutMontage.ToSoftObjectPath().ToString().StartsWith(
-                MakeHumanCc0R15DetailMontageRoot,
+                bMannyR18
+                    ? MannyR18DetailMontageRoot
+                    : MakeHumanCc0R15DetailMontageRoot,
                 ESearchCase::CaseSensitive))
         {
             OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
@@ -447,6 +715,18 @@ bool UVistaAnimationComponent::ResolveMontage(
         Type == EVistaNpcActionType::Place ||
         Type == EVistaNpcActionType::Drop)
     {
+        if (IsCitySampleMannyR18Active(GetOwner()))
+        {
+            const TCHAR* ObjectPath = MannyR18MontageFor(Type, Target);
+            if (!IsExactMannyR18MontageAvailable(GetOwner(), ObjectPath))
+            {
+                OutCode = TEXT("ANIMATION_MANNY_R18_RETARGET_UNAVAILABLE");
+                return false;
+            }
+            OutMontage = Montage(ObjectPath);
+            OutCode = TEXT("ANIMATION_MONTAGE_RESOLVED");
+            return true;
+        }
         const UVistaCharacterProviderComponent* Provider = IsValid(GetOwner())
             ? GetOwner()->FindComponentByClass<UVistaCharacterProviderComponent>()
             : nullptr;
@@ -461,6 +741,26 @@ bool UVistaAnimationComponent::ResolveMontage(
                 : MakeHumanCc0PlaceMontage);
         const FString Path = OutMontage.ToSoftObjectPath().ToString();
         if (!Path.StartsWith(MakeHumanCc0MontageRoot, ESearchCase::CaseSensitive))
+        {
+            OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
+            return false;
+        }
+        OutCode = TEXT("ANIMATION_MONTAGE_RESOLVED");
+        return true;
+    }
+
+    if (IsMannyR18DetailAction(Type) && IsCitySampleMannyR18Active(GetOwner()))
+    {
+        const TCHAR* ObjectPath = MannyR18MontageFor(Type, Target);
+        if (!IsExactMannyR18MontageAvailable(GetOwner(), ObjectPath))
+        {
+            OutCode = TEXT("ANIMATION_MANNY_R18_RETARGET_UNAVAILABLE");
+            return false;
+        }
+        OutMontage = Montage(ObjectPath);
+        if (!OutMontage.ToSoftObjectPath().ToString().StartsWith(
+                MannyR18DetailMontageRoot,
+                ESearchCase::CaseSensitive))
         {
             OutCode = TEXT("ANIMATION_PATH_POLICY_REJECTED");
             return false;
@@ -600,13 +900,13 @@ bool UVistaAnimationComponent::StartNpcAction(
         OutCode = TEXT("ANIMATION_ACTION_UNSUPPORTED");
         return false;
     }
-    if (!HasApprovedMutationAnimation(Action.Type, Target, OutCode))
-    {
-        return false;
-    }
     if (RequiresTarget(Action.Type) && !IsValid(Target))
     {
         OutCode = TEXT("ANIMATION_TARGET_REQUIRED");
+        return false;
+    }
+    if (!HasApprovedMutationAnimation(Action.Type, Target, OutCode))
+    {
         return false;
     }
 
@@ -617,6 +917,10 @@ bool UVistaAnimationComponent::StartNpcAction(
     }
     const FString ResolvedPath = MontageReference.ToSoftObjectPath().ToString();
     const FString RequiredRoot = ResolvedPath.StartsWith(
+            MannyR18DetailMontageRoot,
+            ESearchCase::CaseSensitive)
+        ? FString(MannyR18DetailMontageRoot)
+        : ResolvedPath.StartsWith(
             MakeHumanCc0R15DetailMontageRoot,
             ESearchCase::CaseSensitive)
         ? FString(MakeHumanCc0R15DetailMontageRoot)
@@ -640,6 +944,37 @@ bool UVistaAnimationComponent::StartNpcAction(
     }
 
     ACharacter* Character = Cast<ACharacter>(GetOwner());
+    USkeletalMesh* CharacterMesh =
+        IsValid(Character) && IsValid(Character->GetMesh())
+            ? Character->GetMesh()->GetSkeletalMeshAsset()
+            : nullptr;
+    USkeleton* CharacterSkeleton = IsValid(CharacterMesh)
+        ? CharacterMesh->GetSkeleton()
+        : nullptr;
+    if (ResolvedPath.StartsWith(
+            MannyR18DetailMontageRoot,
+            ESearchCase::CaseSensitive) &&
+        (!IsCitySampleMannyR18Active(GetOwner()) ||
+         !IsValid(CharacterMesh) || !IsValid(CharacterSkeleton) ||
+         ResolvedMontage->GetSkeleton() != CharacterSkeleton))
+    {
+        OutCode = TEXT("ANIMATION_MANNY_R18_SKELETON_MISMATCH");
+        return false;
+    }
+    if (IsCitySampleMannyR18Active(GetOwner()) &&
+        (ResolvedPath.StartsWith(
+             MakeHumanCc0DetailMontageRoot,
+             ESearchCase::CaseSensitive) ||
+         ResolvedPath.StartsWith(
+             MakeHumanCc0R15DetailMontageRoot,
+             ESearchCase::CaseSensitive) ||
+         ResolvedPath.StartsWith(
+             MakeHumanCc0MontageRoot,
+             ESearchCase::CaseSensitive)))
+    {
+        OutCode = TEXT("ANIMATION_CC0_MONTAGE_ON_MANNY_FORBIDDEN");
+        return false;
+    }
     UAnimInstance* AnimInstance = IsValid(Character) && IsValid(Character->GetMesh())
         ? Character->GetMesh()->GetAnimInstance() : nullptr;
     if (!IsValid(AnimInstance))
@@ -652,7 +987,11 @@ bool UVistaAnimationComponent::StartNpcAction(
     ExpectedContactSignal = ContactSignalFor(Action.Type);
     if (ResolvedPath.StartsWith(
             MakeHumanCc0DetailMontageRoot,
-            ESearchCase::CaseSensitive))
+            ESearchCase::CaseSensitive) ||
+        (ResolvedPath.StartsWith(
+             MannyR18DetailMontageRoot,
+             ESearchCase::CaseSensitive) &&
+         ResolvedPath.Contains(TEXT("Fridge"), ESearchCase::CaseSensitive)))
     {
         if (Action.Type == EVistaNpcActionType::OpenDoor)
         {
@@ -667,6 +1006,9 @@ bool UVistaAnimationComponent::StartNpcAction(
     }
     else if (ResolvedPath.StartsWith(
                  MakeHumanCc0R15DetailMontageRoot,
+                 ESearchCase::CaseSensitive) ||
+             ResolvedPath.StartsWith(
+                 MannyR18DetailMontageRoot,
                  ESearchCase::CaseSensitive))
     {
         if (ResolvedPath.Contains(TEXT("ButtonPress"), ESearchCase::CaseSensitive))

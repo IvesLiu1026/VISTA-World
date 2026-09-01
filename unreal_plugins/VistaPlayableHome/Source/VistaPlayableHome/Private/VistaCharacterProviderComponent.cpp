@@ -1,6 +1,7 @@
 #include "VistaCharacterProviderComponent.h"
 
 #include "Animation/AnimInstance.h"
+#include "Animation/Skeleton.h"
 #include "Components/ChildActorComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/PrimitiveComponent.h"
@@ -57,6 +58,10 @@ const TCHAR* CitySampleCrowdVisualDemoClassPath =
 const TCHAR* MetaHumanRetargetAssetPath =
     TEXT("/Game/Characters/Mannequins/Rigs/"
          "RTG_Mannequin.RTG_Mannequin");
+const TCHAR* MannyMeshPath =
+    TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny.SKM_Manny");
+const TCHAR* MannySkeletonPath =
+    TEXT("/Game/Characters/Mannequins/Meshes/SK_Mannequin.SK_Mannequin");
 
 // Publicly redistributable CC0 lane.  These paths never reference Manny,
 // MetaHuman, City Sample, Human_Avatar, or SimWorld animation content.
@@ -116,6 +121,41 @@ bool UVistaCharacterProviderComponent::IsMakeHumanCc0R8Active() const
         FailureCode.IsNone();
 }
 
+bool UVistaCharacterProviderComponent::IsCitySampleHumanOperatedVisualDemoActive() const
+{
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+    ACharacter* VisualCharacter = IsValid(ProviderChildActorComponent)
+        ? Cast<ACharacter>(ProviderChildActorComponent->GetChildActor())
+        : nullptr;
+    USkeletalMeshComponent* OwnerMesh = IsValid(OwnerCharacter)
+        ? OwnerCharacter->GetMesh()
+        : nullptr;
+    USkeletalMesh* OwnerMeshAsset = IsValid(OwnerMesh)
+        ? OwnerMesh->GetSkeletalMeshAsset()
+        : nullptr;
+    USkeleton* OwnerSkeleton = IsValid(OwnerMeshAsset)
+        ? OwnerMeshAsset->GetSkeleton()
+        : nullptr;
+    USkeletalMeshComponent* VisualBody = IsValid(VisualCharacter)
+        ? VisualCharacter->GetMesh()
+        : nullptr;
+    return bCitySampleHumanOperatedVisualDemoValidated &&
+        IsValid(OwnerCharacter) && IsValid(VisualCharacter) &&
+        ActiveProviderId == CitySampleCrowdVisualDemoProviderId &&
+        ProviderStatus == CitySampleVisualDemoActiveUnverifiedStatus &&
+        ProviderFailureCode.IsNone() && !bPhotorealCharacterReady &&
+        IsValid(OwnerMeshAsset) && OwnerMeshAsset->GetPathName() == MannyMeshPath &&
+        IsValid(OwnerSkeleton) && OwnerSkeleton->GetPathName() == MannySkeletonPath &&
+        VisualCharacter->GetOwner() == OwnerCharacter &&
+        VisualCharacter->GetAttachParentActor() == OwnerCharacter &&
+        IsValid(VisualBody) &&
+        IsValid(Cast<URetargetAnimInstance>(VisualBody->GetAnimInstance())) &&
+        IsValid(ProviderRetargetComponent) &&
+        ProviderRetargetComponent->IsRegistered() &&
+        ProviderRetargetComponent->ControlledSkeletalMeshComponent.OverrideComponent.Get() == VisualBody &&
+        IsValid(ProviderRetargetComponent->RetargetAsset);
+}
+
 void UVistaCharacterProviderComponent::BeginPlay()
 {
     Super::BeginPlay();
@@ -135,6 +175,7 @@ void UVistaCharacterProviderComponent::BeginPlay()
     ProviderStatus = MannyActiveStatus;
     ProviderFailureCode = NAME_None;
     bPhotorealCharacterReady = false;
+    bCitySampleHumanOperatedVisualDemoValidated = false;
 
     const FName ProviderId = ResolveRequestedProviderId();
     if (ProviderId == MannyProviderId)
@@ -601,6 +642,7 @@ bool UVistaCharacterProviderComponent::ActivateAllowlistedCitySampleVisualDemo(
                 ActiveProviderId = CitySampleCrowdVisualDemoProviderId;
                 ProviderStatus = CitySampleVisualDemoActiveUnverifiedStatus;
                 ProviderFailureCode = NAME_None;
+                bCitySampleHumanOperatedVisualDemoValidated = true;
 
                 // This provider is not a photoreal/GTA acceptance signal. Its
                 // assets and pixels are excluded from every AI-facing VISTA
@@ -1193,6 +1235,7 @@ void UVistaCharacterProviderComponent::SetMannyFallbackVisible(
 
 void UVistaCharacterProviderComponent::DestroyProviderRetargetComponent()
 {
+    bCitySampleHumanOperatedVisualDemoValidated = false;
     if (IsValid(ProviderRetargetComponent))
     {
         // UE 5.7 narrows URetargetComponent::DestroyComponent to protected,
@@ -1208,6 +1251,7 @@ void UVistaCharacterProviderComponent::DestroyProviderRetargetComponent()
 
 void UVistaCharacterProviderComponent::DestroyProviderChildActorComponent()
 {
+    bCitySampleHumanOperatedVisualDemoValidated = false;
     if (IsValid(ProviderChildActorComponent))
     {
         // A rejected MetaHuman shell is expensive even while hidden: Face,
@@ -1252,6 +1296,7 @@ void UVistaCharacterProviderComponent::SetProviderUnavailable(
         ? FName(TEXT("character_provider_validation_failed"))
         : FailureCode;
     bPhotorealCharacterReady = false;
+    bCitySampleHumanOperatedVisualDemoValidated = false;
     UE_LOG(
         LogVistaCharacterProvider,
         Warning,
