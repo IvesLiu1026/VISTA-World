@@ -32,6 +32,16 @@ EXPECTED_ENGINE = "5.7.3-50162420+++UE5+Release-5.7"
 TEMP_PREFIX = "VISTA_R18_RETARGET_TMP_"
 MAX_EXECUTION_BYTES = 4 * 1024 * 1024
 NOTIFY_TOLERANCE_SECONDS = 1.0 / 3000.0
+SEATED_IDLE_PROBE_BONES = (
+    "pelvis",
+    "spine_01",
+    "spine_02",
+    "spine_03",
+    "spine_04",
+    "spine_05",
+    "neck_01",
+    "head",
+)
 
 
 class RetargetError(RuntimeError):
@@ -253,7 +263,7 @@ def validate_meshes() -> tuple[Any, Any, Any]:
     target_bones = set(skeletal_bone_names(target_mesh))
     required_target_bones = {
         bone for spec in contract.CHAIN_SPECS for bone in spec["target"]
-    } | {"pelvis"}
+    } | set(SEATED_IDLE_PROBE_BONES)
     require(
         property_or_none(target_mesh, "skeleton") == target_skeleton
         and required_target_bones <= target_bones,
@@ -510,16 +520,24 @@ def inspect_motion_probe(
     if clip_id in {"sit_down_chair", "stand_up_chair"}:
         bones = ("pelvis", "spine_02", "thigh_l", "thigh_r")
     elif clip_id == "seated_idle_loop":
-        bones = ("spine_02", "upperarm_r", "lowerarm_r")
+        # The source spine_01..03 chain is redistributed across Manny's
+        # spine_01..05 chain. Probe that complete mapped torso plus head across
+        # every frame: the loop intentionally returns to its starting pose, so
+        # sparse start/middle/end samples can otherwise report a false static.
+        bones = SEATED_IDLE_PROBE_BONES
     else:
         bones = ("upperarm_r", "lowerarm_r", "hand_r")
-    sample_frames = sorted(
-        {
-            0,
-            frame_count // 2,
-            frame_count,
-            *(int(item["frame"]) for item in spec["typed_notifies"]),
-        }
+    sample_frames = (
+        list(range(frame_count + 1))
+        if clip_id == "seated_idle_loop"
+        else sorted(
+            {
+                0,
+                frame_count // 2,
+                frame_count,
+                *(int(item["frame"]) for item in spec["typed_notifies"]),
+            }
+        )
     )
     maximum_translation_delta = 0.0
     maximum_rotation_delta = 0.0
@@ -567,6 +585,11 @@ def inspect_motion_probe(
         "bones": per_bone,
         "maximum_rotation_delta": maximum_rotation_delta,
         "maximum_translation_delta_cm": maximum_translation_delta,
+        "sampling_policy": (
+            "all_frames_mapped_torso"
+            if clip_id == "seated_idle_loop"
+            else "phase_sparse"
+        ),
         "sample_frames": sample_frames,
         "structurally_nonzero": True,
     }
