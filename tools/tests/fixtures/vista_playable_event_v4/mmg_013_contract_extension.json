@@ -1,0 +1,103 @@
+{
+  "schema_version": "simworld.vista.playable-event/v4",
+  "event_id": "mmg_013",
+  "compatible_house": {
+    "house_id": "home.r1",
+    "revision": "vista_playable_home_r1",
+    "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+  },
+  "action_catalog": {
+    "schema_version": "vista.playable-action-catalog/v4",
+    "catalog_id": "vista_indoor_actions",
+    "catalog_revision": "vista_indoor_actions_r4",
+    "content_digest": "0865991e4ee97da51c62a593f3cce34275316b3b025c994cb66fbb245b342107"
+  },
+  "interaction_bindings": {
+    "schema_version": "vista.playable-interaction-bindings/v1",
+    "binding_id": "vista_home_interactions",
+    "binding_revision": "vista_home_interactions_r1",
+    "content_digest": "261543543ee5370f0ef784a4d44c96351d4e367447046dfd4e40192f955ea0a0"
+  },
+  "derivation": {
+    "source_v3_event": {
+      "schema_version": "simworld.vista.playable-event/v3",
+      "event_id": "mmg_013",
+      "content_digest": "81d947ee1b8dcbbf8f28a62bd061fc8bbbd5edb157dba9bf6064b9d93a906832"
+    },
+    "change_scope": "append_closed_posture_and_two_target_actions"
+  },
+  "npc_action_queues": [
+    {
+      "queue_id": "op.05",
+      "npc_id": "npc.resident",
+      "replace": true,
+      "actions": [
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.kitchen_dining"
+        },
+        {
+          "action": "inspect",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "place",
+          "target_id": "home.r1/room.kitchen_dining/entity.dining_table.01",
+          "placement_anchor_id": "place_setting"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "drop"
+        },
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.living_room"
+        },
+        {
+          "action": "inspect",
+          "target_id": "home.r1/room.living_room/entity.slipper.01"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.living_room/entity.slipper.01"
+        },
+        {
+          "action": "drop"
+        },
+        {
+          "action": "sit",
+          "target_id": "home.r1/room.living_room/entity.sofa.01"
+        },
+        {
+          "action": "stand",
+          "target_id": "home.r1/room.living_room/entity.sofa.01"
+        },
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.kitchen_dining"
+        },
+        {
+          "action": "pick_up",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01"
+        },
+        {
+          "action": "navigate_to",
+          "room_id": "home.r1/room.bathroom_laundry"
+        },
+        {
+          "action": "pour",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+          "secondary_target_id": "home.r1/room.bathroom_laundry/entity.bathtub.01"
+        }
+      ]
+    }
+  ],
+  "content_digest": "9a0730a70b204a45b669aac6c314e32df893373662a788cf1f050a775c09d9fc"
+}

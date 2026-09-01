@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simworld.org/schemas/vista-playable-action-catalog-v4.schema.json",
+  "title": "VISTA Playable Indoor Action Catalog v4",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalog_id",
+    "catalog_revision",
+    "source_catalog_binding",
+    "candidate_animation_sources",
+    "actions",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "vista.playable-action-catalog/v4"},
+    "catalog_id": {"const": "vista_indoor_actions"},
+    "catalog_revision": {"const": "vista_indoor_actions_r4"},
+    "source_catalog_binding": {"$ref": "#/$defs/sourceCatalogBinding"},
+    "candidate_animation_sources": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 16,
+      "items": {"$ref": "#/$defs/candidateAnimationSource"}
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 38,
+      "maxItems": 38,
+      "items": {"$ref": "#/$defs/actionRecord"}
+    },
+    "content_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$",
+      "maxLength": 96
+    },
+    "sourceCatalogBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "catalog_id", "catalog_revision", "content_digest"],
+      "properties": {
+        "schema_version": {"const": "vista.playable-action-catalog/v3"},
+        "catalog_id": {"const": "vista_indoor_actions"},
+        "catalog_revision": {"const": "vista_indoor_actions_r3"},
+        "content_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "candidateAnimationSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "profile_schema_version",
+        "profile_id",
+        "content_digest",
+        "acceptance_state",
+        "action_ids"
+      ],
+      "properties": {
+        "source_id": {"$ref": "#/$defs/identifier"},
+        "profile_schema_version": {
+          "type": "string",
+          "pattern": "^vista\\.[a-z0-9-]+/v[0-9]+$",
+          "maxLength": 96
+        },
+        "profile_id": {"$ref": "#/$defs/identifier"},
+        "content_digest": {"$ref": "#/$defs/digest"},
+        "acceptance_state": {"const": "candidate_unaccepted"},
+        "action_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 38,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        }
+      }
+    },
+    "readinessLayer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence_digest"],
+      "properties": {
+        "status": {"enum": ["verified", "candidate", "blocked", "not_applicable"]},
+        "evidence_digest": {
+          "oneOf": [
+            {"$ref": "#/$defs/digest"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "layeredReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "animation",
+        "object_state",
+        "event_mapping",
+        "runtime_acceptance"
+      ],
+      "properties": {
+        "backend": {"$ref": "#/$defs/readinessLayer"},
+        "animation": {"$ref": "#/$defs/readinessLayer"},
+        "object_state": {"$ref": "#/$defs/readinessLayer"},
+        "event_mapping": {"$ref": "#/$defs/readinessLayer"},
+        "runtime_acceptance": {"$ref": "#/$defs/readinessLayer"}
+      }
+    },
+    "parameterName": {
+      "enum": [
+        "room_id",
+        "target_id",
+        "secondary_target_id",
+        "placement_anchor_id",
+        "duration_s",
+        "distance_cm",
+        "height_cm",
+        "hand",
+        "foot",
+        "direction",
+        "pose"
+      ]
+    },
+    "parameterPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "optional"],
+      "properties": {
+        "required": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/parameterName"}
+        },
+        "optional": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/parameterName"}
+        }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effect_id", "commit_phase"],
+      "properties": {
+        "effect_id": {
+          "enum": [
+            "none",
+            "actor_pose",
+            "actor_motion",
+            "held_state_claim",
+            "held_state_release",
+            "target_state",
+            "target_transform",
+            "multi_entity_state"
+          ]
+        },
+        "commit_phase": {"enum": ["none", "contact", "release", "completion"]}
+      }
+    },
+    "nativeActionDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family",
+        "aliases",
+        "target_policy",
+        "approach_policy",
+        "parameters",
+        "effect",
+        "rollback_policy",
+        "dispatch_policy"
+      ],
+      "properties": {
+        "family": {"enum": ["interaction", "appliance"]},
+        "aliases": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/identifier"}
+        },
+        "target_policy": {"const": "required"},
+        "approach_policy": {"enum": ["align_target", "none"]},
+        "parameters": {"$ref": "#/$defs/parameterPolicy"},
+        "effect": {"$ref": "#/$defs/effect"},
+        "rollback_policy": {
+          "enum": ["not_applicable", "restore_pre_contact", "restore_actor_and_target"]
+        },
+        "dispatch_policy": {"enum": ["interaction_binding", "direct"]}
+      }
+    },
+    "actionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_id", "source_action_id", "native_definition", "readiness"],
+      "properties": {
+        "action_id": {"$ref": "#/$defs/identifier"},
+        "source_action_id": {
+          "oneOf": [
+            {"$ref": "#/$defs/identifier"},
+            {"type": "null"}
+          ]
+        },
+        "native_definition": {
+          "oneOf": [
+            {"$ref": "#/$defs/nativeActionDefinition"},
+            {"type": "null"}
+          ]
+        },
+        "readiness": {"$ref": "#/$defs/layeredReadiness"}
+      }
+    }
+  }
+}
