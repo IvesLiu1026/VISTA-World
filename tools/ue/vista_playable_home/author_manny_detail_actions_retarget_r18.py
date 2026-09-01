@@ -413,9 +413,14 @@ def source_assets() -> list[Any]:
         for key in ("source_sequence_object_path", "source_montage_object_path")
     ]
     assets = [unreal.EditorAssetLibrary.find_asset_data(path) for path in paths]
-    observed_paths = [str(asset.get_soft_object_path()) for asset in assets]
+    require(all(asset.is_valid() for asset in assets), "source asset data is missing")
+    loaded_assets = [asset.get_asset() for asset in assets]
+    observed_paths = [
+        str(asset.get_path_name()) if asset is not None else ""
+        for asset in loaded_assets
+    ]
     require(
-        all(asset.is_valid() for asset in assets)
+        all(loaded_assets)
         and len(set(observed_paths)) == len(paths)
         and set(observed_paths) == set(paths),
         "source sequence/montage asset data closure differs",
