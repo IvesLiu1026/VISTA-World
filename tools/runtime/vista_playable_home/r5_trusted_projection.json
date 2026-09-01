@@ -1,5 +1,5 @@
 {
-  "content_digest": "a986241848cdf62a305ae8b2bc3862f2cea58c374a727cc1dfd2c4db892c861b",
+  "content_digest": "26da05c7fcaf8f61c3c1cd53fc422d677dd4eeefa553a5cec33492b7af20f00f",
   "schema": "vista.r5-multiclient-trusted-projection/v2",
   "source_files": [
     {
@@ -149,8 +149,8 @@
     },
     {
       "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeCharacter.cpp",
-      "sha256": "d051e4faa6d19c4de74a18b5895f69e33f319d2ff25947d4d8ae9fde6ac48da1",
-      "size_bytes": 56887
+      "sha256": "cfeeb655a63426101841909e52e3031628450fb1ae2c65e47c1d2d4612945158",
+      "size_bytes": 77408
     },
     {
       "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeGameMode.cpp",
@@ -159,8 +159,8 @@
     },
     {
       "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeHUD.cpp",
-      "sha256": "fe90726b115c50e82e6e98f753369a0ebe45c2be87d524c911d935cc1296dfa9",
-      "size_bytes": 19907
+      "sha256": "30b7861dfe5ea09135a61db7e17e3603a5b9bfbc08b139eae311af0a95fa04b5",
+      "size_bytes": 23850
     },
     {
       "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeModule.cpp",
@@ -304,8 +304,8 @@
     },
     {
       "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaPlayableHomeCharacter.h",
-      "sha256": "86ede1c73dfac2a5729f9ef4d7ae2018dc235cb7d686456020b45e20f8ff75cc",
-      "size_bytes": 14595
+      "sha256": "b3c4c1905cca64fbfb2bb45997d16d1b53f2fa467b39c69d0f24d5985273a2c6",
+      "size_bytes": 17386
     },
     {
       "path": "unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Public/VistaPlayableHomeGameMode.h",
