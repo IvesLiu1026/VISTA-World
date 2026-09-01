@@ -1,0 +1,162 @@
+{
+  "schema_version": "simworld.vista.playable-home-typed-scene-composition/v1",
+  "profile_id": "vista_home_typed_scene_r18",
+  "house_binding": {
+    "house_id": "home.r1",
+    "revision": "vista_playable_home_r1",
+    "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+  },
+  "external_asset_policy": {
+    "payloads_in_git": false,
+    "binding_mode": "external_receipt_required",
+    "proxy_assets_are_acceptance_evidence": false
+  },
+  "animation_dependency_policy": {
+    "detail_action_uassets": {
+      "status": "required_not_materialized_in_live_r6",
+      "source_skeleton": "makehuman_cc0_53_bone",
+      "exact_uasset_materialization_required": true,
+      "profiles": [
+        {
+          "profile_id": "makehuman_cc0_detail_actions_r14",
+          "content_digest": "eccf9da1ca7283efc08cffabe1d52ba020578e3d7c04d423cb2356f25b320d43",
+          "ue_content_namespace": "/Game/VISTA/MakeHumanCC0/R14/DetailActions"
+        },
+        {
+          "profile_id": "makehuman_cc0_detail_actions_r15",
+          "content_digest": "fb88d2cdfe810226d84b9111cbe99ad7c13842cab0e60c4af48354fe5bc02384",
+          "ue_content_namespace": "/Game/VISTA/MakeHumanCC0/R15/DetailActions"
+        }
+      ]
+    },
+    "citysample_retarget_authority": {
+      "status": "required_not_authored",
+      "source_skeleton": "makehuman_cc0_53_bone",
+      "target_skeleton": "citysample_hidden_manny",
+      "separate_retarget_assets_required": true,
+      "original_cc0_montages_citysample_playable": false
+    }
+  },
+  "seat_bindings": [
+    {
+      "entity_id": "home.r1/room.entry_hall/entity.shoe_bench.01",
+      "interaction_target_local_cm": {
+        "location_cm": [0, 0, 48],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "exit_target_local_cm": {
+        "location_cm": [80, 0, 0],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    },
+    {
+      "entity_id": "home.r1/room.living_room/entity.sofa.01",
+      "interaction_target_local_cm": {
+        "location_cm": [0, 0, 48],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "exit_target_local_cm": {
+        "location_cm": [90, 0, 0],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    },
+    {
+      "entity_id": "home.r1/room.bedroom/entity.bed.01",
+      "interaction_target_local_cm": {
+        "location_cm": [0, 0, 55],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "exit_target_local_cm": {
+        "location_cm": [100, 0, 0],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    },
+    {
+      "entity_id": "home.r1/room.office/entity.rolling_chair.01",
+      "interaction_target_local_cm": {
+        "location_cm": [0, 0, 50],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "exit_target_local_cm": {
+        "location_cm": [90, 0, 0],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    }
+  ],
+  "liquid_sources": [
+    {
+      "semantic_id": "home.r1/room.kitchen_dining/entity.water_jug.18",
+      "room_id": "home.r1/room.kitchen_dining",
+      "category": "water_jug",
+      "proxy_asset_id": "asset.prop.coffee_cup",
+      "world_transform_cm": {
+        "location_cm": [280, -230, 80],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "capacity_ml": 1500,
+      "initial_level": 0.8,
+      "liquid_type": "water",
+      "visual_binding_id": "r18.visual.kitchen.water_jug",
+      "external_asset_required": true
+    }
+  ],
+  "liquid_receivers": [
+    {
+      "semantic_id": "home.r1/room.kitchen_dining/entity.drinking_glass.18",
+      "room_id": "home.r1/room.kitchen_dining",
+      "category": "drinking_glass",
+      "receiver_kind": "glass",
+      "proxy_asset_id": "asset.prop.coffee_cup",
+      "world_transform_cm": {
+        "location_cm": [340, -255, 80],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "accepted_liquid_type": "water",
+      "capacity_ml": 350,
+      "initial_level": 0,
+      "initial_liquid_type": "none",
+      "pour_target_local_cm": {
+        "location_cm": [0, 0, 16],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "visual_binding_id": "r18.visual.kitchen.drinking_glass",
+      "external_asset_required": true
+    },
+    {
+      "semantic_id": "home.r1/room.kitchen_dining/entity.serving_bowl.18",
+      "room_id": "home.r1/room.kitchen_dining",
+      "category": "serving_bowl",
+      "receiver_kind": "bowl",
+      "proxy_asset_id": "asset.prop.pot",
+      "world_transform_cm": {
+        "location_cm": [380, -225, 80],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "accepted_liquid_type": "water",
+      "capacity_ml": 1000,
+      "initial_level": 0,
+      "initial_liquid_type": "none",
+      "pour_target_local_cm": {
+        "location_cm": [0, 0, 20],
+        "rotation_deg": [0, 0, 0],
+        "scale": [1, 1, 1]
+      },
+      "visual_binding_id": "r18.visual.kitchen.serving_bowl",
+      "external_asset_required": true
+    }
+  ],
+  "runtime_acceptance": false,
+  "content_digest": "2267f918ea41102f8450609171570b35d2a2c7d310b16a574b15202786058666"
+}

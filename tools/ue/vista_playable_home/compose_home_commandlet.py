@@ -719,6 +719,20 @@ def asset_objects(import_receipt):
     return result
 
 
+def configure_relative_interaction_target(component, binding, label, required_tag):
+    require(component is not None, label + " component is unavailable")
+    component_tags = {
+        str(tag) for tag in component.get_editor_property("component_tags")
+    }
+    require(required_tag in component_tags, label + " component tag differs")
+    require(
+        binding["scale"] == [1.0, 1.0, 1.0],
+        label + " cannot scale an authoritative target",
+    )
+    set_required(component, "relative_location", vector(binding["location_cm"]))
+    set_required(component, "relative_rotation", rotation(binding["rotation_deg"]))
+
+
 def apply_entity_properties(actor, operation, asset_entry):
     semantic_id = operation["semantic_id"]
     set_if_present(actor, "semantic_id", semantic_id)
@@ -839,6 +853,78 @@ def apply_entity_properties(actor, operation, asset_entry):
             runtime_affordances.extend(runtime_profile["extra_affordances"])
     if operation["component_role"] == "pickup":
         set_if_present(actor, "portable", bool(baseline.get("portable", True)))
+    typed_role = operation.get("typed_role")
+    if typed_role == "seat":
+        require(
+            str(actor.get_class().get_path_name())
+            == "/Script/VistaPlayableHome.VistaSeatActor",
+            "typed seat did not spawn AVistaSeatActor",
+        )
+        seat_binding = operation["seat_binding"]
+        configure_relative_interaction_target(
+            actor.get_editor_property("seat_target"),
+            seat_binding["interaction_target_local_cm"],
+            "seat target",
+            "VistaSeatTarget",
+        )
+        require(
+            seat_binding["interaction_anchor_semantic_id"]
+            == semantic_id + "/anchor.seat_target"
+            and seat_binding["exit_anchor_semantic_id"]
+            == semantic_id + "/anchor.exit_target",
+            "typed seat anchor identity differs",
+        )
+    elif typed_role == "liquid_source":
+        require(
+            str(actor.get_class().get_path_name())
+            == "/Script/VistaPlayableHome.VistaPickupActor",
+            "typed liquid source did not spawn AVistaPickupActor",
+        )
+        liquid = operation["liquid_binding"]
+        set_required(actor, "portable", True)
+        set_required(actor, "pourable", bool(liquid["pourable"]))
+        set_required(
+            actor,
+            "liquid_capacity_milliliters",
+            float(liquid["capacity_ml"]),
+        )
+        set_required(actor, "initial_liquid_level", float(liquid["initial_level"]))
+        set_required(
+            actor,
+            "initial_liquid_type",
+            unreal.Name(liquid["initial_liquid_type"]),
+        )
+    elif typed_role == "liquid_receiver":
+        require(
+            str(actor.get_class().get_path_name())
+            == "/Script/VistaPlayableHome.VistaLiquidReceiverActor",
+            "typed liquid receiver did not spawn AVistaLiquidReceiverActor",
+        )
+        liquid = operation["liquid_binding"]
+        set_required(actor, "receiver_kind", unreal.Name(liquid["receiver_kind"]))
+        set_required(
+            actor,
+            "accepted_liquid_type",
+            unreal.Name(liquid["accepted_liquid_type"]),
+        )
+        set_required(
+            actor,
+            "capacity_milliliters",
+            float(liquid["capacity_ml"]),
+        )
+        set_required(actor, "initial_liquid_level", float(liquid["initial_level"]))
+        initial_type = (
+            unreal.Name("None")
+            if liquid["initial_liquid_type"] == "none"
+            else unreal.Name(liquid["initial_liquid_type"])
+        )
+        set_required(actor, "initial_liquid_type", initial_type)
+        configure_relative_interaction_target(
+            actor.get_editor_property("pour_target"),
+            liquid["pour_target_local_cm"],
+            "liquid receiver pour target",
+            "VistaInteractionTarget",
+        )
     if operation["component_role"] == "npc":
         set_if_present(actor, "semantic_id", semantic_id)
         profile = operation["npc_profile"]
@@ -1236,7 +1322,11 @@ def run():
                         "field_of_view", operation["fov_deg"]
                     )
                 created.append(camera)
-            elif kind == "place_entity":
+            elif kind in {
+                "place_entity",
+                "place_typed_liquid_source",
+                "place_typed_liquid_receiver",
+            }:
                 actor_class = unreal.load_class(None, operation["actor_class"])
                 require(actor_class is not None, "typed gameplay class unavailable")
                 actor = spawn(
@@ -1251,7 +1341,7 @@ def run():
                     actor, operation, assets[operation["asset"]["asset_id"]]
                 )
                 created.append(actor)
-            elif kind == "place_placement_anchor":
+            elif kind in {"place_placement_anchor", "place_typed_anchor"}:
                 created.append(
                     spawn(
                         actor_subsystem,
