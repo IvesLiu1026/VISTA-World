@@ -448,7 +448,12 @@ void AVistaPlayableHomeCharacter::Tick(float DeltaSeconds)
     {
         UpdatePendingActionFeedback();
     }
-    RefreshPlayerActionSelection();
+    const UWorld* World = GetWorld();
+    if (!IsValid(World) ||
+        World->GetTimeSeconds() >= NextPlayerActionRefreshAtSeconds)
+    {
+        RefreshPlayerActionSelection();
+    }
     if (!InspectionPresentation.bActive || !IsLocallyControlled())
     {
         return;
@@ -1510,6 +1515,10 @@ void AVistaPlayableHomeCharacter::RefreshPlayerActionSelection()
     }
     ExecutablePlayerActions = MoveTemp(NextOptions);
     SelectedPlayerActionIndex = NextIndex;
+    const UWorld* World = GetWorld();
+    NextPlayerActionRefreshAtSeconds = IsValid(World)
+        ? World->GetTimeSeconds() + PlayerActionRefreshIntervalSeconds
+        : 0.0;
 }
 
 bool AVistaPlayableHomeCharacter::GetSelectedPlayerAction(
