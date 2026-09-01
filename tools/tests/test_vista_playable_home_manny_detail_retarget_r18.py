@@ -137,6 +137,15 @@ def test_worker_uses_closed_ue57_retarget_api_and_false_success_checks() -> None
     assert "author() if mode == contract.AUTHOR_MODE else verify()" in worker
 
 
+def test_worker_uses_public_ue57_montage_identity_apis() -> None:
+    worker = text(TOOLS / "author_manny_detail_actions_retarget_r18.py")
+    assert 'property_or_none(montage, "slot_anim_tracks")' not in worker
+    assert "unreal.AnimationLibrary.get_montage_slot_names(montage)" in worker
+    assert "montage.get_first_anim_reference()" in worker
+    assert 'slot_names == ["DefaultSlot"] and first_reference == sequence' in worker
+    assert '"first_reference": str(first_reference.get_path_name())' in worker
+
+
 def test_runner_dry_run_contract_is_zero_write_and_execution_is_external() -> None:
     source = text(TOOLS / "run_manny_detail_actions_retarget_r18.py")
     ast.parse(source)
