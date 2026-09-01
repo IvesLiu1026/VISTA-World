@@ -11,8 +11,9 @@ held item, and `I` enters or exits Inspect. The selector adds:
 - a restrained HUD row showing the selected action and its position in the
   current action list.
 
-This is a source milestone. It does not claim a packaged or Sunshine-accepted
-demo and it does not start, stop, or modify any UE, GPU, or streaming service.
+This is a compiled-source milestone. It does not claim a packaged or
+Sunshine-accepted demo and it does not start, stop, or modify any UE, GPU, or
+streaming service.
 
 ## Closed action surface
 
@@ -81,12 +82,17 @@ PYTHONPATH=.:tools uv run pytest -q \
 git diff --check
 ```
 
-The next integration gate is an Unreal compile plus a human input pass in a
-composed scene containing an appliance, articulated container, seat, pourable
-source, liquid receiver, pickup, and tagged placement anchor.
+The remaining integration gate is a human input pass in a composed scene
+containing an appliance, articulated container, seat, pourable source, liquid
+receiver, pickup, and tagged placement anchor.
 
 Current source evidence:
 
 - focused selector/executor/HUD/posture/pour suites: `97 passed`;
 - required contract/compiler baseline: `28 passed`;
+- UE 5.7 `BuildPlugin` for Linux Editor, Development Game, and Shipping Game:
+  `BUILD SUCCESSFUL` in the append-only run
+  `playable-actions-r2-plugin-build-r18-selector-20260901b`;
+- R5 trusted projection resealed to the exact compiled plugin source with
+  digest `26da05c7fcaf8f61c3c1cd53fc422d677dd4eeefa553a5cec33492b7af20f00f`;
 - `git diff --check`: passed.
