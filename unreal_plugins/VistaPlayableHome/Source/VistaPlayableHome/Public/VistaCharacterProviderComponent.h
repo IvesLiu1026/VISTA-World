@@ -43,6 +43,15 @@ public:
     bool IsMakeHumanCc0R8Active() const;
 
     /**
+     * True only for the gated human-operated City Sample visual demo when its
+     * hidden animation authority is the exact project Manny mesh/skeleton and
+     * the visual retarget bridge remains valid. This is not a photoreal or AI
+     * data-use acceptance signal.
+     */
+    UFUNCTION(BlueprintPure, Category = "VISTA|Character Provider")
+    bool IsCitySampleHumanOperatedVisualDemoActive() const;
+
+    /**
      * Closed provider identifier. Supported values are "manny", the reviewed
      * Vivian provider and the human-operated City Sample visual-demo provider.
      * Unknown values never become asset paths.
@@ -123,6 +132,10 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<URetargetComponent> ProviderRetargetComponent = nullptr;
+
+    /** Set only after the full City Sample visual/retarget validation succeeds. */
+    UPROPERTY(Transient)
+    bool bCitySampleHumanOperatedVisualDemoValidated = false;
 
     bool bOwnerNoSeeForNearCamera = false;
 
