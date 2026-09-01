@@ -596,8 +596,16 @@ def inspect_sequence(
         for name in unreal.AnimationLibrary.get_animation_track_names(sequence)
     }
     expected_tracks = set(skeletal_bone_names(target_mesh))
+    # FName identity is case-insensitive, while UE 5.7 serializes several Manny
+    # corrective tracks with the lowercase spelling inherited from the retarget
+    # output (for example correctiveRoot -> correctiveroot).  Close the exact
+    # one-to-one FName inventory without treating spelling-case as a new bone.
+    track_keys = {name.casefold() for name in tracks}
+    expected_track_keys = {name.casefold() for name in expected_tracks}
     require(
-        tracks == expected_tracks,
+        len(tracks) == len(track_keys)
+        and len(expected_tracks) == len(expected_track_keys)
+        and track_keys == expected_track_keys,
         f"target sequence exact Manny track closure differs: {spec['clip_id']}",
     )
     require(
