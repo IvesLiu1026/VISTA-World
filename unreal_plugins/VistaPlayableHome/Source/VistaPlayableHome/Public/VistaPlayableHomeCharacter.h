@@ -79,6 +79,30 @@ struct VISTAPLAYABLEHOME_API FVistaInspectionPresentation
     TArray<FVistaInspectionStateRow> PublicState;
 };
 
+/** One locally-derived executable action; actors remain the transaction targets. */
+USTRUCT(BlueprintType)
+struct VISTAPLAYABLEHOME_API FVistaPlayerActionOption
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action Selector")
+    EVistaAffordance Affordance = EVistaAffordance::Inspect;
+
+    /** Mutation target: the focused actor, or the held source for Place/Pour. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action Selector")
+    TObjectPtr<AActor> Target = nullptr;
+
+    /** Pour receiver or Place owner; forbidden for single-target actions. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Action Selector")
+    TObjectPtr<AActor> SecondaryTarget = nullptr;
+
+    bool Matches(const FVistaPlayerActionOption& Other) const
+    {
+        return Affordance == Other.Affordance && Target == Other.Target &&
+            SecondaryTarget == Other.SecondaryTarget;
+    }
+};
+
 /** Closed, measured settings for the realistic-interior gameplay camera. */
 USTRUCT(BlueprintType)
 struct VISTAPLAYABLEHOME_API FVistaIndoorCameraProfile
@@ -257,6 +281,28 @@ public:
     /** True only when the focused actor explicitly advertises Inspect. */
     bool CanInspectFocusedActor() const;
 
+    /**
+     * Closed, deterministic action projection for the current focus, held item,
+     * and posture. Options that already fail known local preconditions are
+     * omitted; the authoritative executor still revalidates at execution time.
+     */
+    TArray<FVistaPlayerActionOption> BuildExecutablePlayerActions() const;
+
+    const TArray<FVistaPlayerActionOption>& GetExecutablePlayerActions() const
+    {
+        return ExecutablePlayerActions;
+    }
+
+    bool GetSelectedPlayerAction(FVistaPlayerActionOption& OutAction) const;
+
+    int32 GetSelectedPlayerActionIndex() const
+    {
+        return SelectedPlayerActionIndex;
+    }
+
+    /** Authority-only direct entry used by the local selector and server RPC. */
+    FVistaInteractionResult PerformSelectedPlayerAction();
+
     /** Applies all camera settings atomically after closed-range validation. */
     UFUNCTION(BlueprintCallable, Category = "VISTA|Camera")
     bool ApplyIndoorCameraProfile(const FVistaIndoorCameraProfile& Profile);
@@ -302,6 +348,12 @@ private:
     UPROPERTY(Transient)
     FVistaPlayerActionFeedback ActionFeedback;
 
+    /** Local presentation cache rebuilt from authoritative replicated state. */
+    UPROPERTY(Transient)
+    TArray<FVistaPlayerActionOption> ExecutablePlayerActions;
+
+    int32 SelectedPlayerActionIndex = INDEX_NONE;
+
     TWeakObjectPtr<AActor> InspectedTarget;
     /** Target whose Inspect presentation waits for the typed montage to finish. */
     TWeakObjectPtr<AActor> PendingInspectionTarget;
@@ -326,6 +378,9 @@ private:
     void DropPressed();
     void InspectPressed();
     void ExitInspectPressed();
+    void CyclePlayerActionNextPressed();
+    void CyclePlayerActionPreviousPressed();
+    void ExecuteSelectedPlayerActionPressed();
     void MoveForwardLegacy(float Value);
     void MoveRightLegacy(float Value);
     void LookYawLegacy(float Value);
@@ -347,6 +402,17 @@ private:
         bool bTerminal = true);
     void PublishTransactionFeedback(const FVistaActionTransactionRecord& Record);
     void UpdatePendingActionFeedback();
+    void RefreshPlayerActionSelection();
+    void CyclePlayerAction(int32 Direction);
+    int32 FindDefaultPlayerActionIndex(
+        const TArray<FVistaPlayerActionOption>& Options) const;
+    FVistaInteractionResult PerformPlayerAction(
+        const FVistaPlayerActionOption& Action);
+    FVistaInteractionResult PerformRequestedPlayerAction(
+        EVistaAffordance Affordance,
+        AActor* Target,
+        AActor* SecondaryTarget);
+    void PresentStartedPlayerAction(const FVistaInteractionResult& Result);
     FVistaInteractionResult BeginAnimatedInspectInteraction();
     bool CancelPendingAnimatedInspection(FName Reason);
     void PresentCompletedInspection(
@@ -373,6 +439,12 @@ private:
 
     UFUNCTION(Server, Reliable)
     void ServerCancelPendingInspection();
+
+    UFUNCTION(Server, Reliable)
+    void ServerPerformSelectedPlayerAction(
+        EVistaAffordance Affordance,
+        AActor* Target,
+        AActor* SecondaryTarget);
 
     UFUNCTION(Client, Reliable)
     void ClientBeginInspectionPresentation(
