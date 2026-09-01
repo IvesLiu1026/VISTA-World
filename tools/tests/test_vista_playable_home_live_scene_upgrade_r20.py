@@ -297,12 +297,13 @@ def test_bwrap_creates_private_mountpoints_before_binding(tmp_path: Path) -> Non
         for index in range(len(command) - 1)
         if command[index : index + 2] == ["--tmpfs", "/vista"]
     )
-    dev_bind_index = next(
+    usr_bind_index = next(
         index
         for index in range(len(command) - 2)
-        if command[index : index + 3] == ["--dev-bind", "/", "/"]
+        if command[index : index + 3] == ["--ro-bind", "/usr", "/usr"]
     )
-    assert dev_bind_index < tmpfs_index
+    assert ["--dev-bind", "/", "/"] != command[3:6]
+    assert usr_bind_index < tmpfs_index
     for destination, bind_flag in (
         ("/vista/engine", "--ro-bind"),
         ("/vista/repository", "--ro-bind"),
