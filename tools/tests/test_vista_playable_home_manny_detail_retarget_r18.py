@@ -157,6 +157,34 @@ def test_worker_uses_public_ue57_notify_trigger_time_api() -> None:
     assert '"notify trigger time is non-finite"' in notify_time
 
 
+def test_seated_idle_motion_probe_covers_mapped_torso_and_every_frame() -> None:
+    worker = text(TOOLS / "author_manny_detail_actions_retarget_r18.py")
+    assert "SEATED_IDLE_PROBE_BONES = (" in worker
+    for bone in (
+        "pelvis",
+        "spine_01",
+        "spine_02",
+        "spine_03",
+        "spine_04",
+        "spine_05",
+        "neck_01",
+        "head",
+    ):
+        assert f'    "{bone}",' in worker
+    probe = worker.split("def inspect_motion_probe", 1)[1].split(
+        "def inspect_sequence", 1
+    )[0]
+    assert 'elif clip_id == "seated_idle_loop":' in probe
+    assert "bones = SEATED_IDLE_PROBE_BONES" in probe
+    assert "list(range(frame_count + 1))" in probe
+    assert '"all_frames_mapped_torso"' in probe
+    assert "retargeted motion is structurally static" in probe
+    meshes = worker.split("def validate_meshes", 1)[1].split(
+        "def create_ik_rig", 1
+    )[0]
+    assert "set(SEATED_IDLE_PROBE_BONES)" in meshes
+
+
 def test_runner_dry_run_contract_is_zero_write_and_execution_is_external() -> None:
     source = text(TOOLS / "run_manny_detail_actions_retarget_r18.py")
     ast.parse(source)
