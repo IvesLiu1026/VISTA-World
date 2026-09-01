@@ -27,7 +27,9 @@ enum class EVistaAffordance : uint8
     /** Idempotently deactivate an appliance without changing external power. */
     TurnOff,
     /** Transfer liquid from one held pourable pickup into one typed receiver. */
-    Pour
+    Pour,
+    /** Leave the requester's currently occupied authored seat. */
+    Stand
 };
 
 UENUM(BlueprintType)
@@ -427,7 +429,11 @@ enum class EVistaNpcActionType : uint8
     /** Transactional idempotent appliance deactivation. */
     TurnOff,
     /** Two-target liquid transfer from a held pickup into a receiver. */
-    Pour
+    Pour,
+    /** Internal loop used only while posture authority remains seated. */
+    SeatedIdle,
+    /** Transactional return from the active authored seat to standing. */
+    StandUp
 };
 
 UENUM(BlueprintType)

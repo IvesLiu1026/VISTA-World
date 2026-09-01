@@ -10,6 +10,7 @@ class AVistaPickupActor;
 class USceneComponent;
 class UVistaAnimationComponent;
 class UVistaCharacterProviderComponent;
+class UVistaPostureComponent;
 
 UCLASS(Blueprintable)
 class VISTAPLAYABLEHOME_API AVistaHomeNpcCharacter final
@@ -53,6 +54,9 @@ public:
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Animation")
     TObjectPtr<UVistaAnimationComponent> AnimationComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Posture")
+    TObjectPtr<UVistaPostureComponent> PostureComponent;
 
     /** Visual-only provider; semantic NPC logic and collision remain on this actor. */
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VISTA|Character Provider")

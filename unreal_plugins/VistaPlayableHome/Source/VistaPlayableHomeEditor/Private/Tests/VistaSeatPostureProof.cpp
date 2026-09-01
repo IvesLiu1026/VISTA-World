@@ -235,7 +235,12 @@ bool FVistaSeatPostureCoreProof::RunTest(const FString& Parameters)
             Movement->Velocity.Equals(FVector(11.0, 22.0, 33.0)));
 
     TestTrue(
-        TEXT("a fresh sit transition can begin after vacancy"),
+        TEXT("stand retains exact seated evidence until terminal finalize"),
+             Posture.HasCommittedStandForDevAutomation());
+    TestTrue(TEXT("terminal finalize closes committed stand evidence"),
+             Posture.FinalizeCommittedStandForDevAutomation(TEXT("proof-stand-success")).bSucceeded);
+
+    TestTrue(TEXT("a fresh sit transition can begin after vacancy"),
         Posture.BeginSitTransition(&Seat, TEXT("proof-sit-rollback")).bSucceeded);
     Occupant.SetActorLocation(FVector(800.0, 800.0, 800.0));
     const FVistaPostureTransitionResult SitRollback =

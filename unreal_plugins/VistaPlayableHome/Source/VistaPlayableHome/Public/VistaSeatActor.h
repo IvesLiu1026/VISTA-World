@@ -74,6 +74,7 @@ public:
         const AActor* Occupant,
         const FString& OccupantSemanticId) const;
 
+    virtual TArray<EVistaAffordance> VistaGetAffordances_Implementation() const override;
     virtual FVistaEntityRuntimeState VistaGetRuntimeState_Implementation() const override;
     virtual FVistaInteractionResult VistaApplyRuntimeState_Implementation(
         const FVistaEntityRuntimeState& State) override;
@@ -84,6 +85,7 @@ public:
 
 protected:
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
     UFUNCTION(BlueprintImplementableEvent, Category = "VISTA|Seat")
     void OnSeatOccupancyChanged(
@@ -146,4 +148,5 @@ private:
     void SyncOccupancyRuntimeValues();
     bool HasAnyReservationField() const;
     bool HasClosedReservation() const;
+    void ReleaseForPostureEndPlay(UVistaPostureComponent* Posture, AActor* Occupant, const FString& OccupantSemanticId);
 };

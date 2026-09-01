@@ -14,6 +14,8 @@
 #include "VistaInteractable.h"
 #include "VistaItemCarrier.h"
 #include "VistaPickupActor.h"
+#include "VistaPostureComponent.h"
+#include "VistaSeatActor.h"
 #include "VistaStatefulApplianceActor.h"
 
 namespace
@@ -60,6 +62,8 @@ TOptional<EVistaAffordance> AffordanceForAction(EVistaNpcActionType Type)
     case EVistaNpcActionType::TurnOn: return EVistaAffordance::TurnOn;
     case EVistaNpcActionType::TurnOff: return EVistaAffordance::TurnOff;
     case EVistaNpcActionType::Sit: return EVistaAffordance::Sit;
+    case EVistaNpcActionType::StandUp:
+        return EVistaAffordance::Stand;
     default: return {};
     }
 }
@@ -87,6 +91,11 @@ bool AVistaHomeNpcController::ValidateAction(
     if (Action.ActionId.IsNone())
     {
         OutCode = TEXT("ACTION_ID_REQUIRED");
+        return false;
+    }
+    if (Action.Type == EVistaNpcActionType::SeatedIdle)
+    {
+        OutCode = TEXT("INTERNAL_ACTION_UNQUEUEABLE");
         return false;
     }
     if (!FMath::IsFinite(Action.TimeoutSeconds) ||
@@ -183,7 +192,9 @@ bool AVistaHomeNpcController::ValidateAction(
         Action.Type == EVistaNpcActionType::Toggle ||
         Action.Type == EVistaNpcActionType::Press ||
         Action.Type == EVistaNpcActionType::TurnOn ||
-        Action.Type == EVistaNpcActionType::TurnOff)
+        Action.Type == EVistaNpcActionType::TurnOff ||
+        Action.Type == EVistaNpcActionType::Sit ||
+        Action.Type == EVistaNpcActionType::StandUp)
     {
         const UVistaAnimationComponent* Animation = IsValid(GetPawn())
             ? GetPawn()->FindComponentByClass<UVistaAnimationComponent>()
@@ -266,9 +277,29 @@ bool AVistaHomeNpcController::PreflightActionQueue(
         ControlledPawn->GetClass()->ImplementsInterface(UVistaItemCarrier::StaticClass())
         ? IVistaItemCarrier::Execute_VistaGetHeldItem(ControlledPawn)
         : nullptr;
+    const UVistaPostureComponent* Posture = ControlledPawn->FindComponentByClass<UVistaPostureComponent>();
+    if (!IsValid(Posture))
+    {
+        OutCode = TEXT("POSTURE_COMPONENT_UNAVAILABLE");
+        return false;
+    }
+    EVistaPostureState SimulatedPosture = Posture->GetPostureState();
+    if (SimulatedPosture == EVistaPostureState::SittingTransition ||
+        SimulatedPosture == EVistaPostureState::StandingTransition)
+    {
+        OutCode = TEXT("POSTURE_TRANSITION_ACTIVE");
+        return false;
+    }
+    FString SimulatedSeatSemanticId =
+        IsValid(Posture->GetActiveSeat()) ? Posture->GetActiveSeat()->SemanticId : FString();
     for (const FVistaNpcAction& Action : Actions)
     {
-        if (!ValidateActionTargetReadOnly(Action, SimulatedHeldItem, OutCode))
+        if (!ValidateActionTargetReadOnly(
+                Action,
+                SimulatedHeldItem,
+                SimulatedPosture,
+                SimulatedSeatSemanticId,
+                OutCode))
         {
             return false;
         }
@@ -280,11 +311,22 @@ bool AVistaHomeNpcController::PreflightActionQueue(
 bool AVistaHomeNpcController::ValidateActionTargetReadOnly(
     const FVistaNpcAction& Action,
     AActor*& InOutSimulatedHeldItem,
+    EVistaPostureState& InOutSimulatedPosture,
+    FString& InOutSimulatedSeatSemanticId,
     FName& OutCode) const
 {
     if (!IsValid(GetPawn()))
     {
         OutCode = TEXT("NPC_PAWN_UNAVAILABLE");
+        return false;
+    }
+
+    const bool bAllowedWhileSeated =
+        Action.Type == EVistaNpcActionType::StandUp || Action.Type == EVistaNpcActionType::Wait ||
+        Action.Type == EVistaNpcActionType::Speak || Action.Type == EVistaNpcActionType::Pause;
+    if (InOutSimulatedPosture == EVistaPostureState::Seated && !bAllowedWhileSeated)
+    {
+        OutCode = TEXT("POSTURE_STAND_REQUIRED");
         return false;
     }
 
@@ -316,6 +358,57 @@ bool AVistaHomeNpcController::ValidateActionTargetReadOnly(
     }
     if (Action.Type == EVistaNpcActionType::NavigateTo)
     {
+        OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
+        return true;
+    }
+
+    if (Action.Type == EVistaNpcActionType::Sit || Action.Type == EVistaNpcActionType::StandUp)
+    {
+        AVistaSeatActor* Seat = Cast<AVistaSeatActor>(Target);
+        if (!IsValid(Seat))
+        {
+            OutCode = TEXT("SEAT_TARGET_REQUIRED");
+            return false;
+        }
+        const UVistaAnimationComponent* Animation =
+            GetPawn()->FindComponentByClass<UVistaAnimationComponent>();
+        if (!IsValid(Animation) || !Animation->HasApprovedMutationAnimation(Action.Type, OutCode))
+        {
+            if (!IsValid(Animation))
+            {
+                OutCode = TEXT("ANIMATION_COMPONENT_UNAVAILABLE");
+            }
+            return false;
+        }
+        if (Action.Type == EVistaNpcActionType::Sit)
+        {
+            if (InOutSimulatedPosture != EVistaPostureState::Standing ||
+                !InOutSimulatedSeatSemanticId.IsEmpty())
+            {
+                OutCode = TEXT("POSTURE_STANDING_AUTHORITY_REQUIRED");
+                return false;
+            }
+            if (Seat->IsOccupied() || Seat->IsReserved())
+            {
+                OutCode = Seat->IsOccupied()
+                    ? FName(TEXT("SEAT_OCCUPIED"))
+                    : FName(TEXT("SEAT_RESERVED"));
+                return false;
+            }
+            InOutSimulatedPosture = EVistaPostureState::Seated;
+            InOutSimulatedSeatSemanticId = Action.TargetSemanticId;
+        }
+        else
+        {
+            if (InOutSimulatedPosture != EVistaPostureState::Seated ||
+                InOutSimulatedSeatSemanticId != Action.TargetSemanticId)
+            {
+                OutCode = TEXT("POSTURE_ACTIVE_SEAT_MISMATCH");
+                return false;
+            }
+            InOutSimulatedPosture = EVistaPostureState::Standing;
+            InOutSimulatedSeatSemanticId.Reset();
+        }
         OutCode = TEXT("ACTION_TARGET_PREFLIGHT_OK");
         return true;
     }
@@ -624,7 +717,9 @@ void AVistaHomeNpcController::StartCurrentAction()
         Action.Type == EVistaNpcActionType::Toggle ||
         Action.Type == EVistaNpcActionType::Press ||
         Action.Type == EVistaNpcActionType::TurnOn ||
-        Action.Type == EVistaNpcActionType::TurnOff)
+        Action.Type == EVistaNpcActionType::TurnOff ||
+        Action.Type == EVistaNpcActionType::Sit ||
+        Action.Type == EVistaNpcActionType::StandUp)
     {
         StartPhysicalAction(Action, Target);
         return;
@@ -725,16 +820,6 @@ void AVistaHomeNpcController::StartCurrentAction()
         CompleteCurrent(EVistaNpcActionStatus::Succeeded, TEXT("LOOK_AT_COMPLETE"));
         return;
     }
-
-    if (Action.Type == EVistaNpcActionType::Sit)
-    {
-        const FVistaInteractionResult Result =
-            ExecuteInteraction(Target, EVistaAffordance::Sit);
-        CompleteCurrent(Result.IsSuccess() ? EVistaNpcActionStatus::Succeeded
-                                           : EVistaNpcActionStatus::Failed,
-                        Result.Code);
-        return;
-    }
     CompleteCurrent(
         EVistaNpcActionStatus::Failed,
         TEXT("ACTION_TYPE_UNSUPPORTED"));
@@ -823,7 +908,9 @@ bool AVistaHomeNpcController::StartPhysicalAction(
         Action.Type == EVistaNpcActionType::Toggle ||
         Action.Type == EVistaNpcActionType::Press ||
         Action.Type == EVistaNpcActionType::TurnOn ||
-        Action.Type == EVistaNpcActionType::TurnOff)
+        Action.Type == EVistaNpcActionType::TurnOff ||
+        Action.Type == EVistaNpcActionType::Sit ||
+        Action.Type == EVistaNpcActionType::StandUp)
     {
         if (!IsValid(Target))
         {
@@ -858,6 +945,12 @@ bool AVistaHomeNpcController::StartPhysicalAction(
             break;
         case EVistaNpcActionType::TurnOff:
             Request.Affordance = EVistaAffordance::TurnOff;
+            break;
+        case EVistaNpcActionType::Sit:
+            Request.Affordance = EVistaAffordance::Sit;
+            break;
+        case EVistaNpcActionType::StandUp:
+            Request.Affordance = EVistaAffordance::Stand;
             break;
         default:
             CompleteCurrent(
@@ -969,7 +1062,9 @@ bool AVistaHomeNpcController::PollPhysicalAction()
          CurrentAction->Type != EVistaNpcActionType::Toggle &&
          CurrentAction->Type != EVistaNpcActionType::Press &&
          CurrentAction->Type != EVistaNpcActionType::TurnOn &&
-         CurrentAction->Type != EVistaNpcActionType::TurnOff))
+         CurrentAction->Type != EVistaNpcActionType::TurnOff &&
+         CurrentAction->Type != EVistaNpcActionType::Sit &&
+         CurrentAction->Type != EVistaNpcActionType::StandUp))
     {
         return false;
     }

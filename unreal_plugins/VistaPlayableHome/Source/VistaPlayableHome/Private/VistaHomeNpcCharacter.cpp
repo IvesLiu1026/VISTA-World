@@ -13,6 +13,7 @@
 #include "VistaCharacterProviderComponent.h"
 #include "VistaHomeNpcController.h"
 #include "VistaPickupActor.h"
+#include "VistaPostureComponent.h"
 
 AVistaHomeNpcCharacter::AVistaHomeNpcCharacter()
 {
@@ -45,6 +46,8 @@ AVistaHomeNpcCharacter::AVistaHomeNpcCharacter()
 
     AnimationComponent =
         CreateDefaultSubobject<UVistaAnimationComponent>(TEXT("VistaAnimationComponent"));
+
+    PostureComponent = CreateDefaultSubobject<UVistaPostureComponent>(TEXT("VistaPostureComponent"));
 
     CharacterProviderComponent =
         CreateDefaultSubobject<UVistaCharacterProviderComponent>(
@@ -166,6 +169,10 @@ void AVistaHomeNpcCharacter::BeginPlay()
                 CurrentRoomId = SemanticId.Left(EntityMarker);
             }
         }
+    }
+    if (IsValid(PostureComponent))
+    {
+        PostureComponent->OccupantSemanticId = SemanticId;
     }
 }
 
