@@ -30,7 +30,6 @@ r.TextureStreaming=True
 bSmoothFrameRate=False
 
 [SystemSettings]
-r.ExposureOffset=-1.8
 r.Streaming.PoolSize=4096
 r.Shadow.Virtual.NonNanite.IncludeInCoarsePages=0
 r.Shadow.Virtual.MaxPhysicalPages=8192
@@ -54,6 +53,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--project",required=True,type=Path)
     parser.add_argument("--plugin",required=True,type=Path)
+    parser.add_argument("--whole-home",action="store_true")
     args=parser.parse_args()
     if args.project.exists():
         raise SystemExit("Use a fresh project directory")
@@ -65,11 +65,15 @@ def main():
     (args.project/"Content").mkdir()
     shutil.copytree(args.plugin,args.project/"Plugins/VistaPhotorealReview",ignore=shutil.ignore_patterns("HostProject","Intermediate"))
     descriptor={"FileVersion":3,"EngineAssociation":"5.7","Category":"Visualization","Description":"Original VISTA photoreal kitchen review","Plugins":[{"Name":name,"Enabled":True} for name in ["VistaPhotorealReview","PythonScriptPlugin","EditorScriptingUtilities","Interchange"]]}
-    (args.project/"PhotorealKitchen.uproject").write_text(json.dumps(descriptor,indent=2)+"\n")
-    (args.project/"Config/DefaultEngine.ini").write_text(ENGINE_CONFIG)
+    project_name="PhotorealHome" if args.whole_home else "PhotorealKitchen"
+    title="VISTA Photoreal Home" if args.whole_home else "VISTA Photoreal Kitchen"
+    descriptor["Description"]=title+" original content review"
+    (args.project/(project_name+".uproject")).write_text(json.dumps(descriptor,indent=2)+"\n")
+    engine_config=ENGINE_CONFIG.replace("PhotorealR1/Maps/Kitchen","PhotorealHomeR1/Maps/Home") if args.whole_home else ENGINE_CONFIG
+    (args.project/"Config/DefaultEngine.ini").write_text(engine_config)
     (args.project/"Config/DefaultInput.ini").write_text(INPUT_CONFIG)
-    (args.project/"Config/DefaultGame.ini").write_text("[/Script/EngineSettings.GeneralProjectSettings]\nProjectName=VISTA Photoreal Kitchen\nProjectVersion=0.1.0\n")
-    print(args.project/"PhotorealKitchen.uproject")
+    (args.project/"Config/DefaultGame.ini").write_text("[/Script/EngineSettings.GeneralProjectSettings]\nProjectName="+title+"\nProjectVersion=0.2.0\n")
+    print(args.project/(project_name+".uproject"))
 
 
 if __name__=="__main__":main()

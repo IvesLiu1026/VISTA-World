@@ -17,10 +17,13 @@ public:
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaSeconds) override;
     virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
+    UFUNCTION(Exec) void ReviewPortal(int32 Index);
 private:
     UPROPERTY() TObjectPtr<UCameraComponent> ReviewCamera;
     bool bFridgeOpen = false;
     bool bFreeFlight = false;
+    bool bWholeHome = false;
+    int32 CurrentRoom = 1;
     float DoorProgress = 0.f;
     void Forward(float Value);
     void Right(float Value);
@@ -34,6 +37,12 @@ private:
     void ViewTwo();
     void ViewThree();
     void ViewFour();
+    void ViewFive();
+    void ViewSix();
+    void ViewSeven();
+    void ViewEight();
+    void ViewNine();
+    void AlternateView();
     void ReviewSnapshot();
     void SetView(FVector Position, FRotator Rotation);
 };
