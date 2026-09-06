@@ -1,4 +1,4 @@
-"""Start the original kitchen review and select its Sunshine input target.
+"""Start a named original-content review and select its Sunshine input target.
 
 Only the named review services are owned here. The previous input relay is
 paused while this view is selected and restored when the review is stopped.
@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import importlib.machinery
 import importlib.util
 import json
+import math
 from pathlib import Path
 import re
 import signal
@@ -20,6 +21,14 @@ import time
 
 GAME="vista-photoreal-kitchen-r1.service"
 RELAY="vista-photoreal-kitchen-input-r1.service"
+REVIEWS={
+    "kitchen":("vista-photoreal-kitchen-r1.service","vista-photoreal-kitchen-input-r1.service",r"^PhotorealKitchen\b","/Game/VISTA/PhotorealR1/Maps/Kitchen"),
+    "home":("vista-photoreal-home-r1.service","vista-photoreal-home-input-r1.service",r"^PhotorealHome\b","/Game/VISTA/PhotorealHomeR1/Maps/Home"),
+}
+TITLE=REVIEWS["kitchen"][2]
+MAP=REVIEWS["kitchen"][3]
+KIND="kitchen"
+SELECTION=Path("/data/sysx/vista-world/runs/vista-photoreal-design-r1/review-selection.json")
 PREVIOUS_RELAY="vista-sunshine-x11-input-relay.service"
 RELAY_BIN=Path("/home/yhliu/.local/libexec/vista-sunshine-x11-input-relay")
 
@@ -41,7 +50,7 @@ def focus_review():
     module=sys.modules[name]
     controller=module.X11WindowController(":119")
     try:
-        policy=module.FocusTargetPolicy(controller.screen_width,controller.screen_height,"UnrealEditor",re.compile(r"^PhotorealKitchen\b"))
+        policy=module.FocusTargetPolicy(controller.screen_width,controller.screen_height,"UnrealEditor",re.compile(TITLE))
         snapshots=[s for wid in controller.top_level_windows() if (s:=controller.inspect_window(wid))]
         wid,candidates=module.select_unique_focus_target(policy,snapshots)
         return wid if wid and controller.focus_window(wid) else None
@@ -49,26 +58,47 @@ def focus_review():
 
 
 def start(config,state_path):
+    previous=active(PREVIOUS_RELAY)
+    if SELECTION.is_file():previous=previous or bool(json.loads(SELECTION.read_text()).get("previous_relay_active"))
+    # Migration from the accepted standalone kitchen launcher. Keep its original
+    # relay state when selecting Home for the first time.
+    if config.get("previous_review_profile"):
+        peer=json.loads(Path(config["previous_review_profile"]).read_text())
+        peer_state=Path(peer["runtime_dir"])/"input-selection.json"
+        if peer_state.is_file():previous=previous or bool(json.loads(peer_state.read_text()).get("previous_relay_active"))
+    pending_state={"previous_relay_active":previous,"selected_at":datetime.now(timezone.utc).isoformat(),"kind":KIND}
+    state_path.write_text(json.dumps(pending_state)+"\n")
+    SELECTION.write_text(json.dumps(pending_state)+"\n")
+    for kind,(game,relay,_,_) in REVIEWS.items():
+        if kind!=KIND:
+            for unit in [relay,game]:
+                if active(unit):run(["systemctl","--user","stop",unit])
     if not active(GAME):
         stamp=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         user=Path(config["runtime_dir"])/("user-"+stamp);user.mkdir(parents=True,exist_ok=False)
-        command=["systemd-run","--user","--unit="+GAME,"--collect","--description=VISTA photoreal kitchen review", "--setenv=DISPLAY=:119","--setenv=XDG_RUNTIME_DIR=/run/user/1000021","--setenv=XDG_CACHE_HOME=/data/sysx/cache", "/usr/bin/bwrap","--unshare-net","--die-with-parent","--dev-bind","/","/","--",config["engine"],config["project"],"/Game/VISTA/PhotorealR1/Maps/Kitchen","-game","-Windowed","-ForceRes","-ResX=1920","-ResY=1080","-WinX=0","-WinY=0","-graphicsadapter=0","-UserDir="+str(user),"-Unattended","-NoSplash","-NOSOUND","-NoAnalytics","-NoVSync","-notraceserver","-ddc=InstalledNoZenLocalFallback","-SaveToUserDir","-ExecCmds=t.MaxFPS 30,r.ScreenPercentage 100,r.ExposureOffset -1.8","-UDPMESSAGING_TRANSPORT_ENABLE=0","-ini:Engine:[/Script/TcpMessaging.TcpMessagingSettings]:EnableTransport=False","-ini:Engine:[/Script/AppleARKit.AppleARKitSettings]:bEnableLiveLinkForFaceTracking=False"]
+        command=["systemd-run","--user","--unit="+GAME,"--collect","--description=VISTA photoreal "+KIND+" review", "--setenv=DISPLAY=:119","--setenv=XDG_RUNTIME_DIR=/run/user/1000021","--setenv=XDG_CACHE_HOME=/data/sysx/cache", "/usr/bin/bwrap","--unshare-net","--die-with-parent","--dev-bind","/","/","--",config["engine"],config["project"],MAP,"-game","-Windowed","-ForceRes","-ResX=1920","-ResY=1080","-WinX=0","-WinY=0","-graphicsadapter=0","-UserDir="+str(user),"-Unattended","-NoSplash","-NOSOUND","-NoAnalytics","-NoVSync","-notraceserver","-ddc=InstalledNoZenLocalFallback","-SaveToUserDir","-ExecCmds=t.MaxFPS 30,r.ScreenPercentage 100,r.ExposureOffset -1.8","-UDPMESSAGING_TRANSPORT_ENABLE=0","-ini:Engine:[/Script/TcpMessaging.TcpMessagingSettings]:EnableTransport=False","-ini:Engine:[/Script/AppleARKit.AppleARKitSettings]:bEnableLiveLinkForFaceTracking=False"]
+        exposure=float(config.get("exposure_offset",-1.8))
+        if not math.isfinite(exposure):raise ValueError("Exposure must be finite")
+        command=[x if not x.startswith("-ExecCmds=") else f"-ExecCmds=t.MaxFPS 30,r.ScreenPercentage 100,r.ExposureOffset {exposure}" for x in command]
+        if KIND=="home":command.append("-VistaWholeHome")
         run(command)
-        print("Starting kitchen review",flush=True)
+        print("Starting "+KIND+" review",flush=True)
     deadline=time.monotonic()+150
     window=None
     while time.monotonic()<deadline:
-        if not active(GAME):raise RuntimeError("Kitchen review process exited; inspect its journal")
+        if not active(GAME):raise RuntimeError("Review process exited; inspect its journal")
         window=focus_review()
         if window:break
         time.sleep(1)
-    if not window:raise RuntimeError("Kitchen window did not become ready")
+    if not window:raise RuntimeError("Review window did not become ready")
     if not active(RELAY):
-        previous=active(PREVIOUS_RELAY)
-        state_path.write_text(json.dumps({"previous_relay_active":previous,"selected_at":datetime.now(timezone.utc).isoformat()})+"\n")
+        previous=previous or active(PREVIOUS_RELAY)
+        state={"previous_relay_active":previous,"selected_at":datetime.now(timezone.utc).isoformat(),"kind":KIND}
+        state_path.write_text(json.dumps(state)+"\n")
+        SELECTION.write_text(json.dumps(state)+"\n")
         if previous:run(["systemctl","--user","stop",PREVIOUS_RELAY])
         try:
-            run(["systemd-run","--user","--unit="+RELAY,"--collect","--description=Photoreal kitchen Sunshine input relay","--property=NoNewPrivileges=yes",str(RELAY_BIN),"--display",":119","--focus-window-title-regex",r"^PhotorealKitchen\b"])
+            run(["systemd-run","--user","--unit="+RELAY,"--collect","--description=Photoreal "+KIND+" Sunshine input relay","--property=NoNewPrivileges=yes",str(RELAY_BIN),"--display",":119","--focus-window-title-regex",TITLE])
         except Exception:
             if previous:run(["systemctl","--user","start",PREVIOUS_RELAY])
             raise
@@ -78,21 +108,30 @@ def start(config,state_path):
 def stop(state_path):
     for unit in [RELAY,GAME]:
         if active(unit):run(["systemctl","--user","stop",unit])
-    if state_path.exists() and json.loads(state_path.read_text()).get("previous_relay_active"):
+    peer_active=any(active(relay) or active(game) for kind,(game,relay,_,_) in REVIEWS.items() if kind!=KIND)
+    if not peer_active and state_path.exists() and json.loads(state_path.read_text()).get("previous_relay_active"):
         run(["systemctl","--user","start",PREVIOUS_RELAY])
-    print("Kitchen stopped; previous input relay restored",flush=True)
+    if not peer_active and SELECTION.exists():SELECTION.unlink()
+    print("Review stopped; input selection restored if no peer review is active",flush=True)
 
 
 def main():
+    global GAME,RELAY,TITLE,MAP,KIND
     p=argparse.ArgumentParser();p.add_argument("--profile",required=True,type=Path);p.add_argument("--action",choices=["start","stop","stream","status"],default="start")
     args=p.parse_args();config=json.loads(args.profile.read_text())
+    KIND=config.get("kind","kitchen")
+    if KIND not in REVIEWS:raise SystemExit("Unknown review kind")
+    GAME,RELAY,TITLE,MAP=REVIEWS[KIND]
     state=Path(config["runtime_dir"])/"input-selection.json";state.parent.mkdir(parents=True,exist_ok=True)
     if args.action=="status":
         print(json.dumps({"game":active(GAME),"input":active(RELAY),"previous_input":active(PREVIOUS_RELAY)}));return
     if args.action=="stop":stop(state);return
     for key in ["engine","project"]:
         if not Path(config[key]).is_file():raise SystemExit("Missing "+key)
-    start(config,state)
+    try:start(config,state)
+    except Exception:
+        stop(state)
+        raise
     if args.action=="stream":
         running=True
         def finish(signum,frame):

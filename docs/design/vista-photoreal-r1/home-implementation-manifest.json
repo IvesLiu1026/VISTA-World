@@ -1,0 +1,529 @@
+{
+  "schema": "vista.photoreal-home-implementation/v1",
+  "status": "modeled_imported_live_review_ready",
+  "run_root": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a",
+  "branch": "codex/vista-photoreal-design-r1",
+  "sunshine_app": "VISTA Photoreal Home",
+  "room_keys": {
+    "1": "entry",
+    "2": "living",
+    "3": "kitchen",
+    "4": "bedroom",
+    "5": "office",
+    "6": "bathroom"
+  },
+  "rooms": {
+    "entry": [
+      -1.5,
+      -4,
+      1.5,
+      4
+    ],
+    "living": [
+      -6.5,
+      -4,
+      -1.5,
+      0
+    ],
+    "kitchen": [
+      1.5,
+      -4,
+      6.5,
+      0
+    ],
+    "bedroom": [
+      -6.5,
+      0,
+      -1.5,
+      4
+    ],
+    "office": [
+      1.5,
+      0,
+      6.5,
+      4
+    ],
+    "bathroom": [
+      -1.5,
+      4,
+      1.5,
+      8
+    ]
+  },
+  "model": {
+    "parts": 126,
+    "source_meshes": 2394,
+    "triangles": 1376608,
+    "glb_bytes": 434193016,
+    "nanite_meshes": 118
+  },
+  "validation": {
+    "unittests": 31,
+    "bidirectional_portals": 5,
+    "native_screenshots": 29,
+    "front_door_collision": true,
+    "fridge_open_close": true,
+    "flight_landing": true,
+    "ceiling_light_direction_checked": true,
+    "material_tints_visually_checked": true,
+    "no_nanite_material_or_vsm_overflow_warnings": true
+  },
+  "runtime": {
+    "status": "ready",
+    "profile": {
+      "kind": "home",
+      "engine": "/mnt/NAS2/yhliu/UE_5.7.3_prebuilt/Engine/Binaries/Linux/UnrealEditor",
+      "project": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/project-g/PhotorealHome.uproject",
+      "runtime_dir": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g",
+      "exposure_offset": -2.8,
+      "previous_review_profile": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/sunshine-review-profile-d.json"
+    },
+    "user_dir": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z",
+    "sunshine": {
+      "http_status": 200,
+      "state": "SUNSHINE_SERVER_FREE"
+    },
+    "services": {
+      "vista-photoreal-home-r1.service": {
+        "MainPID": "1636519",
+        "ActiveState": "active"
+      },
+      "vista-photoreal-home-input-r1.service": {
+        "MainPID": "1637393",
+        "ActiveState": "active"
+      },
+      "vista-playable-actions-fast-candidate-r23.service": {
+        "MainPID": "517873",
+        "ActiveState": "active"
+      },
+      "vista-citysample-human-fit-locked-r6.service": {
+        "MainPID": "3828257",
+        "ActiveState": "active"
+      },
+      "vista-sunshine.service": {
+        "MainPID": "1644589",
+        "ActiveState": "active"
+      }
+    },
+    "sunshine_apps_sha256": "9c13503dc5b2d21a05270a330dbaacbf02fa592e2af9cee9b354c569af6b67fa",
+    "new_app": "VISTA Photoreal Home",
+    "previous_apps_preserved": 5,
+    "no_vsm_overflow_or_missing_nanite_materials": true
+  },
+  "artifacts": [
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/model-b/photoreal_home.blend",
+      "bytes": 77725681,
+      "sha256": "106ee70af531652c2c99df5312a73b6adef16cf001618367e399dde375152f37"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/model-b/model-manifest.json",
+      "bytes": 100797,
+      "sha256": "a8f0435c27fcf68f7e0982b4255965bf4f47cd11d114123c1e68b63b8cb4b0e0"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/export-check-b.json",
+      "bytes": 29255,
+      "sha256": "83aa73634c427997e574147c55e237f00f16af063b0645258f79ab0c3b32cca9"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/import-b.json",
+      "bytes": 109975,
+      "sha256": "4f2b7574107154448ac0eb6c4f196e05dad6d7f92feb6ac9625c57545e337cc1"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/refine-f.json",
+      "bytes": 27607,
+      "sha256": "603eb0f3c865b1799c55aaa7c937d83cf82dd22e5ea60d0948fd1c81a49ab4f2"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/sunshine-review-profile-g.json",
+      "bytes": 498,
+      "sha256": "5e691d419228ece02db121eafe000956d22a3caca9565891fbe95e48fceb8923"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/project-g/PhotorealHome.uproject",
+      "bytes": 453,
+      "sha256": "35f5be48482cad450f4401627c72bb719b6dec4e64c3e01042cbe9448ef0e923"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/project-g/Content/VISTA/PhotorealHomeR1/Maps/Home.umap",
+      "bytes": 278935,
+      "sha256": "5202d6b3b87b47807be5dfd9b045f73328ea0d7c3dc7fa104537d99c231668a8"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/project-g/Plugins/VistaPhotorealReview/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so",
+      "bytes": 188880,
+      "sha256": "5a55354c654881695de0334f4db445560d3105bb234e34d1ff0df68a339ee45e"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/live-check.json",
+      "bytes": 25414,
+      "sha256": "e06c1362a52f6548a2e10176bed7a53c3ccd277f26452e091122e287eeccb894"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/logs/checks-final.log",
+      "bytes": 6092,
+      "sha256": "77a6f9b365d7780f1dfb508d873b989db12c7ab8bcb12c46795f5e13b08f6c16"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/completion.json",
+      "bytes": 1552,
+      "sha256": "7e3c3193cb9985adf77c24197f94ab0f334cfd72fdb29cf4a69834b49363b5fb"
+    }
+  ],
+  "room_previews": [
+    {
+      "name": "entry",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/entry.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00000.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "438a8ae33ecb0ef90112ae0e9c7f6385ebb6107d987fe577d18787d6143f16f2",
+      "state": {
+        "location_cm": [
+          0.0,
+          350.0,
+          90.45
+        ],
+        "rotation_deg": [
+          -2.0,
+          -90.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "entry-reverse",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/entry-reverse.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00001.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "a656f0616e75b306206400743fcc6ddc13fccc185504888d430112317e6574bf",
+      "state": {
+        "location_cm": [
+          -68.0,
+          195.0,
+          90.452
+        ],
+        "rotation_deg": [
+          -14.0,
+          48.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "living",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/living.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00002.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "14e68ea41c4d4163594b1eab7b1fa24635911fc0a3860c0d9485cce83cc04312",
+      "state": {
+        "location_cm": [
+          -198.0,
+          295.0,
+          90.452
+        ],
+        "rotation_deg": [
+          -9.0,
+          -140.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "living-reverse",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/living-reverse.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00003.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "dc7c0ffb6f0c98e220138c09d24b507dd33b487c39258951ee836911a7efe849",
+      "state": {
+        "location_cm": [
+          -585.0,
+          125.0,
+          90.453
+        ],
+        "rotation_deg": [
+          -12.0,
+          40.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "kitchen",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/kitchen.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00004.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "41897e45a77f7aa515ac964b7ef72be9f410e47d6a1cd0abb05050b40002b7bc",
+      "state": {
+        "location_cm": [
+          212.0,
+          362.875,
+          90.45
+        ],
+        "rotation_deg": [
+          -8.0,
+          -53.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "kitchen-reverse",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/kitchen-reverse.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00005.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "625804e404c0901690019c72ddf55726de2908ecfc832ed71159155142124ab7",
+      "state": {
+        "location_cm": [
+          535.0,
+          330.0,
+          90.45
+        ],
+        "rotation_deg": [
+          -12.0,
+          -150.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "bedroom",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/bedroom.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00006.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "1fb4def0d0ecadfa820101a7d0b2564540702359da01e6712c1440b8da67324c",
+      "state": {
+        "location_cm": [
+          -199.0,
+          -139.0,
+          90.453
+        ],
+        "rotation_deg": [
+          -11.0,
+          -155.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "bedroom-reverse",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/bedroom-reverse.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00007.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "1acbe0ab320a84510bf1093fa503a33e3b3064985f0b94d2fde6770ef38699aa",
+      "state": {
+        "location_cm": [
+          -580.0,
+          -294.0,
+          90.452
+        ],
+        "rotation_deg": [
+          -10.0,
+          55.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "office",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/office.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00008.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "b2cebc2580f8c0d5ea3100db2c36502b5f3415cfcb4d53190f47f44f0a3d6f4f",
+      "state": {
+        "location_cm": [
+          208.0,
+          -88.0,
+          90.453
+        ],
+        "rotation_deg": [
+          -9.0,
+          -40.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "office-reverse",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/office-reverse.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00009.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "414a5eb399236989ff3dda12e76af8022290cc1db076412bcb7db02d820eb960",
+      "state": {
+        "location_cm": [
+          557.0,
+          -304.0,
+          90.452
+        ],
+        "rotation_deg": [
+          -12.0,
+          150.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "bathroom",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/bathroom.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00010.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "ebc607f265824d937b1e9b6a466bf9fef25f4b0be34939875699c8258f76a73d",
+      "state": {
+        "location_cm": [
+          18.0,
+          -448.0,
+          90.451
+        ],
+        "rotation_deg": [
+          -9.0,
+          -96.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    },
+    {
+      "name": "bathroom-reverse",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/final-evidence/bathroom-reverse.png",
+      "native_source": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/runtime/live-g/user-20260906T124332Z/Saved/Screenshots/LinuxEditor/PhotorealReview00011.png",
+      "width": 1920,
+      "height": 1080,
+      "sha256": "ad0f90684a978599f2ed9de45176ce09c1902331ad6ca847278b5c3d6904d4ab",
+      "state": {
+        "location_cm": [
+          10.0,
+          -735.0,
+          90.451
+        ],
+        "rotation_deg": [
+          -14.0,
+          93.0,
+          0.0
+        ],
+        "movement": 1,
+        "fridge_open_fraction": 0.0
+      }
+    }
+  ],
+  "limits": [
+    "Nominal original design, not a surveyed replica",
+    "Room door leaves are static/open",
+    "Fridge motion is driven by transforms; no simulated grasping or appliance cycles",
+    "30 fps launch cap is not a guaranteed measured minimum"
+  ],
+  "source_files": [
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/blender/vista_photoreal_r1/build_home.py",
+      "bytes": 41355,
+      "sha256": "aa6cb4909b1c21b1b54b3aa906811b30e12c7739d3630244fe6fbfbb8c00bf80"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/blender/vista_photoreal_r1/verify_home.py",
+      "bytes": 2490,
+      "sha256": "77b2fed275dd62ee87ef6b291dbed8de09ba686dab631a163f6dd5cc41c9488f"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/blender/vista_photoreal_r1/refine_home.py",
+      "bytes": 2416,
+      "sha256": "7390d5efbb49eb46ff25347b3c25fce1eb8625632123962c8b9ef99e2946c887"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/blender/vista_photoreal_r1/build_kitchen.py",
+      "bytes": 28792,
+      "sha256": "4623a9150a6cfa24628128d795975cc7359ac6db055a641fdd97255f708c779d"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/ue/vista_photoreal_r1/import_home.py",
+      "bytes": 4677,
+      "sha256": "325c6494844d3c49b6118d789b84fcb12c0993e3871bc3a12795e7171cfef351"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/ue/vista_photoreal_r1/create_project.py",
+      "bytes": 3532,
+      "sha256": "be21bca43fdd224acdb1c363329e5b1fd9d3175ffae05f01cbd58f4a280a36a2"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/ue/vista_photoreal_r1/import_kitchen.py",
+      "bytes": 8860,
+      "sha256": "e1280623f2222f8e61ccecf507bba3bf7b31034204d298b8d6a5705f64b8a5de"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/ue/vista_photoreal_r1/refine_home.py",
+      "bytes": 4464,
+      "sha256": "44f9250acc537a38d9fcbec86823c1d52d88d59d5df001a065103039f1288467"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/runtime/vista_photoreal_r1/test_review_session.py",
+      "bytes": 3622,
+      "sha256": "828110b48791c9215dab94fba25b7d53de9f619f21f6ae0b4cd58c2c2e891a68"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/runtime/vista_photoreal_r1/capture_home.py",
+      "bytes": 5374,
+      "sha256": "c75d6ced06744f61e686af8034a27b2679263ac9780976305414409c4b7ce052"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/runtime/vista_photoreal_r1/review_session.py",
+      "bytes": 7847,
+      "sha256": "a6f62c0654b881dccfff26f6dc1dff3845e5841efabad9afd85e9d99176bdfce"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/runtime/vista_photoreal_r1/install_sunshine_entry.py",
+      "bytes": 2441,
+      "sha256": "c1584f7378ea7fab48a6bbc1190b2473696b899cb49ad8ba18aab8d750b06efe"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/runtime/vista_photoreal_r1/x11_review.py",
+      "bytes": 2522,
+      "sha256": "537ccd2cd0060ebfb40125640fcdd10ea369a96785b6744492865b2ffcabc1eb"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/VistaPhotorealReview.Build.cs",
+      "bytes": 322,
+      "sha256": "58de78f0a81d566338fe8783f0c911861ecadf49ca53e0d37dd0b57d3d074f01"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/PhotorealReview.cpp",
+      "bytes": 10408,
+      "sha256": "08c80de47f7c0d5782746d0105d1f91bc3aa4d7c4167f94544281233f954907e"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Public/PhotorealReview.h",
+      "bytes": 1616,
+      "sha256": "0423b8a392d0a65c064c3f8c00f7bbfe0092bba844816abb05342ba990df6de8"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+"""Regression checks for exclusive review input and restoration on failure."""
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+spec=importlib.util.spec_from_file_location("review_session",Path(__file__).with_name("review_session.py"))
+review=importlib.util.module_from_spec(spec);spec.loader.exec_module(review)
+
+
+class ReviewSelectionTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name);self.state=self.root/"input-selection.json"
+        self.units=set();self.calls=[]
+        patches={"KIND":"home","GAME":review.REVIEWS["home"][0],"RELAY":review.REVIEWS["home"][1],"TITLE":review.REVIEWS["home"][2],"MAP":review.REVIEWS["home"][3],"SELECTION":self.root/"selection.json"}
+        for name,value in patches.items():
+            p=patch.object(review,name,value);p.start();self.addCleanup(p.stop)
+        p=patch.object(review,"active",side_effect=lambda unit:unit in self.units);p.start();self.addCleanup(p.stop)
+        p=patch.object(review,"run",side_effect=self.fake_run);p.start();self.addCleanup(p.stop)
+
+    def fake_run(self,args,check=True):
+        self.calls.append(args)
+        if args[:3]==["systemctl","--user","stop"]:self.units.discard(args[3])
+        if args[:3]==["systemctl","--user","start"]:self.units.add(args[3])
+        if args[0]=="systemd-run":self.units.add(next(x.split("=",1)[1] for x in args if x.startswith("--unit=")))
+
+    def test_select_home_preserves_external_demo_and_excludes_kitchen_input(self):
+        kg,kr,_,_=review.REVIEWS["kitchen"]
+        self.units.update([kg,kr,review.GAME,review.PREVIOUS_RELAY,"vista-playable-actions-fast-candidate-r23.service"])
+        with patch.object(review,"focus_review",return_value=123):
+            review.start({"runtime_dir":str(self.root)},self.state)
+        self.assertNotIn(kg,self.units);self.assertNotIn(kr,self.units)
+        self.assertNotIn(review.PREVIOUS_RELAY,self.units)
+        self.assertIn(review.RELAY,self.units)
+        self.assertIn("vista-playable-actions-fast-candidate-r23.service",self.units)
+        self.assertTrue(json.loads(self.state.read_text())["previous_relay_active"])
+
+    def test_late_peer_stop_does_not_restore_a_second_input_relay(self):
+        kg,kr,_,_=review.REVIEWS["kitchen"]
+        self.units.update([review.GAME,review.RELAY,kg,kr])
+        self.state.write_text(json.dumps({"previous_relay_active":True}))
+        review.stop(self.state)
+        self.assertIn(kg,self.units);self.assertIn(kr,self.units)
+        self.assertNotIn(review.PREVIOUS_RELAY,self.units)
+
+    def test_failed_window_start_restores_original_input(self):
+        self.units.update([review.GAME,review.PREVIOUS_RELAY])
+        engine=self.root/"engine";engine.touch()
+        project=self.root/"project";project.touch()
+        profile=self.root/"profile.json"
+        profile.write_text(json.dumps({"kind":"home","engine":str(engine),"project":str(project),"runtime_dir":str(self.root)}))
+        with patch("sys.argv",["review_session","--profile",str(profile)]), patch.object(review,"focus_review",return_value=None), patch.object(review.time,"monotonic",side_effect=[0,200]):
+            with self.assertRaisesRegex(RuntimeError,"window did not become ready"):review.main()
+        self.assertNotIn(review.GAME,self.units)
+        self.assertNotIn(review.RELAY,self.units)
+        self.assertIn(review.PREVIOUS_RELAY,self.units)
+        self.assertFalse(review.SELECTION.exists())
+
+
+if __name__=="__main__":unittest.main()

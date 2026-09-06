@@ -25,7 +25,9 @@ def vec(values):
 
 
 def actor(cls,pos=(0,0,0),rot=(0,0,0),label=""):
-    obj=unreal.get_editor_subsystem(unreal.EditorActorSubsystem).spawn_actor_from_class(cls,vec(pos),unreal.Rotator(*rot))
+    # Python's positional Rotator constructor does not follow C++ pitch/yaw/roll.
+    # Keywords are essential; verify light forward vectors in the import receipt.
+    obj=unreal.get_editor_subsystem(unreal.EditorActorSubsystem).spawn_actor_from_class(cls,vec(pos),unreal.Rotator(pitch=rot[0],yaw=rot[1],roll=rot[2]))
     if label:obj.set_actor_label(label)
     return obj
 
@@ -64,7 +66,7 @@ def import_part(part):
     body=mesh.get_editor_property("body_setup")
     if not body:raise RuntimeError("Imported mesh has no collision body: "+part["name"])
     prop(body,"collision_trace_flag",unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE)
-    settings=mesh.get_editor_property("nanite_settings");prop(settings,"enabled",False);prop(mesh,"nanite_settings",settings)
+    settings=mesh.get_editor_property("nanite_settings");prop(settings,"enabled",bool(part.get("nanite",False)));prop(mesh,"nanite_settings",settings)
     unreal.EditorAssetLibrary.save_loaded_asset(mesh,only_if_is_dirty=False)
     p=part["pivot_m"]
     obj=actor(unreal.StaticMeshActor,(100*p[0],-100*p[1],100*p[2]),label="PR_"+part["name"])
@@ -72,8 +74,10 @@ def import_part(part):
     comp.set_static_mesh(mesh)
     for index,slot in enumerate(mesh.get_editor_property("static_materials")):
         if slot.material_interface.get_name()=="PR_Glass":comp.set_material(index,GLASS)
-    comp.set_collision_profile_name("NoCollision" if part["name"] in ("glass","fridge_glass","outside") else "BlockAll")
-    prop(comp,"cast_shadow",part["name"] not in ("glass","fridge_glass"))
+    no_collision=part.get("collision")=="none" or part["name"] in ("glass","fridge_glass","outside")
+    comp.set_collision_profile_name("NoCollision" if no_collision else "BlockAll")
+    prop(comp,"cast_shadow","glass" not in part["name"] and part["name"]!="exterior")
+    if part["name"]=="exterior":prop(comp,"affect_distance_field_lighting",False)
     if part["name"] in ("door_l","door_r"):
         comp.set_mobility(unreal.ComponentMobility.MOVABLE)
         prop(obj,"tags",[unreal.Name("PR_FridgeDoor_"+part["name"][-1].upper())])
@@ -139,13 +143,17 @@ def main():
     REPORT["live_visual_verification"]=False
 
 
-try:
-    main()
-except Exception:
-    REPORT["status"]="failed"
-    REPORT["error"]=traceback.format_exc()
-    raise
-finally:
-    RESULT.parent.mkdir(parents=True,exist_ok=True)
-    RESULT.write_text(json.dumps(REPORT,indent=2)+"\n")
-    unreal.log("VISTA_PHOTOREAL_IMPORT "+REPORT["status"])
+def run_import(entry=main):
+    try:
+        entry()
+    except Exception:
+        REPORT["status"]="failed"
+        REPORT["error"]=traceback.format_exc()
+        raise
+    finally:
+        RESULT.parent.mkdir(parents=True,exist_ok=True)
+        RESULT.write_text(json.dumps(REPORT,indent=2)+"\n")
+        unreal.log("VISTA_PHOTOREAL_IMPORT "+REPORT["status"])
+
+
+if __name__=="__main__":run_import()
