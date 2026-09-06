@@ -1,0 +1,10 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "VISTA Photoreal Review",
+  "Description": "Local first-person asset review for the original photoreal kitchen.",
+  "Category": "VISTA",
+  "CanContainContent": false,
+  "Modules": [{"Name": "VistaPhotorealReview", "Type": "Runtime", "LoadingPhase": "Default"}]
+}
