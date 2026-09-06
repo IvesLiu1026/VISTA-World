@@ -1,0 +1,199 @@
+{
+  "schema": "vista.embodied-interaction-research/v1",
+  "status": "research_and_next_implementation_design_complete",
+  "researched_at": "2026-09-06T14:20:56.689517+00:00",
+  "source_baseline": "26be8b7c",
+  "engine_version": "5.7.3",
+  "research_root": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-interaction-research-20260906a",
+  "report": {
+    "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/docs/design/vista-photoreal-r1/embodied-interaction-research.md",
+    "bytes": 14553,
+    "sha256": "289416c6f92b8fc1797502b8fe82f57bb4f28afc8fc8a436107c0d070cd6cac6"
+  },
+  "skills": [
+    {
+      "name": "ue-animation-system",
+      "repo": "quodsoler/unreal-engine-skills",
+      "commit": "231c8571be6f3335685edc566a28ec6f9621361d",
+      "source_path": "skills/ue-animation-system/SKILL.md",
+      "source_url": "https://github.com/quodsoler/unreal-engine-skills/blob/231c8571be6f3335685edc566a28ec6f9621361d/skills/ue-animation-system/SKILL.md",
+      "local_path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-interaction-research-20260906a/ue-animation-system.md",
+      "bytes": 16946,
+      "sha256": "50581bda7a3d95f098131dd6638f5ed9c2ed81db5a585d95fe8e1f3270faff95"
+    },
+    {
+      "name": "ue-physics-collision",
+      "repo": "quodsoler/unreal-engine-skills",
+      "commit": "231c8571be6f3335685edc566a28ec6f9621361d",
+      "source_path": "skills/ue-physics-collision/SKILL.md",
+      "source_url": "https://github.com/quodsoler/unreal-engine-skills/blob/231c8571be6f3335685edc566a28ec6f9621361d/skills/ue-physics-collision/SKILL.md",
+      "local_path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-interaction-research-20260906a/ue-physics-collision.md",
+      "bytes": 18240,
+      "sha256": "b2099519fa9ea74cb7af20535e673c9da86176ed0d262e1170e2ac3a5dbba266"
+    },
+    {
+      "name": "blender-rigging",
+      "repo": "arjun988/blender-skills",
+      "commit": "8f778d2405a214b508d4c7d80742be8e43acdd52",
+      "source_path": ".claude/skills/rigging/SKILL.md",
+      "source_url": "https://github.com/arjun988/blender-skills/blob/8f778d2405a214b508d4c7d80742be8e43acdd52/.claude/skills/rigging/SKILL.md",
+      "local_path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-interaction-research-20260906a/blender-rigging.md",
+      "bytes": 3811,
+      "sha256": "a5469b3a46f46e659b17e0afd0fb0b1c41751e60246205af785d1dc316a32f9a"
+    },
+    {
+      "name": "blender-animation",
+      "repo": "arjun988/blender-skills",
+      "commit": "8f778d2405a214b508d4c7d80742be8e43acdd52",
+      "source_path": ".claude/skills/animation/SKILL.md",
+      "source_url": "https://github.com/arjun988/blender-skills/blob/8f778d2405a214b508d4c7d80742be8e43acdd52/.claude/skills/animation/SKILL.md",
+      "local_path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-interaction-research-20260906a/blender-animation.md",
+      "bytes": 3528,
+      "sha256": "a7c5fcef13d4f68c017a3f5052194cea3b359e38fb0807eb308f8075b1f398d6"
+    },
+    {
+      "name": "blender-collision-proxy",
+      "repo": "arjun988/blender-skills",
+      "commit": "8f778d2405a214b508d4c7d80742be8e43acdd52",
+      "source_path": ".claude/skills/collision-proxy/SKILL.md",
+      "source_url": "https://github.com/arjun988/blender-skills/blob/8f778d2405a214b508d4c7d80742be8e43acdd52/.claude/skills/collision-proxy/SKILL.md",
+      "local_path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-interaction-research-20260906a/blender-collision-proxy.md",
+      "bytes": 2301,
+      "sha256": "35c3b05ea2b31591cfe9c480730e2963887d7dcc88c80eb891d0c4abdc820af6"
+    },
+    {
+      "name": "ue-control-rig-and-ik",
+      "repo": "kevinpbuckley/unreal-engine-skills",
+      "commit": "1661d7d24325612b79b77b8808ca27797ba43ef4",
+      "source_path": "skills/core/control-rig-and-ik/SKILL.md",
+      "source_url": "https://github.com/kevinpbuckley/unreal-engine-skills/blob/1661d7d24325612b79b77b8808ca27797ba43ef4/skills/core/control-rig-and-ik/SKILL.md",
+      "local_path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-interaction-research-20260906a/ue-control-rig-and-ik.md",
+      "bytes": 15997,
+      "sha256": "4dd70e262728708dcb870f6a817d80ad804459b2052729d3a15e4aded8041a46"
+    },
+    {
+      "name": "ue58-control-rig-ik",
+      "repo": "adventuresincausality/game-development-constitution",
+      "commit": "aee2c2831176c064cb8cb800fc7bbbff5e5fbdc7",
+      "source_path": "skills/unreal-control-rig-ik/SKILL.md",
+      "source_url": "https://github.com/adventuresincausality/game-development-constitution/blob/aee2c2831176c064cb8cb800fc7bbbff5e5fbdc7/skills/unreal-control-rig-ik/SKILL.md",
+      "local_path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-interaction-research-20260906a/ue58-control-rig-ik.md",
+      "bytes": 4754,
+      "sha256": "379acd0c97b16b594aeaa04398f6b186d7d320b8466fe6c80aeaf892221d2c8b"
+    }
+  ],
+  "official_engine_docs": [
+    "https://dev.epicgames.com/documentation/en-us/unreal-engine/first-person-rendering?application_version=5.7",
+    "https://dev.epicgames.com/documentation/en-us/unreal-engine/ik-rig-solvers-in-unreal-engine?application_version=5.7",
+    "https://dev.epicgames.com/documentation/en-us/unreal-engine/physics-components-in-unreal-engine?application_version=5.7",
+    "https://dev.epicgames.com/documentation/en-us/unreal-engine/game-animation-sample-project-in-unreal-engine?application_version=5.7",
+    "https://dev.epicgames.com/documentation/en-us/unreal-engine/motion-warping-in-unreal-engine"
+  ],
+  "papers": [
+    {
+      "name": "GRAB",
+      "venue": "ECCV 2020",
+      "url": "https://grab.is.tue.mpg.de/",
+      "role": "hand/object contact and whole-body grasp references"
+    },
+    {
+      "name": "Omnigrasp",
+      "venue": "NeurIPS 2024",
+      "url": "https://www.zhengyiluo.com/Omnigrasp-Site/",
+      "code": "https://github.com/ZhengyiLuo/Omnigrasp",
+      "role": "research on learned simulated humanoid grasping; not integrated"
+    },
+    {
+      "name": "InterMimic",
+      "venue": "CVPR 2025 Highlight",
+      "url": "https://sirui-xu.github.io/InterMimic/",
+      "paper_read": "https://arxiv.org/html/2502.20390v1",
+      "role": "physics-based refinement and scaling of interaction imitation; not integrated"
+    },
+    {
+      "name": "GVHMR",
+      "venue": "SIGGRAPH Asia 2024",
+      "url": "https://zju3dv.github.io/gvhmr/",
+      "role": "monocular body motion recovery; not a hand-object contact pipeline"
+    }
+  ],
+  "local_sources": [
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/PhotorealReview.cpp",
+      "bytes": 10408,
+      "sha256": "08c80de47f7c0d5782746d0105d1f91bc3aa4d7c4167f94544281233f954907e"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaPlayableHomeCharacter.cpp",
+      "bytes": 80720,
+      "sha256": "7e11e3f899f126a1f960741ee49c8adbd558eb8c6d841b4f0e3c552d3aa158e7"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaActionExecutorComponent.cpp",
+      "bytes": 74672,
+      "sha256": "e43787ffe940739e7a6c4ad172ab838e8ce0a00beb7832097aefbe9f3b3c0881"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/unreal_plugins/VistaPlayableHome/Source/VistaPlayableHome/Private/VistaAnimationComponent.cpp",
+      "bytes": 49545,
+      "sha256": "4e85b8dd70c8956ec1e5cea73abec7a2e88c4aabf8c139292b86d85e5dbde253"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/ue/vista_playable_home/materialize_makehuman_cc0_animation_runtime.py",
+      "bytes": 36114,
+      "sha256": "e513304efd3ee4f5d097d37b7c4fff63d1affef969686cd45cc4d88143862125"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-photoreal-design-r1/tools/ue/vista_photoreal_r1/import_kitchen.py",
+      "bytes": 8860,
+      "sha256": "e1280623f2222f8e61ccecf507bba3bf7b31034204d298b8d6a5705f64b8a5de"
+    },
+    {
+      "path": "/mnt/NAS2/yhliu/UE_5.7.3_prebuilt/Engine/Source/Runtime/Engine/Classes/Camera/CameraComponent.h",
+      "bytes": 18783,
+      "sha256": "6f672a72a52abc1d90e93a4efd31cc9f66e7c23772a9857a229e9f9f95db4464"
+    },
+    {
+      "path": "/mnt/NAS2/yhliu/UE_5.7.3_prebuilt/Engine/Source/Runtime/Engine/Classes/Components/PrimitiveComponent.h",
+      "bytes": 180189,
+      "sha256": "dcd984a353cf6d7161cf1848789352b51f158ff3ee2f3a60ee1036beec8be78b"
+    },
+    {
+      "path": "/mnt/NAS2/yhliu/UE_5.7.3_prebuilt/Engine/Source/Runtime/Engine/Private/Animation/AnimInstance.cpp",
+      "bytes": 161382,
+      "sha256": "f04e8878507a8472fe17166a4936d4376c120c23fe56681c2382d8cbe6e431c9"
+    },
+    {
+      "path": "/mnt/NAS2/yhliu/UE_5.7.3_prebuilt/Engine/Plugins/Animation/IKRig/Source/IKRig/Public/ActorComponents/IKRigComponent.h",
+      "bytes": 2558,
+      "sha256": "605e48481bb842063c24101454963493d12c996b3fccf73945d45eeb7d2a6189"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-r1-20260906a/model-b/model-manifest.json",
+      "bytes": 100797,
+      "sha256": "a8f0435c27fcf68f7e0982b4255965bf4f47cd11d114123c1e68b63b8cb4b0e0"
+    }
+  ],
+  "checked_findings": [
+    "Photoreal review has no assigned visible skeletal body or animation class",
+    "Legacy first-person toggle hides near-camera character visual",
+    "Legacy animation contract defines 53 bones with articulated fingers and feet",
+    "Local UE 5.7.3 headers expose first-person FOV/scale/primitive types",
+    "Mug currently uses complex-as-simple collision and offset visual geometry at a table-relative pivot",
+    "Montage_SetEndDelegate uses an active montage instance; downloaded animation skill has conflicting order advice",
+    "UIKRigComponent position/rotation helper stores goals in component space"
+  ],
+  "proposed_first_playable_scope": [
+    "full_body_first_and_third_person",
+    "locomotion_and_foot_contact",
+    "cup_reach_grasp_carry_place_drop"
+  ],
+  "runtime_implemented_this_research": false,
+  "acceptance_targets_are_proposed_not_results": true,
+  "global_skill_installations": 0,
+  "ue_plugin_installations": 0,
+  "paid_generation_calls": 0,
+  "model_inference_or_training_runs": 0,
+  "dataset_or_model_weight_downloads": 0,
+  "streaming_lifecycle_changes": 0
+}
