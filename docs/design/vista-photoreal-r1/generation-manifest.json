@@ -1,0 +1,199 @@
+{
+  "schema_version": "vista.generated-design-references/v1",
+  "date": "2026-09-06",
+  "selected_sheet_count": 9,
+  "generation_count": 10,
+  "rooms": 6,
+  "objects": 3,
+  "reported_model_note": "The built-in tool returned image data and file paths, not its resolved model ID. gpt-image-2 was the user-requested model; do not present the ID as independently verified.",
+  "billing": {
+    "higgsfield_credits_used": false,
+    "openrouter_requests": 0,
+    "user_api_key_calls": 0,
+    "built_in_quota_usage": "not reported"
+  },
+  "images": [
+    {
+      "id": "entry_hall",
+      "label_zh": "玄關／走廊",
+      "selected": true,
+      "source_file": "/home/yhliu/.codex/generated_images/01a06f66-d3a6-7883-94a9-2cdce8bb766c/exec-67ac0424-2268-4cd1-8bcc-3f8604d6e0e8.png",
+      "file": "references/01-entry-hall.png",
+      "generation_route": "built-in image_gen",
+      "requested_model": "gpt-image-2",
+      "reported_model": null,
+      "input_reference_ids": [
+        "kitchen"
+      ],
+      "review_status": "appearance_reference_only_geometry_not_accepted",
+      "sha256": "a840a48db6bc3a4480688122e9cef796ede518506a700993ef8e1433c41d39d8",
+      "bytes": 2056416,
+      "width_px": 1672,
+      "height_px": 941,
+      "prompt_sha256": "268398e837981d2b3e19fedcfa41beaa5d8692575ed1cb2f253d46a0cf16c5db"
+    },
+    {
+      "id": "living_room",
+      "label_zh": "客廳",
+      "selected": true,
+      "source_file": "/home/yhliu/.codex/generated_images/01a06f66-d3a6-7883-94a9-2cdce8bb766c/exec-c5bb8fc4-3403-4dc6-9f0e-7109cefb4d1c.png",
+      "file": "references/02-living-room.png",
+      "generation_route": "built-in image_gen",
+      "requested_model": "gpt-image-2",
+      "reported_model": null,
+      "input_reference_ids": [
+        "kitchen"
+      ],
+      "review_status": "appearance_reference_only_geometry_not_accepted",
+      "sha256": "53848f367a5e38fc0b9fdd713c26f61903e2c65320d79bf7c93e2e4295dcc35f",
+      "bytes": 2258125,
+      "width_px": 1672,
+      "height_px": 941,
+      "prompt_sha256": "457dbe529bc94d32fd297bc3e1d5d3282a2272ff3bac77d18c06dd288287a416"
+    },
+    {
+      "id": "kitchen",
+      "label_zh": "廚房／餐區",
+      "selected": true,
+      "source_file": "/home/yhliu/.codex/generated_images/01a06f66-d3a6-7883-94a9-2cdce8bb766c/exec-2ad48cfe-b319-4d5c-8055-699a244f9713.png",
+      "file": "references/03-kitchen-dining.png",
+      "generation_route": "built-in image_gen",
+      "requested_model": "gpt-image-2",
+      "reported_model": null,
+      "input_reference_ids": [],
+      "review_status": "appearance_reference_only_geometry_not_accepted",
+      "sha256": "e9ca54dd8ca85d12c6e7dbcee6f384c5b7e579c385fa2950bcf698384954a679",
+      "bytes": 1944006,
+      "width_px": 1672,
+      "height_px": 941,
+      "prompt_sha256": "a9786d0935ddb29b8e4c35728f46d56fd799a6cad4350466fa32d3898d08fda9"
+    },
+    {
+      "id": "bedroom",
+      "label_zh": "臥室",
+      "selected": true,
+      "source_file": "/home/yhliu/.codex/generated_images/01a06f66-d3a6-7883-94a9-2cdce8bb766c/exec-f59d584e-048c-4b4d-ae39-f972f9aee491.png",
+      "file": "references/04-bedroom.png",
+      "generation_route": "built-in image_gen",
+      "requested_model": "gpt-image-2",
+      "reported_model": null,
+      "input_reference_ids": [
+        "kitchen"
+      ],
+      "review_status": "appearance_reference_only_geometry_not_accepted",
+      "sha256": "a646fab29c05196ed48df308378e2736eeacad787037d5ad6bd7d270745439a8",
+      "bytes": 1958628,
+      "width_px": 1672,
+      "height_px": 941,
+      "prompt_sha256": "9b5fb9e2d8c1a970f581a5acced1c9cf54a68515608969152fc4e749393561ee"
+    },
+    {
+      "id": "office",
+      "label_zh": "書房",
+      "selected": true,
+      "source_file": "/home/yhliu/.codex/generated_images/01a06f66-d3a6-7883-94a9-2cdce8bb766c/exec-1912818f-3e56-46de-9a23-7e7ae45d459d.png",
+      "file": "references/05-office.png",
+      "generation_route": "built-in image_gen",
+      "requested_model": "gpt-image-2",
+      "reported_model": null,
+      "input_reference_ids": [
+        "kitchen"
+      ],
+      "review_status": "appearance_reference_only_geometry_not_accepted",
+      "sha256": "f1656629021a9b24344a3a1ddc190399842e4b1e26d851ac0f67208958289372",
+      "bytes": 1884298,
+      "width_px": 1672,
+      "height_px": 941,
+      "prompt_sha256": "1c44022eb6a360b29bd7fc47d5da413a2ff5ffbff61db0bde3931fe20ba2b99c"
+    },
+    {
+      "id": "bathroom_laundry",
+      "label_zh": "衛浴／洗衣",
+      "selected": true,
+      "source_file": "/home/yhliu/.codex/generated_images/01a06f66-d3a6-7883-94a9-2cdce8bb766c/exec-1dbb6070-3721-4a8a-ad3c-c63086e3a936.png",
+      "file": "references/06-bathroom-laundry.png",
+      "generation_route": "built-in image_gen",
+      "requested_model": "gpt-image-2",
+      "reported_model": null,
+      "input_reference_ids": [
+        "bathroom_laundry_v1"
+      ],
+      "review_status": "appearance_reference_only_geometry_not_accepted",
+      "sha256": "af075d23ec0f5a3fa9f051f1bb6d3a1e536025955afee76170397b2f1378cf06",
+      "bytes": 2004835,
+      "width_px": 1672,
+      "height_px": 941,
+      "prompt_sha256": "34015a483db091fe7c9f064c7bcc4b408f3f7130f3a0465ed7c100b34c2307e1"
+    },
+    {
+      "id": "pot",
+      "label_zh": "不鏽鋼鍋",
+      "selected": true,
+      "source_file": "/home/yhliu/.codex/generated_images/01a06f66-d3a6-7883-94a9-2cdce8bb766c/exec-e4587fb0-ca9c-4441-b038-fdd0e1195cf7.png",
+      "file": "references/07-pot.png",
+      "generation_route": "built-in image_gen",
+      "requested_model": "gpt-image-2",
+      "reported_model": null,
+      "input_reference_ids": [],
+      "review_status": "appearance_reference_only_geometry_not_accepted",
+      "sha256": "6bcd0518a7294927828d9cd4aaa784beb803c7eb05983d55533f184d83e4f436",
+      "bytes": 1900055,
+      "width_px": 1672,
+      "height_px": 941,
+      "prompt_sha256": "45c1c720ca5d7bfdfe92ceaf30c278213d0dbc42e3a5605a9f16b961717a21d4"
+    },
+    {
+      "id": "mug",
+      "label_zh": "陶瓷杯",
+      "selected": true,
+      "source_file": "/home/yhliu/.codex/generated_images/01a06f66-d3a6-7883-94a9-2cdce8bb766c/exec-34c71520-bef4-439d-869b-2439b57c61e3.png",
+      "file": "references/08-mug.png",
+      "generation_route": "built-in image_gen",
+      "requested_model": "gpt-image-2",
+      "reported_model": null,
+      "input_reference_ids": [],
+      "review_status": "appearance_reference_only_geometry_not_accepted",
+      "sha256": "9e3a3bdf1feda7099fad46879a11f06732d2d2df9719e0eea8d7cbc509e87036",
+      "bytes": 1713365,
+      "width_px": 1672,
+      "height_px": 941,
+      "prompt_sha256": "0ed5a2e97915249cbda40867692fecac87c5c98b49c82d26a00532dbb903c824"
+    },
+    {
+      "id": "fridge",
+      "label_zh": "對開冰箱",
+      "selected": true,
+      "source_file": "/home/yhliu/.codex/generated_images/01a06f66-d3a6-7883-94a9-2cdce8bb766c/exec-67643df6-f81e-456b-a018-694bd2c5b121.png",
+      "file": "references/09-fridge.png",
+      "generation_route": "built-in image_gen",
+      "requested_model": "gpt-image-2",
+      "reported_model": null,
+      "input_reference_ids": [],
+      "review_status": "appearance_reference_only_geometry_not_accepted",
+      "sha256": "ac3a3eba61dad82354c55a63ebd0a1b4c6abdc37f6ef3cc44c647901b41a3883",
+      "bytes": 1517154,
+      "width_px": 1672,
+      "height_px": 941,
+      "prompt_sha256": "dbfe4b74e58959d7acc0a374d4bf7e26643ea3fe260e44adab5d3a165f1fcdb8"
+    },
+    {
+      "id": "bathroom_laundry_v1",
+      "label_zh": "衛浴／洗衣（初版，缺馬桶）",
+      "selected": false,
+      "source_file": "/home/yhliu/.codex/generated_images/01a06f66-d3a6-7883-94a9-2cdce8bb766c/exec-0deab47a-2314-4ae3-b328-60a52a5ec12f.png",
+      "file": "references/archive/06-bathroom-laundry-v1.png",
+      "generation_route": "built-in image_gen",
+      "requested_model": "gpt-image-2",
+      "reported_model": null,
+      "input_reference_ids": [
+        "kitchen"
+      ],
+      "review_status": "superseded_by_toilet_revision",
+      "sha256": "098b452b1fdbe555e543e389696e3fb1a9a8ef053e4e90dbdb71c5af3f67c939",
+      "bytes": 1944399,
+      "width_px": 1672,
+      "height_px": 941,
+      "prompt_sha256": "7af4758b6d37818990670d10564e1cf56a9cc4530455c4f8b086265587ed1a49"
+    }
+  ]
+}

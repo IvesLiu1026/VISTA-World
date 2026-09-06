@@ -1,0 +1,280 @@
+{
+  "schema_version": "vista.photoreal-reference-design/v1",
+  "status": "concept_reference_only",
+  "source": {
+    "repository_path": "world_packs/vista_playable_home_r1/house.json",
+    "sha256": "3d73f84365a1adfbda408d8c49ac5f95370a221c6ed4fb880838d86b0c71b0c3",
+    "base_commit": "936d86d50aa1cc281fcbe4d91287db935fcc1f51"
+  },
+  "units": "meters",
+  "coordinate_system": {
+    "x": "east",
+    "y": "north",
+    "z": "up"
+  },
+  "dimension_authority": "Existing logical room bounds; not surveyed dimensions or a construction plan. New clear dimensions and wall assemblies need a Blender geometry decision.",
+  "style": {
+    "direction": "contemporary Taiwanese residence",
+    "user_confirmation": "pending_optional_preference",
+    "materials": [
+      "natural oak",
+      "warm offwhite plaster",
+      "muted sage cabinetry",
+      "low-gloss terrazzo",
+      "satin stainless steel",
+      "ivory glazed ceramic"
+    ],
+    "realism": "ordinary lived-in home; credible construction details; restrained wear; natural exposure"
+  },
+  "design_assumptions": {
+    "windows": "proposed original design; not extracted from source",
+    "room_images": "appearance references only; panels may disagree geometrically",
+    "render_comparison": "future single Blender scene with fixed cameras",
+    "furniture_positions": "proposed in prompts; resolve to numeric transforms before production modeling"
+  },
+  "rooms": [
+    {
+      "source_room_id": "home.r1/room.entry_hall",
+      "kind": "entry_hall",
+      "label_zh": "玄關／走廊",
+      "world_min_m": [
+        -1.5,
+        -4,
+        0
+      ],
+      "world_max_m": [
+        1.5,
+        4,
+        3
+      ],
+      "nominal_size_m": [
+        3.0,
+        8,
+        3
+      ],
+      "proposed_window_wall": null,
+      "camera_intents": [
+        "south_to_north",
+        "north_to_south",
+        "entry_oblique",
+        "bench_material_detail"
+      ]
+    },
+    {
+      "source_room_id": "home.r1/room.living_room",
+      "kind": "living_room",
+      "label_zh": "客廳",
+      "world_min_m": [
+        -6.5,
+        -4,
+        0
+      ],
+      "world_max_m": [
+        -1.5,
+        0,
+        3
+      ],
+      "nominal_size_m": [
+        5.0,
+        4,
+        3
+      ],
+      "proposed_window_wall": "west",
+      "camera_intents": [
+        "east_to_northwest",
+        "southwest_to_east",
+        "southwest_to_north",
+        "sofa_material_detail"
+      ]
+    },
+    {
+      "source_room_id": "home.r1/room.kitchen_dining",
+      "kind": "kitchen_dining",
+      "label_zh": "廚房／餐區",
+      "world_min_m": [
+        1.5,
+        -4,
+        0
+      ],
+      "world_max_m": [
+        6.5,
+        0,
+        3
+      ],
+      "nominal_size_m": [
+        5.0,
+        4,
+        3
+      ],
+      "proposed_window_wall": "east",
+      "camera_intents": [
+        "west_to_northeast",
+        "southeast_to_northwest",
+        "southwest_to_northeast",
+        "sink_material_detail"
+      ]
+    },
+    {
+      "source_room_id": "home.r1/room.bedroom",
+      "kind": "bedroom",
+      "label_zh": "臥室",
+      "world_min_m": [
+        -6.5,
+        0,
+        0
+      ],
+      "world_max_m": [
+        -1.5,
+        4,
+        3
+      ],
+      "nominal_size_m": [
+        5.0,
+        4,
+        3
+      ],
+      "proposed_window_wall": "west",
+      "camera_intents": [
+        "east_to_northwest",
+        "northwest_to_southeast",
+        "southwest_to_northeast",
+        "bedside_material_detail"
+      ]
+    },
+    {
+      "source_room_id": "home.r1/room.office",
+      "kind": "office",
+      "label_zh": "書房",
+      "world_min_m": [
+        1.5,
+        0,
+        0
+      ],
+      "world_max_m": [
+        6.5,
+        4,
+        3
+      ],
+      "nominal_size_m": [
+        5.0,
+        4,
+        3
+      ],
+      "proposed_window_wall": "east",
+      "camera_intents": [
+        "west_to_northeast",
+        "southeast_to_northwest",
+        "northwest_to_southeast",
+        "chair_material_detail"
+      ]
+    },
+    {
+      "source_room_id": "home.r1/room.bathroom_laundry",
+      "kind": "bathroom_laundry",
+      "label_zh": "衛浴／洗衣",
+      "world_min_m": [
+        -1.5,
+        4,
+        0
+      ],
+      "world_max_m": [
+        1.5,
+        8,
+        3
+      ],
+      "nominal_size_m": [
+        3.0,
+        4,
+        3
+      ],
+      "proposed_window_wall": "north",
+      "camera_intents": [
+        "south_to_north",
+        "northeast_to_southwest",
+        "southeast_to_northwest",
+        "faucet_material_detail"
+      ]
+    }
+  ],
+  "portals": [
+    {
+      "source_portal_id": "home.r1/portal.entry_hall-living_room.01",
+      "from_room_id": "home.r1/room.entry_hall",
+      "to_room_id": "home.r1/room.living_room",
+      "center_m": [
+        -1.5,
+        -2,
+        0
+      ],
+      "nominal_width_m": 1,
+      "nominal_height_m": 2.1
+    },
+    {
+      "source_portal_id": "home.r1/portal.entry_hall-kitchen_dining.01",
+      "from_room_id": "home.r1/room.entry_hall",
+      "to_room_id": "home.r1/room.kitchen_dining",
+      "center_m": [
+        1.5,
+        -2,
+        0
+      ],
+      "nominal_width_m": 1,
+      "nominal_height_m": 2.1
+    },
+    {
+      "source_portal_id": "home.r1/portal.entry_hall-bedroom.01",
+      "from_room_id": "home.r1/room.entry_hall",
+      "to_room_id": "home.r1/room.bedroom",
+      "center_m": [
+        -1.5,
+        2,
+        0
+      ],
+      "nominal_width_m": 1,
+      "nominal_height_m": 2.1
+    },
+    {
+      "source_portal_id": "home.r1/portal.entry_hall-office.01",
+      "from_room_id": "home.r1/room.entry_hall",
+      "to_room_id": "home.r1/room.office",
+      "center_m": [
+        1.5,
+        2,
+        0
+      ],
+      "nominal_width_m": 1,
+      "nominal_height_m": 2.1
+    },
+    {
+      "source_portal_id": "home.r1/portal.entry_hall-bathroom_laundry.01",
+      "from_room_id": "home.r1/room.entry_hall",
+      "to_room_id": "home.r1/room.bathroom_laundry",
+      "center_m": [
+        0,
+        4,
+        0
+      ],
+      "nominal_width_m": 1,
+      "nominal_height_m": 2.1
+    }
+  ],
+  "future_asset_namespace": "/Game/VISTA/PhotorealR1/",
+  "runtime_migration": {
+    "reuse": [
+      "character controller",
+      "typed action transactions",
+      "EventSpec interfaces",
+      "streaming interface"
+    ],
+    "rebuild_and_verify": [
+      "visual geometry",
+      "collision matching visual geometry",
+      "interaction anchors",
+      "door pivots",
+      "material response",
+      "lighting",
+      "camera clearance"
+    ],
+    "first_slice": "kitchen_dining with pot, mug and articulated fridge"
+  }
+}

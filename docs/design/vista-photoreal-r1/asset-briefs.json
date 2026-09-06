@@ -1,0 +1,137 @@
+{
+  "schema_version": "vista.photoreal-asset-briefs/v1",
+  "status": "proposed_design_dimensions_not_measured_products",
+  "units": "millimeters",
+  "coordinate_convention": "Blender metres, z-up; convert explicitly to UE centimetres at import; keep all pivots and sockets documented",
+  "assets": [
+    {
+      "asset_id": "photoreal_r1.pot",
+      "source_semantic_entity": "home.r1/room.kitchen_dining/entity.pot.01",
+      "dimensions_mm": {
+        "body_diameter": 240,
+        "body_height": 145,
+        "overall_handle_span": 335,
+        "target_rim_thickness": 2
+      },
+      "parts": [
+        "body_with_real_interior",
+        "left_handle",
+        "right_handle",
+        "left_rivet_pair",
+        "right_rivet_pair",
+        "encapsulated_base",
+        "removable_lid",
+        "lid_knob"
+      ],
+      "material_targets": [
+        "anisotropic satin stainless steel",
+        "black heat-resistant handle material"
+      ],
+      "contact_targets": [
+        "left_handle_grip",
+        "right_handle_grip",
+        "base_placement_plane",
+        "lid_knob_grip"
+      ],
+      "checks": [
+        "handles opposite and symmetric in geometry",
+        "lid seats on rim with clearance",
+        "interior and outer surfaces watertight",
+        "convex collision permits gripping and stable placement"
+      ],
+      "physics_mass_kg": null
+    },
+    {
+      "asset_id": "photoreal_r1.mug",
+      "source_semantic_entity": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+      "dimensions_mm": {
+        "rim_outer_diameter": 86,
+        "height": 96,
+        "overall_handle_span": 120,
+        "target_lip_thickness": 4
+      },
+      "parts": [
+        "hollow_ceramic_body",
+        "continuous_C_handle",
+        "unglazed_foot_ring"
+      ],
+      "material_targets": [
+        "warm ivory lightly speckled ceramic glaze",
+        "unglazed ceramic foot"
+      ],
+      "contact_targets": [
+        "handle_grip",
+        "rim_pour_reference",
+        "base_placement_plane"
+      ],
+      "checks": [
+        "two continuous handle junctions",
+        "finger clearance",
+        "interior wall and bottom thickness",
+        "same geometry from all camera views"
+      ],
+      "physics_mass_kg": null
+    },
+    {
+      "asset_id": "photoreal_r1.fridge",
+      "source_semantic_entity": "home.r1/room.kitchen_dining/entity.fridge.01",
+      "dimensions_mm": {
+        "width": 900,
+        "depth_including_doors": 700,
+        "height": 1780
+      },
+      "parts": [
+        "cabinet_shell",
+        "left_freezer_door",
+        "right_refrigerator_door",
+        "two_handles",
+        "magnetic_gaskets",
+        "hinge_covers",
+        "toe_kick",
+        "shelves",
+        "drawers",
+        "door_bins",
+        "rear_service_panel"
+      ],
+      "material_targets": [
+        "satin brushed stainless front",
+        "gray powder-coated shell",
+        "white molded interior",
+        "glass shelves",
+        "rubber gaskets"
+      ],
+      "articulation": {
+        "left_door_hinge": "outer left vertical edge",
+        "right_door_hinge": "outer right vertical edge",
+        "design_open_angle_degrees": 100
+      },
+      "contact_targets": [
+        "left_door_handle",
+        "right_door_handle",
+        "interior_shelf_anchors"
+      ],
+      "checks": [
+        "door swing clear of wall and counter",
+        "door bins do not intersect shelves",
+        "gaskets meet cabinet rim",
+        "separate collision for each moving leaf",
+        "body and doors keep transforms through state changes"
+      ],
+      "physics_mass_kg": null
+    }
+  ],
+  "follow_up_inventory": [
+    "keys",
+    "slippers",
+    "phone",
+    "backpack",
+    "cardboard box",
+    "rolling chair",
+    "ladder",
+    "laundry basket",
+    "clothes",
+    "washer",
+    "faucet"
+  ],
+  "new_asset_rule": "Next assets get their own geometry/material brief and generated reference only as needed; no assumption that appearance images already define every usable part."
+}
