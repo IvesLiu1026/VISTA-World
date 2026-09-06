@@ -17,13 +17,14 @@ def main():
     p.add_argument("--image",required=True,type=Path)
     p.add_argument("--evidence",required=True,type=Path)
     p.add_argument("--apply",action="store_true")
+    p.add_argument("--name",default="VISTA Photoreal Kitchen")
     args=p.parse_args()
     original=args.apps.read_bytes();doc=json.loads(original)
     launcher=Path(__file__).with_name("review_session.py").resolve()
     uv=shutil.which("uv")
     if not uv or not args.profile.is_file() or not args.image.is_file():raise SystemExit("Missing launch input")
-    if any(app.get("name")=="VISTA Photoreal Kitchen" for app in doc["apps"]):raise SystemExit("App already exists; inspect before changing")
-    app={"name":"VISTA Photoreal Kitchen","cmd":shlex.join([uv,"run","--offline","--no-project","python",str(launcher),"--profile",str(args.profile.resolve()),"--action","stream"]),"working-dir":str(launcher.parents[3]),"image-path":str(args.image.resolve()),"auto-detach":"false","wait-all":"false","exit-timeout":"15"}
+    if any(app.get("name")==args.name for app in doc["apps"]):raise SystemExit("App already exists; inspect before changing")
+    app={"name":args.name,"cmd":shlex.join([uv,"run","--offline","--no-project","python",str(launcher),"--profile",str(args.profile.resolve()),"--action","stream"]),"working-dir":str(launcher.parents[3]),"image-path":str(args.image.resolve()),"auto-detach":"false","wait-all":"false","exit-timeout":"15"}
     doc["apps"].append(app)
     encoded=(json.dumps(doc,indent=2)+"\n").encode()
     report={"app":app,"before_sha256":hashlib.sha256(original).hexdigest(),"after_sha256":hashlib.sha256(encoded).hexdigest(),"existing_apps_preserved":len(doc["apps"])-1,"applied":args.apply}

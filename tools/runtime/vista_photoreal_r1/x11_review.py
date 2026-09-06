@@ -17,6 +17,7 @@ from PIL import Image
 def main():
     p=argparse.ArgumentParser()
     p.add_argument("--display",default=":120")
+    p.add_argument("--window-prefix",default="PhotorealKitchen")
     p.add_argument("--key")
     p.add_argument("--hold",type=float,default=.12)
     p.add_argument("--text")
@@ -24,8 +25,8 @@ def main():
     p.add_argument("--settle",type=float,default=1.)
     args=p.parse_args()
     d=display.Display(args.display)
-    windows=[w for w in d.screen().root.query_tree().children if (w.get_wm_name() or "").startswith("PhotorealKitchen") and w.get_attributes().map_state==X.IsViewable]
-    if len(windows)!=1:raise SystemExit(f"Expected exactly one PhotorealKitchen window; found {len(windows)}")
+    windows=[w for w in d.screen().root.query_tree().children if (w.get_wm_name() or "").startswith(args.window_prefix) and w.get_attributes().map_state==X.IsViewable]
+    if len(windows)!=1:raise SystemExit(f"Expected exactly one {args.window_prefix} window; found {len(windows)}")
     w=windows[0]
     w.configure(x=0,y=0,stack_mode=X.Above)
     w.set_input_focus(X.RevertToPointerRoot,X.CurrentTime)
