@@ -4,6 +4,8 @@
 
 整屋模型、實機截圖與驗證位置見 [整屋檢視說明](home-implementation.md) 和 [實作清單](home-implementation-manifest.json)。
 
+第一／第三人稱全身角色、抓取動畫、相關 skills 與論文的調查見 [角色與互動技術調查](embodied-interaction-research.md)。該頁記錄下一版設計；目前 Sunshine 仍是上述整屋檢視版。
+
 ## 開發方式
 
 在 VISTA-World 的 `codex/vista-photoreal-design-r1` 分支與獨立 worktree 開發。起點是 R23 checkpoint `936d86d5`，保留現有角色控制、動作交易、EventSpec 與串流介面。廚房檢視版使用獨立的第一人稱控制與資產 namespace；後續完成操作行為驗證後，再逐間整合進原本的任務環境。
