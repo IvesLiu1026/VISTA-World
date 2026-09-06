@@ -1,0 +1,734 @@
+{
+  "schema": "vista.photoreal-review-checkpoint/v1",
+  "run_root": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a",
+  "blender_version": "4.5.8",
+  "unreal_version": "5.7.3",
+  "scope": [
+    "kitchen",
+    "pot",
+    "mug",
+    "fridge"
+  ],
+  "parts": [
+    {
+      "name": "room",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/room.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -2.6050000190734863,
+          -1.9840000867843628,
+          0.0
+        ],
+        "max": [
+          2.6050000190734863,
+          2.009999990463257,
+          2.9774999618530273
+        ]
+      },
+      "vertices": 57356,
+      "polygons": 56896,
+      "materials": [
+        "PR_Oak",
+        "PR_Steel",
+        "PR_Quartz",
+        "PR_Interior",
+        "PR_Sage",
+        "PR_Black",
+        "PR_Grout",
+        "PR_Tile",
+        "PR_Light",
+        "PR_Chrome",
+        "PR_Soap",
+        "PR_Linen"
+      ],
+      "sha256": "7b78bc7cfa2670058412bbb164f2534aa1661338c96214f8cb9b3141f4037c03",
+      "bytes": 24220012
+    },
+    {
+      "name": "glass",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/glass.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          2.5269999504089355,
+          -0.7760000228881836,
+          1.1799999475479126
+        ],
+        "max": [
+          2.5329999923706055,
+          1.2260000705718994,
+          2.3899998664855957
+        ]
+      },
+      "vertices": 192,
+      "polygons": 196,
+      "materials": [
+        "PR_Glass"
+      ],
+      "sha256": "3689c7b26dda49e063893aadddff222c8e6d7df8f50eb39c4b9e6c785cfd7d37",
+      "bytes": 14420
+    },
+    {
+      "name": "outside",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/outside.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          8.565000534057617,
+          -6.5,
+          -1.5999999046325684
+        ],
+        "max": [
+          9.350000381469727,
+          6.5,
+          6.400000095367432
+        ]
+      },
+      "vertices": 5280,
+      "polygons": 5390,
+      "materials": [
+        "PR_Exterior",
+        "PR_Glass",
+        "PR_Interior"
+      ],
+      "sha256": "d5b9ee99b388d8e6ff753f8cc30ec6009efda1751c4ecfff5024685c6ff46943",
+      "bytes": 360984
+    },
+    {
+      "name": "furniture",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/furniture.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -1.600000023841858,
+          -1.8799999952316284,
+          0.0
+        ],
+        "max": [
+          -0.3999999761581421,
+          -0.15000002086162567,
+          0.8500000238418579
+        ]
+      },
+      "vertices": 2400,
+      "polygons": 2450,
+      "materials": [
+        "PR_Oak"
+      ],
+      "sha256": "3f2cb7e49d057d1fcec0f3967f46589191f22ac8a0e84b2edbda3b6fad226eca",
+      "bytes": 2992536
+    },
+    {
+      "name": "pot",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/pot.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -0.2948206663131714,
+          1.5269999504089355,
+          0.9769999980926514
+        ],
+        "max": [
+          0.054820675402879715,
+          1.7730000019073486,
+          1.1239999532699585
+        ]
+      },
+      "vertices": 6168,
+      "polygons": 5720,
+      "materials": [
+        "PR_Steel",
+        "PR_Black",
+        "PR_Chrome"
+      ],
+      "sha256": "f60843c3afa62542f94de8d86444a39a24185566f2778e34bd77700135ba28b3",
+      "bytes": 5410308
+    },
+    {
+      "name": "lid",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/lid.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -0.24400000274181366,
+          1.5260000228881836,
+          1.121999979019165
+        ],
+        "max": [
+          0.004000000189989805,
+          1.7740000486373901,
+          1.1649999618530273
+        ]
+      },
+      "vertices": 1472,
+      "polygons": 1280,
+      "materials": [
+        "PR_Steel",
+        "PR_Black"
+      ],
+      "sha256": "9eb82349653f2e4dc753858d8f91ef43e51c20fe037a63e0fca385318395c3f5",
+      "bytes": 5127888
+    },
+    {
+      "name": "mug",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/mug.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -1.0230000019073486,
+          -1.0729999542236328,
+          0.765999972820282
+        ],
+        "max": [
+          -0.8974441885948181,
+          -0.9869999885559082,
+          0.8619999885559082
+        ]
+      },
+      "vertices": 3196,
+      "polygons": 2960,
+      "materials": [
+        "PR_Ceramic",
+        "PR_FootClay"
+      ],
+      "sha256": "2e36e4fae45f3e22a425e8bd054334c8dd26c552b081753377b4effef2ae5c40",
+      "bytes": 2531504
+    },
+    {
+      "name": "fridge",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/fridge.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -2.309000015258789,
+          1.1910001039505005,
+          0.03500000014901161
+        ],
+        "max": [
+          -1.3910000324249268,
+          1.8949999809265137,
+          1.815000057220459
+        ]
+      },
+      "vertices": 5440,
+      "polygons": 5412,
+      "materials": [
+        "PR_Steel",
+        "PR_Interior",
+        "PR_Black",
+        "PR_Chrome"
+      ],
+      "sha256": "2ce7f8e4535b912f5ce17999d4a9f5572642a1e836692cfccf411b9712d9dd49",
+      "bytes": 5439616
+    },
+    {
+      "name": "fridge_glass",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/fridge_glass.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -2.2325000762939453,
+          1.403999924659729,
+          0.13999998569488525
+        ],
+        "max": [
+          -1.477500081062317,
+          1.7999999523162842,
+          1.4984999895095825
+        ]
+      },
+      "vertices": 1344,
+      "polygons": 1372,
+      "materials": [
+        "PR_Glass"
+      ],
+      "sha256": "5faa6a11c4237b5c35fca5d45b9fda02dfff081a28753577a4ec0af60d3ceb21",
+      "bytes": 92492
+    },
+    {
+      "name": "door_l",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/door_l.glb",
+      "pivot_m": [
+        -2.3000000000000003,
+        1.1880000000000002,
+        0.11
+      ],
+      "local_bounds_m": {
+        "min": [
+          0.0035000741481781006,
+          -0.12519264221191406,
+          -5.960464477539063e-08
+        ],
+        "max": [
+          0.38899993896484375,
+          0.1784999966621399,
+          1.690000057220459
+        ]
+      },
+      "vertices": 2556,
+      "polygons": 2582,
+      "materials": [
+        "PR_Steel",
+        "PR_Black",
+        "PR_Interior"
+      ],
+      "sha256": "dbc696a540c265ba0750780a57c5800ade130fc0e75e282c630a6779cfbf6e40",
+      "bytes": 5230672
+    },
+    {
+      "name": "door_r",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/door_r.glb",
+      "pivot_m": [
+        -1.4000000000000001,
+        1.1880000000000002,
+        0.11
+      ],
+      "local_bounds_m": {
+        "min": [
+          -0.5370000600814819,
+          -0.12519264221191406,
+          -5.960464477539063e-08
+        ],
+        "max": [
+          -0.001000046730041504,
+          0.1784999966621399,
+          1.690000057220459
+        ]
+      },
+      "vertices": 2556,
+      "polygons": 2582,
+      "materials": [
+        "PR_Steel",
+        "PR_Black",
+        "PR_Interior"
+      ],
+      "sha256": "123a19cb241c01ae23b9a043eb10444e8fcb11be228760c46f9b58d54c1bc126",
+      "bytes": 5230676
+    },
+    {
+      "name": "floor",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/floor.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -3.75,
+          -2.1500000953674316,
+          -0.11999999731779099
+        ],
+        "max": [
+          2.6500000953674316,
+          2.1500000953674316,
+          0.0
+        ]
+      },
+      "vertices": 16,
+      "polygons": 12,
+      "materials": [
+        "PR_Floor"
+      ],
+      "sha256": "d2396aee0befe5b06062793e32b53071f86a0b33ad6835c8e2e39f0b1462c4b7",
+      "bytes": 3266776
+    },
+    {
+      "name": "ceiling",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/ceiling.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -2.6500000953674316,
+          -2.1500000953674316,
+          3.0
+        ],
+        "max": [
+          2.6500000953674316,
+          2.1500000953674316,
+          3.119999885559082
+        ]
+      },
+      "vertices": 96,
+      "polygons": 98,
+      "materials": [
+        "PR_Ceiling"
+      ],
+      "sha256": "360cd455300e2fdf43c12b863fd4178c3ed8704516d0c06a6dc27fd23c174397",
+      "bytes": 7716
+    },
+    {
+      "name": "wall_north",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/wall_north.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -2.6500000953674316,
+          1.9999998807907104,
+          0.0
+        ],
+        "max": [
+          2.6500000953674316,
+          2.1399998664855957,
+          3.0
+        ]
+      },
+      "vertices": 96,
+      "polygons": 98,
+      "materials": [
+        "PR_Plaster"
+      ],
+      "sha256": "2649dabeb6c78eca29d461e0fa42ce9de022cbc0ac776122ae1ae207e85a531f",
+      "bytes": 3878384
+    },
+    {
+      "name": "wall_south",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/wall_south.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -2.6500000953674316,
+          -2.1399998664855957,
+          0.0
+        ],
+        "max": [
+          2.6500000953674316,
+          -1.9999998807907104,
+          3.0
+        ]
+      },
+      "vertices": 96,
+      "polygons": 98,
+      "materials": [
+        "PR_Plaster"
+      ],
+      "sha256": "c3faf8e261caf6b8ad00e5be5e9ad6f0e79ac677ad6d4ff94406c256550a3e7c",
+      "bytes": 3878380
+    },
+    {
+      "name": "wall_west_south",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/wall_west_south.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -2.6399998664855957,
+          -2.0,
+          0.0
+        ],
+        "max": [
+          -2.5,
+          -0.5,
+          3.0
+        ]
+      },
+      "vertices": 96,
+      "polygons": 98,
+      "materials": [
+        "PR_Plaster"
+      ],
+      "sha256": "0e7a2a6cfc377516d2667c36ce5e653fbdf436e5c2b3ba43f48ff06579529215",
+      "bytes": 3878344
+    },
+    {
+      "name": "wall_west_north",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/wall_west_north.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -2.6399998664855957,
+          0.5,
+          0.0
+        ],
+        "max": [
+          -2.5,
+          2.0,
+          3.0
+        ]
+      },
+      "vertices": 96,
+      "polygons": 98,
+      "materials": [
+        "PR_Plaster"
+      ],
+      "sha256": "caa2ea79e27ddede53af572d48a82b805f6e7fe4f2f1247b170913a9781b4fa6",
+      "bytes": 3878348
+    },
+    {
+      "name": "wall_door_lintel",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/wall_door_lintel.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -2.6399998664855957,
+          -0.5,
+          2.119999885559082
+        ],
+        "max": [
+          -2.5,
+          0.5,
+          3.0
+        ]
+      },
+      "vertices": 96,
+      "polygons": 98,
+      "materials": [
+        "PR_Plaster"
+      ],
+      "sha256": "2524fd5e4c96c3105d103c2acaf9a32db60b7d39986b5ec13bc960785c1f55aa",
+      "bytes": 3878368
+    },
+    {
+      "name": "vestibule_back",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/vestibule_back.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -3.8399999141693115,
+          -0.75,
+          0.0
+        ],
+        "max": [
+          -3.7200000286102295,
+          0.75,
+          3.0
+        ]
+      },
+      "vertices": 96,
+      "polygons": 98,
+      "materials": [
+        "PR_Plaster"
+      ],
+      "sha256": "9b9fd6cc2d926b81de501b50258c730bbb1aab9c5b9743ea1b11d11db9dbf797",
+      "bytes": 3878364
+    },
+    {
+      "name": "vestibule_returns",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/vestibule_returns.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          -3.809999942779541,
+          -0.7599999904632568,
+          0.0
+        ],
+        "max": [
+          -2.510000228881836,
+          0.7599999904632568,
+          3.0
+        ]
+      },
+      "vertices": 192,
+      "polygons": 196,
+      "materials": [
+        "PR_Plaster"
+      ],
+      "sha256": "516a85bcb6469d4b694f8f96077098ff60524bf75ea89f89d87d802478045ea0",
+      "bytes": 3884904
+    },
+    {
+      "name": "wall_east_piers",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/wall_east_piers.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          2.5,
+          -2.0,
+          0.0
+        ],
+        "max": [
+          2.6399998664855957,
+          2.0,
+          3.0
+        ]
+      },
+      "vertices": 192,
+      "polygons": 196,
+      "materials": [
+        "PR_Plaster"
+      ],
+      "sha256": "47b92ae863186c575dacf74c327e6929de3043806c50c185c91a866f63b9e8fb",
+      "bytes": 3884848
+    },
+    {
+      "name": "wall_east_sill",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/wall_east_sill.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          2.5,
+          -0.7999999523162842,
+          0.0
+        ],
+        "max": [
+          2.6399998664855957,
+          1.25,
+          1.149999976158142
+        ]
+      },
+      "vertices": 96,
+      "polygons": 98,
+      "materials": [
+        "PR_Plaster"
+      ],
+      "sha256": "c95a831be56898f8ab0d853c6a5e4a639e15063d09ea63ccf80ded748d15d045",
+      "bytes": 3878376
+    },
+    {
+      "name": "wall_east_header",
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/model-d/glb/wall_east_header.glb",
+      "pivot_m": [
+        0,
+        0,
+        0
+      ],
+      "local_bounds_m": {
+        "min": [
+          2.5,
+          -0.7999999523162842,
+          2.4200000762939453
+        ],
+        "max": [
+          2.6399998664855957,
+          1.25,
+          3.0
+        ]
+      },
+      "vertices": 96,
+      "polygons": 98,
+      "materials": [
+        "PR_Plaster"
+      ],
+      "sha256": "09e9493222655615c2870ff4ba82efddd8ffe6a611abcf599b95ccd5d940c33b",
+      "bytes": 3878380
+    }
+  ],
+  "project": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/project-d/PhotorealKitchen.uproject",
+  "import_receipt": "import-c.json",
+  "lighting_receipt": "lighting-d.json",
+  "sunshine_profile": "sunshine-review-profile-d.json",
+  "sunshine_app": "VISTA Photoreal Kitchen",
+  "display": ":119",
+  "render_gpu": 0,
+  "blender_gpu": 1,
+  "fps_cap": 30,
+  "exposure_offset": -1.8,
+  "baseline_tests": {
+    "passed": 28,
+    "failed": 0
+  },
+  "visual_evidence": [
+    {
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/final-evidence/fridge-closed.png",
+      "sha256": "666c436eee3e2c6a32d3799018e8fa26a1934142ea6eb43bf4ee0454b405d95d"
+    },
+    {
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/final-evidence/fridge-open.png",
+      "sha256": "6bafcabcb0a8583e4bbe75964e09546a13a8434a0cb039197575f700c206db3b"
+    },
+    {
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/final-evidence/kitchen-overview.png",
+      "sha256": "6b7a2e3008d4e3949f3446b5d9925b2970c302218a77d131650c2c249efaf4e3"
+    },
+    {
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/final-evidence/mug.png",
+      "sha256": "fa16f6bbbba69e431f8ed9d916abe80e673b1ee907d7896b87489b8f9af55274"
+    },
+    {
+      "file": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/kitchen-r1-20260906a/final-evidence/pot.png",
+      "sha256": "e0d4621f768ddf57fa10d255ce5fc1ca6e736b07960585f02e24e01df5852c57"
+    }
+  ],
+  "existing_apps_preserved": 4,
+  "physical_simulation": false,
+  "moonlight_client_verified": false,
+  "source_hashes": {
+    "tools/blender/vista_photoreal_r1/build_kitchen.py": "4623a9150a6cfa24628128d795975cc7359ac6db055a641fdd97255f708c779d",
+    "tools/ue/vista_photoreal_r1/create_project.py": "ac91646bd6376a88e1cff10dbe6946ec94a226db3587d9c9fa14de5a9456672a",
+    "tools/ue/vista_photoreal_r1/import_kitchen.py": "478878439ae093a6f88444b2715e0bae26ca96972a450cf5fa330386daf3fcfe",
+    "tools/runtime/vista_photoreal_r1/review_session.py": "ae27d82371d7ef369621a226c3389aff87f57ce9d277bfd6e9baf6f6b3383424",
+    "tools/runtime/vista_photoreal_r1/install_sunshine_entry.py": "e493223d35c7ff2a6b1353f7602a6d2388bdc04373bebc7f1e8ed56dadfab3cd",
+    "tools/runtime/vista_photoreal_r1/x11_review.py": "cb632f5560b52b0e2e536850225cfd3f50962988d7c96a6afb6b1d0b7bfe7c79",
+    "unreal_plugins/VistaPhotorealReview/VistaPhotorealReview.uplugin": "641daf1fd155b260adac41e56fb1d1b26c1242c5c246d6df93598fecedff341d",
+    "unreal_plugins/VistaPhotorealReview/Config/FilterPlugin.ini": "266ea37f9ab51887ab2eada839386009e2ec8e43f750646959e922152e2e01f6",
+    "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/VistaPhotorealReview.Build.cs": "58de78f0a81d566338fe8783f0c911861ecadf49ca53e0d37dd0b57d3d074f01",
+    "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/PhotorealReview.cpp": "921299b921466ada87796f7221653b83759993564496919b65bb4f6584121a0c",
+    "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Public/PhotorealReview.h": "2ed1aec017fa321122c7d44412ed960d55602f280e65689784f0e3ebc91a3564"
+  }
+}
