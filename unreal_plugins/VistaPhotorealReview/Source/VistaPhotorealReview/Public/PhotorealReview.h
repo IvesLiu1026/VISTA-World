@@ -18,7 +18,8 @@ public:
     virtual void Tick(float DeltaSeconds) override;
     virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
     UFUNCTION(Exec) void ReviewPortal(int32 Index);
-private:
+    virtual void ReviewSnapshot();
+protected:
     UPROPERTY() TObjectPtr<UCameraComponent> ReviewCamera;
     bool bFridgeOpen = false;
     bool bFreeFlight = false;
@@ -43,7 +44,6 @@ private:
     void ViewEight();
     void ViewNine();
     void AlternateView();
-    void ReviewSnapshot();
     void SetView(FVector Position, FRotator Rotation);
 };
 
