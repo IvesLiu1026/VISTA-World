@@ -1,0 +1,374 @@
+{
+  "schema": "vista.embodied-home-release/v1",
+  "status": "native_validated_sunshine_ready",
+  "created_at_utc": "2026-09-06T22:25:42.914041+00:00",
+  "branch": "codex/vista-embodied-interaction-r1",
+  "base_commit": "3af638090a5c45a98e1911f3e386cb34975b09c9",
+  "worktree": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1",
+  "run_root": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a",
+  "engine": "UE 5.7.3",
+  "blender": "4.5.8",
+  "release_plugin": {
+    "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/build-v/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so",
+    "bytes": 506680,
+    "sha256": "3c4325e9fcc7d2fcb8cfa499a1f436cd6f8890c3e51eef374fc3f31caf6ee944"
+  },
+  "project": {
+    "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/project-f/PhotorealHome.uproject",
+    "bytes": 453,
+    "sha256": "35f5be48482cad450f4401627c72bb719b6dec4e64c3e01042cbe9448ef0e923"
+  },
+  "map": {
+    "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/project-f/Content/VISTA/PhotorealHomeR1/Maps/Home.umap",
+    "bytes": 278986,
+    "sha256": "d3880130ed659975f27c807f826dcac810de839c3912be5cb47712eb7803efa6"
+  },
+  "sources": [
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/blender/vista_embodied_r1/build_body.py",
+      "bytes": 9646,
+      "sha256": "f2e178f997e83836a18b9f7b26971b4b546faff5e38649e86d0e94b92773490c"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/blender/vista_embodied_r1/build_cup.py",
+      "bytes": 2056,
+      "sha256": "b7c03d6ea0c4b06067baf606777096ccf73fd911d49f1e000f8c46809d6f567a"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/blender/vista_embodied_r1/verify_body_export.py",
+      "bytes": 2850,
+      "sha256": "52c6e193430104f20b226e830368f1cee5ce0cecc70afe2e0ec84ef04f71c41a"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/ue/vista_embodied_r1/import_interaction.py",
+      "bytes": 6392,
+      "sha256": "351d2aebeec66223de3685a5d8a061e8a7999ee80b1bf8887467363df2b1db84"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/ue/vista_embodied_r1/prepare_project.py",
+      "bytes": 2015,
+      "sha256": "75615b95722b23f967189d4f6c1241dc5059f5b979a81c4b3fef4c763f1213f0"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/runtime/vista_embodied_r1/record_review.py",
+      "bytes": 3402,
+      "sha256": "a1c1048e947a461a27dbbaf13db3071b8610460a31cb7c3533d3e52470f1059d"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/runtime/vista_embodied_r1/review.py",
+      "bytes": 4165,
+      "sha256": "9fcd7cf64b8a6b406468ad709ab93eb4198863ec04ed385bb019f7a73aa8f9b3"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/runtime/vista_embodied_r1/start_validation.py",
+      "bytes": 1902,
+      "sha256": "731725523f4bcaa87df8fabdc4f46a26fd115aa3251362a6438b8f42ad46162e"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/runtime/vista_embodied_r1/verify_actions.py",
+      "bytes": 5301,
+      "sha256": "4bafab301b4a70ca74d28a53b7e9fa67574bcfc386146434ef8fa2b501c6eba7"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/runtime/vista_embodied_r1/verify_motion.py",
+      "bytes": 3084,
+      "sha256": "def54e0c5470857e1f07488bbed55ccd0187c0a17fdfbf8a55f3bfba2378de40"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/runtime/vista_embodied_r1/verify_runtime.py",
+      "bytes": 4815,
+      "sha256": "44449e8777e1f72c8d87ff2444f2638354bec5b70ae2f0f13823e8451e318ad9"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/EmbodiedAuthoring.cpp",
+      "bytes": 5236,
+      "sha256": "e14d4a3e26f60de455d4b6b217fcb6c7096454e51e142348e5f6526851251fe2"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/EmbodiedBodyAnimation.cpp",
+      "bytes": 10199,
+      "sha256": "ffe9d784afa2f55e9320ff32179e0588f12f708e1d79263d7a790f59b6b7326d"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/EmbodiedReview.cpp",
+      "bytes": 38588,
+      "sha256": "b18529a027036a5cc477b64e6efeffa4b1f4463286d901486689a4ff103aa451"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Public/EmbodiedReview.h",
+      "bytes": 6114,
+      "sha256": "d4060db885f1e141cacebd2e4ce3ed455db054868981f057caf488b7d71fcedd"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/tools/runtime/vista_photoreal_r1/install_sunshine_entry.py",
+      "bytes": 2875,
+      "sha256": "acf0e22469d052b72416f57a60c424978d6d9cecd9ad5602256994d466a74a0f"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Public/PhotorealReview.h",
+      "bytes": 1626,
+      "sha256": "98c880c7302b9b79eaf34d4df6390bd0f48aa60666198137844939081d3a255e"
+    },
+    {
+      "path": "/data/sysx/vista-world/worktrees/vista-embodied-interaction-r1/unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/VistaPhotorealReview.Build.cs",
+      "bytes": 362,
+      "sha256": "f43d0e650b23c3daa831b456c74f40195202fe5613e9f8a01e9b3e93d98c4cf2"
+    }
+  ],
+  "assets": [
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/model/body-b/asset-manifest.json",
+      "bytes": 1367,
+      "sha256": "5e46314e4d66800be3870d73dd83b94e8f58c44e4541f721aa19d3b3b8651984"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/model/body-b/skin-roundtrip.json",
+      "bytes": 566,
+      "sha256": "8fe0e7fcf7e5faae2b1a14d46e859cd13d586bd9fa2eff5cd330252a79cb9a42"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/model/body-b/eye-reference.json",
+      "bytes": 410,
+      "sha256": "cd2f8c9ed4f492d32f811c0df8f32a03d73bfa124d8ee5b23c7e7d2e5a3ed4e4"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/model/cup-a/asset-manifest.json",
+      "bytes": 902,
+      "sha256": "b0784705b7d20037d7390ec4f79fd49645b15dcf15abf51596737b8e7023537a"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/import-f.json",
+      "bytes": 1629,
+      "sha256": "adfcd5236042da7080085318bfcc86c31b4e4e065e43d1b5d376777d7930907f"
+    }
+  ],
+  "build_log": {
+    "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/logs/build-v.log",
+    "bytes": 12824,
+    "sha256": "a6ad5e3b4ef09a2312d945cde7d21adb1b0869acc5c2bf12c8046c4ac4d92646"
+  },
+  "baseline_tests": {
+    "passed": 28,
+    "log": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/logs/baseline-tests.log",
+      "bytes": 5182,
+      "sha256": "29a34573210c2bbb672d2666ca422bc258594ffdf51cfb476dca805b2b8bf63e"
+    }
+  },
+  "validation": {
+    "motion": {
+      "status": "passed",
+      "report": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-motion/result.json",
+        "bytes": 604,
+        "sha256": "dea824ccee1e5b67026da718e627348c399e0e234a45b90bcf297504029221e5"
+      },
+      "captures": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-motion/captures.jsonl",
+        "bytes": 4380,
+        "sha256": "121d6220e899934da3dc6921fdaac68025bed94858cf22208a87e7285aaad16b"
+      },
+      "measurements": {
+        "schema": "vista.embodied-motion-contact/v1",
+        "status": "passed",
+        "frames": 226,
+        "measurement_stage": "OnBoneTransformsFinalized after physics and pose evaluation",
+        "travel_span_cm": 484.2914958104377,
+        "support_samples": 310,
+        "maximum_support_target_error_cm": 0.0002674710272937445,
+        "maximum_support_slide_cm": 0.0001568673692337939,
+        "minimum_support_toe_height_cm": 1.0109794353771147,
+        "median_frame_ms": 51.45106092095375,
+        "p95_frame_ms": 72.12162017822266,
+        "maximum_frame_ms": 86.66427433490753,
+        "screen_resolution": [
+          1920,
+          1080
+        ],
+        "screen_percentage": 100
+      },
+      "frames": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-motion/motion-frames.json",
+        "bytes": 544329,
+        "sha256": "be0185e239fe1a9bf83e78817f881c32f55e06f7285e34a7005a4965224b3d83"
+      }
+    },
+    "actions": {
+      "status": "passed",
+      "report": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-actions/result.json",
+        "bytes": 111107,
+        "sha256": "b22e61bd554b807601120ba5eab8c8e24f4be3893f0dc0608e482079e5648340"
+      },
+      "captures": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-actions/captures.jsonl",
+        "bytes": 43199,
+        "sha256": "5ed09f6cc4d34a8f7a4527ee5dfed20ce69a284f32aad61e854af51c6e1b9b25"
+      }
+    },
+    "heights": {
+      "status": "passed",
+      "report": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-heights/result.json",
+        "bytes": 57822,
+        "sha256": "f0a7c44cf55a0144e2e3fc3db5d8e4a3e2a5c83f01dae4381b5e5b8f7aa946e3"
+      },
+      "captures": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-heights/captures.jsonl",
+        "bytes": 21117,
+        "sha256": "e438688f1c300de36c055cea10a0e471ff1bbd8af5e93a95c3dabd168aadfab5"
+      },
+      "supports_cm": [
+        70,
+        85,
+        100
+      ]
+    },
+    "rooms": {
+      "status": "passed",
+      "report": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-rooms/result.json",
+        "bytes": 126315,
+        "sha256": "bcf2ee2468db03ab90e0e18fb648ef3d2ca7bc1bb035b8d68310cd0bf685cfb5"
+      },
+      "captures": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-rooms/captures.jsonl",
+        "bytes": 45244,
+        "sha256": "571cf406557a69ff1de7f8d106630309ff7465a85ca50924b40e6eba573fbaa2"
+      },
+      "doorway_crossings": 20
+    },
+    "cycles": {
+      "status": "passed",
+      "report": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-cycles/result.json",
+        "bytes": 244649,
+        "sha256": "ad97e7ec33cecf6b7b32a3dde7d1122e949f82c221fee11e2763a865c52968ff"
+      },
+      "captures": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-cycles/captures.jsonl",
+        "bytes": 87019,
+        "sha256": "6f34d2a3165a42c5810fa8a79e772ec7f60b60a31e36ee3a3d8a3a268b6f2af8"
+      },
+      "completed_cycles": 20
+    }
+  },
+  "video": {
+    "receipt": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-video/recording.json",
+      "bytes": 17992,
+      "sha256": "624840a45258ffbecec0c5b3fb5dfc95a46435af14f5b18ce419bdb60e761990"
+    },
+    "clips": [
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-video/first-person.mp4",
+        "bytes": 3795911,
+        "sha256": "4ee69e9a8c2ae25bff3c2be10398b1aab96ffdd69aa7c929db8d53e37d59c72e",
+        "media": {
+          "programs": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30/1"
+            }
+          ],
+          "format": {
+            "duration": "14.734000"
+          }
+        }
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/v-video/third-person.mp4",
+        "bytes": 2221394,
+        "sha256": "b5dad99c6e31f4e17a274b67bed3ea0ad0ff6810dac3aad0012d1565e0ff27d3",
+        "media": {
+          "programs": [],
+          "streams": [
+            {
+              "codec_name": "h264",
+              "width": 1920,
+              "height": 1080,
+              "avg_frame_rate": "30/1"
+            }
+          ],
+          "format": {
+            "duration": "14.800000"
+          }
+        }
+      }
+    ]
+  },
+  "sunshine": {
+    "app_name": "VISTA Photoreal Home",
+    "profile": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/sunshine-review-profile-v.json",
+      "bytes": 507,
+      "sha256": "881132bf51a1d5ef4af358559c589a13286720283417fbe8da32d1b896a19548"
+    },
+    "install_receipt": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/logs/sunshine-apply-v.json",
+      "bytes": 1139,
+      "sha256": "32f0f481d3e379f680120c6cc845078cacef66e470bbe913c3ff8a34686a7cd0"
+    },
+    "native_report": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/sunshine-v/result.json",
+      "bytes": 2589,
+      "sha256": "1bd4a20014887d3d14c270fc703f600ea7090f20fed69a57c26e075a88878dde"
+    },
+    "native_captures": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/probe/sunshine-v/captures.jsonl",
+      "bytes": 12527,
+      "sha256": "d267264ebc7fa03225e7ad65ac8b91bf26a810628d6e21303cf06e079f0ad765"
+    },
+    "user_dir": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/embodied-r1-20260907a/runtime/sunshine-v/user-20260906T222018Z",
+    "other_apps_preserved": 5,
+    "authentication_files_modified_by_this_change": false,
+    "services": {
+      "vista-sunshine.service": {
+        "MainPID": 3285798,
+        "ActiveState": "active"
+      },
+      "vista-photoreal-home-r1.service": {
+        "MainPID": 3285831,
+        "ActiveState": "active"
+      },
+      "vista-photoreal-home-input-r1.service": {
+        "MainPID": 3286781,
+        "ActiveState": "active"
+      },
+      "vista-playable-actions-fast-candidate-r23.service": {
+        "MainPID": 517873,
+        "ActiveState": "active"
+      },
+      "vista-citysample-human-fit-locked-r6.service": {
+        "MainPID": 3828257,
+        "ActiveState": "active"
+      },
+      "vista-embodied-review-test-r1.service": {
+        "MainPID": 0,
+        "ActiveState": "inactive"
+      },
+      "vista-embodied-review-xvfb-r1.service": {
+        "MainPID": 0,
+        "ActiveState": "inactive"
+      }
+    },
+    "remote_client_playback_tested": false
+  },
+  "scope": {
+    "precise_interaction_objects": [
+      "cup"
+    ],
+    "body_animation": "authored hand poses and procedural IK; dynamic cup held by UE Physics Handle",
+    "new_paid_generation_or_model_api_calls": 0,
+    "later_work": [
+      "fridge-handle hand contact",
+      "two-handed pot",
+      "character material and locomotion polish",
+      "research-task executor integration"
+    ]
+  },
+  "development_evidence": "Earlier build and probe directories are retained development attempts; build-v and the explicitly indexed v-* evidence form this release."
+}
