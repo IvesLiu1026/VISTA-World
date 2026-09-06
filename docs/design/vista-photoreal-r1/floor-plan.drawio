@@ -1,0 +1,49 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxGraphModel dx="1120" dy="1050" grid="1" page="1" pageWidth="1120" pageHeight="1050" adaptiveColors="auto">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+    <mxCell id="title" value="VISTA｜六房名義平面配置" style="text;strokeColor=none;fillColor=none;fontSize=30;fontStyle=1;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="80" y="35" width="960" height="40" as="geometry" />
+    </mxCell>
+    <mxCell id="subtitle" value="既有房間 bounds 與門口位置｜新版室內設計起點，非量測／施工圖" style="text;strokeColor=none;fillColor=none;fontSize=16;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="80" y="85" width="960" height="34" as="geometry" />
+    </mxCell>
+    <mxCell id="entry_hall" value="玄關／走廊&lt;br&gt;3 × 8 m&lt;br&gt;名義高度 3 m" style="rounded=0;fillColor=#f3eadc;strokeColor=#384740;strokeWidth=2;fontSize=20;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="445.0" y="385" width="180.0" height="480" as="geometry" />
+    </mxCell>
+    <mxCell id="living_room" value="客廳&lt;br&gt;5 × 4 m&lt;br&gt;名義高度 3 m" style="rounded=0;fillColor=#eadfcf;strokeColor=#384740;strokeWidth=2;fontSize=20;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="145.0" y="625" width="300.0" height="240" as="geometry" />
+    </mxCell>
+    <mxCell id="kitchen_dining" value="廚房／餐區&lt;br&gt;5 × 4 m&lt;br&gt;名義高度 3 m" style="rounded=0;fillColor=#dbe3d5;strokeColor=#384740;strokeWidth=2;fontSize=20;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="625.0" y="625" width="300.0" height="240" as="geometry" />
+    </mxCell>
+    <mxCell id="bedroom" value="臥室&lt;br&gt;5 × 4 m&lt;br&gt;名義高度 3 m" style="rounded=0;fillColor=#eee5dc;strokeColor=#384740;strokeWidth=2;fontSize=20;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="145.0" y="385" width="300.0" height="240" as="geometry" />
+    </mxCell>
+    <mxCell id="office" value="書房&lt;br&gt;5 × 4 m&lt;br&gt;名義高度 3 m" style="rounded=0;fillColor=#dfe5e6;strokeColor=#384740;strokeWidth=2;fontSize=20;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="625.0" y="385" width="300.0" height="240" as="geometry" />
+    </mxCell>
+    <mxCell id="bathroom_laundry" value="衛浴／洗衣&lt;br&gt;3 × 4 m&lt;br&gt;名義高度 3 m" style="rounded=0;fillColor=#dce8e6;strokeColor=#384740;strokeWidth=2;fontSize=20;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="445.0" y="145" width="180.0" height="240" as="geometry" />
+    </mxCell>
+    <mxCell id="portal-0" value="" style="rounded=0;fillColor=#ffffff;strokeColor=#4f7e66;strokeWidth=2;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="440.0" y="715.0" width="10" height="60" as="geometry" />
+    </mxCell>
+    <mxCell id="portal-1" value="" style="rounded=0;fillColor=#ffffff;strokeColor=#4f7e66;strokeWidth=2;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="620.0" y="715.0" width="10" height="60" as="geometry" />
+    </mxCell>
+    <mxCell id="portal-2" value="" style="rounded=0;fillColor=#ffffff;strokeColor=#4f7e66;strokeWidth=2;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="440.0" y="475.0" width="10" height="60" as="geometry" />
+    </mxCell>
+    <mxCell id="portal-3" value="" style="rounded=0;fillColor=#ffffff;strokeColor=#4f7e66;strokeWidth=2;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="620.0" y="475.0" width="10" height="60" as="geometry" />
+    </mxCell>
+    <mxCell id="portal-4" value="" style="rounded=0;fillColor=#ffffff;strokeColor=#4f7e66;strokeWidth=2;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="505.0" y="380.0" width="60" height="10" as="geometry" />
+    </mxCell>
+    <mxCell id="footer" value="綠色門口標記：名義寬 1.0 m／高 2.1 m。圖中尚未指定牆厚、窗洞或家具。&lt;br&gt;北 ↑　比例：60 畫布單位／公尺。各圖尺寸以 design-contract.json 為準。" style="text;strokeColor=none;fillColor=none;fontSize=16;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+      <mxGeometry x="80" y="920" width="960" height="70" as="geometry" />
+    </mxCell>
+  </root>
+</mxGraphModel>
