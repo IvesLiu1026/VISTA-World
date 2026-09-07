@@ -46,6 +46,22 @@ class ReviewSelectionTests(unittest.TestCase):
         self.assertIn(kg,self.units);self.assertIn(kr,self.units)
         self.assertNotIn(review.PREVIOUS_RELAY,self.units)
 
+    def test_home_bridge_and_ddc_are_opt_in_per_fresh_session(self):
+        profile={"runtime_dir":str(self.root),"engine":"/engine","project":"/project",
+                 "ddc_graph":"VistaHomeActionsCache","home_actions_bridge":True}
+        with patch.object(review,"focus_review",return_value=123):review.start(profile,self.state)
+        command=next(c for c in self.calls if c[0]=="systemd-run" and "--unit="+review.GAME in c)
+        self.assertIn("-ddc=VistaHomeActionsCache",command)
+        user=next(c.removeprefix("-UserDir=") for c in command if c.startswith("-UserDir="))
+        self.assertIn("-VistaHomeBridge="+str(Path(user)/"home-bridge"),command)
+
+    def test_original_profiles_keep_original_cache_and_no_bridge(self):
+        with patch.object(review,"focus_review",return_value=123):
+            review.start({"runtime_dir":str(self.root),"engine":"/engine","project":"/project"},self.state)
+        command=next(c for c in self.calls if c[0]=="systemd-run" and "--unit="+review.GAME in c)
+        self.assertIn("-ddc=InstalledNoZenLocalFallback",command)
+        self.assertFalse(any(c.startswith("-VistaHomeBridge=") for c in command))
+
     def test_failed_window_start_restores_original_input(self):
         self.units.update([review.GAME,review.PREVIOUS_RELAY])
         engine=self.root/"engine";engine.touch()

@@ -26,6 +26,7 @@ public:
     UPROPERTY(EditAnywhere,Category="Embodied") TArray<FTransform> OpenHand;
     UPROPERTY(EditAnywhere,Category="Embodied") TArray<FTransform> Grip;
     UPROPERTY(EditAnywhere,Category="Embodied") FTransform WristRelativeToCup;
+    UPROPERTY(EditAnywhere,Category="Embodied") float ContactReferenceHeightCm = 6.2f;
 };
 
 UCLASS(Transient)
@@ -81,14 +82,14 @@ public:
     UFUNCTION(Exec) void EmbodiedTestStand(float HeightCm,float CupYaw);
     UFUNCTION(Exec) void EmbodiedPosition(float X,float Y,float Z,float Yaw);
     UFUNCTION(Exec) void EmbodiedView(int32 View);
-    UFUNCTION(Exec) void EmbodiedReset();
+    UFUNCTION(Exec) virtual void EmbodiedReset();
     UFUNCTION(Exec) void EmbodiedInspect(int32 View);
     UFUNCTION(Exec) void EmbodiedCup(float X, float Y, float Z, float Yaw);
     UFUNCTION(Exec) void EmbodiedCamera(float Pitch, float Yaw);
-    UFUNCTION(Exec) void EmbodiedInteract();
-    UFUNCTION(Exec) void EmbodiedDrop();
-    UFUNCTION(Exec) void EmbodiedPlace();
-    FString GetInteractionHint() const;
+    UFUNCTION(Exec) virtual void EmbodiedInteract();
+    UFUNCTION(Exec) virtual void EmbodiedDrop();
+    UFUNCTION(Exec) virtual void EmbodiedPlace();
+    virtual FString GetInteractionHint() const;
     bool IsThirdPerson() const { return bThirdPerson; }
     EEmbodiedPhase GetPhase() const { return Phase; }
     UPROPERTY() TObjectPtr<UEmbodiedPoseLibrary> Poses;
@@ -96,7 +97,7 @@ public:
     UPROPERTY() TObjectPtr<USpringArmComponent> FollowBoom;
     UPROPERTY() TObjectPtr<UCameraComponent> FollowCamera;
     UPROPERTY() TObjectPtr<UPhysicsHandleComponent> GripHandle;
-private:
+protected:
     UPROPERTY() TObjectPtr<AStaticMeshActor> Cup;
     UPROPERTY() TObjectPtr<UStaticMeshComponent> CupMesh;
     UPROPERTY() TObjectPtr<AStaticMeshActor> TestStand;
@@ -127,12 +128,32 @@ private:
     int32 TransitionSerial = 0;
     FVector PreviousLocation = FVector::ZeroVector;
     FVector ReachStart = FVector::ZeroVector;
+    bool bAllowReachDetour = false;
+    bool bReachDetour = false;
+    bool bSceneCarryLift = false;
+    FVector ReachViaA = FVector::ZeroVector;
+    FVector ReachViaB = FVector::ZeroVector;
     FVector PlaceLocation = FVector::ZeroVector;
     FQuat PlaceRotation = FQuat::Identity;
     FTransform HandRelativeToCup;
     FTransform LastHandGoal;
     FTransform InitialCupTransform;
     FTransform HoldStart;
+    // Optional scene action presentation, zeroed for the original cup review.
+    bool bSceneActionBusy = false;
+    float LeftReachAlpha = 0.f;
+    float LeftFingerAlpha = 0.f;
+    float CrouchAlpha = 0.f;
+    float SeatedAlpha = 0.f;
+    float FallAlpha = 0.f;
+    float SceneReachHipAdvance = 0.f;
+    bool bSceneFeetOverride = false;
+    FVector SceneFootWorld[2];
+    FVector SeatPelvisWorld = FVector::ZeroVector;
+    FTransform LeftHandGoal;
+    float ItemRadius = 3.7f;
+    float ItemHeight = 9.6f;
+    virtual void RefreshScenePoseGoals() {}
     FQuat HoldRelativeRotation = FQuat::Identity;
     FEmbodiedFoot Feet[2];
     TArray<FTransform> ReferenceGlobal;
@@ -142,18 +163,19 @@ private:
     float FeedbackUntil = 0.f;
     void ToggleView();
     void ViewCup() { EmbodiedInspect(0); }
-    void SetPhase(EEmbodiedPhase NewPhase);
+    virtual void SetPhase(EEmbodiedPhase NewPhase);
     void FeedbackMessage(const FString& Text);
     void UpdateFeet(float DeltaSeconds);
-    void UpdateInteraction(float DeltaSeconds);
-    void ReleaseCup(bool bDropped);
-    void CancelReach(const FString& Reason);
+    virtual void UpdateInteraction(float DeltaSeconds);
+    virtual void ReleaseCup(bool bDropped);
+    virtual void CancelReach(const FString& Reason);
     bool IsCupReachable(FString& Reason) const;
-    bool FindPlacement(FVector& Location, FQuat& Rotation) const;
-    FTransform DesiredGrip() const;
-    FTransform CarryTarget() const;
+    virtual FVector PickupAimPoint() const;
+    virtual bool FindPlacement(FVector& Location, FQuat& Rotation) const;
+    virtual FTransform DesiredGrip() const;
+    virtual FTransform CarryTarget() const;
     void MeasureContact();
-    void OnPoseFinalized();
+    virtual void OnPoseFinalized();
 };
 
 UCLASS()

@@ -80,6 +80,13 @@ def start(config,state_path):
         exposure=float(config.get("exposure_offset",-1.8))
         if not math.isfinite(exposure):raise ValueError("Exposure must be finite")
         command=[x if not x.startswith("-ExecCmds=") else f"-ExecCmds=t.MaxFPS 30,r.ScreenPercentage 100,r.ExposureOffset {exposure}" for x in command]
+        graph=config.get("ddc_graph","InstalledNoZenLocalFallback")
+        if graph not in ("InstalledNoZenLocalFallback","VistaHomeActionsCache"):
+            raise ValueError("Unknown reviewed DDC graph")
+        command=["-ddc="+graph if x.startswith("-ddc=") else x for x in command]
+        if config.get("home_actions_bridge"):
+            if KIND!="home":raise ValueError("Home bridge requires the Home review")
+            command.append("-VistaHomeBridge="+str(user/"home-bridge"))
         if KIND=="home":command.append("-VistaWholeHome")
         run(command)
         print("Starting "+KIND+" review",flush=True)

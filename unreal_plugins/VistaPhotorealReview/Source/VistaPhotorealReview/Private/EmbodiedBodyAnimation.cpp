@@ -81,17 +81,27 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     // transform, rather than the transform from the preceding physics frame.
     if (ReachAlpha>0.f && Phase!=EEmbodiedPhase::Retracting && Phase!=EEmbodiedPhase::Idle)
         LastHandGoal=HandRelativeToCup*CupMesh->GetComponentTransform();
+    RefreshScenePoseGoals();
+    if (bReachDetour && Phase==EEmbodiedPhase::Reaching)
+    {
+        const FVector End=LastHandGoal.GetLocation();
+        const float T=FMath::Clamp(PhaseTime/1.6f,0.f,1.f)*3.f;
+        const auto Smooth=[](float X) {X=FMath::Clamp(X,0.f,1.f);return X*X*(3-2*X);};
+        LastHandGoal.SetLocation(T<1?FMath::Lerp(ReachStart,ReachViaA,Smooth(T)):
+            T<2?FMath::Lerp(ReachViaA,ReachViaB,Smooth(T-1)):FMath::Lerp(ReachViaB,End,Smooth(T-2)));
+    }
     Local=Poses->Relaxed;
     const auto Index=[this](const TCHAR* Name) { const int32* I=BoneIndex.Find(FName(Name)); return I ? *I : INDEX_NONE; };
     const FTransform MeshWorld=GetMesh()->GetComponentTransform();
     const float Speed=GetVelocity().Size2D();
     const FVector Goal=LastHandGoal.GetLocation();
     const float GoalHeight=Goal.Z-(GetActorLocation().Z-GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
-    const float Low=FMath::Clamp((110.f-GoalHeight)*.68f,0.f,65.f)*ReachAlpha;
+    const float Low=FMath::Max(FMath::Clamp((110.f-GoalHeight)*.68f,0.f,65.f)*ReachAlpha, CrouchAlpha*38.f);
     const float Distance=FVector::Dist2D(GetActorLocation(),Goal);
     float Bend=FMath::Clamp((Distance-23.f)/55.f,.05f,1.f)*ReachAlpha;
     if (Phase==EEmbodiedPhase::Held && GoalHeight>95.f && Distance<50.f) Bend*=.15f;
     float Lean=(.72f*Bend+FMath::Clamp((65.f-GoalHeight)/80.f,0.f,.5f)*ReachAlpha);
+    if (SceneReachHipAdvance>0.f) Lean*=1.f-.85f*FMath::Clamp((GoalHeight-115.f)/40.f,0.f,1.f);
     const float FloorBlend=FMath::Clamp((45.f-GoalHeight)/20.f,0.f,1.f);
     Lean=FMath::Lerp(Lean,FMath::Min(Lean,.75f*ReachAlpha),FloorBlend);
     if (Controller)
@@ -108,10 +118,12 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     {
         const float Forward=-FMath::Clamp((45.f-GoalHeight)/5.f,0.f,6.f)*ReachAlpha;
         FVector Offset(FMath::Sin(Clock*3.8f)*FMath::Min(Speed/140.f,1.f)*.45f,Forward,-Low-2.4f);
+        FVector Toward=MeshWorld.InverseTransformVector(Goal-GetActorLocation());Toward.Z=0;
+        Offset+=Toward.GetSafeNormal()*SceneReachHipAdvance*ReachAlpha;
         // Adapt hip height to the leg lengths at each stride. This keeps both
         // support points attainable without stretching the legs or sliding feet.
         float GroundCorrection=0.f;
-        if (bFeetReady)
+        if (bFeetReady || bSceneFeetOverride)
         {
             for (int32 Side=0;Side<2;++Side)
             {
@@ -119,7 +131,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
                 const int32 L=Index(Side==0?TEXT("calf_l"):TEXT("calf_r"));
                 const int32 E=Index(Side==0?TEXT("foot_l"):TEXT("foot_r"));
                 const FVector Hip=Global[U].GetLocation()+Offset;
-                const FVector Foot=MeshWorld.InverseTransformPosition(Feet[Side].Current);
+                const FVector Foot=MeshWorld.InverseTransformPosition(bSceneFeetOverride?SceneFootWorld[Side]:Feet[Side].Current);
                 const float Length=FVector::Distance(Global[U].GetLocation(),Global[L].GetLocation())+
                     FVector::Distance(Global[L].GetLocation(),Global[E].GetLocation())-.3f;
                 const float Horizontal=FVector::Dist2D(Hip,Foot);
@@ -127,30 +139,41 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
                 GroundCorrection=FMath::Max(GroundCorrection,float(Hip.Z-Foot.Z)-Vertical);
             }
         }
-        Offset.Z-=FMath::Clamp(GroundCorrection,0.f,18.f);
+        Offset.Z-=FMath::Clamp(GroundCorrection,0.f,bSceneFeetOverride?42.f:18.f);
+        if (SeatedAlpha>0.f)
+            Offset=FMath::Lerp(Offset,MeshWorld.InverseTransformPosition(SeatPelvisWorld)-Global[Pelvis].GetLocation(),SeatedAlpha);
+        if (FallAlpha>0.f)
+        {
+            const float Angle=FallAlpha*PI*.445f;
+            Offset.Y+=76.f*FMath::Sin(Angle);
+            Offset.Z=6.f+76.f*FMath::Cos(Angle)-Global[Pelvis].GetLocation().Z;
+        }
         for (int32 I=Pelvis;I<Global.Num();++I)
         {
             int32 P=I;while (P>Pelvis) P=Parents[P];
             if (P==Pelvis) Global[I].AddToTranslation(Offset);
         }
     }
+    if (Global.IsValidIndex(Pelvis) && FallAlpha>0.f)
+        RotateBranch(Global,Parents,Pelvis,FQuat(FVector::ForwardVector,-FallAlpha*PI*.445f)*Global[Pelvis].GetRotation());
     const int32 Spine=Index(TEXT("spine_01"));
     if (Global.IsValidIndex(Spine)) RotateBranch(Global,Parents,Spine,
-        FQuat(FVector::ForwardVector,-Lean+.003f*FMath::Sin(Clock*1.8f))*Global[Spine].GetRotation());
+        FQuat(FVector::ForwardVector,-Lean*(1-FallAlpha)+.003f*FMath::Sin(Clock*1.8f))*Global[Spine].GetRotation());
     for (int32 Side=0;Side<2;++Side)
     {
         const TCHAR* Upper=Side==0?TEXT("thigh_l"):TEXT("thigh_r");
         const TCHAR* Lower=Side==0?TEXT("calf_l"):TEXT("calf_r");
         const TCHAR* End=Side==0?TEXT("foot_l"):TEXT("foot_r");
         const int32 U=Index(Upper), L=Index(Lower), E=Index(End);
-        if (bFeetReady && Global.IsValidIndex(E))
+        if ((bFeetReady || bSceneFeetOverride) && Global.IsValidIndex(E) && FallAlpha<.05f)
         {
-            const FVector Target=MeshWorld.InverseTransformPosition(Feet[Side].Current);
-            const FQuat YawDelta=MeshWorld.GetRotation().Inverse()*FRotator(0,Feet[Side].Yaw,0).Quaternion()*FRotator(0,-90,0).Quaternion();
+            const FVector Target=MeshWorld.InverseTransformPosition(bSceneFeetOverride?SceneFootWorld[Side]:Feet[Side].Current);
+            const float Yaw=bSceneFeetOverride?GetActorRotation().Yaw:Feet[Side].Yaw;
+            const FQuat YawDelta=MeshWorld.GetRotation().Inverse()*FRotator(0,Yaw,0).Quaternion()*FRotator(0,-90,0).Quaternion();
             const FVector RollAxis=MeshWorld.GetRotation().Inverse().RotateVector(
-                FRotator(0,Feet[Side].Yaw,0).Quaternion().RotateVector(FVector::RightVector));
+                FRotator(0,Yaw,0).Quaternion().RotateVector(FVector::RightVector));
             SolveLimb(Global,Parents,U,L,E,Target,Global[U].GetLocation()+FVector(0,55,-15),
-                      FQuat(RollAxis,FMath::DegreesToRadians(Feet[Side].Roll))*YawDelta*ReferenceGlobal[E].GetRotation());
+                      FQuat(RollAxis,FMath::DegreesToRadians(bSceneFeetOverride?0.f:Feet[Side].Roll))*YawDelta*ReferenceGlobal[E].GetRotation());
         }
     }
     for (int32 Side=0;Side<2;++Side)
@@ -169,6 +192,12 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             Target=FMath::Lerp(Target,CS.GetLocation(),ReachAlpha);
             Rotation=FQuat::Slerp(Rotation,CS.GetRotation(),ReachAlpha);
         }
+        if (!RightHand && LeftReachAlpha>0.f)
+        {
+            const FTransform CS=LeftHandGoal.GetRelativeTransform(MeshWorld);
+            Target=FMath::Lerp(Target,CS.GetLocation(),LeftReachAlpha);
+            Rotation=FQuat::Slerp(Rotation,CS.GetRotation(),LeftReachAlpha);
+        }
         const float Sign=RightHand?-1.f:1.f;
         const FVector Pole=Global[U].GetLocation()+FVector(Sign*24.f,-16.f,-25.f);
         SolveLimb(Global,Parents,U,L,E,Target,Pole,Rotation);
@@ -184,6 +213,12 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         {
             FTransform Open;Open.Blend(Poses->Relaxed[I],Poses->OpenHand[I],ReachAlpha);
             Local[I].Blend(Open,Poses->Grip[I],FingerAlpha);
+        }
+        if (Name.EndsWith(TEXT("_l")) && (Name.StartsWith(TEXT("index_")) || Name.StartsWith(TEXT("middle_")) ||
+            Name.StartsWith(TEXT("ring_")) || Name.StartsWith(TEXT("pinky_")) || Name.StartsWith(TEXT("thumb_"))))
+        {
+            FTransform Open;Open.Blend(Poses->Relaxed[I],Poses->OpenHand[I],LeftReachAlpha);
+            Local[I].Blend(Open,Poses->Grip[I],LeftFingerAlpha);
         }
         Local[I].NormalizeRotation();
     }

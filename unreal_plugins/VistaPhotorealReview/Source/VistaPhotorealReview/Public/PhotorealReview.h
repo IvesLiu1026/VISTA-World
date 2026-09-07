@@ -44,7 +44,7 @@ protected:
     void ViewEight();
     void ViewNine();
     void AlternateView();
-    void SetView(FVector Position, FRotator Rotation);
+    virtual void SetView(FVector Position, FRotator Rotation);
 };
 
 UCLASS()
