@@ -1,0 +1,929 @@
+{
+  "schema": "vista.home-fidelity-release/v1",
+  "created_at": "2026-09-07T20:08:48.729925+00:00",
+  "audience": "privileged_authoring_and_human_review_only",
+  "release_readiness": "review_only",
+  "implementation_commit": "552affa55565890b315680b5467b9e734307f191",
+  "base_commit": "7c51ad4347c8856e3a2ecf5698ad870818f77af9",
+  "branch": "codex/vista-home-fidelity-r3",
+  "run": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a",
+  "scene_contract": {
+    "path": "/data/sysx/vista-world/worktrees/vista-home-fidelity-r3/world_packs/vista_photoreal_home_r2/scene.json",
+    "sha256": "260d35f3116c6dadf88da9ce821b0b089d3cc096f5a0d1a1a9d61506398f6b66",
+    "bytes": 84208
+  },
+  "contact_authoring": {
+    "tips": 10,
+    "joint_frames": 30,
+    "surfaces": 35,
+    "file": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/project-x/Config/VistaFineContacts.json",
+      "sha256": "d21d0fb7a812226a4c7e3b55d57de7582508662664a9b21558e99fc04de2d7dc",
+      "bytes": 31415839
+    },
+    "measurement_limit": "Fingertip skin patch approximation, not full soft-tissue contact physics"
+  },
+  "complete_interaction_validation": {
+    "report": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/native-coverage-final-t.json",
+      "sha256": "6922c3efd8626c1e18d215ec6da0d3b58ba2d2c5667d0756324d073fcc2e83cd",
+      "bytes": 12130
+    },
+    "build": "build-k",
+    "project": "project-t",
+    "runtime_session_id": "D0FF66D0A06640F4A9423B71BE2DD266",
+    "plugin": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so",
+      "sha256": "5ad67ecccd36518e696fae242e4cdc920a0af37abdc41ef947a13000d807c23f",
+      "bytes": 1061880
+    },
+    "map": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/project-t/Content/VISTA/PhotorealHomeR1/Maps/Home.umap",
+      "sha256": "20b3c174bb76180aa79439181b796bf811e0a639a63058e0e30ce8326cefffbc",
+      "bytes": 358499
+    },
+    "packaged_source": [
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/EmbodiedAuthoring.cpp",
+        "sha256": "e14d4a3e26f60de455d4b6b217fcb6c7096454e51e142348e5f6526851251fe2",
+        "bytes": 5236
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/EmbodiedBodyAnimation.cpp",
+        "sha256": "a737bbf810d6d9a2fcbb24d8c6ad31da17f3f96cde4a67b3209200725c0c7583",
+        "bytes": 12568
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/EmbodiedReview.cpp",
+        "sha256": "7c8212c048a820ca543afac6162abe2cbac6040c30cfccfb63c6a3d02d68db2a",
+        "bytes": 40468
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/HomeActionBridge.cpp",
+        "sha256": "4bdd034d7ea00e82f982a23df21d4f56b84aeef2e1c33cb99cb8dd03cfccec96",
+        "bytes": 9856
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/HomeActionClimb.cpp",
+        "sha256": "7b819c6cfc3f3f253badf778100bce7bf976999c890a3397e954d3306b03f962",
+        "bytes": 6408
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/HomeActionEvents.cpp",
+        "sha256": "8a34e3c135a5f18bde6302a5ad1753c5ed5308d3cac76becbacd951934f08bee",
+        "bytes": 18007
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/HomeActionMotion.cpp",
+        "sha256": "47b8736bf97b53c85ce732d2038d18546dd74950e8eab0657e39b1310de8a83b",
+        "bytes": 27218
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/HomeActionTransactions.cpp",
+        "sha256": "8ad0367225e6c858a59c675ee5f2047e21fd63adb35706a4e0117e8b9611ff76",
+        "bytes": 32989
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/HomeActions.cpp",
+        "sha256": "7b2f55511709cf14ea6259ccf53269afb23e0163f964fd3e96f28263360f2224",
+        "bytes": 23593
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/HomeActionsAuthoring.cpp",
+        "sha256": "435501ab85f9ccc36c6a607a2094c12227058bdadba93c6a8524427eadd2add7",
+        "bytes": 3253
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/HomeActionsJson.h",
+        "sha256": "12a481ba0560e4418387100bf24062bc092b85388998827ea39062649627a3ea",
+        "bytes": 2957
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/HomeFineContact.cpp",
+        "sha256": "f8f099609784958ce7b147a10ed4559ecb8d0ec56766c1c0438691b2de515e68",
+        "bytes": 23530
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Private/PhotorealReview.cpp",
+        "sha256": "08c80de47f7c0d5782746d0105d1f91bc3aa4d7c4167f94544281233f954907e",
+        "bytes": 10408
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Public/EmbodiedReview.h",
+        "sha256": "5d9930d2cad6c1a3047b3df5c17cabd1bb85e9c221eaabdb5a152b661469984e",
+        "bytes": 7387
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Public/HomeActions.h",
+        "sha256": "a30243c1e1dee3a5535ce6abb15dca635806bbce8eaaace3fbeb427cbad68728",
+        "bytes": 8708
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/Public/PhotorealReview.h",
+        "sha256": "03c8a05181dd13a333ba4bff141c98f42b3bbd5b35b4935d3ba7f154430238dc",
+        "bytes": 1634
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-k/Source/VistaPhotorealReview/VistaPhotorealReview.Build.cs",
+        "sha256": "f43d0e650b23c3daa831b456c74f40195202fe5613e9f8a01e9b3e93d98c4cf2",
+        "bytes": 362
+      }
+    ],
+    "successful_action_ids": [
+      "appliance.toggle_rotary",
+      "articulation.open",
+      "carry",
+      "close",
+      "contact.brace",
+      "crouch",
+      "drop",
+      "equip",
+      "fall",
+      "idle",
+      "impact",
+      "insert",
+      "inspect",
+      "jog",
+      "load",
+      "look_at",
+      "pause",
+      "pick_up",
+      "place",
+      "pour",
+      "press_button",
+      "pull_drag",
+      "push",
+      "recover",
+      "seated_idle",
+      "sit_down",
+      "slip",
+      "spill",
+      "sprint",
+      "stand_up",
+      "step_down",
+      "step_up",
+      "storage.insert",
+      "storage.remove",
+      "stumble",
+      "turn_in_place",
+      "turn_off",
+      "turn_on",
+      "unequip",
+      "unload",
+      "use",
+      "walk"
+    ],
+    "verified_surface_ids": [
+      "home.r1/room.bathroom_laundry/entity.basin_faucet.01",
+      "home.r1/room.bathroom_laundry/entity.clothes.01",
+      "home.r1/room.bathroom_laundry/entity.faucet.01",
+      "home.r1/room.bathroom_laundry/entity.laundry_basket.01",
+      "home.r1/room.bathroom_laundry/entity.toilet.01",
+      "home.r1/room.bathroom_laundry/entity.washer.01",
+      "home.r1/room.bathroom_laundry/entity.washer_door.01",
+      "home.r1/room.bedroom/entity.backpack.01",
+      "home.r1/room.bedroom/entity.bedside_drawer.01",
+      "home.r1/room.bedroom/entity.phone.01",
+      "home.r1/room.bedroom/entity.wardrobe_0.01",
+      "home.r1/room.bedroom/entity.wardrobe_1.01",
+      "home.r1/room.bedroom/entity.wardrobe_2.01",
+      "home.r1/room.bedroom/entity.wardrobe_3.01",
+      "home.r1/room.entry_hall/entity.exit_door.01",
+      "home.r1/room.entry_hall/entity.interior_door.01",
+      "home.r1/room.entry_hall/entity.interior_door.02",
+      "home.r1/room.entry_hall/entity.interior_door.03",
+      "home.r1/room.entry_hall/entity.interior_door.04",
+      "home.r1/room.entry_hall/entity.interior_door.05",
+      "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+      "home.r1/room.kitchen_dining/entity.fridge.01",
+      "home.r1/room.kitchen_dining/entity.pot.01",
+      "home.r1/room.kitchen_dining/entity.stove.01",
+      "home.r1/room.kitchen_dining/entity.water_jug.01",
+      "home.r1/room.living_room/entity.floor_lamp.01",
+      "home.r1/room.living_room/entity.keys.01",
+      "home.r1/room.living_room/entity.slipper.01",
+      "home.r1/room.living_room/entity.television.01",
+      "home.r1/room.office/entity.cabinet.01",
+      "home.r1/room.office/entity.cabinet_right.01",
+      "home.r1/room.office/entity.cardboard_box.01",
+      "home.r1/room.office/entity.computer.01",
+      "home.r1/room.office/entity.ladder.01",
+      "home.r1/room.office/entity.rolling_chair.01"
+    ],
+    "reports": [
+      {
+        "label": "details",
+        "passed": 34,
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/details-selected-a.json",
+        "sha256": "8791f4db8b6776f338eeeceb6013d2f59e5fbfac88ef732ea718addd412100d1",
+        "bytes": 1608319
+      },
+      {
+        "label": "sequences",
+        "passed": 21,
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/sequences-selected-a.json",
+        "sha256": "e605a39bc257c85b323ee7cabac88ce99dbd8bcec939cfcc8a4997771cc385a9",
+        "bytes": 961052
+      },
+      {
+        "label": "moving",
+        "passed": 2,
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/motion-contact-a/results.json",
+        "sha256": "9a24e39fc2e1be70b1902015392a865a8068a7f98330215b006db916483e6137",
+        "bytes": 24708
+      },
+      {
+        "label": "grips",
+        "passed": 2,
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/fine-views-f/results.json",
+        "sha256": "269d7188a6c3ecf4210a4a1eb7d7e30bf5823e2833b9404e95e5d617c9039ef9",
+        "bytes": 87305
+      },
+      {
+        "label": "precision",
+        "passed": 6,
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/precision-f/results.json",
+        "sha256": "f657111b6c67686dc2e25814c0ba43a83bf34586e3ea5a6f7ab472c31b1ce86c",
+        "bytes": 311263
+      },
+      {
+        "label": "protocol",
+        "passed": 14,
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/protocol-d/results.json",
+        "sha256": "ad99e50709f67cb81981017235733701942bf724e9f94773c712cac86a85de1e",
+        "bytes": 18221
+      },
+      {
+        "label": "keyboard",
+        "passed": 13,
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/keyboard-b/results.json",
+        "sha256": "54c515c9c2059944d034d70315be73366ca6073f3b599e05327150c7b2792752",
+        "bytes": 504563
+      }
+    ],
+    "native_coverage_complete": true
+  },
+  "selected_runtime": {
+    "report": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/final-runtime-x.json",
+      "sha256": "ce5ecff000789e01d9de5055b3b516551c7577ae81a5848e05e113f3fadbc962",
+      "bytes": 10402
+    },
+    "build": "build-n",
+    "project": "project-x",
+    "runtime_session_id": "5F7CA1D950034C42A2BDD31A13B9D3A3",
+    "runtime_process_at_verification": {
+      "unit": "vista-home-actions-validation-r2.service",
+      "pid": 3110218,
+      "project_and_bridge_verified": true
+    },
+    "plugin": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so",
+      "sha256": "04bf30b35a26c54fd3f5ac103a6c8bf8aeae67f4395d4bde272a5ff5abd0fb30",
+      "bytes": 1063536
+    },
+    "map": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/project-x/Content/VISTA/PhotorealHomeR1/Maps/Home.umap",
+      "sha256": "3b6afc3aa2af8b67e3e89dcc6a121ce26d7a3fc07bfd0f81174f663fac2c02d2",
+      "bytes": 364959
+    },
+    "packaged_source": [
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/EmbodiedAuthoring.cpp",
+        "sha256": "e14d4a3e26f60de455d4b6b217fcb6c7096454e51e142348e5f6526851251fe2",
+        "bytes": 5236
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/EmbodiedBodyAnimation.cpp",
+        "sha256": "a737bbf810d6d9a2fcbb24d8c6ad31da17f3f96cde4a67b3209200725c0c7583",
+        "bytes": 12568
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/EmbodiedReview.cpp",
+        "sha256": "7c8212c048a820ca543afac6162abe2cbac6040c30cfccfb63c6a3d02d68db2a",
+        "bytes": 40468
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/HomeActionBridge.cpp",
+        "sha256": "4bdd034d7ea00e82f982a23df21d4f56b84aeef2e1c33cb99cb8dd03cfccec96",
+        "bytes": 9856
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/HomeActionClimb.cpp",
+        "sha256": "7b819c6cfc3f3f253badf778100bce7bf976999c890a3397e954d3306b03f962",
+        "bytes": 6408
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/HomeActionEvents.cpp",
+        "sha256": "8a34e3c135a5f18bde6302a5ad1753c5ed5308d3cac76becbacd951934f08bee",
+        "bytes": 18007
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/HomeActionMotion.cpp",
+        "sha256": "47b8736bf97b53c85ce732d2038d18546dd74950e8eab0657e39b1310de8a83b",
+        "bytes": 27218
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/HomeActionTransactions.cpp",
+        "sha256": "8ad0367225e6c858a59c675ee5f2047e21fd63adb35706a4e0117e8b9611ff76",
+        "bytes": 32989
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/HomeActions.cpp",
+        "sha256": "7b2f55511709cf14ea6259ccf53269afb23e0163f964fd3e96f28263360f2224",
+        "bytes": 23593
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/HomeActionsAuthoring.cpp",
+        "sha256": "7c7da4cc3152e3add3724fcc924d62e8567338981b2e312949758afe8e743cc7",
+        "bytes": 4385
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/HomeActionsJson.h",
+        "sha256": "12a481ba0560e4418387100bf24062bc092b85388998827ea39062649627a3ea",
+        "bytes": 2957
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/HomeFineContact.cpp",
+        "sha256": "f8f099609784958ce7b147a10ed4559ecb8d0ec56766c1c0438691b2de515e68",
+        "bytes": 23530
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Private/PhotorealReview.cpp",
+        "sha256": "08c80de47f7c0d5782746d0105d1f91bc3aa4d7c4167f94544281233f954907e",
+        "bytes": 10408
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Public/EmbodiedReview.h",
+        "sha256": "5d9930d2cad6c1a3047b3df5c17cabd1bb85e9c221eaabdb5a152b661469984e",
+        "bytes": 7387
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Public/HomeActions.h",
+        "sha256": "a30243c1e1dee3a5535ce6abb15dca635806bbce8eaaace3fbeb427cbad68728",
+        "bytes": 8708
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/Public/PhotorealReview.h",
+        "sha256": "03c8a05181dd13a333ba4bff141c98f42b3bbd5b35b4935d3ba7f154430238dc",
+        "bytes": 1634
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n/Source/VistaPhotorealReview/VistaPhotorealReview.Build.cs",
+        "sha256": "d8779b0de664328270725a8ca398169f7599f8ed84952f9895cc4234392aee00",
+        "bytes": 418
+      }
+    ],
+    "reports": [
+      {
+        "label": "resting",
+        "passed": 1,
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/resting-prop-c/results.json",
+        "sha256": "28e4c928c766febc4fc3b128fcf619604dd1eaea8d8006161332a37272cc5c05",
+        "bytes": 46079
+      },
+      {
+        "label": "recordings",
+        "passed": 7,
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/recordings-c/results.json",
+        "sha256": "9801612baa1399aa32c7bfcae65b031889a0f339f4e2777955c0fb4f13b5f5eb",
+        "bytes": 2299
+      }
+    ],
+    "scoped_followup_only": true,
+    "native_coverage_complete": false,
+    "interpretation": "The complete suite ran on K/T. N/X changes only pot/support collision authoring and RenderCore dependency; gameplay and animation source are byte-identical. X passes three native resting resets, two-hand pot pickup and all seven final event recordings. No claim of a repeated full suite on X.",
+    "difference_report": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/pot-repair-scope-b.json",
+      "sha256": "ea3bbb67d248d0d2a4e365af7634104b2b54a5798ed770242626f65c6d9f98af",
+      "bytes": 2588
+    }
+  },
+  "checks": {
+    "unique_python_tests": 46,
+    "native_detail_cases": 34,
+    "native_sequence_cases": 21,
+    "precision_cases": 6,
+    "moving_handle_contact_cases": 2,
+    "first_third_person_grip_cases": 2,
+    "protocol_cases": 14,
+    "x11_keyboard_cases": 13,
+    "final_pot_resets": 3,
+    "final_pot_two_hand_pickup": "passed",
+    "ue_targets": [
+      "Linux Editor",
+      "Linux Game Development",
+      "Linux Game Shipping"
+    ],
+    "vista_contract_cases": 7,
+    "browser_playback_cases": 7,
+    "rejected_review_bundles": 0,
+    "sunshine_display_119_camera_switching": "First to third to first passed on the actual selected R3 runtime"
+  },
+  "assets": {
+    "licenses": [
+      "CC0-1.0"
+    ],
+    "existing_furniture_parts_with_photo_materials": 37,
+    "shared_photo_materials": 4,
+    "hardware_repair_parts": 5,
+    "photo_box_dimensions_cm": [
+      49,
+      28,
+      29
+    ],
+    "native_meshes_with_full_resolution_fallback": 138,
+    "source_geometry_preserved_for_material_revisions": true,
+    "character_geometry_and_weights_preserved": true,
+    "support_volumes": "Four convex hulls from the actual burner bars; no support plane",
+    "restricted_citysample_hssd_assets_used": false
+  },
+  "review_candidates": [
+    {
+      "case_id": "6ab1a1201ee445b19c71d5aaa54004fe",
+      "native_event_id": "mmg_001",
+      "native_outcome": "succeeded",
+      "review_decision": "needs_review",
+      "manifest": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/38c548240aec40e9b6a4d9fd8a8a3174/reviewed_case_candidate.json",
+        "sha256": "8cdbaf562b8846e9542458961405691cc0657d304eae2435271bf1a82623c944",
+        "bytes": 891
+      },
+      "video": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/38c548240aec40e9b6a4d9fd8a8a3174/restricted/observation.mp4",
+        "sha256": "28f2fbd63e3a2cee73227aec2c9f16900f28c1a8d8e8cf0ad5b36b2aa212eafd",
+        "bytes": 3076402
+      },
+      "restricted_input": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/38c548240aec40e9b6a4d9fd8a8a3174/restricted/restricted_assist_step_input.json",
+        "sha256": "2c2ef6dc6093bdc4588b902a7795e3db89ee187a76dd2e952d0a866937400884",
+        "bytes": 1626
+      },
+      "capture": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/38c548240aec40e9b6a4d9fd8a8a3174/privileged/capture.json",
+        "sha256": "79ab3e597c94a0b8ce552cb49f83686e243ec713518066a48da06a578e769d4d",
+        "bytes": 22704
+      },
+      "duration_s": 7.5,
+      "encoded_fps": 20,
+      "median_native_fps_deduplicated": 9.446684818750896,
+      "vista_contract_validation": "passed",
+      "browser_playback": "passed"
+    },
+    {
+      "case_id": "bcd5f43d531646ecb85edf73f4b77a25",
+      "native_event_id": "mmg_013",
+      "native_outcome": "succeeded",
+      "review_decision": "needs_review",
+      "manifest": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/bfe7d6af8bde480cafd08c35885ee218/reviewed_case_candidate.json",
+        "sha256": "6b6a1fd87e83393cd53d722b5af2e8cc58d0d1a5072dfcfa6b142dcfc6289b38",
+        "bytes": 891
+      },
+      "video": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/bfe7d6af8bde480cafd08c35885ee218/restricted/observation.mp4",
+        "sha256": "c79d9d4438af929cef15cc2b8819363e7a1883da7942652c6729ac79e4b0465f",
+        "bytes": 3799449
+      },
+      "restricted_input": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/bfe7d6af8bde480cafd08c35885ee218/restricted/restricted_assist_step_input.json",
+        "sha256": "eb5fb036a2b97aa342a53808f260c53dc84277d351795e1d2e63d836312ad553",
+        "bytes": 1611
+      },
+      "capture": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/bfe7d6af8bde480cafd08c35885ee218/privileged/capture.json",
+        "sha256": "67d8c1f80f4dbb668304600a52692ea09b30b841ee6388b66cc6490f9b12a846",
+        "bytes": 17427
+      },
+      "duration_s": 5.7,
+      "encoded_fps": 20,
+      "median_native_fps_deduplicated": 9.985035435498347,
+      "vista_contract_validation": "passed",
+      "browser_playback": "passed"
+    },
+    {
+      "case_id": "ed6fa34cb0b04540b6dafbb015d51d47",
+      "native_event_id": "mmg_021",
+      "native_outcome": "succeeded",
+      "review_decision": "needs_review",
+      "manifest": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/37c10cd124c5481ebc9c41ed36ed8f5a/reviewed_case_candidate.json",
+        "sha256": "9c387a2df645ec79ddff921c7b83182b8501e9b9de31bc7450fe3f1fe5197492",
+        "bytes": 892
+      },
+      "video": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/37c10cd124c5481ebc9c41ed36ed8f5a/restricted/observation.mp4",
+        "sha256": "6beb950db1ff33eba49895e6466626371b92a9ff250383ebc0917b01d41b2eb4",
+        "bytes": 2723398
+      },
+      "restricted_input": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/37c10cd124c5481ebc9c41ed36ed8f5a/restricted/restricted_assist_step_input.json",
+        "sha256": "9e7e5aefbfa8d5d3f9033b185f61500db9c21a6c5c973e2cf501dfb18f806490",
+        "bytes": 1605
+      },
+      "capture": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/37c10cd124c5481ebc9c41ed36ed8f5a/privileged/capture.json",
+        "sha256": "f7ce273469ae090ec92f9b600dba12efaba94fd3b6ea15dfd2264f1217b6bb6a",
+        "bytes": 21802
+      },
+      "duration_s": 7.25,
+      "encoded_fps": 20,
+      "median_native_fps_deduplicated": 10.419792133195488,
+      "vista_contract_validation": "passed",
+      "browser_playback": "passed"
+    },
+    {
+      "case_id": "e4824f1d4e3542128aeed22a355c68bc",
+      "native_event_id": "mmg_040",
+      "native_outcome": "succeeded",
+      "review_decision": "needs_review",
+      "manifest": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/a06528f9ba364d44b1876abbf41c80b8/reviewed_case_candidate.json",
+        "sha256": "453a88ef4931c0a63e5989525854e92db00be2c4a9ac89dbbb0a82cb902e906e",
+        "bytes": 893
+      },
+      "video": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/a06528f9ba364d44b1876abbf41c80b8/restricted/observation.mp4",
+        "sha256": "05c1117bf0d5c4396897742937854ccebcdd8a648b5f5f945fadaf4a24f9e413",
+        "bytes": 18200370
+      },
+      "restricted_input": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/a06528f9ba364d44b1876abbf41c80b8/restricted/restricted_assist_step_input.json",
+        "sha256": "458223c07f22c6a73e7e3ae9ae69bdd3dbb92e3c0c933429e780a5a0c807fa9f",
+        "bytes": 1608
+      },
+      "capture": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/a06528f9ba364d44b1876abbf41c80b8/privileged/capture.json",
+        "sha256": "26f7cd7a1cd0129a53d94eb7718251779c779f758543b1dfa11e8c70cbb1e7d9",
+        "bytes": 60431
+      },
+      "duration_s": 19.7,
+      "encoded_fps": 20,
+      "median_native_fps_deduplicated": 9.97997376029983,
+      "vista_contract_validation": "passed",
+      "browser_playback": "passed"
+    },
+    {
+      "case_id": "4744ae32a8ff4e4fb44d894a6c3501d1",
+      "native_event_id": "mmg_044",
+      "native_outcome": "succeeded",
+      "review_decision": "needs_review",
+      "manifest": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/34a722e76fc64a0dbd8b6a0e29552653/reviewed_case_candidate.json",
+        "sha256": "20198d2b12a34f83ac9ce0ae6ddba777ad95128384fdee8c3dc52161b3a2a545",
+        "bytes": 892
+      },
+      "video": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/34a722e76fc64a0dbd8b6a0e29552653/restricted/observation.mp4",
+        "sha256": "6b65cf7d86a173a84f4b02d4880ed3e10558e26f54c56cbcd7c7379b57910d67",
+        "bytes": 8136481
+      },
+      "restricted_input": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/34a722e76fc64a0dbd8b6a0e29552653/restricted/restricted_assist_step_input.json",
+        "sha256": "d66c81f3cab6e6dd84992a6c3c6c964181b4e0bfd6f181441da4aa1e38ef60d6",
+        "bytes": 1599
+      },
+      "capture": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/34a722e76fc64a0dbd8b6a0e29552653/privileged/capture.json",
+        "sha256": "69266e5c294fc192890335450b157eb1c651cb009050595d6a15ced942e5387c",
+        "bytes": 39160
+      },
+      "duration_s": 13.4,
+      "encoded_fps": 20,
+      "median_native_fps_deduplicated": 10.098263971297934,
+      "vista_contract_validation": "passed",
+      "browser_playback": "passed"
+    },
+    {
+      "case_id": "2c4b89dd4ae34b6c872b45781a36373d",
+      "native_event_id": "mmg_045",
+      "native_outcome": "succeeded",
+      "review_decision": "needs_review",
+      "manifest": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/da0732a10b3b45f996a61950ca4df109/reviewed_case_candidate.json",
+        "sha256": "c41d491415db485f015f80fb8f71cf08b462f645791e1ed1c66688750298b028",
+        "bytes": 892
+      },
+      "video": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/da0732a10b3b45f996a61950ca4df109/restricted/observation.mp4",
+        "sha256": "ea8f8909c8f66d6e0a7b903ef39f20e9979388c578cecf4a496095b1d8662673",
+        "bytes": 9198864
+      },
+      "restricted_input": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/da0732a10b3b45f996a61950ca4df109/restricted/restricted_assist_step_input.json",
+        "sha256": "d547eb12dcd363c2ed919828af501d8bb8b07b0919b9503ab1bdb3eb918e01ec",
+        "bytes": 1599
+      },
+      "capture": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/da0732a10b3b45f996a61950ca4df109/privileged/capture.json",
+        "sha256": "aa6f1e1f9bdfde4a3693a13444ace7dc7717467042cac14dfcbc0810f57811a7",
+        "bytes": 51139
+      },
+      "duration_s": 17.5,
+      "encoded_fps": 20,
+      "median_native_fps_deduplicated": 9.687665167490382,
+      "vista_contract_validation": "passed",
+      "browser_playback": "passed"
+    },
+    {
+      "case_id": "d9813cdcc7904ef288e40bf1b932a843",
+      "native_event_id": "mmg_070",
+      "native_outcome": "succeeded",
+      "review_decision": "needs_review",
+      "manifest": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/fe15d0888a58475c9dea8f4608e901fa/reviewed_case_candidate.json",
+        "sha256": "b142c56fcf22248dc791725212382112c4be7e39f8e952ac84031924a92c87e2",
+        "bytes": 892
+      },
+      "video": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/fe15d0888a58475c9dea8f4608e901fa/restricted/observation.mp4",
+        "sha256": "44e308d2b9f90aadb99858f981489f8c9d8453fcaf738573b5720ad9492cec71",
+        "bytes": 2973754
+      },
+      "restricted_input": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/fe15d0888a58475c9dea8f4608e901fa/restricted/restricted_assist_step_input.json",
+        "sha256": "07bf9aa01ebac8b4912dea6584021f166cb59655e8221d8e625bd406833d4b00",
+        "bytes": 1608
+      },
+      "capture": {
+        "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/vista-review-candidates-c/fe15d0888a58475c9dea8f4608e901fa/privileged/capture.json",
+        "sha256": "93db28ea0909da958a516fb1b2304848c3f15d4ddc05d44713dedb7c60778ab2",
+        "bytes": 33413
+      },
+      "duration_s": 11.3,
+      "encoded_fps": 20,
+      "median_native_fps_deduplicated": 10.466831389608855,
+      "vista_contract_validation": "passed",
+      "browser_playback": "passed"
+    }
+  ],
+  "handoff": {
+    "review_url": "http://100.114.80.121:8001/native-home-review",
+    "vista_companion_commit": "742a91d9dd566d2149ab4f346f9c938c494d2be5",
+    "sunshine_app": "VISTA Photoreal Home",
+    "sunshine_profile": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-review-profile-n.json",
+    "sunshine_selection": "R3 is running on :119. After confirming the retained Low Res Desktop had zero connected clients, the actual vista-sunshine.service was reloaded and only Home game/input services switched from R2 to R3.",
+    "other_five_sunshine_entries_preserved": true,
+    "validation_display_120": "stopped after final capture",
+    "production_8000_modified": false,
+    "live_runtime_report": {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/live-runtime-a.json",
+      "sha256": "5110e57d95bbe9b30ffbc2042c0ef4d452059ce220404ee8ad17ad7b7df8010a",
+      "bytes": 9590
+    },
+    "live_runtime_session_id": "574D0D2BE46C4993A7B1685F42D85FE4",
+    "live_runtime_process": {
+      "unit": "vista-photoreal-home-r1.service",
+      "pid": 3212366,
+      "project_and_bridge_verified": true
+    },
+    "sunshine_config_reloaded": true,
+    "client_interrupted": false
+  },
+  "acceptance_limits": {
+    "visual_review": "human_review_pending",
+    "benchmark_labels_assigned": false,
+    "observation_cutoff_reviewed": false,
+    "dialogue": "Project-authored external text; not recorded speech",
+    "fine_contact": "Kinematic distal skin-patch distance and penetration checks; not complete hand-volume, soft tissue, pressure, friction or force-closure simulation",
+    "appearance": "Hair, clothing deformation, skin and poses still require artistic refinement; no working facial-animation system",
+    "performance": "Per-clip native median 9.45–10.47 FPS under concurrent UE load; 20 FPS encoded video does not establish native frame rate After stopping the extra validation process, a separate 10-second idle living-room sample on :119 measured 18.26 FPS median; not a whole-house or streamed-client acceptance.",
+    "ladder_episode": "Inspection completion is recorded; carrying a box down the ladder is not asserted"
+  },
+  "restricted_input_policy": {
+    "allowed": [
+      "native video",
+      "selected external dialogue"
+    ],
+    "excluded": [
+      "fine contact geometry",
+      "joint frames",
+      "simulator state",
+      "receipts",
+      "source event IDs",
+      "seeds",
+      "render scripts",
+      "review notes",
+      "oracle"
+    ]
+  },
+  "external_operations": {
+    "paid_generation_calls": 0,
+    "model_calls": 0,
+    "canonical_dataset_writes": 0,
+    "ue_network_isolation": "All subsequent UE imports/builds/runtime validation use bwrap --unshare-net",
+    "early_crash_report": "The first materials import crashed before network isolation; automatic CrashReportClient uploaded 25,147 bytes to Epic (HTTP 204). Payload was not independently audited. Private incident receipt retained."
+  },
+  "artifacts": [
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/materials-b/materials.json",
+      "sha256": "e624c693909873cc587e611b13c486f18656150d1205e128b3972e5ab1bba84e",
+      "bytes": 61906
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/materials-c/materials.json",
+      "sha256": "fa64c3323c1bde32ab9f1b754bc2cddb89cde918b61a2741b2a9a106ae9b9778",
+      "bytes": 11547
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/character-b/character.json",
+      "sha256": "b4c423faf669a3aae64e5fbb0630dff7e85ce4e7fa16a348426ce85d2ff293ff",
+      "bytes": 3717
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/box-b/parts.json",
+      "sha256": "862ce208e9ac2f1a33e4e971ffffe53342cdad990454f3c66212148916e1b9dd",
+      "bytes": 2830
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/hardware-a/parts.json",
+      "sha256": "ed815b1d21af9b0ebc3acf2dd557e74b6e9569e9a0bf11e2bdd08f8e56694dcc",
+      "bytes": 4445
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/hardware-a/contacts.json",
+      "sha256": "b0be95fa6fc126a11b8ee88dcd3f0f001b454fbcff2bc5acfd4cb109827ce44e",
+      "bytes": 5414
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/contacts-j/fine-contacts.json",
+      "sha256": "d21d0fb7a812226a4c7e3b55d57de7582508662664a9b21558e99fc04de2d7dc",
+      "bytes": 31415839
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/supports-a/parts.json",
+      "sha256": "0f0acefde01691108cbde78128db5f36255ecd4273fda9454f54f4bea085599d",
+      "bytes": 3296
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/import-materials-d.json",
+      "sha256": "fd6649aea55d94dde11c68becc3e0f330bff3ddfd209f46d663653e80271e493",
+      "bytes": 18066
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/import-character-h.json",
+      "sha256": "6938880ca2ea4415f539a80a1681f49bf9a6a09132a2fbf24f669bbbd9a3f9a5",
+      "bytes": 1353
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/import-box-m.json",
+      "sha256": "3c296de51a9788d35473fe8e9bca5d210f80209f1ecb748db1aa4bbdec31f225",
+      "bytes": 57209
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/import-hardware-n.json",
+      "sha256": "6e4bb59dfc5670c70ad2de63033191ece356071d9a563fed070ae49a2f34e8af",
+      "bytes": 3429
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/repair-resting-x.json",
+      "sha256": "81446b67a1b6c1ce87239db6d0666a61074c5abefbb97c59d261119db9006076",
+      "bytes": 824
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/import-supports-x.json",
+      "sha256": "9cfbe8af0c61016d8c5913b911c61639775cbd3234d65a52d15cb55bfd9d901a",
+      "bytes": 1609
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/material-geometry-a.json",
+      "sha256": "f12d7a56862481cb5b08d0e0c6c2bc0bb0689b48e0884f9ead869c2a2853c3f6",
+      "bytes": 9777
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/hardware-material-geometry-a.json",
+      "sha256": "897e65bc611c5691888673176335dfc9582453f912d74b3eb5023cec6d1f8bbf",
+      "bytes": 1256
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/pot-resting-plan-a.json",
+      "sha256": "e94f389a9d1fb81e58180d93ff97d620d7fd2b82d16be7d550b620e4017fa21e",
+      "bytes": 366
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/pot-repair-scope-b.json",
+      "sha256": "ea3bbb67d248d0d2a4e365af7634104b2b54a5798ed770242626f65c6d9f98af",
+      "bytes": 2588
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/python-checks-c.txt",
+      "sha256": "cb0fe973e82678adbd3ad490811b26a1573bf6533c6dac073c939f0172e3fb77",
+      "bytes": 841
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/launcher-checks-a.txt",
+      "sha256": "80144f3bf12d071a1497821467ab02765712cb11da3f547a5e2b5cf79f938e9a",
+      "bytes": 102
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/keyboard-b/results.json",
+      "sha256": "54c515c9c2059944d034d70315be73366ca6073f3b599e05327150c7b2792752",
+      "bytes": 504563
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/vista-contracts-d/results.json",
+      "sha256": "4ebebd6fdf869275f33c79e951964f046674d218cf56c74b0ee56f267f4dea1f",
+      "bytes": 4720
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/browser-checks-c.json",
+      "sha256": "4292c086ac71aa0a5811c2ced2971073c08d3b302dbe6025cd51f33905c9690b",
+      "bytes": 2825
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/browser-checks-c.js",
+      "sha256": "11ecc89dfb60d676c90c98b3a40ee21546c009010b7612f7f9f0f9bacfc8de1d",
+      "bytes": 2131
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/browser-review-desktop-c.png",
+      "sha256": "49719f40c2a03f3f6e4fca6f2d5b5b2b02959984b4113c88e1e7dcd2b9636e80",
+      "bytes": 430621
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/browser-review-mobile-c.png",
+      "sha256": "9de9fceaee714eb31250a8a0256f55188273c38f2b2cb37f5b90116ee41890ec",
+      "bytes": 138529
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/final-capture-performance-a.json",
+      "sha256": "8e765f044f6eeb0667380c9f046ab9b7bd67670c0a550c9d0a1ecd48a22fdcdf",
+      "bytes": 3513
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/viewer-install-a/receipt.json",
+      "sha256": "507c3c1ba93af75c2e2f3c82f183155aacee1c80aa766cfbc748443bed615f63",
+      "bytes": 253
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-review-profile-n.json",
+      "sha256": "37172e2f506ea9d2fd819d55eb2dd4643e4f20daf052a779fb13f90938456f7e",
+      "bytes": 596
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/verification.json",
+      "sha256": "b9ed7f0c19c347effc5726e6e05b71e3360accc2401641c8a71e06c45e0633cb",
+      "bytes": 2327
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/process-evidence.json",
+      "sha256": "3260c829dc9331f111157d292c4b102c8f59b1540002a932684baf2fe95856e5",
+      "bytes": 363
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/validation/validation-stop-a.json",
+      "sha256": "8a0a7b4368359de606218906e69f50be8da0232b54bffc753312da1156e2709a",
+      "bytes": 389
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/build-n.log",
+      "sha256": "74ecb629dd89f61822399295fc94c65c0842c547e1199df86ae679c8d8e6dba4",
+      "bytes": 14223
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/ue-crash-network-note-a.json",
+      "sha256": "e743120ccf019737ee9eb4c88f393ec0d476f2f3aed8b5e01760f61569a8bc17",
+      "bytes": 516
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/reload-c.json",
+      "sha256": "236ab6474d2fac8f1b0b11fc9bcea79dbf9ba971f3825a051e6760630d4941c5",
+      "bytes": 1352
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/home-start-a.log",
+      "sha256": "5d0f3982d7c6f96f82491ec4fa757548654b91196d09a1c54a79d94a23bc8854",
+      "bytes": 199
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/live-runtime-a.json",
+      "sha256": "5110e57d95bbe9b30ffbc2042c0ef4d452059ce220404ee8ad17ad7b7df8010a",
+      "bytes": 9590
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/native-review-a/results.json",
+      "sha256": "b82dca6364a033ae4410f1c9b99c5a814bc6cee5b1940a8d3e9d55b4a6766a85",
+      "bytes": 32947
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/native-review-a/captures.jsonl",
+      "sha256": "f2465df5689de6cf7ef788a0d21d3bb9150d0ebf98acb3d7c20b1a9d68f35483",
+      "bytes": 4383
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/native-review-a/living-room-first-person.png",
+      "sha256": "acbf384fa557f5595bffbc1c122cb3e7efc9f191d39273f7c30adf0e2a04db85",
+      "bytes": 2936820
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/native-review-a/character-third-person.png",
+      "sha256": "d775ccb8810d7ab1592064fbc68f4cba697bec97982952ff07c0edfac2d525d4",
+      "bytes": 3146088
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-photoreal-design-r1/home-fidelity-r3-20260907a/sunshine-entry-final/idle-performance-a.json",
+      "sha256": "46a40629283e83c130a933074acb381ccb92f8bde31e8bea965521e4921934dc",
+      "bytes": 9067
+    }
+  ]
+}
