@@ -19,9 +19,10 @@ def main():
     p.add_argument("--apply",action="store_true")
     p.add_argument("--name",default="VISTA Photoreal Kitchen")
     p.add_argument("--replace-existing",action="store_true")
+    p.add_argument("--launcher",type=Path,help="Optional revision-aware review launcher")
     args=p.parse_args()
     original=args.apps.read_bytes();doc=json.loads(original)
-    launcher=Path(__file__).with_name("review_session.py").resolve()
+    launcher=(args.launcher or Path(__file__).with_name("review_session.py")).resolve(strict=True)
     uv=shutil.which("uv")
     if not uv or not args.profile.is_file() or not args.image.is_file():raise SystemExit("Missing launch input")
     matches=[i for i,app in enumerate(doc["apps"]) if app.get("name")==args.name]
