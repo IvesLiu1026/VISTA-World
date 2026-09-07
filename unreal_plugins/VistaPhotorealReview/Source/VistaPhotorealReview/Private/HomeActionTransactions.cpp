@@ -19,7 +19,8 @@ FVector AHomeActionsCharacter::FingerOffset(bool bLeft) const
     const int32 Hand=BoneIndex.FindChecked(bLeft?TEXT("hand_l"):TEXT("hand_r"));
     const int32 Tip=BoneIndex.FindChecked(bLeft?TEXT("index_03_l"):TEXT("index_03_r"));
     const int32 Mid=BoneIndex.FindChecked(bLeft?TEXT("index_02_l"):TEXT("index_02_r"));
-    const FVector End=G[Tip].GetLocation()+(G[Tip].GetLocation()-G[Mid].GetLocation()).GetSafeNormal()*2.1f;
+    const FVector* Fine=bFineContacts?FineTipOffsets.Find(bLeft?TEXT("index_03_l"):TEXT("index_03_r")):nullptr;
+    const FVector End=Fine?G[Tip].TransformPosition(*Fine):G[Tip].GetLocation()+(G[Tip].GetLocation()-G[Mid].GetLocation()).GetSafeNormal()*2.1f;
     return G[Hand].InverseTransformPosition(End);
 }
 
@@ -45,6 +46,8 @@ FTransform AHomeActionsCharacter::WristAt(const FVector& Point,bool bLeft,bool b
 FTransform AHomeActionsCharacter::DesiredGrip() const
 {
     const auto* E=Resolve(TargetId.IsEmpty()?HeldId:TargetId);
+    if (E && bFineContacts && FineSurfaces.Contains(E->Id) && FineSurfaces.FindChecked(E->Id).bHorizontalPinch)
+        return FinePinchWrist(*E);
     if (!E || E->ShortId==TEXT("coffee_cup")) return Super::DesiredGrip();
     FVector Point=E->Actor->GetActorLocation()+FVector(0,0,Number(E->Spec,TEXT("grip_height"),ItemHeight*.6f));
     if (E->Spec->HasField(TEXT("grip_offset_cm"))) Point=E->Actor->GetActorTransform().TransformPosition(Vector(E->Spec,TEXT("grip_offset_cm")));
@@ -55,6 +58,11 @@ FTransform AHomeActionsCharacter::DesiredGrip() const
         Side=E->Actor->GetActorForwardVector();
         if (FVector::DotProduct(Side,GetActorRightVector())<0) Side=-Side;
         Point+=Side*(Number(E->Spec,TEXT("grip_width"),28)*.5f);
+        if (bFineContacts && FineSurfaces.Contains(E->Id) && FineSurfaces.FindChecked(E->Id).GripPoints.Num()==2)
+        {
+            const int32 Index=FVector::DotProduct(Side,E->Actor->GetActorForwardVector())>0?1:0;
+            Point=E->Actor->GetActorTransform().TransformPosition(FineSurfaces.FindChecked(E->Id).GripPoints[Index]);
+        }
     }
     return WristAt(Point,false,false,Bool(E->Spec,TEXT("two_hands"))?E->Actor->GetActorRightVector():
         E->Actor->GetActorQuat().RotateVector(Vector(E->Spec,TEXT("grip_axis"),FVector::UpVector)),Bool(E->Spec,TEXT("top_grip")));
@@ -115,13 +123,19 @@ void AHomeActionsCharacter::SelectPickup(FHomeEntity& E)
     Cup=E.Actor.Get();CupMesh=E.Mesh.Get();ItemRadius=Number(E.Spec,TEXT("radius"),3.7);
     ItemHeight=Number(E.Spec,TEXT("height"),9.6);InitialCupTransform=E.Baseline;
     Poses=HandProfiles.Contains(String(E.Spec,TEXT("grip_profile")))?HandProfiles[String(E.Spec,TEXT("grip_profile"))]:DefaultPoses;
+    if (bFineContacts && FineSurfaces.Contains(E.Id) && FineSurfaces.FindChecked(E.Id).bUseWideGrip) Poses=DefaultPoses;
     if (Bool(E.Spec,TEXT("two_hands")))
     {
         FVector Side=E.Actor->GetActorForwardVector();if (FVector::DotProduct(Side,GetActorRightVector())<0) Side=-Side;
         const FVector Center=E.Spec->HasField(TEXT("grip_offset_cm"))?
             E.Actor->GetActorTransform().TransformPosition(Vector(E.Spec,TEXT("grip_offset_cm"))):
             E.Actor->GetActorLocation()+FVector(0,0,Number(E.Spec,TEXT("grip_height")));
-        const FVector P=Center-Side*(Number(E.Spec,TEXT("grip_width"))*.5f);
+        FVector P=Center-Side*(Number(E.Spec,TEXT("grip_width"))*.5f);
+        if (bFineContacts && FineSurfaces.Contains(E.Id) && FineSurfaces.FindChecked(E.Id).GripPoints.Num()==2)
+        {
+            const int32 Index=FVector::DotProduct(Side,E.Actor->GetActorForwardVector())>0?0:1;
+            P=E.Actor->GetActorTransform().TransformPosition(FineSurfaces.FindChecked(E.Id).GripPoints[Index]);
+        }
         LeftRelativeToItem=WristAt(P,true,false,E.Actor->GetActorRightVector()).GetRelativeTransform(E.Actor->GetActorTransform());
     }
 }
@@ -344,7 +358,7 @@ bool AHomeActionsCharacter::BeginAction(const FString& Command,const FString& Re
     {
         GetCharacterMovement()->StopMovementImmediately();bSceneActionBusy=true;
         ActionHandStart=GetMesh()->GetSocketTransform(TEXT("hand_r"));
-        if (E)
+        if (E && HeldId.IsEmpty())
         {
             Poses=HandProfiles.Contains(String(E->Spec,TEXT("grip_profile")))?HandProfiles[String(E->Spec,TEXT("grip_profile"))]:DefaultPoses;
             ActionHandEnd=WristAt(ControlPoint(*E),false,E->Kind==TEXT("appliance") && !E->Spec->HasField(TEXT("axis")),
@@ -395,6 +409,7 @@ void AHomeActionsCharacter::FinishAction(bool Success,const FString& Code)
             Transaction->SetArrayField(TEXT("placement_goal_cm"),Values(PlaceLocation));
         }
     Transaction->SetNumberField(TEXT("right_wrist_error_before_recovery_cm"),RightContactError);
+    if (FineContactSnapshot) Transaction->SetObjectField(TEXT("fine_contact_before_recovery"),Copy(FineContactSnapshot));
     Transaction->SetNumberField(TEXT("left_wrist_error_before_recovery_cm"),LeftContactError);
     bool Restored=true;
     if (!Success) Restored=RestoreBefore();
@@ -433,6 +448,7 @@ void AHomeActionsCharacter::SetPhase(EEmbodiedPhase NewPhase)
     if (!bSceneReady || ActiveId.IsEmpty() || !bPhysicalAction) return;
     if (NewPhase==EEmbodiedPhase::Held && ActionId==TEXT("pick_up"))
     {
+        if (FineContactSnapshot) Transaction->SetObjectField(TEXT("fine_contact_at_commit"),Copy(FineContactSnapshot));
         ContactMaximum=FMath::Max(HandErrorCm,LeftContactError);
         if (Bool(Resolve(TargetId)->Spec,TEXT("two_hands")) && LeftContactError>1.6f)
         {FinishAction(false,TEXT("LEFT_HAND_CONTACT_REQUIRED"));return;}

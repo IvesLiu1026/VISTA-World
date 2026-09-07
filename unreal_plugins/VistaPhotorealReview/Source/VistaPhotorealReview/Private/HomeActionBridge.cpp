@@ -27,6 +27,7 @@ TSharedRef<FJsonObject> AHomeActionsCharacter::MakeState() const
     O->SetArrayField(TEXT("player_cm"),Values(GetActorLocation()));O->SetArrayField(TEXT("velocity_cm_s"),Values(GetVelocity()));
     O->SetStringField(TEXT("player_room"),RoomAt(GetActorLocation()));
     O->SetStringField(TEXT("contact_measurement"),TEXT("post_animation_wrist"));
+    if (FineContactSnapshot) O->SetObjectField(TEXT("fine_contact"),FineContactSnapshot);
     if (ReachAlpha>.95f) O->SetNumberField(TEXT("right_contact_error_cm"),RightContactError);
     else O->SetField(TEXT("right_contact_error_cm"),MakeShared<FJsonValueNull>());
     if (LeftReachAlpha>.95f) O->SetNumberField(TEXT("left_contact_error_cm"),LeftContactError);

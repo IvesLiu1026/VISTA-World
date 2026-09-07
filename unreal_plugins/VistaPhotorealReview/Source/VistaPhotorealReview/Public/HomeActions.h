@@ -34,6 +34,30 @@ struct FHomeBefore
     FName AttachSocket;
 };
 
+struct FHomeContactTriangle
+{
+    FVector A, B, C, Normal;
+    FBox Bounds;
+};
+struct FHomeContactNode
+{
+    FBox Bounds;
+    int32 Start=0, Count=0, Left=INDEX_NONE, Right=INDEX_NONE;
+};
+struct FHomeFineSurface
+{
+    TArray<FHomeContactTriangle> Triangles;
+    TArray<FHomeContactNode> Nodes;
+    TArray<FString> Fingers;
+    FString Mode;
+    bool bHorizontalPinch=false,bUseWideGrip=false;
+    bool bSupportBothHands=false;
+    TArray<FVector> GripPoints;
+    FVector GripCenter=FVector::ZeroVector;
+    float PinchRollDegrees=0.f;
+    float MaximumError=.45f, Clearance=.12f, MaximumJointAngle=45.f;
+};
+
 UCLASS()
 class VISTAPHOTOREALREVIEW_API AHomeActionsCharacter : public AEmbodiedReviewCharacter
 {
@@ -68,7 +92,11 @@ protected:
     virtual bool FindPlacement(FVector& Location,FQuat& Rotation) const override;
     virtual FVector PickupAimPoint() const override;
     virtual void RefreshScenePoseGoals() override;
+    virtual void AdjustScenePoseGoals() override;
+    virtual FTransform AdjustedSceneHandGoal(FTransform Goal,bool bLeft=false) const override;
     virtual void OnPoseFinalized() override;
+    virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) override;
+    virtual bool IsSceneContactReady(FString& Reason) const override;
 private:
     TSharedPtr<FJsonObject> Contract;
     TMap<FString,FHomeEntity> Entities;
@@ -82,6 +110,19 @@ private:
     TSet<FString> Interactions;
     TSet<FString> ProcessedRequests;
     TSharedPtr<FJsonObject> Transaction;
+    TMap<FName,FVector> FineTipOffsets;
+    TMap<FName,FVector> FineFlexionAxes,FineSpreadAxes;
+    TMap<FString,FHomeFineSurface> FineSurfaces;
+    TSharedPtr<FJsonObject> FineContactSnapshot;
+    FString FineWristEntity;
+    FVector FineWristCorrection[2] = {FVector::ZeroVector,FVector::ZeroVector};
+    bool bFineContacts=false;
+    bool LoadFineContacts();
+    const FHomeEntity* FineContactEntity() const;
+    bool FineLeftRequired(const FHomeEntity& Entity) const;
+    FTransform FinePinchWrist(const FHomeEntity& Entity) const;
+    void MeasureFineContacts();
+    bool ClosestFineSurface(const FHomeFineSurface& Surface,const FVector& Point,FVector& Closest,FVector& Normal) const;
     FString Revision, BridgeDir, SessionId;
     FString ActiveId, ActionId, TargetId, SecondaryId, HeldId, SeatId;
     FString StandingOn;
@@ -93,6 +134,8 @@ private:
     float RightContactError=0.f, LeftContactError=0.f;
     float ContactMaximum=0.f;
     int32 ActionStage=0;
+    float FineSupportLossTime=0.f;
+    int32 FineSupportSamples=0;
     bool bSceneReady=false, bPhysicalAction=false, bCommitted=false, bSuppressReceipt=false;
     bool bCleanObservation=false, bControlHeld=false, bJog=false, bSprint=false;
     FTransform ActionHandStart, ActionHandEnd, LeftRelativeToItem, ControlHandRelative;

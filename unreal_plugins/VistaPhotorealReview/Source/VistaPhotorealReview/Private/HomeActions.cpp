@@ -163,6 +163,7 @@ void AHomeActionsCharacter::BeginPlay()
     auto Session=MakeShared<FJsonObject>();Session->SetStringField(TEXT("session_id"),SessionId);
     Session->SetStringField(TEXT("revision"),Revision);Session->SetStringField(TEXT("schema"),TEXT("vista.home-session/v1"));
     FFileHelper::SaveStringToFile(Encode(Session),*(BridgeDir/TEXT("session.json")));
+    if (!LoadFineContacts()) {UE_LOG(LogTemp,Error,TEXT("HOME_FINE_CONTACT_CONFIG_INVALID"));return;}
     bSceneReady=true;
     UE_LOG(LogTemp,Display,TEXT("HOME_ACTIONS_READY entities=%d bridge=%s revision=%s"),Entities.Num(),*BridgeDir,*Revision);
     PublishState();
@@ -337,6 +338,7 @@ void AHomeActionsCharacter::OnPoseFinalized()
 {
     if (bSceneReady)
     {
+        MeasureFineContacts();
         RightContactError=FVector::Distance(GetMesh()->GetSocketLocation(TEXT("hand_r")),LastHandGoal.GetLocation());
         LeftContactError=LeftReachAlpha>.95f?FVector::Distance(GetMesh()->GetSocketLocation(TEXT("hand_l")),LeftHandGoal.GetLocation()):0.f;
         if (!ActiveId.IsEmpty() && ReachAlpha>.95f && ActionStage==1)

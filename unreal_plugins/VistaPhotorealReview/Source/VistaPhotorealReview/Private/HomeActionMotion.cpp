@@ -24,6 +24,8 @@ void AHomeActionsCharacter::ApplyAperture(FHomeEntity& E,float Value)
 
 bool AHomeActionsCharacter::CommitAction(FString& Code)
 {
+    if (!IsSceneContactReady(Code)) return false;
+    if (FineContactSnapshot) Transaction->SetObjectField(TEXT("fine_contact_at_commit"),Copy(FineContactSnapshot));
     auto* E=Resolve(TargetId);auto* S=Resolve(SecondaryId);
     const FString A=ActionId;
     if (A==TEXT("articulation.open") || A==TEXT("close")) E->State->SetBoolField(TEXT("open"),A!=TEXT("close"));
@@ -197,9 +199,16 @@ void AHomeActionsCharacter::UpdateSemanticAction(float Dt)
         }
         if (Remove && ActionStage==1)
         {
+            LastHandGoal=DesiredGrip();ActionHandEnd=LastHandGoal;
             FingerAlpha=Ease(ActionTime/.4f);
             if (ActionTime>.4f)
             {
+                // The finalized pose is from the previous animation update.
+                // Wait for actual closure rather than committing on the tick
+                // that merely assigns FingerAlpha=1.
+                FString ContactCode;
+                if (!IsSceneContactReady(ContactCode))
+                {if (ActionTime>1.9f) FinishAction(false,ContactCode);return;}
                 FString Code;if (!CommitAction(Code)) {FinishAction(false,Code);return;}
                 ActionStage=2;ActionTime=0;ItemBefore=E->Actor->GetActorTransform();
             }
@@ -245,7 +254,7 @@ void AHomeActionsCharacter::UpdateSemanticAction(float Dt)
         }
         else if (Remove && ActionTime>2.3f && Error<1.5f && FVector::Distance(E->Actor->GetActorLocation(),Goal.GetLocation())<2.f) FinishAction(true,TEXT("REMOVE_COMPLETE"));
         else if (Pour && !bCommitted && ActionTime>2.6f && Error<1.5f && FVector::Distance(E->Actor->GetActorLocation(),Goal.GetLocation())<2.f)
-        {FString Code;CommitAction(Code);HoldStart=E->Actor->GetActorTransform();PhaseTime=0;FinishAction(true,Spill?TEXT("SPILL_COMPLETE"):TEXT("POUR_COMPLETE"));}
+        {FString Code;if (!CommitAction(Code)) {FinishAction(false,Code);return;}HoldStart=E->Actor->GetActorTransform();PhaseTime=0;FinishAction(true,Spill?TEXT("SPILL_COMPLETE"):TEXT("POUR_COMPLETE"));}
         else if (ActionTime>4.f) FinishAction(false,TEXT("STORAGE_OR_POUR_BLOCKED"));
         return;
     }
@@ -255,16 +264,31 @@ void AHomeActionsCharacter::UpdateSemanticAction(float Dt)
         if (ActionTime>.85f && RightContactError>=1.2f) ApproachHand();
         if (ActionTime>.8f && RightContactError<1.2f)
         {
-            ActionStage=1;ActionTime=0;ContactMaximum=RightContactError;
+            ActionStage=bFineContacts && E && FineSurfaces.Contains(E->Id)?3:1;ActionTime=0;ContactMaximum=RightContactError;
             ActionBodyStart=GetActorTransform();
             if (E && E->Actor.IsValid()) ControlHandRelative=ActionHandEnd.GetRelativeTransform(E->Actor->GetActorTransform());
         }
         else if (ActionTime>2.5f) FinishAction(false,TEXT("HAND_CONTACT_UNREACHABLE"));
         return;
     }
+    if (ActionStage==3)
+    {
+        // Establish finger contact while the control is still stationary.
+        // The subsequent motion starts only after the rendered pose passes.
+        LastHandGoal=ActionHandEnd;ReachAlpha=1;
+        FingerAlpha=E && FineSurfaces.FindChecked(E->Id).Mode==TEXT("point")?0.f:Ease(ActionTime/.35f);
+        FString Code;
+        if (ActionTime>.45f && IsSceneContactReady(Code)) {ActionStage=1;ActionTime=0;ActionBodyStart=GetActorTransform();}
+        else if (ActionTime>1.9f) FinishAction(false,TEXT("FINGERTIP_CONTACT_INCOMPLETE"));
+        return;
+    }
     if (ActionStage==1)
     {
-        ReachAlpha=1;FingerAlpha=E && E->Kind==TEXT("appliance") && !E->Spec->HasField(TEXT("axis"))?0.f:Ease(ActionTime/.25f);
+        ReachAlpha=1;
+        // Fine-contact stage 3 has already closed the hand. Keep that grip
+        // through actuation instead of reopening when the motion clock resets.
+        FingerAlpha=E && E->Kind==TEXT("appliance") && !E->Spec->HasField(TEXT("axis"))?0.f:
+            (bFineContacts && E && FineSurfaces.Contains(E->Id)?1.f:Ease(ActionTime/.25f));
         if (A==TEXT("articulation.open") || A==TEXT("close"))
         {
             const float Next=FMath::Lerp(ActionStartAperture,ActionEndAperture,Ease(ActionTime/1.5f));

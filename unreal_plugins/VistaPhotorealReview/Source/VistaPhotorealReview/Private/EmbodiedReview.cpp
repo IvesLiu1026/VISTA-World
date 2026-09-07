@@ -337,7 +337,7 @@ void AEmbodiedReviewCharacter::UpdateInteraction(float Dt)
         if (PhaseTime>=.55f) SetPhase(EEmbodiedPhase::Idle);
         return;
     }
-    LastHandGoal=HandRelativeToCup*CupMesh->GetComponentTransform();
+    LastHandGoal=AdjustedSceneHandGoal(HandRelativeToCup*CupMesh->GetComponentTransform());
     MeasureContact();
     if (Phase==EEmbodiedPhase::Reaching || Phase==EEmbodiedPhase::Closing)
     {
@@ -355,6 +355,9 @@ void AEmbodiedReviewCharacter::UpdateInteraction(float Dt)
             FingerAlpha=Ease(PhaseTime/.38f);
             if (PhaseTime>=.38f && HandErrorCm<1.f && HandAngleDeg<10.f)
             {
+                FString ContactReason;
+                if (!IsSceneContactReady(ContactReason))
+                { if (PhaseTime>1.8f) CancelReach(ContactReason); return; }
                 if (!CupMesh->IsSimulatingPhysics()) CupMesh->SetSimulatePhysics(true);
                 GripHandle->GrabComponentAtLocationWithRotation(CupMesh,NAME_None,CupMesh->GetComponentLocation(),CupMesh->GetComponentRotation());
                 if (!GripHandle->GrabbedComponent) {CancelReach(TEXT("Could not establish grip"));return;}

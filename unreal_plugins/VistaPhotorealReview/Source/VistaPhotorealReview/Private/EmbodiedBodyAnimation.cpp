@@ -82,6 +82,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     if (ReachAlpha>0.f && Phase!=EEmbodiedPhase::Retracting && Phase!=EEmbodiedPhase::Idle)
         LastHandGoal=HandRelativeToCup*CupMesh->GetComponentTransform();
     RefreshScenePoseGoals();
+    AdjustScenePoseGoals();
     if (bReachDetour && Phase==EEmbodiedPhase::Reaching)
     {
         const FVector End=LastHandGoal.GetLocation();
@@ -222,4 +223,5 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         }
         Local[I].NormalizeRotation();
     }
+    RefineSceneBodyPose(Local);
 }

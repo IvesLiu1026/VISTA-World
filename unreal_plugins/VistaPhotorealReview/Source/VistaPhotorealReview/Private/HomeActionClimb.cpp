@@ -19,6 +19,7 @@ void AHomeActionsCharacter::UpdateClimb(float Dt)
         FVector(284,-279.535,52.3)+Offset,FVector(284,-286.945,78.3)+Offset,FVector(284,-297,106.3)+Offset};
     if (ActionStage==0)
     {
+        FineSupportLossTime=0;FineSupportSamples=0;
         for (int32 Side=0;Side<2;++Side)
             ClimbFeetStart[Side]=bSceneFeetOverride?SceneFootWorld[Side]:GetMesh()->GetSocketLocation(Side==0?TEXT("foot_l"):TEXT("foot_r"));
         bSceneFeetOverride=true;GetCharacterMovement()->SetMovementMode(MOVE_Flying);
@@ -74,6 +75,17 @@ void AHomeActionsCharacter::UpdateClimb(float Dt)
     ActionHandEnd=WristAt(Rail+FVector(22,0,0),false,false,FVector(0,-.28f,.96f));LastHandGoal=ActionHandEnd;
     LeftHandGoal=WristAt(Rail-FVector(22,0,0),true,false,FVector(0,-.28f,.96f));
     ReachAlpha=LeftReachAlpha=HandBlend;FingerAlpha=LeftFingerAlpha=HandBlend;
+    if (bFineContacts && HandBlend>.98f && FineContactSnapshot && Bool(FineContactSnapshot,TEXT("active")))
+    {
+        FString Code;
+        if (IsSceneContactReady(Code))
+        {
+            FineSupportLossTime=0;++FineSupportSamples;
+            Transaction->SetObjectField(TEXT("fine_rail_contact"),Copy(FineContactSnapshot));
+        }
+        else FineSupportLossTime+=Dt;
+        if (FineSupportLossTime>.6f) {FinishAction(false,TEXT("RAIL_FINGER_CONTACT_LOST"));return;}
+    }
     if (T>.98f)
     {
         auto Supported=Transaction->GetArrayField(TEXT("supported_treads_cm"));
@@ -81,6 +93,8 @@ void AHomeActionsCharacter::UpdateClimb(float Dt)
     }
     if (ActionTime>=6.4f)
     {
+        Transaction->SetNumberField(TEXT("fine_rail_contact_samples"),FineSupportSamples);
+        if (bFineContacts && FineSupportSamples==0) {FinishAction(false,TEXT("RAIL_FINGER_CONTACT_UNVERIFIED"));return;}
         const float FootError=FMath::Max(FVector::Distance(GetMesh()->GetSocketLocation(TEXT("foot_l")),SceneFootWorld[0]),
             FVector::Distance(GetMesh()->GetSocketLocation(TEXT("foot_r")),SceneFootWorld[1]));
         Transaction->SetNumberField(TEXT("terminal_foot_error_cm"),FootError);

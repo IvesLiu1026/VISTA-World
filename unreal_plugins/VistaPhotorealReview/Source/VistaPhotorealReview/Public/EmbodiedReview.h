@@ -154,6 +154,8 @@ protected:
     float ItemRadius = 3.7f;
     float ItemHeight = 9.6f;
     virtual void RefreshScenePoseGoals() {}
+    virtual void AdjustScenePoseGoals() {}
+    virtual FTransform AdjustedSceneHandGoal(FTransform Goal,bool bLeft=false) const { return Goal; }
     FQuat HoldRelativeRotation = FQuat::Identity;
     FEmbodiedFoot Feet[2];
     TArray<FTransform> ReferenceGlobal;
@@ -176,6 +178,8 @@ protected:
     virtual FTransform CarryTarget() const;
     void MeasureContact();
     virtual void OnPoseFinalized();
+    virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) {}
+    virtual bool IsSceneContactReady(FString& Reason) const { return true; }
 };
 
 UCLASS()
