@@ -85,6 +85,8 @@ def main():
         label, path = spec.split('=', 1)
         data = json.loads(Path(path).read_text())
         rows = data if isinstance(data, list) else data.get('cases', data.get('checks', []))
+        if isinstance(data, dict) and data.get('schema') == 'vista.home-resting-prop-check/v1':
+            rows = [data]
         if not rows or any(not (row.get('status') in {'passed', 'exported'} or row.get('passed') is True) for row in rows):
             raise ValueError('Report is incomplete or includes failed checks: ' + label)
         sessions = set()

@@ -6,5 +6,6 @@ public class VistaPhotorealReview : ModuleRules
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "InputCore", "Json", "JsonUtilities", "PhysicsCore" });
+        PrivateDependencyModuleNames.Add("RenderCore");
     }
 }

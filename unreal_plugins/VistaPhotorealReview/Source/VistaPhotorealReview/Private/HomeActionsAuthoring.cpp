@@ -2,13 +2,24 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "PhysicsEngine/BodySetup.h"
+#include "StaticMeshResources.h"
 
 bool UHomeActionsAuthoring::ConfigurePickup(UStaticMesh* Mesh,const FString& Kind)
 {
     if (!Mesh || !Mesh->GetBodySetup()) return false;
     UBodySetup* Body=Mesh->GetBodySetup();Body->AggGeom.EmptyElements();Body->CollisionTraceFlag=CTF_UseSimpleAndComplex;
     const FBoxSphereBounds B=Mesh->GetBounds();
-    if (Kind==TEXT("pot") || Kind==TEXT("jug"))
+    if (Kind==TEXT("support"))
+    {
+        const auto* Data=Mesh->GetRenderData();
+        if (!Data || Data->LODResources.IsEmpty()) return false;
+        const auto& Positions=Data->LODResources[0].VertexBuffers.PositionVertexBuffer;
+        if (Positions.GetNumVertices()<4) return false;
+        FKConvexElem Hull;
+        for (uint32 I=0;I<Positions.GetNumVertices();++I) Hull.VertexData.Add(FVector(Positions.VertexPosition(I)));
+        Hull.UpdateElemBox();Body->AggGeom.ConvexElems.Add(Hull);
+    }
+    else if (Kind==TEXT("pot") || Kind==TEXT("jug"))
     {
         const float R=Kind==TEXT("pot")?12.f:8.f;
         const float H=Kind==TEXT("pot")?14.8f:25.3f;
@@ -22,8 +33,20 @@ bool UHomeActionsAuthoring::ConfigurePickup(UStaticMesh* Mesh,const FString& Kin
             }
             Wall.UpdateElemBox();Body->AggGeom.ConvexElems.Add(Wall);
         }
-        FKBoxElem Base;Base.Center=FVector(0,0,.45);Base.X=R*1.42f;Base.Y=R*1.42f;Base.Z=.9;
-        Body->AggGeom.BoxElems.Add(Base);
+        if (Kind==TEXT("pot"))
+        {
+            // Match the 23 cm encapsulated base. The former inscribed square
+            // omitted physical support near its rim on narrow burner grates.
+            FKConvexElem Base;
+            for (int32 I=0;I<32;++I) for (float Z:{0.f,.9f})
+            {const float A=I*2*PI/32;Base.VertexData.Add(FVector(11.5f*FMath::Cos(A),11.5f*FMath::Sin(A),Z));}
+            Base.UpdateElemBox();Body->AggGeom.ConvexElems.Add(Base);
+        }
+        else
+        {
+            FKBoxElem Base;Base.Center=FVector(0,0,.45);Base.X=R*1.42f;Base.Y=R*1.42f;Base.Z=.9;
+            Body->AggGeom.BoxElems.Add(Base);
+        }
         if (Kind==TEXT("pot")) for (float Side:{-1.f,1.f})
         {FKBoxElem Handle;Handle.Center=FVector(Side*14.3f,0,11.8f);Handle.X=5.8;Handle.Y=7.8;Handle.Z=1.4;Body->AggGeom.BoxElems.Add(Handle);}
     }
@@ -33,6 +56,9 @@ bool UHomeActionsAuthoring::ConfigurePickup(UStaticMesh* Mesh,const FString& Kin
         Box.Y=FMath::Max(.35f,float(B.BoxExtent.Y*1.95));Box.Z=FMath::Max(.4f,float(B.BoxExtent.Z*1.96));
         Body->AggGeom.BoxElems.Add(Box);
     }
+#if WITH_EDITOR
+    Mesh->SetCustomizedCollision(true);
+#endif
     Body->InvalidatePhysicsData();Body->CreatePhysicsMeshes();Mesh->MarkPackageDirty();return true;
 }
 
