@@ -1,0 +1,83 @@
+{
+  "schema": "vista.home-first-person-r5.demo/v1",
+  "created_at": "2026-09-08T08:06:26.164189+00:00",
+  "status": "live_user_selected",
+  "app": "VISTA Home R5",
+  "app_id": "1722879117",
+  "original_app": "VISTA Photoreal Home",
+  "original_revision": "R3",
+  "source_branch": "codex/vista-home-first-person-r5",
+  "implementation_commit": "eac044042ee4a1a65d9ba3be275ea522c8782ddb",
+  "profile": {
+    "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/sunshine-profile.json",
+    "bytes": 734,
+    "sha256": "e80c5dd9eee08dc1fbf0bafb5ee9782668154af8138a89db53318cfe71090174"
+  },
+  "project": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/project-c/PhotorealHome.uproject",
+  "plugin_sha256": "3ad3e79bd81065135655a9be370802da1fe85e669c92de3e4c392f845836904d",
+  "isolation": {
+    "separate_projects": true,
+    "separate_profiles": true,
+    "separate_user_and_bridge_directories": true,
+    "separate_writable_ddc": true,
+    "home_service_slot": "one selected revision on :119",
+    "original_app_definitions_preserved": 6,
+    "r3_original_and_backup_files_preserved": 2318
+  },
+  "validation": {
+    "launcher_tests": 14,
+    "launcher_tests_status": "passed",
+    "live_client_ownership_guard": "passed",
+    "sunshine_selected_r5": "verified",
+    "native_gpu_viewport": "rendering",
+    "observed_native_cup_pickup": "succeeded",
+    "observed_native_cup_placement": "succeeded",
+    "gpu_automated_smoke": "interrupted_by_client_input; not passed",
+    "full_gpu_body_view_acceptance": "pending",
+    "full_action_suite": "pending",
+    "native_r3_rollback_retest": "pending"
+  },
+  "performance": {
+    "passive_tick_fps_median": 19.103991409748126,
+    "limit": "Three seconds of passive game tick snapshots; not rendered FPS or a full-scene benchmark."
+  },
+  "evidence": [
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/preservation.json",
+      "bytes": 396,
+      "sha256": "0c24131f5dfdea0c3c4e398c6e6636487fcf4bcd9da3faa3d0cb954420a7bac2"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/live-confirmation.json",
+      "bytes": 5016,
+      "sha256": "6a3c5efe6c831ac990c46ea8bab8b685e7b053ebc7029ec3f72ebdcc5f9db15a"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/tests-final.log",
+      "bytes": 3246,
+      "sha256": "1b4b625ae33b8651ff67b250332c03863743c2770fa554c6b6d57b334fc91dbd"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/client-ownership-guard.json",
+      "bytes": 207,
+      "sha256": "2ae3674847bb44dbd424d94c203d56a15315d51b805c313d471385c1394c4579"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/native-a/interrupted.json",
+      "bytes": 402,
+      "sha256": "3a13448c1b0521fd651f68de385059f03ac365d06be016a46f5fc8e0bdadfa47"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/install/sunshine-entry-20260908T075214Z.json",
+      "bytes": 1020,
+      "sha256": "cb103446ca61e42d484a30dbf74caf802d9fa92ad7675ab85fab584e1d5d6d5e"
+    }
+  ],
+  "native_screenshot": {
+    "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/native-live.png",
+    "bytes": 4104407,
+    "sha256": "a91ee2a182971368ebcfa0bcaa2e042ce054fdade86f907bee612301a5bc46d4"
+  },
+  "instructions": "/data/sysx/vista-world/worktrees/vista-home-first-person-r5/docs/design/vista-home-first-person-r5/demo.md",
+  "handoff_policy": "Leave the user in control of R5; no further automatic input, reset or service switch."
+}

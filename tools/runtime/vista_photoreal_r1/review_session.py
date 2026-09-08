@@ -81,7 +81,7 @@ def start(config,state_path):
         if not math.isfinite(exposure):raise ValueError("Exposure must be finite")
         command=[x if not x.startswith("-ExecCmds=") else f"-ExecCmds=t.MaxFPS 30,r.ScreenPercentage 100,r.ExposureOffset {exposure}" for x in command]
         graph=config.get("ddc_graph","InstalledNoZenLocalFallback")
-        if graph not in ("InstalledNoZenLocalFallback","VistaHomeActionsCache"):
+        if graph not in ("InstalledNoZenLocalFallback","VistaHomeActionsCache","VistaHomeFirstPersonR5Cache"):
             raise ValueError("Unknown reviewed DDC graph")
         command=["-ddc="+graph if x.startswith("-ddc=") else x for x in command]
         if config.get("home_actions_bridge"):
