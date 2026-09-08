@@ -1,4 +1,5 @@
 #include "EmbodiedReview.h"
+#include "EmbodiedFirstPersonProof.h"
 
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -540,7 +541,7 @@ void AEmbodiedReviewCharacter::Tick(float Dt)
         const float TurnSpeed=Phase==EEmbodiedPhase::Held?180.f:300.f;
         SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Controller->GetControlRotation().Yaw,Dt*TurnSpeed),0));
     }
-    UpdateFeet(Dt);UpdateInteraction(Dt);
+    UpdateFeet(Dt);UpdateInteraction(Dt);UpdateFirstPersonRest(Dt);
     if (TraceRemaining>0.f)
     {
         TraceRemaining-=Dt;
@@ -554,6 +555,16 @@ void AEmbodiedReviewCharacter::Tick(float Dt)
     const FVector EyeInHead=ReferenceGlobal[HeadIndex].InverseTransformPosition(FVector(0,12.545f,145.045f));
     const FVector EyeWorld=GetMesh()->GetSocketTransform(TEXT("head")).TransformPosition(EyeInHead);
     FVector EyeTarget=GetActorTransform().InverseTransformPosition(EyeWorld);
+    if (!bThirdPerson && Controller)
+    {
+        // A small inspection lean keeps the shirt from occluding the legs.
+        // It fades out for active hands and uses the existing eye collision
+        // sweep; neutral viewing and precise contact retain calibrated eyes.
+        const float Pitch=FRotator::NormalizeAxis(Controller->GetControlRotation().Pitch);
+        const float Inspection=Ease((-Pitch-55.f)/30.f)*(1.f-ReachAlpha)*(1.f-LeftReachAlpha)*
+            (1.f-FMath::Max3(CrouchAlpha,SeatedAlpha,FallAlpha));
+        EyeTarget.X+=8.f*Inspection;
+    }
     EyeTarget.X=FMath::Clamp(EyeTarget.X,10.f,FallAlpha>0.f?160.f:30.f);
     const FVector SmoothedEye=FMath::VInterpTo(ReviewCamera->GetRelativeLocation(),EyeTarget,Dt,6.f);
     FVector EyePosition=GetActorTransform().TransformPosition(SmoothedEye);
@@ -568,6 +579,7 @@ void AEmbodiedReviewCharacter::Tick(float Dt)
         if (PC->PlayerCameraManager)
         { PC->PlayerCameraManager->ViewPitchMin=-89.f;PC->PlayerCameraManager->ViewPitchMax=74.f; }
     }
+    TickEmbodiedFirstPersonProof(this,Dt);
 }
 
 void AEmbodiedReviewCharacter::EmbodiedInspect(int32 View)

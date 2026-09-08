@@ -92,6 +92,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             T<2?FMath::Lerp(ReachViaA,ReachViaB,Smooth(T-1)):FMath::Lerp(ReachViaB,End,Smooth(T-2)));
     }
     Local=Poses->Relaxed;
+    const float RestBlend=FirstPersonRestAlpha*FirstPersonRestAlpha*(3.f-2.f*FirstPersonRestAlpha);
     const auto Index=[this](const TCHAR* Name) { const int32* I=BoneIndex.Find(FName(Name)); return I ? *I : INDEX_NONE; };
     const FTransform MeshWorld=GetMesh()->GetComponentTransform();
     const float Speed=GetVelocity().Size2D();
@@ -108,7 +109,10 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     if (Controller)
     {
         const float Pitch=FRotator::NormalizeAxis(Controller->GetControlRotation().Pitch);
-        Lean+=FMath::Clamp((-Pitch-55.f)/34.f,0.f,1.f)*.32f*(1.f-ReachAlpha);
+        // Looking at one's abdomen is primarily a neck movement. The old
+        // torso bend carried the calibrated eye forwards beyond the body.
+        const float PassiveLookLean=bThirdPerson?.32f:.04f;
+        Lean+=FMath::Clamp((-Pitch-55.f)/34.f,0.f,1.f)*PassiveLookLean*(1.f-ReachAlpha);
     }
     const int32 Pelvis=Index(TEXT("pelvis"));
     TArray<FTransform> Global;Global.SetNum(Local.Num());
@@ -187,6 +191,26 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         const float Swing=FMath::Sin(StepClock*2.f*PI)*(RightHand?-1.f:1.f)*FMath::Min(Speed/125.f,1.f)*6.f;
         Target.Y+=Swing;
         FQuat Rotation=Global[E].GetRotation();
+        if (RestBlend>0.f)
+        {
+            const float Sign=RightHand?-1.f:1.f;
+            const int32 Head=Index(TEXT("head"));
+            const FVector EyeLocal=ReferenceGlobal[Head].InverseTransformPosition(FVector(0,12.545f,145.045f));
+            const FVector Eye=Global[Head].TransformPosition(EyeLocal);
+            // Calibrated to the fitted 45 cm arm chains: bent elbows and
+            // relaxed hands at the lower edge, without detached camera arms.
+            const FVector Ready=Eye+FVector(Sign*22.f,30.f+Swing*.18f,-10.f+.12f*FMath::Sin(Clock*1.8f));
+            const int32 Middle=Index(RightHand?TEXT("middle_01_r"):TEXT("middle_01_l"));
+            const int32 FingerIndex=Index(RightHand?TEXT("index_01_r"):TEXT("index_01_l"));
+            const int32 Pinky=Index(RightHand?TEXT("pinky_01_r"):TEXT("pinky_01_l"));
+            const FVector Long=(Global[Middle].GetLocation()-Global[E].GetLocation()).GetSafeNormal();
+            const FVector Across=Global[FingerIndex].GetLocation()-Global[Pinky].GetLocation();
+            const FQuat From=FRotationMatrix::MakeFromXY(Long,Across).ToQuat();
+            const FQuat To=FRotationMatrix::MakeFromXY(FVector(-Sign*.10f,.965f,-.25f),FVector(-Sign,0,0)).ToQuat();
+            const FQuat ReadyRotation=(To*From.Inverse()*Rotation).GetNormalized();
+            Target=FMath::Lerp(Target,Ready,RestBlend);
+            Rotation=FQuat::Slerp(Rotation,ReadyRotation,RestBlend);
+        }
         if (RightHand && ReachAlpha>0.f)
         {
             const FTransform CS=LastHandGoal.GetRelativeTransform(MeshWorld);
@@ -212,13 +236,15 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         if (Name.EndsWith(TEXT("_r")) && (Name.StartsWith(TEXT("index_")) || Name.StartsWith(TEXT("middle_")) ||
             Name.StartsWith(TEXT("ring_")) || Name.StartsWith(TEXT("pinky_")) || Name.StartsWith(TEXT("thumb_"))))
         {
-            FTransform Open;Open.Blend(Poses->Relaxed[I],Poses->OpenHand[I],ReachAlpha);
+            FTransform Idle;Idle.Blend(Poses->Relaxed[I],Poses->Grip[I],.08f*RestBlend);
+            FTransform Open;Open.Blend(Idle,Poses->OpenHand[I],ReachAlpha);
             Local[I].Blend(Open,Poses->Grip[I],FingerAlpha);
         }
         if (Name.EndsWith(TEXT("_l")) && (Name.StartsWith(TEXT("index_")) || Name.StartsWith(TEXT("middle_")) ||
             Name.StartsWith(TEXT("ring_")) || Name.StartsWith(TEXT("pinky_")) || Name.StartsWith(TEXT("thumb_"))))
         {
-            FTransform Open;Open.Blend(Poses->Relaxed[I],Poses->OpenHand[I],LeftReachAlpha);
+            FTransform Idle;Idle.Blend(Poses->Relaxed[I],Poses->Grip[I],.08f*RestBlend);
+            FTransform Open;Open.Blend(Idle,Poses->OpenHand[I],LeftReachAlpha);
             Local[I].Blend(Open,Poses->Grip[I],LeftFingerAlpha);
         }
         Local[I].NormalizeRotation();

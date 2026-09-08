@@ -14,6 +14,7 @@ class UStaticMeshComponent;
 class AStaticMeshActor;
 class UStaticMesh;
 class USkeletalMesh;
+struct FEmbodiedFirstPersonProof;
 
 UCLASS()
 class VISTAPHOTOREALREVIEW_API UEmbodiedPoseLibrary : public UDataAsset
@@ -68,6 +69,7 @@ UCLASS()
 class VISTAPHOTOREALREVIEW_API AEmbodiedReviewCharacter : public APhotorealReviewCharacter
 {
     GENERATED_BODY()
+    friend struct FEmbodiedFirstPersonProof;
 public:
     AEmbodiedReviewCharacter();
     virtual void BeginPlay() override;
@@ -120,6 +122,8 @@ protected:
     float UnreachableTime = 0.f;
     float StepClock = 0.f;
     float TurnOffset = 0.f;
+    float FirstPersonRestAlpha = 0.f;
+    bool bFirstPersonRestObstructed = false;
     int32 NextFoot = 0;
     int32 CompletedPickups = 0;
     int32 CompletedPlacements = 0;
@@ -168,6 +172,7 @@ protected:
     virtual void SetPhase(EEmbodiedPhase NewPhase);
     void FeedbackMessage(const FString& Text);
     void UpdateFeet(float DeltaSeconds);
+    void UpdateFirstPersonRest(float DeltaSeconds);
     virtual void UpdateInteraction(float DeltaSeconds);
     virtual void ReleaseCup(bool bDropped);
     virtual void CancelReach(const FString& Reason);
