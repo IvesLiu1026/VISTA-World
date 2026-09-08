@@ -1,8 +1,8 @@
 """Launch the isolated R5 profile in the existing revision-aware Home slot.
 
 Original R3 launchers already replace this slot when their project is selected.
-The app entries and project contents remain separate. A manual start requires
-an idle Sunshine server; an explicit Moonlight selection uses stream instead.
+The app entries and project contents remain separate. R5 remains available on
+the desktop when its stream closes; the original R3 entry still replaces it.
 """
 import argparse
 import hashlib
@@ -18,6 +18,7 @@ import xml.etree.ElementTree as ET
 
 GAME = 'vista-photoreal-home-r1.service'
 RELAY = 'vista-photoreal-home-input-r1.service'
+LOW_RES_DESKTOP_ID = '303580669'
 
 
 def validate(config):
@@ -62,7 +63,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--profile', type=Path, required=True)
     parser.add_argument('--action', choices=['plan', 'start', 'stream', 'stop', 'status'], default='start')
+    parser.add_argument('--show-in-desktop', action='store_true', help='Explicitly show R5 in the currently selected Low Res Desktop stream')
     args = parser.parse_args()
+    if args.show_in_desktop and args.action != 'start':
+        raise ValueError('--show-in-desktop is only valid with --action start')
     config = json.loads(args.profile.read_text())
     project, runtime = validate(config)
     if args.action == 'plan':
@@ -80,8 +84,9 @@ def main():
         return
     if args.action == 'start':
         with urllib.request.urlopen(config['serverinfo_url'], timeout=5) as response:
-            status = ET.fromstring(response.read()).findtext('state')
-        if status != 'SUNSHINE_SERVER_FREE':
+            server = ET.fromstring(response.read())
+        desktop_selection = args.show_in_desktop and server.findtext('currentgame') == LOW_RES_DESKTOP_ID
+        if server.findtext('state') != 'SUNSHINE_SERVER_FREE' and not desktop_selection:
             raise RuntimeError('Sunshine is in use; select VISTA Home R5 in Moonlight')
     runtime.mkdir(parents=True, exist_ok=True)
     if selected and selected != str(project):
@@ -100,13 +105,10 @@ def main():
         running = False
     signal.signal(signal.SIGTERM, finish)
     signal.signal(signal.SIGINT, finish)
-    try:
-        while running and running_project(review) == str(project):
-            time.sleep(1)
-    finally:
-        # A stale stream wrapper must never stop a subsequently selected R3.
-        if running_project(review) == str(project):
-            review.stop(state)
+    while running and running_project(review) == str(project):
+        time.sleep(1)
+    # Keep the selected Home visible for Desktop/Low Res Desktop reconnects.
+    # Only explicit --stop or selecting the original R3 replaces this runtime.
 
 
 if __name__ == '__main__':

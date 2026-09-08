@@ -28,12 +28,12 @@ class DemoTests(unittest.TestCase):
                            plugin_sha256=hashlib.sha256(self.plugin.read_bytes()).hexdigest(), serverinfo_url='http://localhost/serverinfo')
         self.profile = self.root / 'profile.json'; self.profile.write_text(json.dumps(self.config))
 
-    def invoke(self, action, review=None, selected=None, server='SUNSHINE_SERVER_FREE'):
+    def invoke(self, action, review=None, selected=None, server='SUNSHINE_SERVER_FREE', app='0', extra=()):
         review = review or Mock()
         with patch.object(demo, 'load_review', return_value=review), \
              patch.object(demo, 'running_project', return_value=selected), \
-             patch.object(demo.urllib.request, 'urlopen', return_value=io.BytesIO(f'<root><state>{server}</state></root>'.encode())), \
-             patch.object(demo.sys, 'argv', ['demo', '--profile', str(self.profile), '--action', action]), redirect_stdout(io.StringIO()):
+             patch.object(demo.urllib.request, 'urlopen', return_value=io.BytesIO(f'<root><state>{server}</state><currentgame>{app}</currentgame></root>'.encode())), \
+             patch.object(demo.sys, 'argv', ['demo', '--profile', str(self.profile), '--action', action, *extra]), redirect_stdout(io.StringIO()):
             demo.main()
         return review
 
@@ -82,6 +82,30 @@ class DemoTests(unittest.TestCase):
     def test_smoke_accepts_free_display(self):
         with patch.object(smoke.urllib.request, 'urlopen', return_value=io.BytesIO(b'<root><state>SUNSHINE_SERVER_FREE</state></root>')):
             smoke.require_idle('http://localhost/serverinfo')
+
+    def test_explicit_desktop_selection_can_show_r5_without_restarting_stream(self):
+        review = self.invoke('start', server='SUNSHINE_SERVER_BUSY', app=demo.LOW_RES_DESKTOP_ID, extra=['--show-in-desktop'])
+        review.start.assert_called_once()
+        review.run.assert_not_called()
+
+    def test_desktop_selection_does_not_override_another_app(self):
+        review = Mock()
+        with self.assertRaisesRegex(RuntimeError, 'Sunshine is in use'):
+            self.invoke('start', review, server='SUNSHINE_SERVER_BUSY', app='100392040', extra=['--show-in-desktop'])
+        review.start.assert_not_called()
+
+    def test_leaving_stream_keeps_r5_on_desktop(self):
+        review = Mock(); handlers = {}
+        def register(number, handler): handlers[number] = handler
+        def disconnect(_): handlers[demo.signal.SIGTERM](demo.signal.SIGTERM, None)
+        with patch.object(demo, 'load_review', return_value=review), \
+             patch.object(demo, 'running_project', return_value=str(self.project)), \
+             patch.object(demo.signal, 'signal', side_effect=register), \
+             patch.object(demo.time, 'sleep', side_effect=disconnect), \
+             patch.object(demo.sys, 'argv', ['demo', '--profile', str(self.profile), '--action', 'stream']):
+            demo.main()
+        review.start.assert_called_once()
+        review.stop.assert_not_called()
 
 
 if __name__ == '__main__':

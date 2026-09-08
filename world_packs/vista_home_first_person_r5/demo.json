@@ -1,7 +1,7 @@
 {
   "schema": "vista.home-first-person-r5.demo/v1",
-  "created_at": "2026-09-08T08:06:26.164189+00:00",
-  "status": "live_user_selected",
+  "created_at": "2026-09-08T08:13:22.680745+00:00",
+  "status": "live_in_low_res_desktop",
   "app": "VISTA Home R5",
   "app_id": "1722879117",
   "original_app": "VISTA Photoreal Home",
@@ -25,7 +25,7 @@
     "r3_original_and_backup_files_preserved": 2318
   },
   "validation": {
-    "launcher_tests": 14,
+    "launcher_tests": 17,
     "launcher_tests_status": "passed",
     "live_client_ownership_guard": "passed",
     "sunshine_selected_r5": "verified",
@@ -35,7 +35,8 @@
     "gpu_automated_smoke": "interrupted_by_client_input; not passed",
     "full_gpu_body_view_acceptance": "pending",
     "full_action_suite": "pending",
-    "native_r3_rollback_retest": "pending"
+    "native_r3_rollback_retest": "pending",
+    "stream_exit_retains_same_native_game": "passed"
   },
   "performance": {
     "passive_tick_fps_median": 19.103991409748126,
@@ -71,13 +72,30 @@
       "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/install/sunshine-entry-20260908T075214Z.json",
       "bytes": 1020,
       "sha256": "cb103446ca61e42d484a30dbf74caf802d9fa92ad7675ab85fab584e1d5d6d5e"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/tests-desktop-retention.log",
+      "bytes": 3803,
+      "sha256": "e61139b9209c0ebcfc1e5f124718c149a43edb76911d7dffc0ce6b10f0b1b0e1"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/desktop-retention.json",
+      "bytes": 697,
+      "sha256": "4a85c50aba5d87e21c081cd769329850578d2e124f747af2c7b369efef287fe4"
     }
   ],
   "native_screenshot": {
-    "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/native-live.png",
-    "bytes": 4104407,
-    "sha256": "a91ee2a182971368ebcfa0bcaa2e042ce054fdade86f907bee612301a5bc46d4"
+    "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/native-desktop-r5.png",
+    "bytes": 3927176,
+    "sha256": "d5abe79fd1253bdcc373b9451636704da0851fa665a3826fd2f6c40b5fc22195"
   },
   "instructions": "/data/sysx/vista-world/worktrees/vista-home-first-person-r5/docs/design/vista-home-first-person-r5/demo.md",
-  "handoff_policy": "Leave the user in control of R5; no further automatic input, reset or service switch."
+  "handoff_policy": "Leave the user in control of R5; no further automatic input, reset or service switch.",
+  "desktop_retention": {
+    "game_pid": "1027421",
+    "user_dir": "/data/sysx/vista-world/runs/vista-home-first-person-r5-demo-20260908a/runtime/user-20260908T080958Z",
+    "desktop_app_id": "303580669",
+    "native_project": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/project-c/PhotorealHome.uproject",
+    "stream_exit_behavior": "Keep the selected R5 game and input relay running; original R3 app or explicit --stop replaces/stops it."
+  }
 }
