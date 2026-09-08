@@ -1,0 +1,153 @@
+{
+  "schema": "vista.home-materials-r4.delivery/v1",
+  "created_at": "2026-09-08T05:23:37.170715+00:00",
+  "status": "authored_pending_native_visual_review",
+  "source_branch": "codex/vista-home-materials-r4",
+  "base_commit": "fc68a26236f53245b242283097576e93fa9a61c4",
+  "live_demo": {
+    "app": "VISTA Photoreal Home",
+    "version": "R3",
+    "unchanged": true,
+    "checked_project_files": 2318,
+    "backup": "/data/sysx/vista-world/home/demo-r3-20260908"
+  },
+  "selected_project": {
+    "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/project-e/PhotorealHome.uproject",
+    "bytes": 453,
+    "sha256": "35f5be48482cad450f4401627c72bb719b6dec4e64c3e01042cbe9448ef0e923"
+  },
+  "coverage": {
+    "pbr_sources": 6,
+    "shared_maps": 18,
+    "photo_material_profiles": 21,
+    "solid_material_profiles": 2,
+    "new_profile_slots": 130,
+    "finish_slots": 77,
+    "finish_materials": 23,
+    "static_actors_preserved": 158,
+    "character_meshes": 2
+  },
+  "validation": {
+    "unit_tests": 35,
+    "unit_result": "passed",
+    "saved_native_readback": "passed",
+    "demo_integrity": "passed",
+    "native_renderer": "NullRHI",
+    "native_gpu_visual_review": "pending",
+    "full_r4_action_replay": "pending",
+    "r4_fps": "pending"
+  },
+  "evidence": [
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/materials-a/materials.json",
+      "bytes": 28321,
+      "sha256": "43577e711708bed6ec8277a6abc9fc1f0be379edfd3aadaeaea1d2772cbcc524"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/acquisition-a/acquisition-receipt.json",
+      "bytes": 7634,
+      "sha256": "f3ba804bbea18852f309382d94b3a420e333306fbd7a83cc5a71eff4c9fb5a13"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/import-config-e.json",
+      "bytes": 645,
+      "sha256": "5b1fcfa883b74a89f49c90744f3af5d469f0963a304a944124fc9c4cd83987cf"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/import-e.json",
+      "bytes": 67745,
+      "sha256": "5c23b7b4a657147b2e2423f2003b902f44514e55f746d703d88d5a0bbb845a2b"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/verify-config-e.json",
+      "bytes": 301,
+      "sha256": "d5c21dd5f7a5d718ad2105f87874200987494089d0ae5b48fe15946c0a70429c"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/verify-saved-e.json",
+      "bytes": 230872,
+      "sha256": "c164d33cd199254280e4ea93a1774720d4c1dc4716efbc2787d4318415188a69"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/integrity-final-e.json",
+      "bytes": 7205,
+      "sha256": "035c66c16e166038acfc545dcff541e1e5e999f3ec23967fc5d76887de40d775"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/tests-a.log",
+      "bytes": 6191,
+      "sha256": "c3f7dfd259bc655c91f80969e6883c358973a981e09a4f86891dad858de9dae8"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/previews-a/preview.json",
+      "bytes": 179529,
+      "sha256": "7afacdd064a33076e530f182f0e59a7c7cf7e1c0b38ace3c44ee43584be2a078"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/details-a/preview.json",
+      "bytes": 179326,
+      "sha256": "47670fc67a4ee57f275d321ad6bc4984384450a16eb93f705dd9c151ee5650d2"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/character-preview-a/preview.json",
+      "bytes": 1686,
+      "sha256": "58b397501c5b9b5e613f18ab565ce682e2582f077e1b9de3b58a8b79b3bd5600"
+    }
+  ],
+  "selected_assets": [
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/project-e/Content/VISTA/PhotorealHomeR1/Maps/Home.umap",
+      "bytes": 371033,
+      "sha256": "7a99376c6f204d0d66f0e7f1dbde1bd69f523766935f009402a3399f06a1cc38"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/project-e/Content/VISTA/EmbodiedR1/OwnerBody/SK_OwnerBody.uasset",
+      "bytes": 2273977,
+      "sha256": "6f029b26d890d3411916911c5c588f7604ae4f5d18d338bc072de0d14a8f39b7"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/project-e/Content/VISTA/EmbodiedR1/WorldBody/SK_WorldBody.uasset",
+      "bytes": 5527976,
+      "sha256": "6b7e4cefc04b6519b9d6795679a11a3ac320c899d92d1911b9c6644dfb4352df"
+    }
+  ],
+  "previews": [
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/previews-a/living.png",
+      "bytes": 1123068,
+      "sha256": "e5bfc34f5b8268e743982bebd99f22ceefa52ee645e855803305ee232adcaed2"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/previews-a/bedroom.png",
+      "bytes": 1066566,
+      "sha256": "6bce4824da91f3536543ca389b5a7ec5d56ec9aec36669387953e6fe63e5fa2c"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/previews-a/kitchen.png",
+      "bytes": 1219371,
+      "sha256": "f4afb6b69b892b4cec6df6b32496a2094d10b0525cb17b84e65fefafefaa9bf3"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/details-a/fabric-detail.png",
+      "bytes": 1324731,
+      "sha256": "8d07e709d0ac3edf4892c41618e209306c8c85d3886a1efc0a74dbf1c420c3f7"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/details-a/wood-detail.png",
+      "bytes": 1097028,
+      "sha256": "8d9856f964a92e7c369aa9ad466974a7f704eca29a457d1e24691a52b8526a7f"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/character-preview-a/character.png",
+      "bytes": 1129871,
+      "sha256": "1a2296cd666a72b783648d872c3b0829060618e9b9ec4f208ad71c4b5f73a31d"
+    }
+  ],
+  "preview_renderer": "Blender Cycles CPU",
+  "preview_limit": "Authoring previews on retained Blender geometry, not Sunshine or Unreal viewport captures.",
+  "limits": [
+    "R3 live entry retained; no runtime switch.",
+    "Character hair, shape and clothing deformation still require refinement.",
+    "Blender and Unreal skin/cloth shading are different implementations; native visual acceptance remains pending."
+  ]
+}
