@@ -1,0 +1,531 @@
+{
+  "schema": "vista.home-actions-implementation/v1",
+  "created_at": "2026-09-07T14:22:07.508886+00:00",
+  "worktree_branch": "codex/vista-home-actions-r2",
+  "base_commit": "f31a389e",
+  "run_root": "runs/vista-photoreal-design-r1/home-actions-r2-20260907a",
+  "runtime_release": {
+    "build": "build-r",
+    "project": "project-s",
+    "profile": "sunshine-review-profile-r.json",
+    "sunshine_app": "VISTA Photoreal Home",
+    "display": ":119",
+    "repository_sources_match_packaged_sources": true,
+    "contract_matches_project": true
+  },
+  "recording_source": {
+    "build": "build-q",
+    "project": "project-r",
+    "captures": "captures-a",
+    "candidates": "vista-review-candidates-b",
+    "container_fps": 20,
+    "native_median_fps_range": [
+      17.9,
+      19.8
+    ]
+  },
+  "scope": {
+    "rooms": 6,
+    "interactive_entities": 46,
+    "frozen_source_events": 7,
+    "source_actions": 40,
+    "extensions": [
+      "step_down",
+      "unequip"
+    ]
+  },
+  "validation": {
+    "unit_and_contract_tests": 32,
+    "launcher_compatibility_tests": 5,
+    "vista_router_tests": 6,
+    "frontend_build": "passed",
+    "native_plugin_build": "passed",
+    "sequence_cases": 21,
+    "latest_detail_cases": 34,
+    "native_protocol_checks": 14,
+    "sunshine_keyboard_checks": 11,
+    "vista_contract_bundles": 7,
+    "browser_video_playback_cases": 7,
+    "browser_mobile_horizontal_overflow": false,
+    "catalog_cases": 7,
+    "catalog_rejected": 0,
+    "coverage": {
+      "path": "validation/native-coverage-final.json",
+      "sha256": "8070c1a8d9bdbe3d204acbd22c6ede34a7e8db6c9b6032dd97eac2df3fe10b83",
+      "bytes": 34903
+    }
+  },
+  "release_readiness": "native_review_only",
+  "visual_acceptance": "needs_human_review",
+  "benchmark_readiness": "needs_review",
+  "model_calls": 0,
+  "paid_generation_calls": 0,
+  "source_contracts": [
+    {
+      "path": "world_packs/vista_playable_home_r1/house.json",
+      "sha256": "3d73f84365a1adfbda408d8c49ac5f95370a221c6ed4fb880838d86b0c71b0c3"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/action_catalogs/vista_indoor_actions_r5.json",
+      "sha256": "e168b9f25b2af92619d3aae9a559ac0c195a998243e1ab464ef2faee3cda83eb"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/interaction_bindings/vista_home_interactions_r1.json",
+      "sha256": "406d429f2619c53dfe8fb0d42c587047ad9155af9e53079aa8c4dbc86cc41fef"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_001.json",
+      "sha256": "6d0ce9f13f8847bf14ce0d04262edc23da1b9a80efdedf8fcb62b417a70fe4ed"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_013.json",
+      "sha256": "8157865f7762a42394575da25ed2517974676482291bbe941934f4591af8d34b"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_021.json",
+      "sha256": "10f2256e1c8893e21d96e5569e2866dada9c91da9459efe664251128cfdf7c89"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_040.json",
+      "sha256": "a8787de2b87d7905ab4b195c7e01b747581019e6e3a00da39582fe4275da10c4"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_044.json",
+      "sha256": "b3855233e6a5097f5d405fc7c48e3808511d6161d3580cd0fd67d47e50dee25a"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_045.json",
+      "sha256": "f263f8981648a24a6832f8962d08b86e07b2be98c6b72bcd3f7cf5b2759598ff"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_070.json",
+      "sha256": "72a2c5723b51007f158cc3b2701b2e8339157226cafe60b03fbfc5bd68101cb0"
+    }
+  ],
+  "compiled_sources": [
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/EmbodiedAuthoring.cpp",
+      "sha256": "e14d4a3e26f60de455d4b6b217fcb6c7096454e51e142348e5f6526851251fe2",
+      "bytes": 5236
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/EmbodiedBodyAnimation.cpp",
+      "sha256": "686eff8409f9fc8c605d5bf994109cf85ce088f0a2971e8046cf4eee6279d8c6",
+      "bytes": 12508
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/EmbodiedReview.cpp",
+      "sha256": "83ff883de0ce706e83e3e0aa65a6429c35a2d1c14ca5669dd3a99c44d5a46c92",
+      "bytes": 40273
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/HomeActionBridge.cpp",
+      "sha256": "779de7a01d3700009c6c1a7f86ccbc3bf2c558ae4b72daa0b5e9277e0d5125c7",
+      "bytes": 9766
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/HomeActionClimb.cpp",
+      "sha256": "33b64b53270e11a38b18913138f961ff4801838c29ff3b5b13dd49edb0fb9d5a",
+      "bytes": 5655
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/HomeActionEvents.cpp",
+      "sha256": "8a34e3c135a5f18bde6302a5ad1753c5ed5308d3cac76becbacd951934f08bee",
+      "bytes": 18007
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/HomeActionMotion.cpp",
+      "sha256": "55d2643c08b52c9ab2292076b8b6649e6f5161f0db791c972b30f9a9dd5a83c5",
+      "bytes": 25682
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/HomeActionTransactions.cpp",
+      "sha256": "f83c681735b296898202ee41947170360c3015b3bd98e9ba7f7b404bec2bfe95",
+      "bytes": 31627
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/HomeActions.cpp",
+      "sha256": "ab093c71ed2c211771501e364c094501960905551b79f51500a4c92d73711d49",
+      "bytes": 23460
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/HomeActionsAuthoring.cpp",
+      "sha256": "435501ab85f9ccc36c6a607a2094c12227058bdadba93c6a8524427eadd2add7",
+      "bytes": 3253
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/HomeActionsJson.h",
+      "sha256": "12a481ba0560e4418387100bf24062bc092b85388998827ea39062649627a3ea",
+      "bytes": 2957
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Private/PhotorealReview.cpp",
+      "sha256": "08c80de47f7c0d5782746d0105d1f91bc3aa4d7c4167f94544281233f954907e",
+      "bytes": 10408
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Public/EmbodiedReview.h",
+      "sha256": "5974327c0e499ab42c1957689d89e0cde5a8a0644c476fb1a7b57f849dba2f12",
+      "bytes": 7094
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Public/HomeActions.h",
+      "sha256": "eaae60b2517f1f83b6c91d03c22667e443ff6f1511386628fdce4cbced89b1c9",
+      "bytes": 7050
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/Public/PhotorealReview.h",
+      "sha256": "03c8a05181dd13a333ba4bff141c98f42b3bbd5b35b4935d3ba7f154430238dc",
+      "bytes": 1634
+    },
+    {
+      "path": "unreal_plugins/VistaPhotorealReview/Source/VistaPhotorealReview/VistaPhotorealReview.Build.cs",
+      "sha256": "f43d0e650b23c3daa831b456c74f40195202fe5613e9f8a01e9b3e93d98c4cf2",
+      "bytes": 362
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "build-r.log",
+      "sha256": "e22c96e940e1930620e9e5ab5d713c23e27f145de24f1573895e4f427a95a34a",
+      "bytes": 14011
+    },
+    {
+      "path": "build-r/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so",
+      "sha256": "1e0b85760ea3961563a08fd981732b8605c2d0d86d2d62c46946496e06312434",
+      "bytes": 984104
+    },
+    {
+      "path": "project-s/Plugins/VistaPhotorealReview/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so",
+      "sha256": "1e0b85760ea3961563a08fd981732b8605c2d0d86d2d62c46946496e06312434",
+      "bytes": 984104
+    },
+    {
+      "path": "project-s/PhotorealHome.uproject",
+      "sha256": "35f5be48482cad450f4401627c72bb719b6dec4e64c3e01042cbe9448ef0e923",
+      "bytes": 453
+    },
+    {
+      "path": "project-s/Content/VISTA/PhotorealHomeR1/Maps/Home.umap",
+      "sha256": "885557f01803658a6d8334ac4fd75882e7e9bb591b338b0cad8651116f90551c",
+      "bytes": 356540
+    },
+    {
+      "path": "project-s/Config/VistaHomeActions.json",
+      "sha256": "260d35f3116c6dadf88da9ce821b0b089d3cc096f5a0d1a1a9d61506398f6b66",
+      "bytes": 84208
+    },
+    {
+      "path": "project-s/Config/DefaultEngine.ini",
+      "sha256": "305485d9d799e49e455340d06ca00baa1990c876f6f824ac1361fd28e2618641",
+      "bytes": 1778
+    },
+    {
+      "path": "sunshine-review-profile-r.json",
+      "sha256": "9264d1d7c08e226fb1db9993993a46c755c63cc402be5b87b921fb1a524f0f29",
+      "bytes": 590
+    },
+    {
+      "path": "model-c/parts.json",
+      "sha256": "9efc2bd72abcce8066aef6db95d2ee743fe80639bff194307a438d435539a9e2",
+      "bytes": 42611
+    },
+    {
+      "path": "model-c/home-actions.blend",
+      "sha256": "8f24829e22e7def93a8a604d892d67b4555662d9f3464be6f4c7c97ae261c402",
+      "bytes": 78418004
+    },
+    {
+      "path": "model-d/parts.json",
+      "sha256": "11a6848fe92038c6dd1e53983794ecbaa462388e5527f022c3bcea6882e4aa1e",
+      "bytes": 1950
+    },
+    {
+      "path": "model-d/home-actions.blend",
+      "sha256": "5aa379c736030d1005aea27014dde7292584756e774933b457bbabb63db333ee",
+      "bytes": 78407173
+    },
+    {
+      "path": "hands-a/thin.json",
+      "sha256": "b152c7fa2214d3ebf44da498da5bd52f080f7c360aa93691ff8a6b9b304ea779",
+      "bytes": 71937
+    },
+    {
+      "path": "hands-a/pinch.json",
+      "sha256": "811ba97652989221546400bbb3a6db4423332cd918783f2c454e3c9921be0e81",
+      "bytes": 71841
+    },
+    {
+      "path": "hands-a/hand-profile-authoring.blend",
+      "sha256": "1a2f3d6fc2cb9297794ec9f5bad9baecb2a06ca31e347efbcabda0b9cf986c39",
+      "bytes": 26890719
+    },
+    {
+      "path": "import-d.json",
+      "sha256": "5b242ddd678837ac848fb25eadcb7f549f86d51b921c24de8ff7c40c1e043a53",
+      "bytes": 18908
+    },
+    {
+      "path": "import-e.json",
+      "sha256": "515e5f4744e2a3f28b443912ebd1cf2803c57801436a95b91f720fd005fc1bda",
+      "bytes": 776
+    },
+    {
+      "path": "repair-i.json",
+      "sha256": "1c1db97674644336d07f8ca083b073a981316497f80fa18b565dccf4e8e6cc8c",
+      "bytes": 37230
+    },
+    {
+      "path": "build-q/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so",
+      "sha256": "20c4aa8d9ed6caa65ef400cae82b7addf8a0c5028519219fddfd0807bc3918a5",
+      "bytes": 983784
+    },
+    {
+      "path": "project-r/Config/VistaHomeActions.json",
+      "sha256": "5a1f488673ff0a39f7e96c40b3d377846347e565ed9895c90f46cc7fe3ad2cde",
+      "bytes": 84139
+    },
+    {
+      "path": "validation/python-tests-final.log",
+      "sha256": "f6327dd5d071d4b6e582ded30092e73f279bc86cd8c778c96e796f8110f8ee7c",
+      "bytes": 5824
+    },
+    {
+      "path": "validation/vista-router-tests-final.log",
+      "sha256": "c74a61ac58d70959f4687914118045000c8659d74728aeb424a91f464becdcfe",
+      "bytes": 721
+    },
+    {
+      "path": "vista-frontend-build-b.log",
+      "sha256": "c63edb28182a1ddf49e556478a70a713b47d9e60f3b859597eeca59fe2261332",
+      "bytes": 4393
+    },
+    {
+      "path": "output/playwright/video-playback-checks-b.log",
+      "sha256": "8e1403020a25daab4057350b4f3e4659b08a25fc18fecb258b934cbe7d7087ec",
+      "bytes": 1314
+    },
+    {
+      "path": "output/playwright/mobile-check.log",
+      "sha256": "e8553695852777133d6bb3c696ec7e00e56b7c01c7240facff66f2e8d35c62a6",
+      "bytes": 380
+    },
+    {
+      "path": "output/playwright/native-home-desktop-b.png",
+      "sha256": "9e0ca4f2ad4cc4ea8ee656bfea98d7b21a8e39eb6757d3130eb91cc731570f49",
+      "bytes": 630283
+    },
+    {
+      "path": "output/playwright/native-home-mobile.png",
+      "sha256": "da8f2475268a66c4df17b22aadddbe1a267cf928dda493ede1cdabdf2d02a797",
+      "bytes": 143938
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "eabc5a98f4774a6386526e986cf5a98e",
+      "event_id": "mmg_001",
+      "duration_s": 6.55,
+      "sha256": "04fdd4055bdacc91f8daaa1624364b4fa2b0a2259adcf10bfe133e3c9bed34d2",
+      "native_outcome": "succeeded",
+      "median_native_fps": 17.9,
+      "sample_count": 67,
+      "manifest": {
+        "path": "vista-review-candidates-b/eabc5a98f4774a6386526e986cf5a98e/reviewed_case_candidate.json",
+        "sha256": "e23f17329f453675f32f4a3d4aef514be4a8d95d0a374ea0f5d40e51fc893fbf",
+        "bytes": 892
+      },
+      "input": {
+        "path": "vista-review-candidates-b/eabc5a98f4774a6386526e986cf5a98e/restricted/restricted_assist_step_input.json",
+        "sha256": "4f1942d1beacd8ecfa14c4334844d7c210130313d136349d519f983004686d56",
+        "bytes": 1626
+      },
+      "vista_contract_validation": {
+        "path": "validation/vista-input-mmg_001.json",
+        "sha256": "bf921c8f41c5eab32299481a29d6c05a292a4d707d606c6e60a283a355b07510",
+        "bytes": 617
+      }
+    },
+    {
+      "case_id": "c05103c608ff4d4ea08c853c42b7c6e9",
+      "event_id": "mmg_013",
+      "duration_s": 5.3,
+      "sha256": "cf4953185f31268a23eb31e1858e383bfb20cd43c5efa57604c96ebb9c925ad3",
+      "native_outcome": "succeeded",
+      "median_native_fps": 18.3,
+      "sample_count": 92,
+      "manifest": {
+        "path": "vista-review-candidates-b/c05103c608ff4d4ea08c853c42b7c6e9/reviewed_case_candidate.json",
+        "sha256": "7a8057fe65334a34210638d09be78d5678322e56ebdf42169246fca353cbffdd",
+        "bytes": 890
+      },
+      "input": {
+        "path": "vista-review-candidates-b/c05103c608ff4d4ea08c853c42b7c6e9/restricted/restricted_assist_step_input.json",
+        "sha256": "0a490141819b381c698c93a3e868274111ef2dcf4adc4e89bb5eceab0285663b",
+        "bytes": 1611
+      },
+      "vista_contract_validation": {
+        "path": "validation/vista-input-mmg_013.json",
+        "sha256": "5aec02793a8a6fe6e45123c278961ae2917110bc467bd95206b259de4d2c7e89",
+        "bytes": 617
+      }
+    },
+    {
+      "case_id": "6460449425674363a304190ea17bc5c6",
+      "event_id": "mmg_021",
+      "duration_s": 6.65,
+      "sha256": "322ae8671a5a0de1b479fbdc1c9bd13774dfbea82dc2482676325fbbaeaf6bf7",
+      "native_outcome": "succeeded",
+      "median_native_fps": 19.8,
+      "sample_count": 67,
+      "manifest": {
+        "path": "vista-review-candidates-b/6460449425674363a304190ea17bc5c6/reviewed_case_candidate.json",
+        "sha256": "62786e4833365a391e5450df0255e01025e955a8467e1468e56fd21bbb564009",
+        "bytes": 892
+      },
+      "input": {
+        "path": "vista-review-candidates-b/6460449425674363a304190ea17bc5c6/restricted/restricted_assist_step_input.json",
+        "sha256": "b189ba30b79e28b803e7bd459a54981c3a40ea245ddb311e9d5fab5018f92ab6",
+        "bytes": 1605
+      },
+      "vista_contract_validation": {
+        "path": "validation/vista-input-mmg_021.json",
+        "sha256": "581e788aca977f0c2926b37b38c53fd55b970f39f0328c5d1c1e929fbd5f454a",
+        "bytes": 617
+      }
+    },
+    {
+      "case_id": "40f5774ce8f4475eb7bbb4e94b922669",
+      "event_id": "mmg_040",
+      "duration_s": 19.35,
+      "sha256": "880b09dd514d3c848a68dc549468bf9804ffe6a72cde0b9358e57202644b7b45",
+      "native_outcome": "succeeded",
+      "median_native_fps": 19.1,
+      "sample_count": 193,
+      "manifest": {
+        "path": "vista-review-candidates-b/40f5774ce8f4475eb7bbb4e94b922669/reviewed_case_candidate.json",
+        "sha256": "2f8202355ec2b9a0248fc399099b2e4e825730756bb7d34199d15015d0c69256",
+        "bytes": 894
+      },
+      "input": {
+        "path": "vista-review-candidates-b/40f5774ce8f4475eb7bbb4e94b922669/restricted/restricted_assist_step_input.json",
+        "sha256": "9a462eb58ce82ace76ed0829d46e3fc69edf4d13cafb3a728239f4f3ffeccdaa",
+        "bytes": 1608
+      },
+      "vista_contract_validation": {
+        "path": "validation/vista-input-mmg_040.json",
+        "sha256": "3f642361d7843d926de0105e9be653780bea234a4e18699c1220271d15d35d2f",
+        "bytes": 617
+      }
+    },
+    {
+      "case_id": "d5f950a7cd2148478558fa8a8498ecdc",
+      "event_id": "mmg_044",
+      "duration_s": 13.25,
+      "sha256": "644ddb20d610eff0fbfe3b0c58fc49d9800e7a8489af45659f0f275c2b45f057",
+      "native_outcome": "succeeded",
+      "median_native_fps": 19.0,
+      "sample_count": 132,
+      "manifest": {
+        "path": "vista-review-candidates-b/d5f950a7cd2148478558fa8a8498ecdc/reviewed_case_candidate.json",
+        "sha256": "578cc00b8e5fd5d280a9f142b4aea178c27e88ea1ede98d0da441fa7ca7bf0ad",
+        "bytes": 893
+      },
+      "input": {
+        "path": "vista-review-candidates-b/d5f950a7cd2148478558fa8a8498ecdc/restricted/restricted_assist_step_input.json",
+        "sha256": "6fa9f963950b70f0795112bf9613c3376aafd624c9790aa9eb43067b5f52ef88",
+        "bytes": 1599
+      },
+      "vista_contract_validation": {
+        "path": "validation/vista-input-mmg_044.json",
+        "sha256": "8892f450ddf32371d32d6e73dce91db5b43a39a2ed73186d52d9a3e282c0a112",
+        "bytes": 617
+      }
+    },
+    {
+      "case_id": "9746ed0c804c4ead91be869bf731eaa8",
+      "event_id": "mmg_045",
+      "duration_s": 16.75,
+      "sha256": "9abf869cab61405bbe4c836613457d42cc42e8b8841feb63b7f7868a6584539c",
+      "native_outcome": "succeeded",
+      "median_native_fps": 18.6,
+      "sample_count": 167,
+      "manifest": {
+        "path": "vista-review-candidates-b/9746ed0c804c4ead91be869bf731eaa8/reviewed_case_candidate.json",
+        "sha256": "cf9742dde2657326f0fb0253a49f69fe8f35b250cdec9d921c6e183457d79e3e",
+        "bytes": 893
+      },
+      "input": {
+        "path": "vista-review-candidates-b/9746ed0c804c4ead91be869bf731eaa8/restricted/restricted_assist_step_input.json",
+        "sha256": "fc2b0775b8198c7e5bde80a35478508acf3a66158f90a72b909b18c6a327fee4",
+        "bytes": 1599
+      },
+      "vista_contract_validation": {
+        "path": "validation/vista-input-mmg_045.json",
+        "sha256": "8409bfae3159c5c695ff7e7c7b7858047a3cfdee717e80044127b34219da9851",
+        "bytes": 617
+      }
+    },
+    {
+      "case_id": "9609ceb383494fc19758df933ce103cf",
+      "event_id": "mmg_070",
+      "duration_s": 10.7,
+      "sha256": "5912e87db9daf7ce40a26766bd3acc296216468f4580c74364d507982820c242",
+      "native_outcome": "succeeded",
+      "median_native_fps": 19.3,
+      "sample_count": 107,
+      "manifest": {
+        "path": "vista-review-candidates-b/9609ceb383494fc19758df933ce103cf/reviewed_case_candidate.json",
+        "sha256": "880400ebe95f4cc3c18e7bfa14a0f85f9e07ee9fccf89f734a58a04b9a11921f",
+        "bytes": 892
+      },
+      "input": {
+        "path": "vista-review-candidates-b/9609ceb383494fc19758df933ce103cf/restricted/restricted_assist_step_input.json",
+        "sha256": "06e191f71ea1079aba9b042c59bd1127a961061ed570f5e908226c1b9cf6a198",
+        "bytes": 1608
+      },
+      "vista_contract_validation": {
+        "path": "validation/vista-input-mmg_070.json",
+        "sha256": "305f7b4133d96a31ad4a9cbf6f06cabe5c5c30d1d1b154ed2c2603d97153c2ee",
+        "bytes": 617
+      }
+    }
+  ],
+  "preservation": {
+    "accepted_embodied_base": [
+      {
+        "path": "build-v/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so",
+        "sha256": "3c4325e9fcc7d2fcb8cfa499a1f436cd6f8890c3e51eef374fc3f31caf6ee944",
+        "bytes": 506680,
+        "unchanged": true
+      },
+      {
+        "path": "project-f/PhotorealHome.uproject",
+        "sha256": "35f5be48482cad450f4401627c72bb719b6dec4e64c3e01042cbe9448ef0e923",
+        "bytes": 453,
+        "unchanged": true
+      },
+      {
+        "path": "project-f/Content/VISTA/PhotorealHomeR1/Maps/Home.umap",
+        "sha256": "d3880130ed659975f27c807f826dcac810de839c3912be5cb47712eb7803efa6",
+        "bytes": 278986,
+        "unchanged": true
+      }
+    ],
+    "other_sunshine_apps_unchanged": 5,
+    "sunshine_config_before_sha256": "685ca3d22ed1b1ff2cf0ef4bfb968059574accbbf58258c5ce2ced462aeed3f2",
+    "sunshine_config_after_sha256": "f5858641eebdecc6c989e320a26db4393715426e6733733ee527909b8548ff90",
+    "production_8000": "untouched",
+    "r23_r6": "preserved"
+  },
+  "limits": [
+    "Cumulative native evidence uses builds o, p and r; not all cases were rerun on r.",
+    "scene.json retains frozen source readiness and pending authoring defaults; this manifest records separate runtime evidence.",
+    "mmg_040 succeeds on ladder inspection; box retrieval is a separate detail test.",
+    "Full observation clips include action completion; they are not assist-step ground-truth rows.",
+    "Dialogue is project-authored external text, not recorded speech.",
+    "Wrist/sole IK does not certify fingertip contact. Small hand/mesh/strap artifacts remain.",
+    "Liquids, fabric and falls are analytic/procedural representations, not fluid, cloth or ragdoll simulation.",
+    "Shared-GPU native recording medians are 17.9–19.8 FPS, not 60 FPS."
+  ]
+}
