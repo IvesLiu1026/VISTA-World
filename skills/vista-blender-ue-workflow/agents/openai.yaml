@@ -1,0 +1,4 @@
+interface:
+  display_name: "VISTA Blender / Unreal Workflow"
+  short_description: "Build reproducible 3D scenes and embodied interactions"
+  default_prompt: "Use $vista-blender-ue-workflow to build and validate a VISTA room, assets, and natural interactions in an isolated Blender/Unreal project."
