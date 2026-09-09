@@ -58,6 +58,10 @@ def focus_review():
 
 
 def start(config,state_path):
+    selected_map=config.get("map",MAP)
+    allowed_maps={MAP}
+    if KIND=="home":allowed_maps.add("/Game/VISTA/VillaR1/Maps/Villa")
+    if selected_map not in allowed_maps:raise ValueError("Unknown reviewed map")
     previous=active(PREVIOUS_RELAY)
     if SELECTION.is_file():previous=previous or bool(json.loads(SELECTION.read_text()).get("previous_relay_active"))
     # Migration from the accepted standalone kitchen launcher. Keep its original
@@ -80,7 +84,16 @@ def start(config,state_path):
         exposure=float(config.get("exposure_offset",-1.8))
         if not math.isfinite(exposure):raise ValueError("Exposure must be finite")
         command=[x if not x.startswith("-ExecCmds=") else f"-ExecCmds=t.MaxFPS 30,r.ScreenPercentage 100,r.ExposureOffset {exposure}" for x in command]
-        if KIND=="home":command.append("-VistaWholeHome")
+        graph=config.get("ddc_graph","InstalledNoZenLocalFallback")
+        if graph not in ("InstalledNoZenLocalFallback","VistaHomeActionsCache","VistaHomeFirstPersonR5Cache","VistaVillaR1Cache"):
+            raise ValueError("Unknown reviewed DDC graph")
+        if graph=="VistaVillaR1Cache" and selected_map!="/Game/VISTA/VillaR1/Maps/Villa":raise ValueError("Villa cache requires the Villa map")
+        command=["-ddc="+graph if x.startswith("-ddc=") else x for x in command]
+        command=[selected_map if x==MAP else x for x in command]
+        if config.get("home_actions_bridge"):
+            if KIND!="home":raise ValueError("Home bridge requires the Home review")
+            command.append("-VistaHomeBridge="+str(user/"home-bridge"))
+        if KIND=="home" and selected_map==REVIEWS["home"][3]:command.append("-VistaWholeHome")
         run(command)
         print("Starting "+KIND+" review",flush=True)
     deadline=time.monotonic()+150

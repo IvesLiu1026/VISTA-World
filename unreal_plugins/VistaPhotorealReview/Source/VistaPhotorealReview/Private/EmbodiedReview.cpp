@@ -1,4 +1,6 @@
 #include "EmbodiedReview.h"
+#include "EmbodiedFirstPersonProof.h"
+#include "VistaMotionCurves.h"
 
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -23,7 +25,7 @@
 
 namespace
 {
-float Ease(float V) { V=FMath::Clamp(V,0.f,1.f);return V*V*(3.f-2.f*V); }
+float Ease(float V) { return VistaMotion::Ease(V); }
 TArray<TSharedPtr<FJsonValue>> VectorJson(FVector V)
 {
     return {MakeShared<FJsonValueNumber>(V.X),MakeShared<FJsonValueNumber>(V.Y),MakeShared<FJsonValueNumber>(V.Z)};
@@ -197,6 +199,8 @@ FTransform AEmbodiedReviewCharacter::DesiredGrip() const
     return Result;
 }
 
+FVector AEmbodiedReviewCharacter::PickupAimPoint() const { return CupMesh?CupMesh->Bounds.Origin:FVector::ZeroVector; }
+
 bool AEmbodiedReviewCharacter::IsCupReachable(FString& Reason) const
 {
     if (!CupMesh || !bReady) {Reason=TEXT("Cup unavailable");return false;}
@@ -207,11 +211,12 @@ bool AEmbodiedReviewCharacter::IsCupReachable(FString& Reason) const
     const float ReachLimit=Center.Z-GetMesh()->GetComponentLocation().Z<35.f?46.f:86.f;
     if (FVector::Dist2D(Center,GetActorLocation())>ReachLimit || FMath::Abs(Center.Z-GetActorLocation().Z)>110.f)
     {Reason=TEXT("Move closer to the cup");return false;}
-    const float Alignment=FVector::DotProduct((Center-Eye).GetSafeNormal(),LookRotation.Vector());
+    const FVector Aim=PickupAimPoint();
+    const float Alignment=FVector::DotProduct((Aim-Eye).GetSafeNormal(),LookRotation.Vector());
     if (Alignment<.93f) {Reason=TEXT("Look at the cup");return false;}
     FCollisionQueryParams Params(SCENE_QUERY_STAT(EmbodiedReach),true,this);
     FHitResult Hit;
-    if (GetWorld()->LineTraceSingleByChannel(Hit,Eye,Center,ECC_Visibility,Params) && Hit.GetActor()!=Cup)
+    if (GetWorld()->LineTraceSingleByChannel(Hit,Eye,Aim,ECC_Visibility,Params) && Hit.GetActor()!=Cup)
     {Reason=TEXT("The cup is behind an obstacle");return false;}
     if (CupMesh->GetPhysicsLinearVelocity().Size()>45.f)
     {Reason=TEXT("Wait for the cup to settle");return false;}
@@ -229,9 +234,19 @@ void AEmbodiedReviewCharacter::EmbodiedInteract()
     const FTransform Grip=DesiredGrip();
     FCollisionQueryParams PathParams(SCENE_QUERY_STAT(EmbodiedHandApproach),true,this);PathParams.AddIgnoredActor(Cup);
     FHitResult PathHit;
+    bReachDetour=false;
     if (GetWorld()->SweepSingleByChannel(PathHit,GetMesh()->GetSocketLocation(TEXT("hand_r")),Grip.GetLocation(),
         FQuat::Identity,ECC_Visibility,FCollisionShape::MakeSphere(2.f),PathParams))
-    {FeedbackMessage(TEXT("The hand path is blocked"));UE_LOG(LogTemp,Display,TEXT("EMBODIED_REJECT hand path blocked"));return;}
+    {
+        const FVector Start=GetMesh()->GetSocketLocation(TEXT("hand_r"));
+        const float Height=FMath::Max(Start.Z,Grip.GetLocation().Z)+18.f;
+        ReachViaA=FVector(Start.X,Start.Y,Height);ReachViaB=FVector(Grip.GetLocation().X,Grip.GetLocation().Y,Height);
+        const auto Clear=[&](FVector From,FVector To)
+        {FHitResult H;return !GetWorld()->SweepSingleByChannel(H,From,To,FQuat::Identity,ECC_Visibility,FCollisionShape::MakeSphere(2.f),PathParams);};
+        bReachDetour=bAllowReachDetour && Clear(Start,ReachViaA) && Clear(ReachViaA,ReachViaB) && Clear(ReachViaB,Grip.GetLocation());
+        if (!bReachDetour)
+        {FeedbackMessage(TEXT("The hand path is blocked"));UE_LOG(LogTemp,Display,TEXT("EMBODIED_REJECT hand path blocked by %s"),*GetNameSafe(PathHit.GetActor()));return;}
+    }
     HandRelativeToCup=Grip.GetRelativeTransform(CupMesh->GetComponentTransform());
     LastHandGoal=Grip;ReachStart=GetMesh()->GetSocketLocation(TEXT("hand_r"));
     SetPhase(EEmbodiedPhase::Reaching);
@@ -272,7 +287,7 @@ bool AEmbodiedReviewCharacter::FindPlacement(FVector& Location,FQuat& Rotation) 
     for (int32 I=0;I<8;++I)
     {
         const float A=I*PI/4.f;
-        const FVector P=Hit.ImpactPoint+FVector(FMath::Cos(A)*3.7f,FMath::Sin(A)*3.7f,0);
+        const FVector P=Hit.ImpactPoint+FVector(FMath::Cos(A)*ItemRadius,FMath::Sin(A)*ItemRadius,0);
         FHitResult Support;
         if (!GetWorld()->LineTraceSingleByChannel(Support,P+FVector(0,0,2),P-FVector(0,0,3),ECC_Visibility,Params) ||
             Support.ImpactNormal.Z<.94f || FMath::Abs(Support.ImpactPoint.Z-Hit.ImpactPoint.Z)>1.f) return false;
@@ -281,8 +296,8 @@ bool AEmbodiedReviewCharacter::FindPlacement(FVector& Location,FQuat& Rotation) 
     Rotation=FRotator(0,CupMesh->GetComponentRotation().Yaw,0).Quaternion();
     // Check the body volume above the support before entering placement.
     FHitResult Obstacle;
-    if (GetWorld()->SweepSingleByChannel(Obstacle,Location+FVector(0,0,5),Location+FVector(0,0,5.1),
-        FQuat::Identity,ECC_Visibility,FCollisionShape::MakeBox(FVector(4.1,4.1,4.2)),Params)) return false;
+    if (GetWorld()->SweepSingleByChannel(Obstacle,Location+FVector(0,0,ItemHeight*.5f+.2f),Location+FVector(0,0,ItemHeight*.5f+.3f),
+        FQuat::Identity,ECC_Visibility,FCollisionShape::MakeBox(FVector(ItemRadius,ItemRadius,ItemHeight*.5f-.2f)),Params)) return false;
     return true;
 }
 
@@ -324,23 +339,28 @@ void AEmbodiedReviewCharacter::UpdateInteraction(float Dt)
         if (PhaseTime>=.55f) SetPhase(EEmbodiedPhase::Idle);
         return;
     }
-    LastHandGoal=HandRelativeToCup*CupMesh->GetComponentTransform();
+    LastHandGoal=AdjustedSceneHandGoal(HandRelativeToCup*CupMesh->GetComponentTransform());
     MeasureContact();
     if (Phase==EEmbodiedPhase::Reaching || Phase==EEmbodiedPhase::Closing)
     {
         if (FVector::Dist2D(CupMesh->Bounds.Origin,GetActorLocation())>94.f || CupMesh->GetPhysicsLinearVelocity().Size()>80.f)
         {CancelReach(TEXT("Cup moved out of reach"));return;}
-        ReachAlpha=Phase==EEmbodiedPhase::Reaching?Ease(PhaseTime/.85f):1.f;
-        if (Phase==EEmbodiedPhase::Reaching && PhaseTime>=.85f)
+        const float ReachDuration=bReachDetour?1.6f:.85f;
+        ReachAlpha=Phase==EEmbodiedPhase::Reaching?Ease(PhaseTime/(bReachDetour?.25f:.85f)):1.f;
+        if (Phase==EEmbodiedPhase::Reaching && PhaseTime>=ReachDuration)
         {
             if (HandErrorCm<1.f && HandAngleDeg<10.f) SetPhase(EEmbodiedPhase::Closing);
-            else if (PhaseTime>1.8f) CancelReach(TEXT("Hand cannot safely reach the cup"));
+            else if (PhaseTime>ReachDuration+.95f) CancelReach(TEXT("Hand cannot safely reach the cup"));
         }
         else if (Phase==EEmbodiedPhase::Closing)
         {
             FingerAlpha=Ease(PhaseTime/.38f);
             if (PhaseTime>=.38f && HandErrorCm<1.f && HandAngleDeg<10.f)
             {
+                FString ContactReason;
+                if (!IsSceneContactReady(ContactReason))
+                { if (PhaseTime>1.8f) CancelReach(ContactReason); return; }
+                if (!CupMesh->IsSimulatingPhysics()) CupMesh->SetSimulatePhysics(true);
                 GripHandle->GrabComponentAtLocationWithRotation(CupMesh,NAME_None,CupMesh->GetComponentLocation(),CupMesh->GetComponentRotation());
                 if (!GripHandle->GrabbedComponent) {CancelReach(TEXT("Could not establish grip"));return;}
                 HoldStart=CupMesh->GetComponentTransform();
@@ -358,7 +378,14 @@ void AEmbodiedReviewCharacter::UpdateInteraction(float Dt)
     FTransform Target;
     if (Phase==EEmbodiedPhase::Held)
     {
-        Target.Blend(HoldStart,CarryTarget(),Ease(PhaseTime/.75f));
+        if (bSceneCarryLift)
+        {
+            FTransform Lift=HoldStart;FVector Position=Lift.GetLocation();
+            Position.Z=FMath::Max(Position.Z,CarryTarget().GetLocation().Z)+8.f;Lift.SetLocation(Position);
+            Target.Blend(PhaseTime<.7f?HoldStart:Lift,PhaseTime<.7f?Lift:CarryTarget(),Ease(PhaseTime<.7f?PhaseTime/.7f:(PhaseTime-.7f)/.65f));
+            if (PhaseTime>=1.35f) bSceneCarryLift=false;
+        }
+        else Target.Blend(HoldStart,CarryTarget(),Ease(PhaseTime/.75f));
     }
     else if (Phase==EEmbodiedPhase::Releasing)
     {
@@ -373,19 +400,20 @@ void AEmbodiedReviewCharacter::UpdateInteraction(float Dt)
     // a wall. The object always remains a dynamic body throughout the grip.
     FCollisionQueryParams Params(SCENE_QUERY_STAT(EmbodiedCarry),false,this);Params.AddIgnoredActor(Cup);
     FHitResult Hit;
-    const FVector From=CupMesh->GetComponentLocation()+FVector(0,0,5);
-    const FVector To=Target.GetLocation()+FVector(0,0,5);
-    if (GetWorld()->SweepSingleByChannel(Hit,From,To,FQuat::Identity,ECC_Visibility,FCollisionShape::MakeSphere(3.7f),Params) && !Hit.bStartPenetrating)
+    const FVector Centre(0,0,ItemHeight*.5f);
+    const FVector From=CupMesh->GetComponentLocation()+Centre;
+    const FVector To=Target.GetLocation()+Centre;
+    if (GetWorld()->SweepSingleByChannel(Hit,From,To,FQuat::Identity,ECC_Visibility,FCollisionShape::MakeSphere(ItemRadius),Params) && !Hit.bStartPenetrating)
     {
         const FVector Safe=FMath::Lerp(From,To,FMath::Max(0.f,Hit.Time-.04f));
         FVector Slide=Safe+FVector::VectorPlaneProject(To-Safe,Hit.Normal);
         FHitResult Corner;
         if (GetWorld()->SweepSingleByChannel(Corner,Safe,Slide,FQuat::Identity,ECC_Visibility,
-            FCollisionShape::MakeSphere(3.7f),Params) && !Corner.bStartPenetrating)
+            FCollisionShape::MakeSphere(ItemRadius),Params) && !Corner.bStartPenetrating)
             Slide=FMath::Lerp(Safe,Slide,FMath::Max(0.f,Corner.Time-.04f));
         // Preserve the requested height along a wall. Reusing the actual cup
         // height every frame would accumulate the spring's gravity deflection.
-        Target.SetLocation(Slide-FVector(0,0,5));
+        Target.SetLocation(Slide-Centre);
     }
     GripHandle->SetTargetLocationAndRotation(Target.GetLocation(),Target.Rotator());
     MaxHeldError=FMath::Max(MaxHeldError,HandErrorCm);
@@ -509,26 +537,36 @@ void AEmbodiedReviewCharacter::Tick(float Dt)
     if (!bReady) return;
     // Keep the look response immediate while the physical body and carried
     // object turn together at a finite speed.
-    if ((!bThirdPerson || Phase!=EEmbodiedPhase::Idle) && Controller)
+    if ((!bThirdPerson || Phase!=EEmbodiedPhase::Idle || bSceneActionBusy) && Controller)
     {
         const float TurnSpeed=Phase==EEmbodiedPhase::Held?180.f:300.f;
         SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Controller->GetControlRotation().Yaw,Dt*TurnSpeed),0));
     }
-    UpdateFeet(Dt);UpdateInteraction(Dt);
+    UpdateFeet(Dt);UpdateInteraction(Dt);UpdateFirstPersonRest(Dt);
     if (TraceRemaining>0.f)
     {
         TraceRemaining-=Dt;
     }
     ReviewCamera->SetFirstPersonFieldOfView(ReviewCamera->FieldOfView);
     const bool Busy=Phase==EEmbodiedPhase::Reaching || Phase==EEmbodiedPhase::Closing || Phase==EEmbodiedPhase::Placing || Phase==EEmbodiedPhase::Releasing;
-    GetCharacterMovement()->MaxWalkSpeed=Busy?0.f:(Phase==EEmbodiedPhase::Held?95.f:125.f);
+    GetCharacterMovement()->MaxWalkSpeed=(Busy || bSceneActionBusy || SeatedAlpha>.01f)?0.f:(Phase==EEmbodiedPhase::Held?95.f:125.f);
     // Calibrated from the fitted eye mesh, rather than from the head joint's
     // centre. A camera at the joint can look through the open shirt collar.
     const int32 HeadIndex=BoneIndex.FindChecked(TEXT("head"));
     const FVector EyeInHead=ReferenceGlobal[HeadIndex].InverseTransformPosition(FVector(0,12.545f,145.045f));
     const FVector EyeWorld=GetMesh()->GetSocketTransform(TEXT("head")).TransformPosition(EyeInHead);
     FVector EyeTarget=GetActorTransform().InverseTransformPosition(EyeWorld);
-    EyeTarget.X=FMath::Clamp(EyeTarget.X,10.f,30.f);
+    if (!bThirdPerson && Controller)
+    {
+        // A small inspection lean keeps the shirt from occluding the legs.
+        // It fades out for active hands and uses the existing eye collision
+        // sweep; neutral viewing and precise contact retain calibrated eyes.
+        const float Pitch=FRotator::NormalizeAxis(Controller->GetControlRotation().Pitch);
+        const float Inspection=Ease((-Pitch-55.f)/30.f)*(1.f-ReachAlpha)*(1.f-LeftReachAlpha)*
+            (1.f-FMath::Max3(CrouchAlpha,SeatedAlpha,FallAlpha));
+        EyeTarget.X+=8.f*Inspection;
+    }
+    EyeTarget.X=FMath::Clamp(EyeTarget.X,10.f,FallAlpha>0.f?160.f:30.f);
     const FVector SmoothedEye=FMath::VInterpTo(ReviewCamera->GetRelativeLocation(),EyeTarget,Dt,6.f);
     FVector EyePosition=GetActorTransform().TransformPosition(SmoothedEye);
     const FVector EyeBase=GetActorTransform().TransformPosition(FVector(12.545f,0,60.645f));
@@ -542,6 +580,7 @@ void AEmbodiedReviewCharacter::Tick(float Dt)
         if (PC->PlayerCameraManager)
         { PC->PlayerCameraManager->ViewPitchMin=-89.f;PC->PlayerCameraManager->ViewPitchMax=74.f; }
     }
+    TickEmbodiedFirstPersonProof(this,Dt);
 }
 
 void AEmbodiedReviewCharacter::EmbodiedInspect(int32 View)

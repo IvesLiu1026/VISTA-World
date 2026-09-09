@@ -1,0 +1,9 @@
+{
+  "schema_version": "simworld.vista.playable-home-poly-haven-acquisition/v1",
+  "assets": [
+    {"asset_id": "beige_wall_001", "logical_asset_id": "visual.material.r4.paint", "asset_type": "texture", "expected_files_hash": "66328da3fac4865f84ac4bb6f296fe282e734ea5", "resolution": "4k", "file_variant": "pbr_jpg", "room_role": "all_rooms_wall_finish"},
+    {"asset_id": "cotton_jersey", "logical_asset_id": "visual.material.r4.cotton", "asset_type": "texture", "expected_files_hash": "de468d9c53b8a1aaa40a37664f778bb44f9effdf", "resolution": "2k", "file_variant": "pbr_jpg", "room_role": "bedding_and_towels"},
+    {"asset_id": "rough_linen", "logical_asset_id": "visual.material.r4.linen", "asset_type": "texture", "expected_files_hash": "4e637f8a844f5100c96dc1b33d4d63fd7309797a", "resolution": "2k", "file_variant": "pbr_jpg", "room_role": "curtains_and_upholstery"},
+    {"asset_id": "terrazzo_tiles", "logical_asset_id": "visual.material.r4.terrazzo", "asset_type": "texture", "expected_files_hash": "62f6e4d8c61e84c16c55b049f4e0bcf4a8cb45b8", "resolution": "4k", "file_variant": "pbr_jpg", "room_role": "kitchen_entry_floor"}
+  ]
+}
