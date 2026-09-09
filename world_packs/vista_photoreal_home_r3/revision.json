@@ -1,0 +1,33 @@
+{
+  "schema": "vista.home-fidelity-revision/v1",
+  "revision": "photoreal-home-fidelity-r3",
+  "base_scene": "../vista_photoreal_home_r2/scene.json",
+  "contract_policy": "Keep frozen source identities, action definitions, events and readiness fields unchanged; R3 is an asset and native implementation revision.",
+  "runtime_contact_schema": "vista.home-fine-contact/v1",
+  "authoring_contact_surfaces": 35,
+  "source_asset_licenses": [
+    {
+      "source": "Retained Poly Haven acquisition",
+      "assets": ["white_oak_veneer", "poly_wool_herringbone", "cardboard_box_01"],
+      "license": "CC0-1.0",
+      "license_url": "https://polyhaven.com/license"
+    },
+    {
+      "source": "Retained fitted MakeHuman CC0 character and its source receipt",
+      "license": "CC0-1.0",
+      "license_url": "https://static.makehumancommunity.org/about/license.html"
+    }
+  ],
+  "documentation": "../../docs/design/vista-home-fidelity-r3/implementation.md",
+  "evidence_manifest": "../../docs/design/vista-home-fidelity-r3/implementation-manifest.json",
+  "acceptance": {
+    "release": "native_review_only",
+    "visual_review": "human_review_pending",
+    "benchmark_labeling": "not_assigned",
+    "source_catalog_readiness": "not_overridden"
+  },
+  "restricted_input_policy": {
+    "allowed": ["native_observation_video", "selected_external_dialogue"],
+    "excluded": ["contact_geometry", "joint_frames", "runtime_state", "receipts", "source_event_ids", "seeds", "render_scripts", "review_notes", "oracle"]
+  }
+}

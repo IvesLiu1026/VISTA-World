@@ -1,0 +1,159 @@
+{
+  "schema": "vista.home-first-person-r5.delivery/v1",
+  "created_at": "2026-09-08T07:13:13.642406+00:00",
+  "status": "implemented_pending_native_gpu_review",
+  "source_branch": "codex/vista-home-first-person-r5",
+  "base_commit": "4355a35bfd7ba87379548d51f591f9d90d316441",
+  "base_branch": "codex/vista-home-materials-r4",
+  "behavior": [
+    "Empty hands visible at level first-person view.",
+    "Looking down reveals the shirt-covered torso/abdomen area, legs and shoes.",
+    "Whole-body pose blends into existing hand interactions and view toggles.",
+    "Rest pose lowers near obstacles."
+  ],
+  "live_demo": {
+    "app": "VISTA Photoreal Home",
+    "version": "R3",
+    "unchanged": true,
+    "checked_project_files": 2318,
+    "backup": "/data/sysx/vista-world/home/demo-r3-20260908"
+  },
+  "selected_project": {
+    "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/project-c/PhotorealHome.uproject",
+    "bytes": 453,
+    "sha256": "35f5be48482cad450f4401627c72bb719b6dec4e64c3e01042cbe9448ef0e923"
+  },
+  "selected_plugin": {
+    "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/project-c/Plugins/VistaPhotorealReview/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so",
+    "bytes": 1118224,
+    "sha256": "3ad3e79bd81065135655a9be370802da1fe85e669c92de3e4c392f845836904d"
+  },
+  "selected_map": {
+    "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/project-c/Content/VISTA/PhotorealHomeR1/Maps/Home.umap",
+    "bytes": 371033,
+    "sha256": "7a99376c6f204d0d66f0e7f1dbde1bd69f523766935f009402a3399f06a1cc38"
+  },
+  "authoring_preview": {
+    "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/previews-d/first-person-review.blend",
+    "bytes": 101367110,
+    "sha256": "4f86c24d40ef5b601ced5761c79b8fd7178e9e09a9c533cfe8cce1a8164125a6"
+  },
+  "gallery": {
+    "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/R5第一人稱預覽.md",
+    "bytes": 1787,
+    "sha256": "b1b1a15e004613996177711e2b7d4db7ca5670c3562f4cb7feacc69edb964178"
+  },
+  "inherited_assets": {
+    "source": "/data/sysx/vista-world/runs/vista-home-materials-r4-20260908a/project-e",
+    "content_files_byte_identical": 2357,
+    "body_geometry_weights_skeleton_and_materials": "retained from R4; no asset replacement"
+  },
+  "validation": {
+    "linux_plugin_editor_development_shipping_build": "passed",
+    "existing_unit_tests": 35,
+    "existing_unit_result": "passed",
+    "native_game_scenarios": 12,
+    "native_game_result": "passed",
+    "native_renderer": "NullRHI",
+    "cup_pickup_fine_contact_and_drop": "passed",
+    "cpu_previews": 3,
+    "posed_surface_visibility": "passed",
+    "manual_preview_inspection": "passed",
+    "demo_preservation": "passed",
+    "compiled_source_files_match": 20,
+    "native_gpu_visual_review": "pending",
+    "native_self_shadow": "pending",
+    "native_fps": "pending",
+    "full_42_action_regression": "pending"
+  },
+  "evidence": [
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/build-c.log",
+      "bytes": 14514,
+      "sha256": "0acbdcd59c02cb12edd0323cab6ccaaa83e6fd22564de979b22ece146f849a7b"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/project-c-prepared.json",
+      "bytes": 518,
+      "sha256": "1b02ed0fd66713b9ba82a2518eff55ebd87eb20e2ad7a317f83c8c6771d89b6b"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/native-c/process.json",
+      "bytes": 1267,
+      "sha256": "4de952acb8ad3cf06842114507da791000281376afd247b34b7de00b35228f41"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/native-c/user/Saved/FirstPersonProof/poses.json",
+      "bytes": 694194,
+      "sha256": "8b1fd2c6d227c8dd8cc8713f00b5a560c89fe751556e6e44d5032e2a8b6ea6e8"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/pose-check-c.json",
+      "bytes": 20240,
+      "sha256": "cd87ad418b05c7c465275195cc2442fe872b7911996a2c40236a6457e0ec0dc2"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/native-c/bridge/receipts.jsonl",
+      "bytes": 4492,
+      "sha256": "5f57908b1586591a8d464fb4e55163b9055e8ac221a3251e23214bedbb7e5e26"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/tests-a.log",
+      "bytes": 6191,
+      "sha256": "a49aace0dfd637557837ce8f6520b951e22823054dae9a5ea8a28d25014be946"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/preservation-final.json",
+      "bytes": 1067,
+      "sha256": "f9beb1bd5f6b851ff43e8c5bb83ee9e3b211a3514d58b9ba59fcf9c9d115f798"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/previews-d/preview.json",
+      "bytes": 6509,
+      "sha256": "d9037255bca04acd57139debbe697ce1f4c4914979a1cde233ed2f45ec429b74"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/previews-d-process.json",
+      "bytes": 1092,
+      "sha256": "a917b861bec5e2bc246e03954c881c9682868bfc0a3970388ef6b0e05c52deac"
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/visual-review.json",
+      "bytes": 2227,
+      "sha256": "df0964ec99bff5454ae0c0a8ca949ea8f300e0623b2aa8aadd521ef0aec39f85"
+    }
+  ],
+  "previews": [
+    {
+      "case": "empty_level",
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/previews-d/empty_level.png",
+      "bytes": 972295,
+      "sha256": "6bb89b7e7b0f69bf1808c19902c3ddfe7fb95f3be3cc2cd5e5f71b79f9eb3269",
+      "manual_inspection": "passed",
+      "observation": "Both empty hands, palms and fingers are visible at the lower sides of the view; the room remains visible ahead."
+    },
+    {
+      "case": "feet_down_89",
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/previews-d/feet_down_89.png",
+      "bytes": 1046780,
+      "sha256": "badee248ffce7d52b4b214d4246fa76aa4eb615bf5af90b09c235426d67fd855",
+      "manual_inspection": "passed",
+      "observation": "The shirt-covered torso/abdomen area, both arms and hands, jeans-covered legs and both shoes are visible together."
+    },
+    {
+      "case": "third_person",
+      "path": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/previews-d/third_person.png",
+      "bytes": 1040502,
+      "sha256": "0a0a975cbf7724239f446ccca1862880cf9f04145928faaa42abd469f58d1d76",
+      "manual_inspection": "passed",
+      "observation": "The full character is visible from behind, with arms at the sides and both legs and shoes present."
+    }
+  ],
+  "preview_renderer": "Blender Cycles CPU",
+  "preview_limit": "Actual Unreal bone and camera poses rendered on retained fitted body assets with the R4 Blender authoring scene/materials; not Unreal or Sunshine captures.",
+  "limits": [
+    "Sunshine remains on the preserved R3 demo; R5 has not been promoted.",
+    "Native GPU appearance, self-shadow, FPS and full action regression remain pending.",
+    "Canonical VISTA datasets, labels and restricted model inputs were not changed."
+  ]
+}

@@ -1,0 +1,3563 @@
+{
+  "schema": "vista.photoreal-actions/v1",
+  "revision": "photoreal-home-actions-r2",
+  "coordinate_system": "UE centimetres: (Blender x, -y, z) * 100",
+  "entities": [
+    {
+      "id": "home.r1/room.entry_hall/entity.exit_door.01",
+      "short_id": "exit_door",
+      "room": "home.r1/room.entry_hall",
+      "label": "PR_action_door_entry",
+      "kind": "door",
+      "control_cm": [
+        42.5,
+        383.1,
+        102
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false
+      },
+      "hinge_cm": [
+        -52.5,
+        390.4,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": -95,
+      "display": "Entry door",
+      "grip_profile": "thin",
+      "grip_axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "home.r1/room.entry_hall/entity.interior_door.01",
+      "short_id": "living_door",
+      "room": "home.r1/room.entry_hall",
+      "label": "PR_action_door_living",
+      "kind": "door",
+      "control_cm": [
+        -166.3,
+        239,
+        102
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": true
+      },
+      "hinge_cm": [
+        -159,
+        149,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": 90,
+      "display": "Living door",
+      "grip_profile": "thin",
+      "grip_axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "home.r1/room.entry_hall/entity.interior_door.02",
+      "short_id": "kitchen_door",
+      "room": "home.r1/room.entry_hall",
+      "label": "PR_action_door_kitchen",
+      "kind": "door",
+      "control_cm": [
+        151.7,
+        239,
+        102
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": true
+      },
+      "hinge_cm": [
+        159,
+        149,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": 90,
+      "display": "Kitchen door",
+      "grip_profile": "thin",
+      "grip_axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "home.r1/room.entry_hall/entity.interior_door.03",
+      "short_id": "bedroom_door",
+      "room": "home.r1/room.entry_hall",
+      "label": "PR_action_door_bedroom",
+      "kind": "door",
+      "control_cm": [
+        -166.3,
+        -161,
+        102
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": true
+      },
+      "hinge_cm": [
+        -159,
+        -251,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": 90,
+      "display": "Bedroom door",
+      "grip_profile": "thin",
+      "grip_axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "home.r1/room.entry_hall/entity.interior_door.04",
+      "short_id": "office_door",
+      "room": "home.r1/room.entry_hall",
+      "label": "PR_action_door_office",
+      "kind": "door",
+      "control_cm": [
+        151.7,
+        -161,
+        102
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": true
+      },
+      "hinge_cm": [
+        159,
+        -251,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": -90,
+      "display": "Office door",
+      "grip_profile": "thin",
+      "grip_axis": [
+        0,
+        1,
+        0
+      ]
+    },
+    {
+      "id": "home.r1/room.entry_hall/entity.interior_door.05",
+      "short_id": "bathroom_door",
+      "room": "home.r1/room.entry_hall",
+      "label": "PR_action_door_bathroom",
+      "kind": "door",
+      "control_cm": [
+        39,
+        -401.7,
+        102
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": true
+      },
+      "hinge_cm": [
+        -51,
+        -409,
+        0
+      ],
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": -90,
+      "display": "Bathroom door",
+      "grip_profile": "thin",
+      "grip_axis": [
+        1,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "home.r1/room.entry_hall/entity.shoe_bench.01",
+      "short_id": "shoe_bench",
+      "room": "home.r1/room.entry_hall",
+      "label": "PR_entry_shoe_bench",
+      "kind": "seat",
+      "control_cm": [
+        122,
+        299,
+        48
+      ],
+      "actions": [
+        "inspect",
+        "sit_down",
+        "stand_up",
+        "seated_idle"
+      ],
+      "initial_state": {
+        "visible": true,
+        "occupied": false
+      },
+      "seat_cm": [
+        122,
+        299,
+        55
+      ],
+      "stand_cm": [
+        72,
+        299,
+        84.5
+      ],
+      "facing": 180,
+      "display": "Shoe bench"
+    },
+    {
+      "id": "home.r1/room.living_room/entity.sofa.01",
+      "short_id": "sofa",
+      "room": "home.r1/room.living_room",
+      "label": "PR_living_sofa",
+      "kind": "seat",
+      "control_cm": [
+        -415,
+        89,
+        53
+      ],
+      "actions": [
+        "inspect",
+        "sit_down",
+        "stand_up",
+        "seated_idle"
+      ],
+      "initial_state": {
+        "visible": true,
+        "occupied": false
+      },
+      "seat_cm": [
+        -415,
+        82,
+        59
+      ],
+      "stand_cm": [
+        -415,
+        130,
+        84.5
+      ],
+      "facing": 90,
+      "display": "Sofa"
+    },
+    {
+      "id": "home.r1/room.living_room/entity.coffee_table.01",
+      "short_id": "coffee_table",
+      "room": "home.r1/room.living_room",
+      "label": "PR_living_table",
+      "kind": "surface",
+      "control_cm": [
+        -415,
+        189,
+        45.5
+      ],
+      "actions": [
+        "inspect"
+      ],
+      "initial_state": {
+        "visible": true
+      },
+      "anchors": {
+        "tabletop_left": [
+          -450,
+          183,
+          45.8
+        ],
+        "tabletop_right": [
+          -385,
+          177,
+          45.8
+        ]
+      },
+      "display": "Coffee table"
+    },
+    {
+      "id": "home.r1/room.living_room/entity.keys.01",
+      "short_id": "keys",
+      "room": "home.r1/room.living_room",
+      "label": "PR_keys",
+      "kind": "pickup",
+      "control_cm": [
+        -443,
+        193,
+        47
+      ],
+      "actions": [
+        "inspect",
+        "pick_up",
+        "carry",
+        "place",
+        "drop"
+      ],
+      "initial_state": {
+        "visible": true,
+        "portable": true,
+        "held_by": null,
+        "container_in": null
+      },
+      "position_cm": [
+        -443,
+        193,
+        46.2
+      ],
+      "radius": 2.0,
+      "height": 0.6,
+      "mass": 0.075,
+      "grip_height": 0.4,
+      "grip_profile": "pinch",
+      "top_grip": true,
+      "display": "House keys"
+    },
+    {
+      "id": "home.r1/room.living_room/entity.slipper.01",
+      "short_id": "slipper",
+      "room": "home.r1/room.living_room",
+      "label": "PR_slipper",
+      "kind": "pickup",
+      "control_cm": [
+        -207,
+        220,
+        5
+      ],
+      "actions": [
+        "inspect",
+        "pick_up",
+        "carry",
+        "place",
+        "drop"
+      ],
+      "initial_state": {
+        "visible": true,
+        "portable": true,
+        "held_by": null,
+        "container_in": null
+      },
+      "position_cm": [
+        -207,
+        220,
+        0.4
+      ],
+      "radius": 5.0,
+      "height": 8.2,
+      "mass": 0.18,
+      "grip_height": 8,
+      "grip_profile": "pinch",
+      "top_grip": true,
+      "display": "Slipper"
+    },
+    {
+      "id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+      "short_id": "coffee_cup",
+      "room": "home.r1/room.kitchen_dining",
+      "label": "Interaction cup",
+      "kind": "pickup",
+      "control_cm": [
+        334,
+        317,
+        83
+      ],
+      "actions": [
+        "inspect",
+        "pick_up",
+        "carry",
+        "place",
+        "drop",
+        "spill"
+      ],
+      "initial_state": {
+        "visible": true,
+        "portable": true,
+        "held_by": null,
+        "container_in": null
+      },
+      "radius": 3.7,
+      "height": 9.6,
+      "mass": 0.32,
+      "grip_height": 6.2,
+      "liquid_ml": 200,
+      "capacity_ml": 300,
+      "display": "Coffee cup"
+    },
+    {
+      "id": "home.r1/room.kitchen_dining/entity.pot.01",
+      "short_id": "pot",
+      "room": "home.r1/room.kitchen_dining",
+      "label": "PR_kitchen_pot",
+      "kind": "pickup",
+      "control_cm": [
+        380.5,
+        42.5,
+        109
+      ],
+      "actions": [
+        "inspect",
+        "pick_up",
+        "carry",
+        "place",
+        "drop"
+      ],
+      "initial_state": {
+        "visible": true,
+        "portable": true,
+        "held_by": null,
+        "container_in": null
+      },
+      "radius": 11.0,
+      "height": 16.2,
+      "mass": 1.8,
+      "grip_height": 12.2,
+      "two_hands": true,
+      "grip_width": 33.4,
+      "grip_profile": "thin",
+      "children": [
+        "PR_kitchen_lid"
+      ],
+      "display": "Cooking pot"
+    },
+    {
+      "id": "home.r1/room.kitchen_dining/entity.water_jug.01",
+      "short_id": "water_jug",
+      "room": "home.r1/room.kitchen_dining",
+      "label": "PR_jug",
+      "kind": "pickup",
+      "control_cm": [
+        348,
+        282,
+        89
+      ],
+      "actions": [
+        "inspect",
+        "pick_up",
+        "carry",
+        "place",
+        "drop",
+        "pour",
+        "spill"
+      ],
+      "initial_state": {
+        "visible": true,
+        "portable": true,
+        "held_by": null,
+        "container_in": null
+      },
+      "radius": 7.2,
+      "height": 25.3,
+      "mass": 1.1,
+      "grip_height": 13.0,
+      "grip_offset_cm": [
+        12.4,
+        0,
+        13.0
+      ],
+      "grip_profile": "thin",
+      "liquid_ml": 900,
+      "capacity_ml": 1500,
+      "display": "Water jug"
+    },
+    {
+      "id": "home.r1/room.kitchen_dining/entity.dining_table.01",
+      "short_id": "dining_table",
+      "room": "home.r1/room.kitchen_dining",
+      "label": "PR_kitchen_dining",
+      "kind": "surface",
+      "control_cm": [
+        300,
+        303,
+        76.5
+      ],
+      "actions": [
+        "inspect"
+      ],
+      "initial_state": {
+        "visible": true
+      },
+      "anchors": {
+        "place_setting": [
+          334,
+          317,
+          76.8
+        ],
+        "free_surface": [
+          347,
+          307,
+          76.8
+        ]
+      },
+      "display": "Dining table"
+    },
+    {
+      "id": "home.r1/room.kitchen_dining/entity.stove.01",
+      "short_id": "stove",
+      "room": "home.r1/room.kitchen_dining",
+      "label": "PR_stove_control",
+      "kind": "appliance",
+      "control_cm": [
+        387.5,
+        62,
+        94.9
+      ],
+      "actions": [
+        "inspect",
+        "turn_on",
+        "turn_off",
+        "appliance.toggle_rotary"
+      ],
+      "initial_state": {
+        "visible": true,
+        "active": false,
+        "powered": true,
+        "status": "idle"
+      },
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": 75,
+      "display": "Stove control",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.kitchen_dining/entity.fridge.01",
+      "short_id": "fridge",
+      "room": "home.r1/room.kitchen_dining",
+      "label": "PR_door_r",
+      "kind": "container",
+      "control_cm": [
+        204.8,
+        97.4,
+        108
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close",
+        "insert",
+        "storage.insert",
+        "storage.remove"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false,
+        "contents": []
+      },
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": -100,
+      "storage_cm": [
+        227,
+        52,
+        66.4
+      ],
+      "entry_cm": [
+        227,
+        106,
+        66.4
+      ],
+      "capacity_cm": [
+        35,
+        34,
+        28
+      ],
+      "display": "Refrigerator",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.bedroom/entity.bed.01",
+      "short_id": "bed",
+      "room": "home.r1/room.bedroom",
+      "label": "PR_bedroom_bed",
+      "kind": "seat",
+      "control_cm": [
+        -365,
+        -258,
+        56
+      ],
+      "actions": [
+        "inspect",
+        "sit_down",
+        "stand_up",
+        "seated_idle"
+      ],
+      "initial_state": {
+        "visible": true,
+        "occupied": false
+      },
+      "seat_cm": [
+        -372,
+        -258,
+        62
+      ],
+      "stand_cm": [
+        -325,
+        -258,
+        84.5
+      ],
+      "facing": 0,
+      "display": "Bed edge"
+    },
+    {
+      "id": "home.r1/room.bedroom/entity.nightstand.01",
+      "short_id": "nightstand",
+      "room": "home.r1/room.bedroom",
+      "label": "PR_bedroom_nightstand",
+      "kind": "surface",
+      "control_cm": [
+        -330,
+        -329,
+        55
+      ],
+      "actions": [
+        "inspect"
+      ],
+      "initial_state": {
+        "visible": true
+      },
+      "anchors": {
+        "top": [
+          -337,
+          -317,
+          55
+        ]
+      },
+      "display": "Bedside table"
+    },
+    {
+      "id": "home.r1/room.bedroom/entity.phone.01",
+      "short_id": "phone",
+      "room": "home.r1/room.bedroom",
+      "label": "PR_phone",
+      "kind": "pickup",
+      "control_cm": [
+        -348,
+        -317,
+        56
+      ],
+      "actions": [
+        "inspect",
+        "pick_up",
+        "carry",
+        "place",
+        "drop"
+      ],
+      "initial_state": {
+        "visible": true,
+        "portable": true,
+        "held_by": null,
+        "container_in": null
+      },
+      "position_cm": [
+        -348,
+        -317,
+        55.2
+      ],
+      "radius": 3.4,
+      "height": 0.9,
+      "mass": 0.18,
+      "grip_height": 0.5,
+      "grip_profile": "pinch",
+      "top_grip": true,
+      "display": "Phone"
+    },
+    {
+      "id": "home.r1/room.bedroom/entity.backpack.01",
+      "short_id": "backpack",
+      "room": "home.r1/room.bedroom",
+      "label": "PR_backpack",
+      "kind": "pickup",
+      "control_cm": [
+        -241,
+        -22,
+        150
+      ],
+      "actions": [
+        "inspect",
+        "pick_up",
+        "carry",
+        "place",
+        "drop",
+        "equip",
+        "unequip"
+      ],
+      "initial_state": {
+        "visible": true,
+        "portable": true,
+        "held_by": null,
+        "container_in": null,
+        "mounted": true
+      },
+      "radius": 14,
+      "height": 63,
+      "mass": 0.7,
+      "grip_height": 57.3,
+      "grip_offset_cm": [
+        -5.9,
+        7,
+        57.3
+      ],
+      "grip_profile": "thin",
+      "display": "Backpack"
+    },
+    {
+      "id": "home.r1/room.bedroom/entity.bedside_drawer.01",
+      "short_id": "bedside_drawer",
+      "room": "home.r1/room.bedroom",
+      "label": "PR_bedside_drawer",
+      "kind": "drawer",
+      "control_cm": [
+        -330,
+        -306,
+        48.2
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false
+      },
+      "slide_cm": [
+        0,
+        25,
+        0
+      ],
+      "display": "Bedside drawer",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.bedroom/entity.wardrobe_0.01",
+      "short_id": "wardrobe_0",
+      "room": "home.r1/room.bedroom",
+      "label": "PR_wardrobe_0",
+      "kind": "container",
+      "control_cm": [
+        -501.0,
+        -75,
+        113
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close",
+        "insert",
+        "storage.insert",
+        "storage.remove"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false,
+        "contents": []
+      },
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": -65,
+      "storage_cm": [
+        -520.0,
+        -40,
+        6.5
+      ],
+      "capacity_cm": [
+        50,
+        40,
+        50
+      ],
+      "display": "Wardrobe 1",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.bedroom/entity.wardrobe_1.01",
+      "short_id": "wardrobe_1",
+      "room": "home.r1/room.bedroom",
+      "label": "PR_wardrobe_1",
+      "kind": "container",
+      "control_cm": [
+        -441.0,
+        -75,
+        113
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close",
+        "insert",
+        "storage.insert",
+        "storage.remove"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false,
+        "contents": []
+      },
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": -65,
+      "storage_cm": [
+        -460.0,
+        -40,
+        6.5
+      ],
+      "capacity_cm": [
+        50,
+        40,
+        50
+      ],
+      "display": "Wardrobe 2",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.bedroom/entity.wardrobe_2.01",
+      "short_id": "wardrobe_2",
+      "room": "home.r1/room.bedroom",
+      "label": "PR_wardrobe_2",
+      "kind": "container",
+      "control_cm": [
+        -381.0,
+        -75,
+        113
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close",
+        "insert",
+        "storage.insert",
+        "storage.remove"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false,
+        "contents": []
+      },
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": -65,
+      "storage_cm": [
+        -400.0,
+        -40,
+        6.5
+      ],
+      "capacity_cm": [
+        50,
+        40,
+        50
+      ],
+      "display": "Wardrobe 3",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.bedroom/entity.wardrobe_3.01",
+      "short_id": "wardrobe_3",
+      "room": "home.r1/room.bedroom",
+      "label": "PR_wardrobe_3",
+      "kind": "container",
+      "control_cm": [
+        -321.0,
+        -75,
+        113
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close",
+        "insert",
+        "storage.insert",
+        "storage.remove"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false,
+        "contents": []
+      },
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": -65,
+      "storage_cm": [
+        -340.0,
+        -40,
+        6.5
+      ],
+      "capacity_cm": [
+        50,
+        40,
+        50
+      ],
+      "display": "Wardrobe 4",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.office/entity.desk.01",
+      "short_id": "desk",
+      "room": "home.r1/room.office",
+      "label": "PR_office_desk",
+      "kind": "surface",
+      "control_cm": [
+        575,
+        -200,
+        74
+      ],
+      "actions": [
+        "inspect"
+      ],
+      "initial_state": {
+        "visible": true
+      },
+      "anchors": {
+        "desktop": [
+          575,
+          -222,
+          74.3
+        ]
+      },
+      "display": "Desk"
+    },
+    {
+      "id": "home.r1/room.office/entity.rolling_chair.01",
+      "short_id": "rolling_chair",
+      "room": "home.r1/room.office",
+      "label": "PR_office_chair",
+      "kind": "seat",
+      "control_cm": [
+        527,
+        -200,
+        50
+      ],
+      "actions": [
+        "inspect",
+        "sit_down",
+        "stand_up",
+        "seated_idle",
+        "push",
+        "pull_drag"
+      ],
+      "initial_state": {
+        "visible": true,
+        "occupied": false
+      },
+      "seat_cm": [
+        506,
+        -200,
+        56
+      ],
+      "stand_cm": [
+        550,
+        -200,
+        84.5
+      ],
+      "facing": 0,
+      "display": "Office chair"
+    },
+    {
+      "id": "home.r1/room.office/entity.cabinet.01",
+      "short_id": "cabinet",
+      "room": "home.r1/room.office",
+      "label": "PR_cabinet_left",
+      "kind": "container",
+      "control_cm": [
+        280,
+        -345,
+        70
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close",
+        "insert",
+        "storage.insert",
+        "storage.remove"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false,
+        "contents": []
+      },
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": 100,
+      "storage_cm": [
+        266,
+        -362,
+        5.6
+      ],
+      "capacity_cm": [
+        34,
+        30,
+        65
+      ],
+      "display": "Storage cabinet",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.office/entity.cabinet_right.01",
+      "short_id": "cabinet_right",
+      "room": "home.r1/room.office",
+      "label": "PR_cabinet_right",
+      "kind": "container",
+      "control_cm": [
+        288,
+        -345,
+        70
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close",
+        "insert",
+        "storage.insert",
+        "storage.remove"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false,
+        "contents": []
+      },
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": -100,
+      "storage_cm": [
+        305,
+        -362,
+        5.6
+      ],
+      "capacity_cm": [
+        34,
+        30,
+        65
+      ],
+      "display": "Storage cabinet right",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.office/entity.cardboard_box.01",
+      "short_id": "cardboard_box",
+      "room": "home.r1/room.office",
+      "label": "PR_box",
+      "kind": "pickup",
+      "control_cm": [
+        286.5,
+        -357,
+        214
+      ],
+      "actions": [
+        "inspect",
+        "pick_up",
+        "carry",
+        "place",
+        "drop"
+      ],
+      "initial_state": {
+        "visible": true,
+        "portable": true,
+        "held_by": null,
+        "container_in": null
+      },
+      "position_cm": [
+        286.5,
+        -368,
+        200.5
+      ],
+      "radius": 14,
+      "height": 29,
+      "mass": 0.9,
+      "grip_height": 14,
+      "grip_offset_cm": [
+        0,
+        11,
+        14
+      ],
+      "two_hands": true,
+      "grip_width": 49,
+      "display": "Storage box"
+    },
+    {
+      "id": "home.r1/room.office/entity.ladder.01",
+      "short_id": "ladder",
+      "room": "home.r1/room.office",
+      "label": "PR_office_ladder",
+      "kind": "equipment",
+      "control_cm": [
+        306,
+        -296.35,
+        110
+      ],
+      "actions": [
+        "inspect",
+        "push",
+        "pull_drag",
+        "step_up",
+        "step_down",
+        "contact.brace"
+      ],
+      "initial_state": {
+        "visible": true
+      },
+      "platform_cm": [
+        284,
+        -297,
+        106
+      ],
+      "stand_cm": [
+        284,
+        -224,
+        84.5
+      ],
+      "grip_profile": "thin",
+      "grip_axis": [
+        0,
+        -0.285,
+        0.96
+      ],
+      "display": "Stepladder"
+    },
+    {
+      "id": "home.r1/room.bathroom_laundry/entity.bathtub.01",
+      "short_id": "bathtub",
+      "room": "home.r1/room.bathroom_laundry",
+      "label": "PR_bathroom_tub",
+      "kind": "receiver",
+      "control_cm": [
+        -99,
+        -669,
+        40
+      ],
+      "actions": [
+        "inspect"
+      ],
+      "initial_state": {
+        "visible": true
+      },
+      "capacity_ml": 180000,
+      "liquid_ml": 0,
+      "display": "Bathtub"
+    },
+    {
+      "id": "home.r1/room.bathroom_laundry/entity.faucet.01",
+      "short_id": "faucet",
+      "room": "home.r1/room.bathroom_laundry",
+      "label": "PR_tap_control",
+      "kind": "appliance",
+      "control_cm": [
+        -58,
+        -630,
+        74.5
+      ],
+      "actions": [
+        "inspect",
+        "turn_on",
+        "turn_off",
+        "appliance.toggle_rotary"
+      ],
+      "initial_state": {
+        "visible": true,
+        "active": false,
+        "powered": true,
+        "status": "idle"
+      },
+      "axis": [
+        0,
+        1,
+        0
+      ],
+      "open_angle": -30,
+      "display": "Bath faucet",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.bathroom_laundry/entity.washer.01",
+      "short_id": "washer",
+      "room": "home.r1/room.bathroom_laundry",
+      "label": "PR_washer_control",
+      "kind": "appliance",
+      "control_cm": [
+        71.7,
+        -689.4,
+        77.4
+      ],
+      "actions": [
+        "inspect",
+        "turn_on",
+        "turn_off",
+        "appliance.toggle_rotary"
+      ],
+      "initial_state": {
+        "visible": true,
+        "active": false,
+        "powered": true,
+        "status": "idle"
+      },
+      "display": "Washer start control"
+    },
+    {
+      "id": "home.r1/room.bathroom_laundry/entity.washer_door.01",
+      "short_id": "washer_door",
+      "room": "home.r1/room.bathroom_laundry",
+      "label": "PR_washer_door",
+      "kind": "container",
+      "control_cm": [
+        66,
+        -694.5,
+        44.5
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close",
+        "insert",
+        "storage.insert",
+        "storage.remove",
+        "load",
+        "unload"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false,
+        "contents": []
+      },
+      "axis": [
+        0,
+        0,
+        1
+      ],
+      "open_angle": 100,
+      "storage_cm": [
+        85.8,
+        -713,
+        34
+      ],
+      "entry_cm": [
+        53,
+        -713,
+        34
+      ],
+      "storage_yaw_deg": 90,
+      "capacity_cm": [
+        24,
+        28,
+        20
+      ],
+      "display": "Washer door",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.bathroom_laundry/entity.laundry_basket.01",
+      "short_id": "laundry_basket",
+      "room": "home.r1/room.bathroom_laundry",
+      "label": "PR_basket_lid",
+      "kind": "container",
+      "control_cm": [
+        98,
+        -610,
+        58
+      ],
+      "actions": [
+        "inspect",
+        "articulation.open",
+        "close",
+        "insert",
+        "storage.insert",
+        "storage.remove"
+      ],
+      "initial_state": {
+        "visible": true,
+        "open": false,
+        "contents": []
+      },
+      "axis": [
+        1,
+        0,
+        0
+      ],
+      "open_angle": 95,
+      "grip_axis": [
+        1,
+        0,
+        0
+      ],
+      "storage_cm": [
+        98,
+        -610,
+        4.6
+      ],
+      "entry_cm": [
+        98,
+        -610,
+        60
+      ],
+      "capacity_cm": [
+        35,
+        29,
+        43
+      ],
+      "display": "Laundry basket",
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.bathroom_laundry/entity.clothes.01",
+      "short_id": "clothes",
+      "room": "home.r1/room.bathroom_laundry",
+      "label": "PR_clothes",
+      "kind": "pickup",
+      "control_cm": [
+        98,
+        -610,
+        9.6
+      ],
+      "actions": [
+        "inspect",
+        "pick_up",
+        "carry",
+        "place",
+        "drop"
+      ],
+      "initial_state": {
+        "visible": true,
+        "portable": true,
+        "held_by": null,
+        "container_in": "home.r1/room.bathroom_laundry/entity.laundry_basket.01"
+      },
+      "radius": 11,
+      "height": 9.1,
+      "mass": 0.6,
+      "grip_height": 5,
+      "grip_profile": "pinch",
+      "top_grip": true,
+      "display": "Folded laundry"
+    },
+    {
+      "id": "home.r1/room.living_room/entity.television.01",
+      "short_id": "television",
+      "room": "home.r1/room.living_room",
+      "label": "PR_tv_control",
+      "kind": "appliance",
+      "control_cm": [
+        -403,
+        356.5,
+        56.3
+      ],
+      "actions": [
+        "inspect",
+        "turn_on",
+        "turn_off",
+        "appliance.toggle_rotary",
+        "press_button"
+      ],
+      "initial_state": {
+        "visible": true,
+        "active": false,
+        "powered": true,
+        "status": "idle"
+      },
+      "display": "Television",
+      "button_travel_cm": [
+        0,
+        0.25,
+        0
+      ]
+    },
+    {
+      "id": "home.r1/room.living_room/entity.floor_lamp.01",
+      "short_id": "floor_lamp",
+      "room": "home.r1/room.living_room",
+      "label": "PR_lamp_control",
+      "kind": "appliance",
+      "control_cm": [
+        -575,
+        45.3,
+        110
+      ],
+      "actions": [
+        "inspect",
+        "turn_on",
+        "turn_off",
+        "appliance.toggle_rotary",
+        "press_button"
+      ],
+      "initial_state": {
+        "visible": true,
+        "active": false,
+        "powered": true,
+        "status": "idle"
+      },
+      "display": "Floor Lamp",
+      "button_travel_cm": [
+        0,
+        0.15,
+        0
+      ]
+    },
+    {
+      "id": "home.r1/room.office/entity.computer.01",
+      "short_id": "computer",
+      "room": "home.r1/room.office",
+      "label": "PR_computer_control",
+      "kind": "appliance",
+      "control_cm": [
+        615.5,
+        -180,
+        87.3
+      ],
+      "actions": [
+        "inspect",
+        "turn_on",
+        "turn_off",
+        "appliance.toggle_rotary",
+        "press_button"
+      ],
+      "initial_state": {
+        "visible": true,
+        "active": false,
+        "powered": true,
+        "status": "idle"
+      },
+      "display": "Computer",
+      "button_travel_cm": [
+        0.25,
+        0,
+        0
+      ]
+    },
+    {
+      "id": "home.r1/room.bathroom_laundry/entity.toilet.01",
+      "short_id": "toilet",
+      "room": "home.r1/room.bathroom_laundry",
+      "label": "PR_flush_control",
+      "kind": "appliance",
+      "control_cm": [
+        -126.5,
+        -519,
+        80.5
+      ],
+      "actions": [
+        "inspect",
+        "press_button"
+      ],
+      "initial_state": {
+        "visible": true,
+        "active": false,
+        "powered": true,
+        "status": "idle"
+      },
+      "display": "Toilet",
+      "button_travel_cm": [
+        0,
+        0,
+        -0.6
+      ]
+    },
+    {
+      "id": "home.r1/room.bathroom_laundry/entity.basin_faucet.01",
+      "short_id": "basin_faucet",
+      "room": "home.r1/room.bathroom_laundry",
+      "label": "PR_basin_control",
+      "kind": "appliance",
+      "control_cm": [
+        127,
+        -515,
+        98.4
+      ],
+      "actions": [
+        "inspect",
+        "turn_on",
+        "turn_off",
+        "appliance.toggle_rotary"
+      ],
+      "initial_state": {
+        "visible": true,
+        "active": false,
+        "powered": true,
+        "status": "idle"
+      },
+      "display": "Basin Faucet",
+      "axis": [
+        0,
+        1,
+        0
+      ],
+      "open_angle": 30,
+      "grip_profile": "thin"
+    },
+    {
+      "id": "home.r1/room.living_room/entity.spill_marker.01",
+      "short_id": "spill_marker",
+      "room": "home.r1/room.living_room",
+      "label": "",
+      "kind": "hazard",
+      "control_cm": [
+        0,
+        0,
+        0
+      ],
+      "actions": [
+        "inspect"
+      ],
+      "initial_state": {
+        "visible": false
+      },
+      "display": "spill_marker"
+    },
+    {
+      "id": "home.r1/room.kitchen_dining/entity.fire_marker.01",
+      "short_id": "fire_marker",
+      "room": "home.r1/room.kitchen_dining",
+      "label": "",
+      "kind": "hazard",
+      "control_cm": [
+        0,
+        0,
+        0
+      ],
+      "actions": [
+        "inspect"
+      ],
+      "initial_state": {
+        "visible": false
+      },
+      "display": "fire_marker"
+    },
+    {
+      "id": "home.r1/room.bathroom_laundry/entity.overflow_marker.01",
+      "short_id": "overflow_marker",
+      "room": "home.r1/room.bathroom_laundry",
+      "label": "",
+      "kind": "hazard",
+      "control_cm": [
+        0,
+        0,
+        0
+      ],
+      "actions": [
+        "inspect"
+      ],
+      "initial_state": {
+        "visible": false
+      },
+      "display": "overflow_marker"
+    }
+  ],
+  "events": [
+    {
+      "schema_version": "simworld.vista.playable-event/v1",
+      "event_id": "mmg_001",
+      "title": "Stove remains active before leaving home",
+      "compatible_house": {
+        "house_id": "home.r1",
+        "revision": "vista_playable_home_r1",
+        "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+      },
+      "participating_room_ids": [
+        "home.r1/room.entry_hall",
+        "home.r1/room.kitchen_dining"
+      ],
+      "participating_entity_ids": [
+        "home.r1/room.entry_hall/entity.exit_door.01",
+        "home.r1/room.kitchen_dining/entity.fire_marker.01",
+        "home.r1/room.kitchen_dining/entity.pot.01",
+        "home.r1/room.kitchen_dining/entity.stove.01"
+      ],
+      "initial_operations": [
+        {
+          "op_id": "op.01",
+          "op": "set_state",
+          "target_id": "home.r1/room.kitchen_dining/entity.stove.01",
+          "state_patch": {
+            "active": true,
+            "hazard": "thermal"
+          }
+        },
+        {
+          "op_id": "op.02",
+          "op": "set_visibility",
+          "target_id": "home.r1/room.kitchen_dining/entity.fire_marker.01",
+          "visible": true
+        },
+        {
+          "op_id": "op.03",
+          "op": "set_goal",
+          "goal_id": "secure_stove",
+          "enabled": true
+        }
+      ],
+      "public_goals": [
+        {
+          "goal_id": "secure_stove",
+          "description": "Deactivate the stove before opening the exit door.",
+          "success_condition_ids": [
+            "stove_off"
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "condition_id": "stove_active",
+          "type": "entity_state",
+          "target_id": "home.r1/room.kitchen_dining/entity.stove.01",
+          "field": "active",
+          "operator": "eq",
+          "value": true
+        }
+      ],
+      "success_conditions": [
+        {
+          "condition_id": "stove_off",
+          "type": "entity_state",
+          "target_id": "home.r1/room.kitchen_dining/entity.stove.01",
+          "field": "active",
+          "operator": "eq",
+          "value": false
+        }
+      ],
+      "failure_conditions": [
+        {
+          "condition_id": "exit_opened_while_active",
+          "type": "interaction",
+          "target_id": "home.r1/room.entry_hall/entity.exit_door.01",
+          "affordance": "open"
+        }
+      ],
+      "timeout_s": 600,
+      "reset_policy": {
+        "mode": "restore_baseline",
+        "reset_npc_queues": true,
+        "release_held_items": true
+      },
+      "source": {
+        "dataset": "VISTA",
+        "sample_id": "mmg_001",
+        "verification": "verified",
+        "public_reference": "vista://assist-step/mmg_001"
+      },
+      "content_digest": "1ee2f01a75e59c7500ae4d04a7c41c47d8f618173f85dbdad80e8cab3a1db430"
+    },
+    {
+      "schema_version": "simworld.vista.playable-event/v1",
+      "event_id": "mmg_013",
+      "title": "Coffee carried past a slipper obstacle",
+      "compatible_house": {
+        "house_id": "home.r1",
+        "revision": "vista_playable_home_r1",
+        "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+      },
+      "participating_room_ids": [
+        "home.r1/room.kitchen_dining",
+        "home.r1/room.living_room"
+      ],
+      "participating_entity_ids": [
+        "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+        "home.r1/room.living_room/entity.slipper.01",
+        "home.r1/room.living_room/entity.spill_marker.01"
+      ],
+      "initial_operations": [
+        {
+          "op_id": "op.01",
+          "op": "set_transform",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+          "room_id": "home.r1/room.kitchen_dining",
+          "transform": {
+            "location_m": [
+              -0.55,
+              -0.2,
+              0.78
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "op_id": "op.02",
+          "op": "set_transform",
+          "target_id": "home.r1/room.living_room/entity.slipper.01",
+          "room_id": "home.r1/room.living_room",
+          "transform": {
+            "location_m": [
+              1.4,
+              -0.5,
+              0.03
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              25
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "op_id": "op.03",
+          "op": "set_visibility",
+          "target_id": "home.r1/room.living_room/entity.spill_marker.01",
+          "visible": false
+        },
+        {
+          "op_id": "op.04",
+          "op": "set_goal",
+          "goal_id": "clear_obstacle",
+          "enabled": true
+        }
+      ],
+      "public_goals": [
+        {
+          "goal_id": "clear_obstacle",
+          "description": "Clear the slipper from the walking path before carrying the coffee through the living room.",
+          "success_condition_ids": [
+            "slipper_moved"
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "condition_id": "coffee_picked_up",
+          "type": "interaction",
+          "target_id": "home.r1/room.kitchen_dining/entity.coffee_cup.01",
+          "affordance": "pick_up"
+        }
+      ],
+      "success_conditions": [
+        {
+          "condition_id": "slipper_moved",
+          "type": "interaction",
+          "target_id": "home.r1/room.living_room/entity.slipper.01",
+          "affordance": "pick_up"
+        }
+      ],
+      "failure_conditions": [
+        {
+          "condition_id": "spill_visible",
+          "type": "entity_state",
+          "target_id": "home.r1/room.living_room/entity.spill_marker.01",
+          "field": "visible",
+          "operator": "eq",
+          "value": true
+        }
+      ],
+      "timeout_s": 600,
+      "reset_policy": {
+        "mode": "restore_baseline",
+        "reset_npc_queues": true,
+        "release_held_items": true
+      },
+      "source": {
+        "dataset": "VISTA",
+        "sample_id": "mmg_013",
+        "verification": "verified",
+        "public_reference": "vista://assist-step/mmg_013"
+      },
+      "content_digest": "ea9d4fd5ca4f7abb0000fe92229e1d1e45251c73811b887d09a3ad988af90b96"
+    },
+    {
+      "schema_version": "simworld.vista.playable-event/v1",
+      "event_id": "mmg_021",
+      "title": "Bath water continues running",
+      "compatible_house": {
+        "house_id": "home.r1",
+        "revision": "vista_playable_home_r1",
+        "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+      },
+      "participating_room_ids": [
+        "home.r1/room.bathroom_laundry"
+      ],
+      "participating_entity_ids": [
+        "home.r1/room.bathroom_laundry/entity.bathtub.01",
+        "home.r1/room.bathroom_laundry/entity.faucet.01",
+        "home.r1/room.bathroom_laundry/entity.overflow_marker.01"
+      ],
+      "initial_operations": [
+        {
+          "op_id": "op.01",
+          "op": "set_state",
+          "target_id": "home.r1/room.bathroom_laundry/entity.faucet.01",
+          "state_patch": {
+            "active": true,
+            "hazard": "overflow"
+          }
+        },
+        {
+          "op_id": "op.02",
+          "op": "set_state",
+          "target_id": "home.r1/room.bathroom_laundry/entity.bathtub.01",
+          "state_patch": {
+            "liquid_level": 0.75
+          }
+        },
+        {
+          "op_id": "op.03",
+          "op": "set_visibility",
+          "target_id": "home.r1/room.bathroom_laundry/entity.overflow_marker.01",
+          "visible": false
+        },
+        {
+          "op_id": "op.04",
+          "op": "set_goal",
+          "goal_id": "stop_water",
+          "enabled": true
+        }
+      ],
+      "public_goals": [
+        {
+          "goal_id": "stop_water",
+          "description": "Deactivate the faucet before the bathtub overflows.",
+          "success_condition_ids": [
+            "faucet_off"
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "condition_id": "faucet_running",
+          "type": "entity_state",
+          "target_id": "home.r1/room.bathroom_laundry/entity.faucet.01",
+          "field": "active",
+          "operator": "eq",
+          "value": true
+        }
+      ],
+      "success_conditions": [
+        {
+          "condition_id": "faucet_off",
+          "type": "entity_state",
+          "target_id": "home.r1/room.bathroom_laundry/entity.faucet.01",
+          "field": "active",
+          "operator": "eq",
+          "value": false
+        }
+      ],
+      "failure_conditions": [
+        {
+          "condition_id": "overflow_visible",
+          "type": "entity_state",
+          "target_id": "home.r1/room.bathroom_laundry/entity.overflow_marker.01",
+          "field": "visible",
+          "operator": "eq",
+          "value": true
+        },
+        {
+          "condition_id": "water_timeout",
+          "type": "elapsed",
+          "operator": "gte",
+          "seconds": 90
+        }
+      ],
+      "timeout_s": 600,
+      "reset_policy": {
+        "mode": "restore_baseline",
+        "reset_npc_queues": true,
+        "release_held_items": true
+      },
+      "source": {
+        "dataset": "VISTA",
+        "sample_id": "mmg_021",
+        "verification": "verified",
+        "public_reference": "vista://assist-step/mmg_021"
+      },
+      "content_digest": "af73a90f818d5f4278f44bd37fdf4d313efe48e29c05b4cdd49887043f188efd"
+    },
+    {
+      "schema_version": "simworld.vista.playable-event/v1",
+      "event_id": "mmg_040",
+      "title": "High cabinet item and unstable rolling chair",
+      "compatible_house": {
+        "house_id": "home.r1",
+        "revision": "vista_playable_home_r1",
+        "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+      },
+      "participating_room_ids": [
+        "home.r1/room.office"
+      ],
+      "participating_entity_ids": [
+        "home.r1/room.office/entity.cardboard_box.01",
+        "home.r1/room.office/entity.ladder.01",
+        "home.r1/room.office/entity.rolling_chair.01"
+      ],
+      "initial_operations": [
+        {
+          "op_id": "op.01",
+          "op": "set_state",
+          "target_id": "home.r1/room.office/entity.rolling_chair.01",
+          "state_patch": {
+            "hazard": "unstable"
+          }
+        },
+        {
+          "op_id": "op.02",
+          "op": "set_transform",
+          "target_id": "home.r1/room.office/entity.cardboard_box.01",
+          "room_id": "home.r1/room.office",
+          "transform": {
+            "location_m": [
+              2,
+              -1.2,
+              2.28
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              5
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "op_id": "op.03",
+          "op": "set_goal",
+          "goal_id": "use_stable_access",
+          "enabled": true
+        }
+      ],
+      "public_goals": [
+        {
+          "goal_id": "use_stable_access",
+          "description": "Inspect and use the stable ladder rather than the rolling chair for the high box.",
+          "success_condition_ids": [
+            "ladder_inspected"
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "condition_id": "box_targeted",
+          "type": "interaction",
+          "target_id": "home.r1/room.office/entity.cardboard_box.01",
+          "affordance": "inspect"
+        }
+      ],
+      "success_conditions": [
+        {
+          "condition_id": "ladder_inspected",
+          "type": "interaction",
+          "target_id": "home.r1/room.office/entity.ladder.01",
+          "affordance": "inspect"
+        }
+      ],
+      "failure_conditions": [
+        {
+          "condition_id": "chair_used",
+          "type": "interaction",
+          "target_id": "home.r1/room.office/entity.rolling_chair.01",
+          "affordance": "sit"
+        }
+      ],
+      "timeout_s": 600,
+      "reset_policy": {
+        "mode": "restore_baseline",
+        "reset_npc_queues": true,
+        "release_held_items": true
+      },
+      "source": {
+        "dataset": "VISTA",
+        "sample_id": "mmg_040",
+        "verification": "verified",
+        "public_reference": "vista://assist-step/mmg_040"
+      },
+      "content_digest": "1a855f57bcefa61914d88659912bac331990c7b24074deac4580aa6052b3ccdb"
+    },
+    {
+      "schema_version": "simworld.vista.playable-event/v1",
+      "event_id": "mmg_044",
+      "title": "Keys left in the living room",
+      "compatible_house": {
+        "house_id": "home.r1",
+        "revision": "vista_playable_home_r1",
+        "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+      },
+      "participating_room_ids": [
+        "home.r1/room.entry_hall",
+        "home.r1/room.living_room"
+      ],
+      "participating_entity_ids": [
+        "home.r1/room.entry_hall/entity.exit_door.01",
+        "home.r1/room.living_room/entity.keys.01"
+      ],
+      "initial_operations": [
+        {
+          "op_id": "op.01",
+          "op": "set_transform",
+          "target_id": "home.r1/room.living_room/entity.keys.01",
+          "room_id": "home.r1/room.living_room",
+          "transform": {
+            "location_m": [
+              -0.35,
+              0.3,
+              0.5
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              15
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "op_id": "op.02",
+          "op": "set_portable",
+          "target_id": "home.r1/room.living_room/entity.keys.01",
+          "portable": true
+        },
+        {
+          "op_id": "op.03",
+          "op": "set_goal",
+          "goal_id": "bring_keys",
+          "enabled": true
+        }
+      ],
+      "public_goals": [
+        {
+          "goal_id": "bring_keys",
+          "description": "Bring the keys from the living room to the entry before opening the exit door.",
+          "success_condition_ids": [
+            "keys_at_entry"
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "condition_id": "player_at_entry",
+          "type": "player_room",
+          "room_id": "home.r1/room.entry_hall"
+        }
+      ],
+      "success_conditions": [
+        {
+          "condition_id": "keys_at_entry",
+          "type": "entity_room",
+          "target_id": "home.r1/room.living_room/entity.keys.01",
+          "room_id": "home.r1/room.entry_hall"
+        }
+      ],
+      "failure_conditions": [
+        {
+          "condition_id": "exit_opened_without_keys",
+          "type": "interaction",
+          "target_id": "home.r1/room.entry_hall/entity.exit_door.01",
+          "affordance": "open"
+        }
+      ],
+      "timeout_s": 600,
+      "reset_policy": {
+        "mode": "restore_baseline",
+        "reset_npc_queues": true,
+        "release_held_items": true
+      },
+      "source": {
+        "dataset": "VISTA",
+        "sample_id": "mmg_044",
+        "verification": "verified",
+        "public_reference": "vista://assist-step/mmg_044"
+      },
+      "content_digest": "6d7487760faed67dba961d8c7acbd07476af1c4d197160263f4b413bd9a60340"
+    },
+    {
+      "schema_version": "simworld.vista.playable-event/v1",
+      "event_id": "mmg_045",
+      "title": "Phone left in the bedroom",
+      "compatible_house": {
+        "house_id": "home.r1",
+        "revision": "vista_playable_home_r1",
+        "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+      },
+      "participating_room_ids": [
+        "home.r1/room.bedroom",
+        "home.r1/room.entry_hall"
+      ],
+      "participating_entity_ids": [
+        "home.r1/room.bedroom/entity.phone.01",
+        "home.r1/room.entry_hall/entity.exit_door.01"
+      ],
+      "initial_operations": [
+        {
+          "op_id": "op.01",
+          "op": "set_transform",
+          "target_id": "home.r1/room.bedroom/entity.phone.01",
+          "room_id": "home.r1/room.bedroom",
+          "transform": {
+            "location_m": [
+              0.6,
+              1.2,
+              0.64
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              10
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        },
+        {
+          "op_id": "op.02",
+          "op": "set_portable",
+          "target_id": "home.r1/room.bedroom/entity.phone.01",
+          "portable": true
+        },
+        {
+          "op_id": "op.03",
+          "op": "set_goal",
+          "goal_id": "bring_phone",
+          "enabled": true
+        }
+      ],
+      "public_goals": [
+        {
+          "goal_id": "bring_phone",
+          "description": "Bring the phone from the bedroom to the entry before opening the exit door.",
+          "success_condition_ids": [
+            "phone_at_entry"
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "condition_id": "player_reaches_entry",
+          "type": "player_room",
+          "room_id": "home.r1/room.entry_hall"
+        }
+      ],
+      "success_conditions": [
+        {
+          "condition_id": "phone_at_entry",
+          "type": "entity_room",
+          "target_id": "home.r1/room.bedroom/entity.phone.01",
+          "room_id": "home.r1/room.entry_hall"
+        }
+      ],
+      "failure_conditions": [
+        {
+          "condition_id": "exit_opened_without_phone",
+          "type": "interaction",
+          "target_id": "home.r1/room.entry_hall/entity.exit_door.01",
+          "affordance": "open"
+        }
+      ],
+      "timeout_s": 600,
+      "reset_policy": {
+        "mode": "restore_baseline",
+        "reset_npc_queues": true,
+        "release_held_items": true
+      },
+      "source": {
+        "dataset": "VISTA",
+        "sample_id": "mmg_045",
+        "verification": "verified",
+        "public_reference": "vista://assist-step/mmg_045"
+      },
+      "content_digest": "3d41cf13b10855541a1d6fd67a56773f1639176b986154d28fc957c9c073fcc4"
+    },
+    {
+      "schema_version": "simworld.vista.playable-event/v1",
+      "event_id": "mmg_070",
+      "title": "Loaded washer has not been started",
+      "compatible_house": {
+        "house_id": "home.r1",
+        "revision": "vista_playable_home_r1",
+        "content_digest": "d2636c119f6b96793df494fce15b497be857c8994213a5078370a75ff443d1a7"
+      },
+      "participating_room_ids": [
+        "home.r1/room.bathroom_laundry"
+      ],
+      "participating_entity_ids": [
+        "home.r1/room.bathroom_laundry/entity.clothes.01",
+        "home.r1/room.bathroom_laundry/entity.washer.01"
+      ],
+      "initial_operations": [
+        {
+          "op_id": "op.01",
+          "op": "set_state",
+          "target_id": "home.r1/room.bathroom_laundry/entity.washer.01",
+          "state_patch": {
+            "active": false,
+            "status": "loaded"
+          }
+        },
+        {
+          "op_id": "op.02",
+          "op": "set_state",
+          "target_id": "home.r1/room.bathroom_laundry/entity.clothes.01",
+          "state_patch": {
+            "status": "loaded"
+          }
+        },
+        {
+          "op_id": "op.03",
+          "op": "set_goal",
+          "goal_id": "start_washer",
+          "enabled": true
+        }
+      ],
+      "public_goals": [
+        {
+          "goal_id": "start_washer",
+          "description": "Start the loaded washer before leaving the laundry area.",
+          "success_condition_ids": [
+            "washer_started"
+          ]
+        }
+      ],
+      "triggers": [
+        {
+          "condition_id": "clothes_loaded",
+          "type": "entity_state",
+          "target_id": "home.r1/room.bathroom_laundry/entity.clothes.01",
+          "field": "status",
+          "operator": "eq",
+          "value": "loaded"
+        }
+      ],
+      "success_conditions": [
+        {
+          "condition_id": "washer_started",
+          "type": "entity_state",
+          "target_id": "home.r1/room.bathroom_laundry/entity.washer.01",
+          "field": "active",
+          "operator": "eq",
+          "value": true
+        }
+      ],
+      "failure_conditions": [
+        {
+          "condition_id": "washer_wait_timeout",
+          "type": "elapsed",
+          "operator": "gte",
+          "seconds": 120
+        }
+      ],
+      "timeout_s": 600,
+      "reset_policy": {
+        "mode": "restore_baseline",
+        "reset_npc_queues": true,
+        "release_held_items": true
+      },
+      "source": {
+        "dataset": "VISTA",
+        "sample_id": "mmg_070",
+        "verification": "verified",
+        "public_reference": "vista://assist-step/mmg_070"
+      },
+      "content_digest": "e4fc6ad4b42345161f4b582d4409afa077fba1cb6f2c17febb436d17184f59de"
+    }
+  ],
+  "pose_profiles": {
+    "thin": "/Game/VISTA/HomeActionsR2b/DA_GripThin.DA_GripThin",
+    "pinch": "/Game/VISTA/HomeActionsR2b/DA_GripPinch.DA_GripPinch"
+  },
+  "presentation_assets_root": "/Game/VISTA/HomeActionsR2c",
+  "actions": [
+    {
+      "action_id": "idle",
+      "source_action_id": "idle",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "walk",
+      "source_action_id": "walk",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "jog",
+      "source_action_id": "jog",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "sprint",
+      "source_action_id": "sprint",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "turn_in_place",
+      "source_action_id": "turn_in_place",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "crouch",
+      "source_action_id": "crouch",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "look_at",
+      "source_action_id": "look_at",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "inspect",
+      "source_action_id": "inspect",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "pause",
+      "source_action_id": "pause",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "pick_up",
+      "source_action_id": "pick_up",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "carry",
+      "source_action_id": "carry",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "place",
+      "source_action_id": "place",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "drop",
+      "source_action_id": "drop",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "insert",
+      "source_action_id": "insert",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "pour",
+      "source_action_id": "pour",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "push",
+      "source_action_id": "push",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "pull_drag",
+      "source_action_id": "pull_drag",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "equip",
+      "source_action_id": "equip",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "articulation.open",
+      "source_action_id": "articulation.open",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "close",
+      "source_action_id": "close",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "appliance.toggle_rotary",
+      "source_action_id": "appliance.toggle_rotary",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "press_button",
+      "source_action_id": "press_button",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "load",
+      "source_action_id": "load",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "unload",
+      "source_action_id": "unload",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "contact.brace",
+      "source_action_id": "contact.brace",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "step_up",
+      "source_action_id": "step_up",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "sit_down",
+      "source_action_id": "sit_down",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "seated_idle",
+      "source_action_id": "seated_idle",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "stand_up",
+      "source_action_id": "stand_up",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "stumble",
+      "source_action_id": "stumble",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "slip",
+      "source_action_id": "slip",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "fall",
+      "source_action_id": "fall",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "impact",
+      "source_action_id": "impact",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "spill",
+      "source_action_id": "spill",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "recover",
+      "source_action_id": "recover",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "use",
+      "source_action_id": "use",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "not_applicable"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "turn_on",
+      "source_action_id": "turn_on",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "turn_off",
+      "source_action_id": "turn_off",
+      "native_definition": null,
+      "readiness": {
+        "animation": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "backend": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "event_mapping": {
+          "evidence_digest": null,
+          "status": "blocked"
+        },
+        "object_state": {
+          "evidence_digest": null,
+          "status": "candidate"
+        },
+        "runtime_acceptance": {
+          "evidence_digest": null,
+          "status": "blocked"
+        }
+      }
+    },
+    {
+      "action_id": "storage.insert",
+      "source_action_id": null,
+      "native_definition": {
+        "family": "storage_transaction",
+        "aliases": [],
+        "target_policy": "required",
+        "secondary_target_policy": "required",
+        "target_roles": {
+          "target_id": "storage_item",
+          "secondary_target_id": "storage_container"
+        },
+        "approach_policy": "align_secondary_target",
+        "parameters": {
+          "required": [
+            "target_id",
+            "secondary_target_id"
+          ],
+          "optional": []
+        },
+        "effect": {
+          "effect_id": "multi_entity_state",
+          "commit_phase": "contact"
+        },
+        "rollback_policy": "restore_actor_and_target",
+        "dispatch_policy": "direct",
+        "runtime_binding": {
+          "wire_action": "insert",
+          "backend_action": "Insert",
+          "runtime_type": "insert"
+        },
+        "animation_acceptance": {
+          "status": "blocked",
+          "montage_policy": "dedicated_action_montage_required",
+          "contact_signal": "required",
+          "completion_signal": "required",
+          "prohibited_reuse_action_ids": [
+            "pick_up",
+            "place"
+          ]
+        }
+      },
+      "readiness": {
+        "backend": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "animation": {
+          "status": "blocked",
+          "evidence_digest": null
+        },
+        "object_state": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "event_mapping": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "runtime_acceptance": {
+          "status": "blocked",
+          "evidence_digest": null
+        }
+      }
+    },
+    {
+      "action_id": "storage.remove",
+      "source_action_id": null,
+      "native_definition": {
+        "family": "storage_transaction",
+        "aliases": [],
+        "target_policy": "required",
+        "secondary_target_policy": "required",
+        "target_roles": {
+          "target_id": "storage_item",
+          "secondary_target_id": "storage_container"
+        },
+        "approach_policy": "align_secondary_target",
+        "parameters": {
+          "required": [
+            "target_id",
+            "secondary_target_id"
+          ],
+          "optional": []
+        },
+        "effect": {
+          "effect_id": "multi_entity_state",
+          "commit_phase": "contact"
+        },
+        "rollback_policy": "restore_actor_and_target",
+        "dispatch_policy": "direct",
+        "runtime_binding": {
+          "wire_action": "remove",
+          "backend_action": "Remove",
+          "runtime_type": "remove"
+        },
+        "animation_acceptance": {
+          "status": "blocked",
+          "montage_policy": "dedicated_action_montage_required",
+          "contact_signal": "required",
+          "completion_signal": "required",
+          "prohibited_reuse_action_ids": [
+            "pick_up",
+            "place"
+          ]
+        }
+      },
+      "readiness": {
+        "backend": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "animation": {
+          "status": "blocked",
+          "evidence_digest": null
+        },
+        "object_state": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "event_mapping": {
+          "status": "candidate",
+          "evidence_digest": null
+        },
+        "runtime_acceptance": {
+          "status": "blocked",
+          "evidence_digest": null
+        }
+      }
+    }
+  ],
+  "extension_actions": [
+    "step_down",
+    "unequip"
+  ],
+  "sources": [
+    {
+      "path": "world_packs/vista_playable_home_r1/house.json",
+      "sha256": "3d73f84365a1adfbda408d8c49ac5f95370a221c6ed4fb880838d86b0c71b0c3"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/action_catalogs/vista_indoor_actions_r5.json",
+      "sha256": "e168b9f25b2af92619d3aae9a559ac0c195a998243e1ab464ef2faee3cda83eb"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/interaction_bindings/vista_home_interactions_r1.json",
+      "sha256": "406d429f2619c53dfe8fb0d42c587047ad9155af9e53079aa8c4dbc86cc41fef"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_001.json",
+      "sha256": "6d0ce9f13f8847bf14ce0d04262edc23da1b9a80efdedf8fcb62b417a70fe4ed"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_013.json",
+      "sha256": "8157865f7762a42394575da25ed2517974676482291bbe941934f4591af8d34b"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_021.json",
+      "sha256": "10f2256e1c8893e21d96e5569e2866dada9c91da9459efe664251128cfdf7c89"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_040.json",
+      "sha256": "a8787de2b87d7905ab4b195c7e01b747581019e6e3a00da39582fe4275da10c4"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_044.json",
+      "sha256": "b3855233e6a5097f5d405fc7c48e3808511d6161d3580cd0fd67d47e50dee25a"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_045.json",
+      "sha256": "f263f8981648a24a6832f8962d08b86e07b2be98c6b72bcd3f7cf5b2759598ff"
+    },
+    {
+      "path": "world_packs/vista_playable_home_r1/events/mmg_070.json",
+      "sha256": "72a2c5723b51007f158cc3b2701b2e8339157226cafe60b03fbfc5bd68101cb0"
+    }
+  ],
+  "event_transform_policy": "canonical identity; set_transform uses the new scene baseline for that exact entity",
+  "acceptance": {
+    "native_runtime": "pending",
+    "visual_review": "pending",
+    "benchmark_release": "needs_review"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "date": "2026-09-10",
+  "intent": "14 separate concept images for user spatial/material review, not as-built geometry or validated UE screenshots",
+  "tool": "built-in image_gen",
+  "requested_model": "GPT Image 2.5",
+  "model_version": "Not exposed by the built-in tool; no version claim",
+  "reference": "01-living-master.png",
+  "master_prompt": "Use case: photorealistic-natural. Asset type: architectural interior design concept photograph, view 01 of a coherent two-storey private villa for a first-person 3D environment. Create one single landscape image, not a collage.\nPrimary request: an exceptionally refined but believable lived-in contemporary villa, human-scale furniture, genuine construction detail and physically plausible light. Master reference view of the double-height living room, camera 1.55 m above the floor, architectural 26 mm lens with straight verticals, looking diagonally from the southwest garden glazing toward the northeast kitchen/dining zone.\nFixed design for all later views: two-storey rectangular home roughly 16 m east-west by 12 m north-south; double-height living room in the southwest quarter; dining to its north; open kitchen in the northeast; entry in southeast; an east-side return stair with substantial landings; upstairs gallery overlooking the living room and leading to bedrooms and study. Ground floor ceiling 3.2 m, living volume 6.4 m; no third storey. The stair has closed warm-oak treads, a slim dark-bronze balustrade with safe close-spaced vertical rods, and a continuous handrail. Tall garden-facing windows on south and west. A restrained warm limestone feature wall to the east, softly textured ivory plaster, brushed light-oak cabinetry, pale travertine, linen upholstery, honest matte finishes. Cream low sectional with realistic seams, two sculptural yet practical oak armchairs, oval dark-oak coffee table, wool rug, subtle books and a ceramic cup. In background a stone kitchen island and a dining table with six chairs. The house should feel like a real high-end residential commission in Taiwan, comfortable and usable rather than a hotel lobby. Doors, light switches, skirting, frame reveals and joinery are scaled correctly. Daylight from garden, soft indirect ceiling lighting, realistic glass, wood grain and stone pores, restrained slight wear. No people, no lettering, no logos, no watermark, no impossible cantilevers, no endless staircase, no warped furniture. Refined architectural editorial photography, precise spatial depth, material texture and realistic reflections.",
+  "shared_prompt": "Use case: photorealistic-natural. One full-frame landscape architectural design photograph, not a collage. This is the SAME two-storey private villa as reference image 1; use it as a design and material anchor, not an image to paste. Preserve its warm ivory plaster, light oak cabinetry, pale travertine floor and stone wall, slim dark-bronze vertical balustrade, cream linen furniture, restrained high-end residential detailing and garden daylight. Two floors only. Southwest double-height living room, dining to its north, open kitchen northeast, stair on the east edge, southeast entry, upstairs gallery wrapping the living void with bedrooms and study behind. Believable 1.55 m camera height, corrected architectural verticals, 24–32 mm lens, human scale, plausible walls and door circulation. Real construction, wood grain, soft worn edges, fine seams, realistic reflections. No people, no logos, no watermark, no decorative text, no impossible structure. ",
+  "shots": [
+    {
+      "id": "02-living-reverse",
+      "prompt": "Reverse angle within the same double-height living room: stand near the dining area and look toward the tall south garden glazing and southeast entrance. Show the SAME cream sectional, oval dark-oak coffee table and two oak armchairs from the opposite side, the stone stair wall to the left/east and the upper gallery overhead. Prioritize believable spatial correspondence with the reference, quieter domestic details, realistic sunlight on limestone."
+    },
+    {
+      "id": "03-kitchen",
+      "prompt": "Close architectural view of the northeast kitchen: camera at dining-room edge looking toward the same pale stone island, light-oak tall cabinets, integrated refrigerator, dark induction hob and backsplash, realistic stainless undermount sink and brushed nickel mixer with functional spout. Show 1.1 m working aisle, island drawers and subtle outlet, a glass pitcher and two ceramic cups on worktop; an open sightline back to the living area at left. No excessively large island, no duplicated sinks, no magically suspended cabinets."
+    },
+    {
+      "id": "04-dining",
+      "prompt": "Architectural view centered on the north dining area, with the same six-seat natural oak dining table, tactile neutral upholstered chairs, sculptural white pendant and a small ceramic vase. Look diagonally southwest so the SAME living room, cream sofa, two-storey garden window and upper bronze-railed gallery remain visible. Kitchen island appears on the right. Plausible chair pullout space and circulation, soft afternoon garden light."
+    },
+    {
+      "id": "05-entry-stair",
+      "prompt": "Architectural view from the southeast entry vestibule looking toward the east stair and double-height living room. Warm oak entry storage, integrated bench with linen cushion, small catchall tray with keys, stone floor, continuous stair handrail and closely spaced dark bronze rails. Stair is a plausible return stair with a real intermediate landing and consistent risers, leading to the same upper gallery. Make the entrance feel elegant and practical, with believable threshold and door hardware."
+    },
+    {
+      "id": "06-upper-gallery",
+      "prompt": "Second-floor eye-level view from the upper gallery looking down and across the same double-height living room. The close-spaced dark bronze guardrail is clearly continuous around the void, showing plausible guardrail height, oak floor upstairs and stone downstairs. The SAME sofa, oval coffee table, dining and garden glazing are visible below; a bedroom doorway and small oak reading bench are visible behind the camera-side railing. Exactly two levels, no extra mezzanine, no unguarded edge."
+    },
+    {
+      "id": "07-bedroom",
+      "prompt": "Primary bedroom on the upper northeast side of the SAME villa, connected to the gallery, with warm oak floor, softly textured ivory plaster, a low upholstered king bed with realistic rumpled cream linen, integrated oak bedside ledges and softly glowing reading lights. Garden-facing full-height window, sheer curtain, a comfortable reading chair, understated wardrobe panels. Restrained warm residential luxury, easy circulation, real fabric and wood grain; no hotel signage or decorative excess."
+    },
+    {
+      "id": "08-bathroom",
+      "prompt": "Primary upstairs bathroom of the SAME villa, photographed from its doorway toward a pale travertine double vanity, brushed-nickel faucets, large mirror with believable reflections, walk-in shower with clear glass partition and linear drain, and a freestanding tub by a privacy-screened window. Refined warm stone, oak vanity fronts, practical towel storage, subtle realistic water droplets at sink edge, plausible drain and shower fittings, dry traversable main floor."
+    },
+    {
+      "id": "09-study",
+      "prompt": "Upstairs study of the SAME villa: a beautifully restrained working home office with built-in light-oak shelves, books with unlettered spines, a solid oak desk, ergonomic upholstered chair, monitor off, ceramic mug, realistic keyboard and task lamp. Soft ivory plaster, oak floor, garden window, linen blinds. Camera from doorway shows clear walking space, enough desk depth and natural proportions; lived-in, elegant and calm."
+    },
+    {
+      "id": "10-laundry",
+      "prompt": "Ground-floor north service/laundry room of the SAME villa, accessible behind the kitchen. High-quality practical interior: side-by-side front-loading washer and dryer under a stone folding counter, oak closed storage, deep utility sink with proper mixer, woven laundry basket, folded towels, high privacy window, stone tiled floor with subtle drain. Warm matching palette, realistic appliance size and door clearance, entirely believable residential utilities without visible branding."
+    },
+    {
+      "id": "11-exterior",
+      "prompt": "Exterior architecture photograph of the SAME two-storey villa seen from the southwest garden. Show the double-height living glazing clearly, exactly two floors, pale limestone and ivory plaster facades, warm oak soffits, restrained bronze window frames, a sheltered ground-floor terrace and a modest planted garden. The living sofa and upper gallery can be glimpsed through glazing in their matching positions. Contemporary Taiwan residential villa, natural subtropical planting, no pool required, no third floor, no giant mansion scale."
+    },
+    {
+      "id": "12-ground-plan",
+      "prompt": "Generate a presentation-quality TOP-DOWN ORTHOGRAPHIC GROUND-FLOOR interior design plan of this same villa, landscape image, crisp architectural walls, door swings, furniture and material fills, white margins. North is up. Rectangular footprint approximately 16 m wide by 12 m deep. Southwest 8 by 6 m double-height living with matching sofa and coffee table; dining directly north-west, kitchen north-east; entry southeast; return staircase against east side with landing; compact service laundry north of stair; a small ground-floor WC beside service circulation. Show connected walkable open living/dining/kitchen circulation. Label only in simple clear English: LIVING, DINING, KITCHEN, ENTRY, STAIR UP, LAUNDRY, WC, NORTH. Add small title GROUND FLOOR — DESIGN CONCEPT. This is a concept plan, not a certified construction drawing. No perspective tilt, no floating roof, no fake detailed dimensions or engineering stamps."
+    },
+    {
+      "id": "13-upper-plan",
+      "prompt": "Generate a presentation-quality TOP-DOWN ORTHOGRAPHIC UPPER-FLOOR interior design plan of this same villa, landscape image, crisp walls, door swings, furnishings, pale oak floor and restrained material fills, white margins. North up, same roughly 16 by 12 m footprint. Southwest 8 by 6 m is a clearly marked OPEN TO BELOW void matching the double-height living, with continuous safe gallery guardrail along north and east edges. Stair on east arrives into gallery; north/east enclosed areas contain primary BEDROOM with BATH, second BEDROOM, and STUDY with a connected hallway. Keep adequate walking widths and make every room accessible without crossing the void. Label only simple clear English: OPEN TO BELOW, GALLERY, STAIR DOWN, BEDROOM, BATH, STUDY, NORTH. Add small title UPPER FLOOR — DESIGN CONCEPT. No perspective tilt, no invented third floor, no fake detailed dimensions or engineering stamps."
+    },
+    {
+      "id": "14-material-detail",
+      "prompt": "One exquisite close architectural detail photograph within the SAME villa showing the junction of a pale travertine kitchen island edge, oak fluted drawer front, brushed nickel faucet and stainless undermount sink, with a clear glass tumbler and matte ceramic cup placed naturally. Gentle daylight reveals realistic stone pores, fine wood grain, tiny roughness variation, subtle brushed metal and physically believable glass thickness/refraction. Quiet editorial material study, no staged sample-board collage, no labels, no hypergloss plastic."
+    }
+  ]
+}
