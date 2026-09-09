@@ -87,7 +87,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     {
         const FVector End=LastHandGoal.GetLocation();
         const float T=FMath::Clamp(PhaseTime/1.6f,0.f,1.f)*3.f;
-        const auto Smooth=[](float X) {X=FMath::Clamp(X,0.f,1.f);return X*X*(3-2*X);};
+        const auto Smooth=[](float X) {X=FMath::Clamp(X,0.f,1.f);return X*X*X*(10+X*(-15+6*X));};
         LastHandGoal.SetLocation(T<1?FMath::Lerp(ReachStart,ReachViaA,Smooth(T)):
             T<2?FMath::Lerp(ReachViaA,ReachViaB,Smooth(T-1)):FMath::Lerp(ReachViaB,End,Smooth(T-2)));
     }
@@ -96,6 +96,10 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     const auto Index=[this](const TCHAR* Name) { const int32* I=BoneIndex.Find(FName(Name)); return I ? *I : INDEX_NONE; };
     const FTransform MeshWorld=GetMesh()->GetComponentTransform();
     const float Speed=GetVelocity().Size2D();
+    const float Walking=FMath::Clamp(Speed/150.f,0.f,1.f)*(1-SeatedAlpha)*(1-FallAlpha);
+    const float Unoccupied=(1-FMath::Max(ReachAlpha,LeftReachAlpha))*(1-SeatedAlpha)*(1-FallAlpha);
+    const float Quiet=(1-Walking)*Unoccupied;
+    const float Stride=FMath::Sin(StepClock*2.f*PI);
     const FVector Goal=LastHandGoal.GetLocation();
     const float GoalHeight=Goal.Z-(GetActorLocation().Z-GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
     const float Low=FMath::Max(FMath::Clamp((110.f-GoalHeight)*.68f,0.f,65.f)*ReachAlpha, CrouchAlpha*38.f);
@@ -122,7 +126,11 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     if (Global.IsValidIndex(Pelvis))
     {
         const float Forward=-FMath::Clamp((45.f-GoalHeight)/5.f,0.f,6.f)*ReachAlpha;
-        FVector Offset(FMath::Sin(Clock*3.8f)*FMath::Min(Speed/140.f,1.f)*.45f,Forward,-Low-2.4f);
+        // Pelvis rhythm follows planted-foot phase, not an unrelated clock.
+        // Small quiet weight shifts are solved before foot IK, preserving contact.
+        FVector Offset(Stride*Walking*.45f+FMath::Sin(Clock*.73f)*Quiet*.16f,
+            Forward+FMath::Sin(Clock*.51f)*Quiet*.10f,
+            -Low-2.4f+(1-FMath::Cos(StepClock*4.f*PI))*Walking*.18f);
         FVector Toward=MeshWorld.InverseTransformVector(Goal-GetActorLocation());Toward.Z=0;
         Offset+=Toward.GetSafeNormal()*SceneReachHipAdvance*ReachAlpha;
         // Adapt hip height to the leg lengths at each stride. This keeps both
@@ -163,7 +171,8 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         RotateBranch(Global,Parents,Pelvis,FQuat(FVector::ForwardVector,-FallAlpha*PI*.445f)*Global[Pelvis].GetRotation());
     const int32 Spine=Index(TEXT("spine_01"));
     if (Global.IsValidIndex(Spine)) RotateBranch(Global,Parents,Spine,
-        FQuat(FVector::ForwardVector,-Lean*(1-FallAlpha)+.003f*FMath::Sin(Clock*1.8f))*Global[Spine].GetRotation());
+        FQuat(FVector::UpVector,Stride*Walking*Unoccupied*.04f+FMath::Sin(Clock*.61f)*Quiet*.003f)*
+        FQuat(FVector::ForwardVector,-Lean*(1-FallAlpha)+.003f*FMath::Sin(Clock*1.4f)*(1-FallAlpha))*Global[Spine].GetRotation());
     for (int32 Side=0;Side<2;++Side)
     {
         const TCHAR* Upper=Side==0?TEXT("thigh_l"):TEXT("thigh_r");
@@ -199,7 +208,8 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             const FVector Eye=Global[Head].TransformPosition(EyeLocal);
             // Calibrated to the fitted 45 cm arm chains: bent elbows and
             // relaxed hands at the lower edge, without detached camera arms.
-            const FVector Ready=Eye+FVector(Sign*22.f,30.f+Swing*.18f,-10.f+.12f*FMath::Sin(Clock*1.8f));
+            const FVector Ready=Eye+FVector(Sign*22.f,30.f+Swing*.18f,
+                -10.f+.15f*FMath::Sin(Clock*1.4f+(RightHand?.35f:0.f)));
             const int32 Middle=Index(RightHand?TEXT("middle_01_r"):TEXT("middle_01_l"));
             const int32 FingerIndex=Index(RightHand?TEXT("index_01_r"):TEXT("index_01_l"));
             const int32 Pinky=Index(RightHand?TEXT("pinky_01_r"):TEXT("pinky_01_l"));
@@ -224,7 +234,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             Rotation=FQuat::Slerp(Rotation,CS.GetRotation(),LeftReachAlpha);
         }
         const float Sign=RightHand?-1.f:1.f;
-        const FVector Pole=Global[U].GetLocation()+FVector(Sign*24.f,-16.f,-25.f);
+        const FVector Pole=Global[U].GetLocation()+FVector(Sign*24.f,-16.f-Swing*.18f,-25.f);
         SolveLimb(Global,Parents,U,L,E,Target,Pole,Rotation);
     }
     // Hand-local joint poses are shared by both presentations. Arm reach is
@@ -233,19 +243,23 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     {
         Local[I]=Parents[I]>=0 ? Global[I].GetRelativeTransform(Global[Parents[I]]) : Global[I];
         const FString Name=Poses->BoneNames[I].ToString();
+        const float FingerDelay=Name.StartsWith(TEXT("thumb_"))?.04f:
+            Name.StartsWith(TEXT("pinky_"))?.05f:Name.StartsWith(TEXT("ring_"))?.03f:
+            Name.StartsWith(TEXT("middle_"))?.01f:0.f;
+        const auto FingerProgress=[FingerDelay](float A){return FMath::Clamp((A-FingerDelay)/(1-FingerDelay),0.f,1.f);};
         if (Name.EndsWith(TEXT("_r")) && (Name.StartsWith(TEXT("index_")) || Name.StartsWith(TEXT("middle_")) ||
             Name.StartsWith(TEXT("ring_")) || Name.StartsWith(TEXT("pinky_")) || Name.StartsWith(TEXT("thumb_"))))
         {
             FTransform Idle;Idle.Blend(Poses->Relaxed[I],Poses->Grip[I],.08f*RestBlend);
             FTransform Open;Open.Blend(Idle,Poses->OpenHand[I],ReachAlpha);
-            Local[I].Blend(Open,Poses->Grip[I],FingerAlpha);
+            Local[I].Blend(Open,Poses->Grip[I],FingerProgress(FingerAlpha));
         }
         if (Name.EndsWith(TEXT("_l")) && (Name.StartsWith(TEXT("index_")) || Name.StartsWith(TEXT("middle_")) ||
             Name.StartsWith(TEXT("ring_")) || Name.StartsWith(TEXT("pinky_")) || Name.StartsWith(TEXT("thumb_"))))
         {
             FTransform Idle;Idle.Blend(Poses->Relaxed[I],Poses->Grip[I],.08f*RestBlend);
             FTransform Open;Open.Blend(Idle,Poses->OpenHand[I],LeftReachAlpha);
-            Local[I].Blend(Open,Poses->Grip[I],LeftFingerAlpha);
+            Local[I].Blend(Open,Poses->Grip[I],FingerProgress(LeftFingerAlpha));
         }
         Local[I].NormalizeRotation();
     }

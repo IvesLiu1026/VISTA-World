@@ -1,5 +1,6 @@
 #include "EmbodiedReview.h"
 #include "EmbodiedFirstPersonProof.h"
+#include "VistaMotionCurves.h"
 
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -24,7 +25,7 @@
 
 namespace
 {
-float Ease(float V) { V=FMath::Clamp(V,0.f,1.f);return V*V*(3.f-2.f*V); }
+float Ease(float V) { return VistaMotion::Ease(V); }
 TArray<TSharedPtr<FJsonValue>> VectorJson(FVector V)
 {
     return {MakeShared<FJsonValueNumber>(V.X),MakeShared<FJsonValueNumber>(V.Y),MakeShared<FJsonValueNumber>(V.Z)};

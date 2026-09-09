@@ -5,6 +5,7 @@
 #include "Serialization/JsonSerializer.h"
 #include "Policies/CondensedJsonPrintPolicy.h"
 #include "Misc/FileHelper.h"
+#include "VistaMotionCurves.h"
 #include <cstdio>
 
 namespace HomeJson
@@ -51,5 +52,5 @@ inline FString RequestSignature(const TSharedPtr<FJsonObject>& O)
     {const FString V=String(O,Key);Result+=FString::Printf(TEXT("%d:"),V.Len())+V;}
     return Result+FString::Printf(TEXT("#%.0f"),Number(O,TEXT("expected_generation"),-1));
 }
-inline float Ease(float V) { V=FMath::Clamp(V,0.f,1.f);return V*V*(3-2*V); }
+inline float Ease(float V) { return VistaMotion::Ease(V); }
 }
