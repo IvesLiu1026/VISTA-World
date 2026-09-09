@@ -1,0 +1,25 @@
+[
+  {
+    "id": "04-dining-r2",
+    "refs": [
+      "04-dining.png",
+      "03-kitchen.png"
+    ],
+    "prompt": "Use case: precise-object-edit. Edit image 1 only. Preserve the dining camera, dining furniture, stair, living room, daylight, materials and all architecture exactly. Correct the kitchen island at right so it has exactly ONE sink and ONE faucet, consistent with reference image 2. Remove the extra redundant faucet and make that patch continuous stone worktop. One full-frame image, no collage, no labels. Image 2 is reference only; do not include a second panel."
+  },
+  {
+    "id": "13-upper-plan-r2",
+    "refs": [
+      "12-ground-plan.png",
+      "13-upper-plan.png"
+    ],
+    "prompt": "Use case: infographic-diagram. Produce a corrected single top-down UPPER FLOOR interior design plan for the villa. Image 1 is the ground-floor footprint and exact stair-placement reference. Image 2 is the upper-floor design to correct. The stair in image 2 is wrongly shifted west: move the entire stairwell to align exactly above the stair rectangle in the EASTMOST strip of image 1, including the same north-end landing; preserve image 1's full rectangular exterior footprint, window alignment and roughly 16:12 ratio. Keep the southwest living void approximately half the width and half the depth. Put gallery circulation along the north and east sides of that void, linked to the EASTMOST stair landing without crossing bedrooms. Fit two bedrooms, study and bathrooms in remaining north/east enclosed floor area, resizing/repositioning bathrooms as needed so none occupies the stairwell. Keep doors and continuous guardrails. Warm oak floors, black/grey architectural walls and restrained furniture, north up. Simple clear labels: OPEN TO BELOW, GALLERY, BEDROOM, STUDY, BATH, STAIR DOWN, NORTH. Small title UPPER FLOOR — DESIGN CONCEPT. Single orthographic plan only, no perspective image panels, no dimensions or construction certification."
+  },
+  {
+    "id": "14-material-detail-r2",
+    "refs": [
+      "14-material-detail.png"
+    ],
+    "prompt": "Use case: precise-object-edit. Reframe this into ONE uninterrupted landscape close-up photograph of the material detail on the RIGHT of the reference. The entire output must show only the stone island edge, oak drawer front, single brushed nickel faucet, sink, glass tumbler and ceramic mug. Remove the reference's left living-room panel and the dividing line entirely. Preserve the right panel's actual materials, shapes, lighting and objects; extend its close-up photographic framing naturally to landscape. No collage, no split screen, no room overview, no text."
+  }
+]

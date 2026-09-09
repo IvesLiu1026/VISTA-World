@@ -1,0 +1,136 @@
+{
+  "schema": "vista.villa-implementation/v1",
+  "date": "2026-09-10",
+  "status": "prototype_review_handoff",
+  "project": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/project-a/PhotorealHome.uproject",
+  "base_r5_commit": "ac9feccdccb0bc96d453b5bc4c2267db31da006d",
+  "plugin_sha256": "c5403bd39e6328c260c3df4e25c0eab6edcd618012705d661e4bcad1c94fcadb",
+  "map_paths": [
+    "/Game/VISTA/VillaR1/Maps/PropsLab",
+    "/Game/VISTA/VillaR1/Maps/FluidLabR2"
+  ],
+  "artifacts": {
+    "concepts": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/design-review-a/manifest.json",
+      "sha256": "36071a712c0095b8dce39abe976e94d9bb6c3f32f17a7b087ccecead12528a45"
+    },
+    "props": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/hero-props-d/manifest.json",
+      "sha256": "de9e55128a902d27e55092beaad574b301811753229c9af78b65a34e7fbb3f98"
+    },
+    "prop_structure": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/hero-props-d/glb-inspection.json",
+      "sha256": "d3ea458d9d5a3f6c8beb62328d376b57803980ece06f18c917ab901f53e8b1f5"
+    },
+    "native_import": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/props-import-a.json",
+      "sha256": "c9901246f92e1d079fb86fe9c71acb7d8cf69eee52e981969c995aadf3c7996f"
+    },
+    "native_readback": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/saved-assets-check-b.json",
+      "sha256": "7e75b48438daf37a025a2a40cd443392b4dbc3499a08b64b56a35864454a87ba"
+    },
+    "native_poses": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/poses-b/check.json",
+      "sha256": "7dd58ec5fa5782d411b6ebbfee5909b38b03711a945288e9080a059303634aaa"
+    },
+    "body_surfaces": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/pose-preview-a/preview.json",
+      "sha256": "34163ce2adc8b49a6303a92a1fd6d9168e29fa630555e56696453d5c96050be3"
+    },
+    "fluid_configuration": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-author-a.json",
+      "sha256": "e3d25c30967079378ad5fc6638cc9a8f75281c26ba1fa1692702cacc860b4cb6"
+    },
+    "fluid_process": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/process.json",
+      "sha256": "0fbff90df57ab13ce87aa1d7d6a4c336e38ff141b98f2aaa20f71f67f9c717ac"
+    },
+    "fluid_proof": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/proof.json",
+      "sha256": "8649abe7e0b8000dcea779e145f579985220b1f1f55852dd9e83506dee5025b1"
+    },
+    "cache": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/cache-config-a.json",
+      "sha256": "d6c7fede1e8569d0d31d89a64a9a6f2228465c64446cad22c9a2aba0d11f2817"
+    },
+    "baseline_tests": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/baseline-tests.log",
+      "sha256": "bafb8d87c515c66d41ef0e9200bdf4f8470a2654244aba96313240e3dfb7dfb3"
+    },
+    "focused_tests": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/focused-tests-a.log",
+      "sha256": "9e76a7710195b51baa7831b3358c8b5116155ccc2e76ea0ed933f3a45606544b"
+    },
+    "editor_build": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/build-e.log",
+      "sha256": "c2377ccb7b893e78cc55dd339b9792b4ae12c0c44f7b694709a4aeadf29db9e7"
+    },
+    "native_poses_initial": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/poses-a/check.json",
+      "sha256": "e772082dd56bdcf74e9fc83f02479bbaf9479e6b1d09ae121cfec288055519c9"
+    }
+  },
+  "fluid_images": [
+    {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0120.png",
+      "sha256": "e9c3714c09ee9badb17f3593c026c6193647fcb1130056fb34541ab11cc10724",
+      "frame": 120
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0240.png",
+      "sha256": "9fcf1818b399ba092c338db992c535c53392be5430fcea071c6ab8895902d683",
+      "frame": 240
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0330.png",
+      "sha256": "4ef41aeaa67e2120dd1751beb19643e7a57c92a20c8699f0021cd93353107e0e",
+      "frame": 330
+    },
+    {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0450.png",
+      "sha256": "46a7fd02abdd01f3fd7fd72902373adb93d847ec7425736c4dc6e287529d2ced",
+      "frame": 450
+    }
+  ],
+  "fluid_review": {
+    "native_surface_visible": true,
+    "moving_obstacle_and_surface_change_visible": true,
+    "camera_verified": true,
+    "production_visual_quality_accepted": false,
+    "volume_conservation_verified": false,
+    "home_actions_coupled": false,
+    "findings": [
+      "Visible liquid surface and its deformation around the moving calibration box.",
+      "Strong blue shading, coarse surface detail and translucent boundary artifacts remain.",
+      "Grid boundary and fixture demonstration, not a completed faucet or pouring action."
+    ]
+  },
+  "attempt_notes": {
+    "fluid-author-a": "Assets saved; Python weakref cleanup crashed on shutdown. Fresh-process saved-assets-check-b passed.",
+    "fluid-native-a": "Rejected: software renderer selected; process failed.",
+    "fluid-native-b": "Rejected: NVIDIA ICD could not initialize without DISPLAY.",
+    "fluid-native-c": "Rejected: cold shader compilation exceeded 600-second bound.",
+    "fluid-native-d": "Native FLIP observed; floor/pawn presentation defects prompted revision.",
+    "fluid-native-e": "Rejected visual review: unpossessing reset the camera to an origin view.",
+    "fluid-native-f": "Native capture verified and visually inspected; remaining limitations recorded above.",
+    "props-b": "Rejected modeling check: degenerate axis geometry. Corrected pole triangulation and sealed base in c/d.",
+    "poses-a": "Initial 16:9 pose capture at 1280x720; body surface previews refer to this trace. Final poses-b uses 1920x1080 to match the native producer annotation.",
+    "poses-b": "Final installed plugin passed all 12 pose/camera/pickup/drop cases."
+  },
+  "preserved_demo": {
+    "project": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/project-c",
+    "map_sha256": "7a99376c6f204d0d66f0e7f1dbde1bd69f523766935f009402a3399f06a1cc38",
+    "plugin_sha256": "3ad3e79bd81065135655a9be370802da1fe85e669c92de3e4c392f845836904d",
+    "matches_preparation_baseline": true,
+    "sunshine_entries_modified": false
+  },
+  "unfinished": [
+    "GTA-level character and motion library",
+    "New prop grasp/dynamic collision integration",
+    "Runtime nozzle/flow control and Home liquid-state coupling",
+    "Dimensionally validated villa and second-floor construction",
+    "Counterfactual world restoration and assistant/human response loop"
+  ],
+  "skill_installed": "/home/yhliu/.codex/skills/vista-blender-ue-workflow/SKILL.md"
+}

@@ -1,0 +1,156 @@
+{
+  "schema": "vista.villa-concept-review/v1",
+  "count": 14,
+  "model_version": "not exposed by built-in image tool",
+  "review_status": "awaiting user design feedback",
+  "geometry_status": "not dimensionally validated",
+  "images": [
+    {
+      "id": "01-living-master",
+      "title": "挑高客廳",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/01-living-master.png",
+      "bytes": 2804048,
+      "sha256": "65aeaf8acbb9511164929b8cad064d8b936d8d22aca30898d66113f5b44f9e27",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "02-living-reverse",
+      "title": "客廳反向視角",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/02-living-reverse.png",
+      "bytes": 2628331,
+      "sha256": "cdde32554bdded5fa19fbffd228acd5079f47f3be758eebf5a5816868b309734",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "03-kitchen",
+      "title": "廚房與中島",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/03-kitchen.png",
+      "bytes": 2611428,
+      "sha256": "364c27ecd977021aad1f7c32ed4d516d349b247406f69c5601334f1ebf4c32cc",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "04-dining-r2",
+      "title": "餐廳",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/04-dining-r2.png",
+      "bytes": 2302762,
+      "sha256": "7b819be2a76e727f4e1cc746c2846e05dc1a1c025290ba98f61136a77c629644",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "05-entry-stair",
+      "title": "玄關與樓梯",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/05-entry-stair.png",
+      "bytes": 2719199,
+      "sha256": "601398ac8e390ac6e30a6297fdd39d72abb6e13832722a84af00335430383e15",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "06-upper-gallery",
+      "title": "二樓回廊",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/06-upper-gallery.png",
+      "bytes": 2648520,
+      "sha256": "ab2a052d4974bb66ffd3346874bb6743acea85d8b1b92bc27a164cc224b8c604",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "07-bedroom",
+      "title": "主臥",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/07-bedroom.png",
+      "bytes": 2860727,
+      "sha256": "ac23c8414fc6c25fe9e3505d7334a6b57b7e12d72655ef11caeec8fb7dd2108a",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "08-bathroom",
+      "title": "主衛浴",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/08-bathroom.png",
+      "bytes": 2812602,
+      "sha256": "9018f63b4e45163ace241a2654d3f4ec4446c6ad5b936de0cd2673681d410648",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "09-study",
+      "title": "書房",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/09-study.png",
+      "bytes": 2603462,
+      "sha256": "0cf5016d18ee445d958299e17f10f5996d9e106cee21a7ca41cc9d084a8bee96",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "10-laundry",
+      "title": "家事間",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/10-laundry.png",
+      "bytes": 2233415,
+      "sha256": "b0b1a9a20a5b63a3015482819d9200ade60bb425439a309fb9f954c9b0215e8c",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "11-exterior",
+      "title": "庭院外觀",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/11-exterior.png",
+      "bytes": 3290693,
+      "sha256": "c185156c0f03ac79fcf50ecea72d3b3a1e97433bde66bda348c1a3c07e298c26",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "12-ground-plan",
+      "title": "一樓配置概念",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/12-ground-plan.png",
+      "bytes": 2386168,
+      "sha256": "be9863f699091c60eb614f7af1bee698ed6bb89c1d197201004095f714ea7974",
+      "width": 1448,
+      "height": 1086,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "13-upper-plan-r2",
+      "title": "二樓配置概念",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/13-upper-plan-r2.png",
+      "bytes": 2011847,
+      "sha256": "dd41916b2cf793f1499276748478b8c0071372502213a693a9f0f83999a983e1",
+      "width": 1448,
+      "height": 1086,
+      "evidence_kind": "generated_design_concept"
+    },
+    {
+      "id": "14-material-detail-r2",
+      "title": "石材、木材與金屬細節",
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/designs/14-material-detail-r2.png",
+      "bytes": 2320203,
+      "sha256": "73578eb00969751ec54eb7bbb34d121010472980fcc4127720f679c330bb6a6c",
+      "width": 1536,
+      "height": 1024,
+      "evidence_kind": "generated_design_concept"
+    }
+  ],
+  "gallery_markdown": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/design-review-a/設計圖冊.md",
+  "gallery_html": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/design-review-a/index.html",
+  "revision_notes": [
+    "Dining view revised to remove a duplicated faucet.",
+    "Upper plan stair moved toward the east; final dimensional/landing consistency is unverified.",
+    "Material closeup revised to one image instead of split panels."
+  ]
+}
