@@ -1,35 +1,47 @@
-# Villa R1：設計與即時品質樣板
+# Villa R1：可操作的兩層住宅 demo
 
-目標是人物、物件與操作都可信的住宅環境。本次版本從 Home R5 分出獨立工作副本，原本 Sunshine 的 **VISTA Home R5** 保留。
+在 Moonlight 選 **VISTA Villa R1**。新版使用凍結的獨立專案；原本 **VISTA Home R5** 仍保留。這次把生成圖的挑高、淺木／石材、黑色細框、二樓迴廊和主要房間配置做進 Unreal，並接好一段廚房操作。
 
-先看 [14 張別墅設計圖冊](/data/sysx/vista-world/runs/vista-villa-r1-20260910a/design-review-a/設計圖冊.md) 或 [HTML 圖冊](/data/sysx/vista-world/runs/vista-villa-r1-20260910a/design-review-a/index.html)。包含客餐廳、廚房、入口樓梯、二樓迴廊、臥室、浴室、書房、洗衣間、外觀、兩層平面概念與材質近景。生成工具沒有回報模型版本，因此沒有把它標成已驗證的 GPT Image 2.5。
+![Unreal 實機：挑高客廳與二樓迴廊](/data/sysx/vista-world/runs/vista-villa-r1-20260910b/native-h/user/Saved/VillaProof/09_architecture.png)
 
-![近距離物件樣板；Blender Cycles 渲染](/data/sysx/vista-world/runs/vista-villa-r1-20260910a/hero-props-d/hero-props.png)
+[進度簡報 PPTX](/data/sysx/vista-world/runs/vista-villa-r1-20260910b/progress-deck-b/VISTA-Villa-progress.zh-TW.pptx) · [簡報 PDF](/data/sysx/vista-world/runs/vista-villa-r1-20260910b/progress-deck-b/VISTA-Villa-progress.zh-TW.pdf) · [14 張生成設計圖冊](/data/sysx/vista-world/runs/vista-villa-r1-20260910a/design-review-a/index.html)
 
-這組托盤、陶瓷杯、玻璃壺是實際建模／PBR 的 Blender 預覽。托盤沿用已取得的 Poly Haven CC0 照片木紋、roughness 和 normal；杯壺有內壁、圓唇與封閉底部。模型已匯入獨立 UE 材質檢查場景，保存後重新載入，尺寸、材質和靜態碰撞設定吻合。這三件新樣板尚未接成可抓握的 Home 道具。
+## 現在可以操作
 
-## 本次完成與界線
+| 按鍵 | 功能 |
+| --- | --- |
+| WASD、滑鼠 | 在兩層空間走動、觀看 |
+| Tab | 第一／第三人稱切換 |
+| E | 對準近處杯壺拿取；持物時對支撐面放回 |
+| P | 拿壺、靠近杯子後倒水 |
+| F | 在水槽旁開關龍頭 |
+| H | 廚房示範、獨立上樓測試、多視角巡覽 |
+| R | 重設道具和水量，回到角色鏡頭 |
 
-| 項目 | 本次結果 | 後續驗收 |
-| --- | --- | --- |
-| 設計 | 14 張選定概念圖、提示詞、修訂與 SHA-256 圖冊 | 使用者選定設計後，統一尺寸、樓梯與開口；目前不是可施工平面圖 |
-| 人物動作 | 共用五次曲線、步伐／身體小動作、手指依序閉合；12 項原生相機／姿勢／拿放檢查通過，3 張 Blender 表面可見性預覽通過 | 新角色、臉／眼／頭髮、動捕資料與 Motion Matching 尚未整套導入；不宣稱達到 GTA 品質 |
-| 物件 | 3 個 GLB、Blender 原檔、照片木紋；閉合壁面與底部射線檢查；UE 匯入及重載檢查 | 原生近看材質、可動碰撞與新抓握錨點 |
-| 流體 | Niagara 3D FLIP 校準場景、參數型別／名稱檢查、獨立 GPU 執行與原生截圖流程 | 出水源控制、倒入杯中、溢出與 Home ml／事件狀態仍需連動與量測 |
-| 流程 | 已建立並安裝可重用 skill，含 GLB 檢查工具與本機執行範例 | 不代表較小模型的端到端能力已做實驗驗證 |
+H 會先把角色放到廚房起點，樓梯測試另設起點；樓梯上升使用實際角色移動與碰撞。自由走動可自行探索房間。第一人稱空手能看到雙手，低頭可見衣服、腹部、腿和鞋。
 
-詳細方向見 [接近 GTA 的品質方案](quality-plan.zh-TW.md)。流體各次嘗試與最終檢查結論見 `implementation-manifest.json`；不能只看程序回傳 0 或粒子數為正就認定畫面通過。
+## 這版的四項進度
 
-## 可重現來源
+- **人物與動作：**沿用 MakeHuman CC0 骨架與皮膚，增加眼睛／角膜、綁定髮絲和衣物幾何。三段 CMU 步行轉成 203 個姿勢樣本，修正 A／T pose，選片後接 IK。尚非完整 Epic Motion Matching 資料庫。
+- **住宅：**16 × 12 m 外框、3.2 m 二樓、6.4 m 挑高、20 階樓梯；客餐廳、廚房、洗衣房、兩間臥室、書房、浴室。60 組幾何使用實際材質槽和照片 PBR；木櫃、石材中島、薄壁杯壺與水槽已有近距離檢查。
+- **連續操作：**走近、抓壺、倒入杯中、放回、走到水槽、開關水、上樓。原生流程拿取／放回各 1 次，無取消。
+- **液體：**水量守恆帳本、容器液面、重力細水柱與粗網格 FLIP。關源後已流出的部分繼續運動。本次杯中 218.9 ml，帳本殘差 0.0 ml；此數字不是 FLIP 粒子質量的量測。
 
-- 模型與渲染：`tools/blender/vista_villa_r1/build_hero_props.py`。
-- UE 資產與校準：`tools/ue/vista_villa_r1/`。兩個獨立地圖為 `/Game/VISTA/VillaR1/Maps/PropsLab` 和 `/Game/VISTA/VillaR1/Maps/FluidLabR2`。
-- 原生檢查：`tools/runtime/vista_villa_r1/run_native.py`，使用自己的網路 namespace、虛擬顯示器和 user directory；記錄實際 NVIDIA renderer。
-- Skill 原始碼：[SKILL.md](../../../skills/vista-blender-ue-workflow/SKILL.md)；已安裝至 [本機 skill](/home/yhliu/.codex/skills/vista-blender-ue-workflow/SKILL.md)。
-- 大型／生成檔案保留於 `/data/sysx/vista-world/runs/vista-villa-r1-20260910a`，不進 Git。
+## 驗證與界線
 
-基礎 contract/compiler 的 28 項測試及本次 8 項動作曲線、GLB 與 Home 合約測試通過。新外掛以 UnrealEditor Linux Development 編譯；原生姿勢檢查是 NullRHI，身體表面預覽是 Blender，流體截圖才是 Vulkan 原生畫面。
+Editor、Game Development 和 Shipping 外掛編譯通過；73 項 Python 檢查、原 Home 的 12 個姿勢／拿放案例通過。新版以 GPU 1 原生執行並保存 15 張截圖，無材質編譯失敗；角色可上樓。實測 frame time 中位數 **45.7 ms**、p95 **85.1 ms**，包含自動截圖，不代表穩定 30 fps。
 
-## 研究銜接
+目前未達完整 GTA 或生成圖的照片品質。細部手指、臉部、衣物、家具與花園還需精修；FLIP 有粗顆粒／青色表面瑕疵，液體材質仍需改善。原 Home 六個空間的事件保留在 R5，**尚未全部移植到這棟新 Villa**。自然語言規劃、世界還原與 VISTA／EgoArgus 助理閉環尚待接入。
 
-[VISTA](https://arxiv.org/html/2605.10579v2) 負責情境生成與稽核，[EgoArgus](https://arxiv.org/html/2608.25561v1) 提供證據關係與介入判斷；後者已使用 VISTA。新的切入點是固定起始世界後，執行不同提醒與人物反應，量測後果差異。世界還原、人物語言反應及完整助理閉環仍需獨立實作與驗證。
+[設計圖與各空間的對照及驗收方向](quality-plan.zh-TW.md) · [來源、雜湊與失敗嘗試](implementation-manifest.json)
+
+## 可重現流程與交付
+
+1. Blender 的 `build_villa.py` 由共同尺寸建立空間；`build_character.py` 與 `retarget_mocap.py` 準備人物及步行資料。
+2. UE 的 `import_villa.py`、`refine_native.py`、`update_geometry.py`、`finish_materials_and_source.py`、`finish_kitchen.py` 與 `finish_water.py` 逐步保存資產、材質、碰撞和出水源；每次使用獨立輸出與紀錄。
+3. `run_native.py` 檢查 renderer、實際動作、地圖／外掛雜湊及水量；再看實機畫面。所有大型資產留在本機 run，不放 Git。
+4. 測過的 2,763 個檔案已複製並逐檔比對至 `/data/sysx/vista-world/runs/vista-villa-r1-20260910b/demo-project-a`。Sunshine 新入口只會在你選它時啟動；R5 的地圖、外掛和遊戲／輸入程序維持原狀。
+
+可重用的 [skill 原始碼](../../../skills/vista-blender-ue-workflow/SKILL.md) 已同步至 [本機 skill](/home/yhliu/.codex/skills/vista-blender-ue-workflow/SKILL.md)。其中記錄了材質保存、骨架校正、Niagara 綁定、GPU 檢查及失敗恢復的具體流程；未宣稱較小模型的端到端能力已做實驗驗證。
+
+設計圖的生成工具沒有回報模型版本，因此沒有標成已驗證的 GPT Image 2.5。本輪未呼叫付費影像、影片或 OpenRouter 模型。研究筆記與老師推薦論文已在私人 VISTA-Web 的 PR #2 合併到 dev；錄影審查頁 PR #1 也已合併到 dev，未部署 production。

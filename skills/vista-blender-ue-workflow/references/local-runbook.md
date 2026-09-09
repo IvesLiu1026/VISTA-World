@@ -77,3 +77,40 @@ Official references, checked against the installed version:
 
 These document capabilities, not completed installation of motion databases,
 grooms, new characters or a volume-coupled Home fluid system.
+
+## Integrated villa implementation
+
+The next iteration lives under `vista-villa-r1-20260910b`. Its private `project-c`
+contains the Villa map and retains Home. Consult the current implementation
+manifest before launching; preparation receipts become stale after plugin swaps.
+
+Source entry points in `tools/blender/vista_villa_r1`:
+
+- `build_character.py`: fitted CC0 body, subdivided close geometry, skinned hair.
+- `retarget_mocap.py`: T/A-pose calibration and measured BVH walk samples.
+- `build_villa.py`: common dimensions, stairs, rooms, glazing and furniture.
+  `--split-architecture --geometry-only --no-render` exports separately cacheable
+  wall meshes with named viewport materials for a verified UE palette.
+
+The UE scripts use `VISTA_VILLA_CONFIG` JSON. `import_villa.py` requires `out`,
+`villa` (manifest path), `character` (asset directory), `motion` (JSON), `props`
+(import receipt). `refine_native.py` adds `import_script` and optionally
+`keep_character`. `update_geometry.py` adds a fresh `geometry_revision` and must
+have a saved native palette. `finish_materials_and_source.py` requires `out`,
+`stone` (download directory) and `geometry_receipt`. Its `reuse_textures` option
+checks source filenames when recovering an interrupted own import.
+`finish_kitchen.py` requires `out`, `villa`, `geometry_receipt` and `import_script`;
+it replaces the kitchen with a continuous faucet and a carcass that preserves the
+basin cavity. Supply `--plant` as the downloaded asset directory to Blender.
+Always use Blender's `--python-exit-code 1`, and require its output manifest.
+
+Run `verify_villa_saved.py` in a new commandlet with `VISTA_VILLA_VERIFY_OUT`.
+Then use `run_native.py --mode villa --gpu 1 --ddc-graph VistaVillaR1Cache` with
+the usual project/engine/fresh-output arguments. It validates both process and
+functional receipts and records the tested map/plugin hashes. Keep known
+compiler jobs off the same CPU cores while measuring interactive performance.
+
+`launch_demo.py --profile <profile> --action plan` checks delivery identity without
+starting it. The Villa app must select `/Game/VISTA/VillaR1/Maps/Villa`, its cache
+and its verified plugin; it must not inherit the apartment's `-VistaWholeHome`.
+Do not launch or send input to the live R5 merely to validate a private revision.

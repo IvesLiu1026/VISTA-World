@@ -1,136 +1,318 @@
 {
-  "schema": "vista.villa-implementation/v1",
+  "schema": "vista.villa-implementation/v2",
   "date": "2026-09-10",
-  "status": "prototype_review_handoff",
-  "project": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/project-a/PhotorealHome.uproject",
+  "status": "isolated_native_demo_progress",
+  "project": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/demo-project-a/PhotorealHome.uproject",
+  "map": "/Game/VISTA/VillaR1/Maps/Villa",
+  "sunshine_app": "VISTA Villa R1",
+  "plugin_sha256": "e4cd2b6af8d7996dec30aa9401d8e2added9fbbdc72b0a4b37a3658a237ec789",
+  "map_sha256": "0fbc2bfcf0492715ef9ab6fbec44a9b5d74b97aab36dd5d00621e12a04369360",
   "base_r5_commit": "ac9feccdccb0bc96d453b5bc4c2267db31da006d",
-  "plugin_sha256": "c5403bd39e6328c260c3df4e25c0eab6edcd618012705d661e4bcad1c94fcadb",
-  "map_paths": [
-    "/Game/VISTA/VillaR1/Maps/PropsLab",
-    "/Game/VISTA/VillaR1/Maps/FluidLabR2"
-  ],
   "artifacts": {
-    "concepts": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/design-review-a/manifest.json",
-      "sha256": "36071a712c0095b8dce39abe976e94d9bb6c3f32f17a7b087ccecead12528a45"
+    "native_process": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/native-h/process.json",
+      "sha256": "d0c14843b8d66bd0aed2b185b985772151536f2e966d70bcc70e30fe67f87e4d"
     },
-    "props": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/hero-props-d/manifest.json",
-      "sha256": "de9e55128a902d27e55092beaad574b301811753229c9af78b65a34e7fbb3f98"
+    "native_proof": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/native-h/user/Saved/VillaProof/proof.json",
+      "sha256": "1e0403c002cdeced0ad5ce30ac45b1770f327ee6ce0dfad679a3a03926c0d74b"
     },
-    "prop_structure": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/hero-props-d/glb-inspection.json",
-      "sha256": "d3ea458d9d5a3f6c8beb62328d376b57803980ece06f18c917ab901f53e8b1f5"
-    },
-    "native_import": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/props-import-a.json",
-      "sha256": "c9901246f92e1d079fb86fe9c71acb7d8cf69eee52e981969c995aadf3c7996f"
-    },
-    "native_readback": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/saved-assets-check-b.json",
-      "sha256": "7e75b48438daf37a025a2a40cd443392b4dbc3499a08b64b56a35864454a87ba"
-    },
-    "native_poses": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/poses-b/check.json",
-      "sha256": "7dd58ec5fa5782d411b6ebbfee5909b38b03711a945288e9080a059303634aaa"
-    },
-    "body_surfaces": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/pose-preview-a/preview.json",
-      "sha256": "34163ce2adc8b49a6303a92a1fd6d9168e29fa630555e56696453d5c96050be3"
-    },
-    "fluid_configuration": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-author-a.json",
-      "sha256": "e3d25c30967079378ad5fc6638cc9a8f75281c26ba1fa1692702cacc860b4cb6"
-    },
-    "fluid_process": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/process.json",
-      "sha256": "0fbff90df57ab13ce87aa1d7d6a4c336e38ff141b98f2aaa20f71f67f9c717ac"
-    },
-    "fluid_proof": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/proof.json",
-      "sha256": "8649abe7e0b8000dcea779e145f579985220b1f1f55852dd9e83506dee5025b1"
-    },
-    "cache": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/cache-config-a.json",
-      "sha256": "d6c7fede1e8569d0d31d89a64a9a6f2228465c64446cad22c9a2aba0d11f2817"
-    },
-    "baseline_tests": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/baseline-tests.log",
-      "sha256": "bafb8d87c515c66d41ef0e9200bdf4f8470a2654244aba96313240e3dfb7dfb3"
-    },
-    "focused_tests": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/focused-tests-a.log",
-      "sha256": "9e76a7710195b51baa7831b3358c8b5116155ccc2e76ea0ed933f3a45606544b"
+    "native_review": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/native-review-a.json",
+      "sha256": "98ad4f4586b63881a51fc0f2d7d003beecf7e4df9ff6832dc347225237bec656"
     },
     "editor_build": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/build-e.log",
-      "sha256": "c2377ccb7b893e78cc55dd339b9792b4ae12c0c44f7b694709a4aeadf29db9e7"
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/build-t.log",
+      "sha256": "cbcff9ffcbc2497b81d20efc7483cb4044175acbb89ad8f1dabf19bd9ae400a6"
     },
-    "native_poses_initial": {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/poses-a/check.json",
-      "sha256": "e772082dd56bdcf74e9fc83f02479bbaf9479e6b1d09ae121cfec288055519c9"
+    "game_development_shipping_build": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/build-game-b.log",
+      "sha256": "65b8cc4baa11cc174dfdc2c4bb0e5a352b70e26c6f0d881ec0ab1d64203911e5"
+    },
+    "native_r5_pose_regression": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/poses-final-a/check.json",
+      "sha256": "7b2e06cd577edc85aad06963a8ac46bdf55e6cec9164835ccc8191e14343f53a"
+    },
+    "geometry_base": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/geometry-b.json",
+      "sha256": "3224c7a1a431ee610e07fdde7694d484bcd3400b0782298c3edb54f8f0b909da"
+    },
+    "kitchen_geometry": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/kitchen-finish-a.json",
+      "sha256": "a040a38955d1805ecf0f0f15c46a857bd507c1893d02c6f690aaea8952c1a0f3"
+    },
+    "house_export": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/villa-h/manifest.json",
+      "sha256": "aa9fd067068f06cc955bb21d6db487f0fba3c4ac59ca485f188fb180451208de"
+    },
+    "character": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/character-c/manifest.json",
+      "sha256": "6257a65f8b0feaa2b71124748ab59c741d6bd885168adedd7d7db374456e49cb"
+    },
+    "motion": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/motion-c/mocap.json",
+      "sha256": "d933a7fb1938e42ea25c5546b7e0d86ba1c9b5df72726a58b89efd4be1657b42"
+    },
+    "stone_source": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/cc0-marble-8k-a/manifest.json",
+      "sha256": "52ec7cd5bebe811447423155d71b3ba3a0dbb5f6b7e22a9943a6c334948c6df8"
+    },
+    "plant_source": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/cc0-plant-a/manifest.json",
+      "sha256": "5b46a1885dfff2e4d7274a02acdeea7a25d1fbcb182c2a75c7c99703618fa952"
+    },
+    "close_materials_source_control": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/delivery-assets-c.json",
+      "sha256": "0da7ffe2208ff1c66958b3606f8ac33638db6df7c8736815a8f3fae44981f653"
+    },
+    "water_finish": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/water-finish-a.json",
+      "sha256": "4478a72c1437cbca03b935495d6a34ad24acae6626e6ef48a46c0854d34c1b3d"
+    },
+    "saved_dependencies": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/saved-check-b.json",
+      "sha256": "c30c57567f93f1f5cc3613216145cb4dc1458ad094d6af86b5b303ac040eec64"
+    },
+    "source_review": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/source-review-a.json",
+      "sha256": "38d4544b554b09ff772fbda2da4c3648e00a79105f85603c87d1f751ff51b4cf"
+    },
+    "unit_tests": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/final-unit-tests-a.log",
+      "sha256": "d517edf0292ebfa4ff102ce17b7bad36a9d648aae834d6d2f0da36b2a25ed773"
+    },
+    "stack_tests": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/integration-stack-tests-a.log",
+      "sha256": "2e5ca38218e679b5c4250f9ecbbe7b9493603eaf810a6d4b8b4f58e92f9e734e"
+    },
+    "frozen_demo": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/frozen-demo-a.json",
+      "sha256": "8a634ba4fff48b83bfa004752c6e3779043a8fd44a54905d0ce4a3aa17e18dc4"
+    },
+    "sunshine_profile": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/demo-a/sunshine-profile.json",
+      "sha256": "5c804cc09b6a0be62dc82aa2221180876e8747c2ec0f482def7210d3bd19145e"
+    },
+    "sunshine_reload": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/demo-a/sunshine-reload-a.json",
+      "sha256": "8639772fc5e49695007ba7e67103cb7c35715551ef63380fdf11dd308e216daa"
+    },
+    "presentation": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/progress-deck-b/VISTA-Villa-progress.zh-TW.pptx",
+      "sha256": "6931a78e74f0ce3565311ec2159e8bf2dcde64ebc0ec7a205953c7bdae100d82"
+    },
+    "presentation_pdf": {
+      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910b/progress-deck-b/VISTA-Villa-progress.zh-TW.pdf",
+      "sha256": "f28b3d207679be786423eea77eaf413bbf1d7befb4d2c47611164a2dae7bf92c"
     }
   },
-  "fluid_images": [
-    {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0120.png",
-      "sha256": "e9c3714c09ee9badb17f3593c026c6193647fcb1130056fb34541ab11cc10724",
-      "frame": 120
-    },
-    {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0240.png",
-      "sha256": "9fcf1818b399ba092c338db992c535c53392be5430fcea071c6ab8895902d683",
-      "frame": 240
-    },
-    {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0330.png",
-      "sha256": "4ef41aeaa67e2120dd1751beb19643e7a57c92a20c8699f0021cd93353107e0e",
-      "frame": 330
-    },
-    {
-      "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0450.png",
-      "sha256": "46a7fd02abdd01f3fd7fd72902373adb93d847ec7425736c4dc6e287529d2ced",
-      "frame": 450
-    }
-  ],
-  "fluid_review": {
-    "native_surface_visible": true,
-    "moving_obstacle_and_surface_change_visible": true,
-    "camera_verified": true,
-    "production_visual_quality_accepted": false,
-    "volume_conservation_verified": false,
-    "home_actions_coupled": false,
-    "findings": [
-      "Visible liquid surface and its deformation around the moving calibration box.",
-      "Strong blue shading, coarse surface detail and translucent boundary artifacts remain.",
-      "Grid boundary and fixture demonstration, not a completed faucet or pouring action."
-    ]
+  "concept_gallery": {
+    "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/design-review-a/manifest.json",
+    "sha256": "36071a712c0095b8dce39abe976e94d9bb6c3f32f17a7b087ccecead12528a45"
   },
-  "attempt_notes": {
-    "fluid-author-a": "Assets saved; Python weakref cleanup crashed on shutdown. Fresh-process saved-assets-check-b passed.",
-    "fluid-native-a": "Rejected: software renderer selected; process failed.",
-    "fluid-native-b": "Rejected: NVIDIA ICD could not initialize without DISPLAY.",
-    "fluid-native-c": "Rejected: cold shader compilation exceeded 600-second bound.",
-    "fluid-native-d": "Native FLIP observed; floor/pawn presentation defects prompted revision.",
-    "fluid-native-e": "Rejected visual review: unpossessing reset the camera to an origin view.",
-    "fluid-native-f": "Native capture verified and visually inspected; remaining limitations recorded above.",
-    "props-b": "Rejected modeling check: degenerate axis geometry. Corrected pole triangulation and sealed base in c/d.",
-    "poses-a": "Initial 16:9 pose capture at 1280x720; body surface previews refer to this trace. Final poses-b uses 1920x1080 to match the native producer annotation.",
-    "poses-b": "Final installed plugin passed all 12 pose/camera/pickup/drop cases."
+  "hero_props": {
+    "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/hero-props-d/manifest.json",
+    "sha256": "de9e55128a902d27e55092beaad574b301811753229c9af78b65a34e7fbb3f98"
+  },
+  "native_results": {
+    "schema": "vista.villa-integration-proof/v1",
+    "motion_library_frames": 203,
+    "pickups": 1,
+    "placements": 1,
+    "cancelled_actions": 0,
+    "receiver_ml": 218.8571022078395,
+    "mass_residual_ml": 0,
+    "demo_completed": true,
+    "stairs_reached_upper_floor": true,
+    "volume_model": "conservative reservoir/flight ledger; Niagara surface is not a mass measurement",
+    "frame_ms_median": 45.68909201771021,
+    "frame_ms_p95": 85.0665271282196
+  },
+  "modeling": {
+    "footprint_m": [
+      16,
+      12
+    ],
+    "floor_levels_m": [
+      0,
+      3.2
+    ],
+    "living_ceiling_m": 6.4,
+    "stair_rises": 20,
+    "geometry_groups": 60,
+    "runtime_geometry": "GeometryE plus the revised GeometryH kitchen",
+    "character_bones": 53,
+    "motion_clips": 3,
+    "motion_frames": 203
+  },
+  "validation": {
+    "unique_python_checks": 73,
+    "native_r5_pose_cases": 12,
+    "villa_gpu": "NVIDIA A6000 GPU 1, Vulkan, 1920x1080",
+    "editor_and_game_development_shipping_compiled": true,
+    "full_gta_quality_accepted": false,
+    "stable_30fps_accepted": false
+  },
+  "scope": {
+    "villa_kitchen_grasp_pour_place": true,
+    "first_third_person_and_body": true,
+    "stairs": true,
+    "all_old_events_migrated_to_villa": false,
+    "full_assistant_counterfactual_loop": false,
+    "liquid": "conservative ledger, hydrostatic vessel surface, ballistic sub-cell column and coarse GPU FLIP; no measured FLIP mass"
   },
   "preserved_demo": {
-    "project": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/project-c",
-    "map_sha256": "7a99376c6f204d0d66f0e7f1dbde1bd69f523766935f009402a3399f06a1cc38",
-    "plugin_sha256": "3ad3e79bd81065135655a9be370802da1fe85e669c92de3e4c392f845836904d",
-    "matches_preparation_baseline": true,
-    "sunshine_entries_modified": false
+    "r5_project": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/project-c",
+    "r5_plugin_sha256": "3ad3e79bd81065135655a9be370802da1fe85e669c92de3e4c392f845836904d",
+    "r5_map_sha256": "7a99376c6f204d0d66f0e7f1dbde1bd69f523766935f009402a3399f06a1cc38",
+    "original_seven_apps_preserved": true,
+    "r5_game_and_input_services_unchanged": true,
+    "new_villa_auto_started": false
   },
-  "unfinished": [
-    "GTA-level character and motion library",
-    "New prop grasp/dynamic collision integration",
-    "Runtime nozzle/flow control and Home liquid-state coupling",
-    "Dimensionally validated villa and second-floor construction",
-    "Counterfactual world restoration and assistant/human response loop"
-  ],
-  "skill_installed": "/home/yhliu/.codex/skills/vista-blender-ue-workflow/SKILL.md"
+  "attempt_notes": {
+    "native_e": "Functional pass; older textures and horizontal source velocity were superseded.",
+    "native_f": "Functional pass; visual review found cabinet occlusion and unresolved thin water stream.",
+    "native_g": "Hollow basin and ballistic stream passed; faucet stem occluded the straight-on inspection.",
+    "native_h": "Final oblique faucet view, complete functional sequence and 15 captures; liquid artifacts documented.",
+    "build_o_p": "Private Niagara helper/linkage errors corrected with public pin inspection.",
+    "delivery_assets_a_b": "Recovered interrupted texture import and existing graph links in c.",
+    "villa_f_g": "Rejected missing input path attempts; h completed with manifest.",
+    "build_r": "Incomplete unique-pointer pointee in generated UE constructor; corrected with an out-of-line custom deleter."
+  },
+  "initial_handoff": {
+    "schema": "vista.villa-implementation/v1",
+    "date": "2026-09-10",
+    "status": "prototype_review_handoff",
+    "project": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/project-a/PhotorealHome.uproject",
+    "base_r5_commit": "ac9feccdccb0bc96d453b5bc4c2267db31da006d",
+    "plugin_sha256": "c5403bd39e6328c260c3df4e25c0eab6edcd618012705d661e4bcad1c94fcadb",
+    "map_paths": [
+      "/Game/VISTA/VillaR1/Maps/PropsLab",
+      "/Game/VISTA/VillaR1/Maps/FluidLabR2"
+    ],
+    "artifacts": {
+      "concepts": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/design-review-a/manifest.json",
+        "sha256": "36071a712c0095b8dce39abe976e94d9bb6c3f32f17a7b087ccecead12528a45"
+      },
+      "props": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/hero-props-d/manifest.json",
+        "sha256": "de9e55128a902d27e55092beaad574b301811753229c9af78b65a34e7fbb3f98"
+      },
+      "prop_structure": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/hero-props-d/glb-inspection.json",
+        "sha256": "d3ea458d9d5a3f6c8beb62328d376b57803980ece06f18c917ab901f53e8b1f5"
+      },
+      "native_import": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/props-import-a.json",
+        "sha256": "c9901246f92e1d079fb86fe9c71acb7d8cf69eee52e981969c995aadf3c7996f"
+      },
+      "native_readback": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/saved-assets-check-b.json",
+        "sha256": "7e75b48438daf37a025a2a40cd443392b4dbc3499a08b64b56a35864454a87ba"
+      },
+      "native_poses": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/poses-b/check.json",
+        "sha256": "7dd58ec5fa5782d411b6ebbfee5909b38b03711a945288e9080a059303634aaa"
+      },
+      "body_surfaces": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/pose-preview-a/preview.json",
+        "sha256": "34163ce2adc8b49a6303a92a1fd6d9168e29fa630555e56696453d5c96050be3"
+      },
+      "fluid_configuration": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-author-a.json",
+        "sha256": "e3d25c30967079378ad5fc6638cc9a8f75281c26ba1fa1692702cacc860b4cb6"
+      },
+      "fluid_process": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/process.json",
+        "sha256": "0fbff90df57ab13ce87aa1d7d6a4c336e38ff141b98f2aaa20f71f67f9c717ac"
+      },
+      "fluid_proof": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/proof.json",
+        "sha256": "8649abe7e0b8000dcea779e145f579985220b1f1f55852dd9e83506dee5025b1"
+      },
+      "cache": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/cache-config-a.json",
+        "sha256": "d6c7fede1e8569d0d31d89a64a9a6f2228465c64446cad22c9a2aba0d11f2817"
+      },
+      "baseline_tests": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/baseline-tests.log",
+        "sha256": "bafb8d87c515c66d41ef0e9200bdf4f8470a2654244aba96313240e3dfb7dfb3"
+      },
+      "focused_tests": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/focused-tests-a.log",
+        "sha256": "9e76a7710195b51baa7831b3358c8b5116155ccc2e76ea0ed933f3a45606544b"
+      },
+      "editor_build": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/build-e.log",
+        "sha256": "c2377ccb7b893e78cc55dd339b9792b4ae12c0c44f7b694709a4aeadf29db9e7"
+      },
+      "native_poses_initial": {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/poses-a/check.json",
+        "sha256": "e772082dd56bdcf74e9fc83f02479bbaf9479e6b1d09ae121cfec288055519c9"
+      }
+    },
+    "fluid_images": [
+      {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0120.png",
+        "sha256": "e9c3714c09ee9badb17f3593c026c6193647fcb1130056fb34541ab11cc10724",
+        "frame": 120
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0240.png",
+        "sha256": "9fcf1818b399ba092c338db992c535c53392be5430fcea071c6ab8895902d683",
+        "frame": 240
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0330.png",
+        "sha256": "4ef41aeaa67e2120dd1751beb19643e7a57c92a20c8699f0021cd93353107e0e",
+        "frame": 330
+      },
+      {
+        "path": "/data/sysx/vista-world/runs/vista-villa-r1-20260910a/fluid-native-f/user/Saved/FluidLabProof/frame_0450.png",
+        "sha256": "46a7fd02abdd01f3fd7fd72902373adb93d847ec7425736c4dc6e287529d2ced",
+        "frame": 450
+      }
+    ],
+    "fluid_review": {
+      "native_surface_visible": true,
+      "moving_obstacle_and_surface_change_visible": true,
+      "camera_verified": true,
+      "production_visual_quality_accepted": false,
+      "volume_conservation_verified": false,
+      "home_actions_coupled": false,
+      "findings": [
+        "Visible liquid surface and its deformation around the moving calibration box.",
+        "Strong blue shading, coarse surface detail and translucent boundary artifacts remain.",
+        "Grid boundary and fixture demonstration, not a completed faucet or pouring action."
+      ]
+    },
+    "attempt_notes": {
+      "fluid-author-a": "Assets saved; Python weakref cleanup crashed on shutdown. Fresh-process saved-assets-check-b passed.",
+      "fluid-native-a": "Rejected: software renderer selected; process failed.",
+      "fluid-native-b": "Rejected: NVIDIA ICD could not initialize without DISPLAY.",
+      "fluid-native-c": "Rejected: cold shader compilation exceeded 600-second bound.",
+      "fluid-native-d": "Native FLIP observed; floor/pawn presentation defects prompted revision.",
+      "fluid-native-e": "Rejected visual review: unpossessing reset the camera to an origin view.",
+      "fluid-native-f": "Native capture verified and visually inspected; remaining limitations recorded above.",
+      "props-b": "Rejected modeling check: degenerate axis geometry. Corrected pole triangulation and sealed base in c/d.",
+      "poses-a": "Initial 16:9 pose capture at 1280x720; body surface previews refer to this trace. Final poses-b uses 1920x1080 to match the native producer annotation.",
+      "poses-b": "Final installed plugin passed all 12 pose/camera/pickup/drop cases."
+    },
+    "preserved_demo": {
+      "project": "/data/sysx/vista-world/runs/vista-home-first-person-r5-20260908a/project-c",
+      "map_sha256": "7a99376c6f204d0d66f0e7f1dbde1bd69f523766935f009402a3399f06a1cc38",
+      "plugin_sha256": "3ad3e79bd81065135655a9be370802da1fe85e669c92de3e4c392f845836904d",
+      "matches_preparation_baseline": true,
+      "sunshine_entries_modified": false
+    },
+    "unfinished": [
+      "GTA-level character and motion library",
+      "New prop grasp/dynamic collision integration",
+      "Runtime nozzle/flow control and Home liquid-state coupling",
+      "Dimensionally validated villa and second-floor construction",
+      "Counterfactual world restoration and assistant/human response loop"
+    ],
+    "skill_installed": "/home/yhliu/.codex/skills/vista-blender-ue-workflow/SKILL.md"
+  }
 }

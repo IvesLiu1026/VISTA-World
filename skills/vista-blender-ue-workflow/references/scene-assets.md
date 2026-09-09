@@ -44,3 +44,26 @@ Render neutral material and in-context views. Inspect glass, contact shadows,
 seams and texture scale. Export selected meshes without staging lights/cameras.
 Keep source, GLB and render recipe together. Use `--python-exit-code 1`: Blender
 can otherwise return 0 after a Python exception. Verify outputs and the manifest.
+
+## Saved imports and large interiors
+
+Save the whole Interchange dependency subtree before renaming or checkpointing
+the mesh. Interrupted authoring can leave a mesh whose materials or skeleton
+were never saved. Reopen in a fresh process and inspect actual slots/references;
+file existence alone is insufficient for safe resume.
+
+Use `InterchangeManager.import_asset` with automated, no-dialog parameters and
+explicit saves in headless UE. `AssetImportTask` can invoke a Slate save dialog
+even after a successful import. Check every material-connection return value.
+NullRHI cannot catch a broken Vulkan shader: inspect the GPU log for fallbacks.
+
+Keep walls, ceilings and slabs as separate meshes for Lumen surface coverage.
+For geometry revisions with a verified native palette, Blender's `VIEWPORT`
+material export retains names without copying every photograph. `PLACEHOLDER`
+omits those bindings. Verify UVs, map named slots to the real materials, save
+them on the mesh, and only then enable Nanite on appropriate opaque geometry.
+
+A continuous counter needs deliberate UV placement within a photographed slab.
+Do not magnify a tiny 2K crop into a hero surface. Use adequate source resolution
+and separately modeled floor joints; inspect close and room views. Match light
+color, exposure and proportions against the same approved design images.
