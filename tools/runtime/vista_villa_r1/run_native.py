@@ -1,5 +1,6 @@
 """Run bounded, network-isolated checks in the private villa copy."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -30,7 +31,7 @@ def main():
     p.add_argument('--project', type=Path, required=True)
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--engine', type=Path, required=True)
-    p.add_argument('--mode', choices=['poses', 'fluid'], default='poses')
+    p.add_argument('--mode', choices=['poses', 'fluid', 'villa'], default='poses')
     p.add_argument('--gpu', type=int, default=1)
     p.add_argument('--timeout', type=int, default=240)
     p.add_argument('--ddc-graph', choices=['VistaHomeFirstPersonR5Cache', 'VistaVillaR1Cache'], default='VistaHomeFirstPersonR5Cache')
@@ -43,8 +44,8 @@ def main():
     if out.exists() or not 1 <= a.timeout <= 900:
         raise RuntimeError('Use a fresh attempt and a bounded timeout (1–900 seconds)')
     out.mkdir(parents=True)
-    width, height = (1920, 1080) if a.mode == 'poses' else (1280, 720)
-    level = '/Game/VISTA/PhotorealHomeR1/Maps/Home' if a.mode == 'poses' else '/Game/VISTA/VillaR1/Maps/'+a.fluid_map
+    width, height = (1920, 1080) if a.mode in ['poses','villa'] else (1280, 720)
+    level = '/Game/VISTA/PhotorealHomeR1/Maps/Home' if a.mode == 'poses' else '/Game/VISTA/VillaR1/Maps/'+('Villa' if a.mode=='villa' else a.fluid_map)
     command = ['taskset', '-c', '20-23', 'ionice', '-c', '3', 'nice', '-n', '10',
         '/usr/bin/bwrap', '--unshare-net', '--die-with-parent', '--dev-bind', '/', '/', '--',
         str(a.engine/'Engine/Binaries/Linux/UnrealEditor'), str(project), level, '-game',
@@ -57,7 +58,7 @@ def main():
     if a.mode == 'poses':
         command += ['-NullRHI', '-VistaWholeHome', '-VistaFirstPersonProof']
     else:
-        command += ['-graphicsadapter='+str(a.gpu), '-VistaFluidLabProof']
+        command += ['-graphicsadapter='+str(a.gpu), '-VistaVillaProof' if a.mode=='villa' else '-VistaFluidLabProof']
         index = command.index(str(a.engine/'Engine/Binaries/Linux/UnrealEditor'))
         # This host's NVIDIA ICD requires a DISPLAY even for Vulkan offscreen.
         # Own a temporary virtual display inside our network namespace.
@@ -65,12 +66,16 @@ def main():
     env = os.environ.copy()
     env.pop('DISPLAY', None)
     env['OMP_NUM_THREADS'] = '4'
-    if a.mode == 'fluid':
+    if a.mode != 'poses':
         icd = Path('/usr/share/vulkan/icd.d/nvidia_icd.json')
         if not icd.is_file():
             raise RuntimeError('NVIDIA Vulkan ICD is missing; do not fall back to software rendering')
         env['VK_ICD_FILENAMES'] = str(icd)
     started = time.monotonic()
+    artifacts={}
+    if a.mode=='villa':
+        for key,relative in [('plugin_sha256','Plugins/VistaPhotorealReview/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so'),('map_sha256','Content/VISTA/VillaR1/Maps/Villa.umap')]:
+            with (project.parent/relative).open('rb') as f:artifacts[key]=hashlib.file_digest(f,'sha256').hexdigest()
     timed_out = False
     with (out/'native.log').open('w') as log:
         process = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT,
@@ -95,9 +100,23 @@ def main():
         'requested_gpu': None if a.mode == 'poses' else a.gpu,
         'hardware_backend_verified': None if a.mode == 'poses' else hardware_ok}
     receipt['detached_shader_workers_stopped'] = stopped
+    receipt.update(artifacts)
+    functional = True
+    if a.mode == 'villa':
+        proof = out/'user/Saved/VillaProof/proof.json'
+        data = json.loads(proof.read_text()) if proof.exists() else {}
+        functional = (data.get('demo_completed') is True and
+            data.get('stairs_reached_upper_floor') is True and
+            data.get('pickups', 0) >= 1 and data.get('placements', 0) >= 1 and
+            data.get('receiver_ml', 0) >= 100 and abs(data.get('mass_residual_ml', 1)) < 1e-5)
+        for row in data.get('records',[]):
+            functional=bool(functional and abs(row.get('jug_surface_ml',-1)-row.get('source_ml',0))<.05 and
+                abs(row.get('mug_surface_ml',-1)-row.get('receiver_ml',0))<.05)
+        functional=bool(functional and 'Failed to compile Material for platform' not in log_text)
+        receipt['functional_sequence_passed'] = functional
     (out/'process.json').write_text(json.dumps(receipt, indent=2)+'\n')
     print(json.dumps(receipt))
-    if code or timed_out or not hardware_ok:
+    if code or timed_out or not hardware_ok or not functional:
         raise SystemExit(1)
 
 

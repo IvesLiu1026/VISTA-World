@@ -7,5 +7,5 @@
   "Category": "VISTA",
   "CanContainContent": false,
   "Modules": [{"Name": "VistaPhotorealReview", "Type": "Runtime", "LoadingPhase": "Default"}],
-  "Plugins": [{"Name": "Niagara", "Enabled": true}, {"Name": "NiagaraFluids", "Enabled": true}]
+  "Plugins": [{"Name": "Niagara", "Enabled": true}, {"Name": "NiagaraFluids", "Enabled": true}, {"Name": "ProceduralMeshComponent", "Enabled": true}]
 }

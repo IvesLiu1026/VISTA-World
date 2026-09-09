@@ -6,12 +6,19 @@
 
 class UNiagaraSystem;
 class UNiagaraComponent;
+class UStaticMesh;
 
 UCLASS()
 class VISTAPHOTOREALREVIEW_API UHomeFluidAuthoring : public UBlueprintFunctionLibrary
 {
     GENERATED_BODY()
 public:
+    UFUNCTION(BlueprintCallable,Category="VISTA|Fluids") static FString InspectHoseSource(UNiagaraSystem* System);
+    UFUNCTION(BlueprintCallable, Category="VistaFluid")
+    static bool ConfigureVesselCollision(UStaticMesh* Mesh, bool Carafe);
+    // Author links in a project-owned copy of the hose graph, then compile it.
+    UFUNCTION(BlueprintCallable, Category="VistaFluid")
+    static FString ExposeHoseSource(UNiagaraSystem* System);
     UFUNCTION(BlueprintCallable, Category="VistaFluid")
     static FString DescribeSystem(UNiagaraSystem* System);
 

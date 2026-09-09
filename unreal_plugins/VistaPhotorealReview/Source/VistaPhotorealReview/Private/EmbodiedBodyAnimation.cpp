@@ -92,6 +92,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             T<2?FMath::Lerp(ReachViaA,ReachViaB,Smooth(T-1)):FMath::Lerp(ReachViaB,End,Smooth(T-2)));
     }
     Local=Poses->Relaxed;
+    ModifyBaseBodyPose(Local);
     const float RestBlend=FirstPersonRestAlpha*FirstPersonRestAlpha*(3.f-2.f*FirstPersonRestAlpha);
     const auto Index=[this](const TCHAR* Name) { const int32* I=BoneIndex.Find(FName(Name)); return I ? *I : INDEX_NONE; };
     const FTransform MeshWorld=GetMesh()->GetComponentTransform();
@@ -208,8 +209,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             const FVector Eye=Global[Head].TransformPosition(EyeLocal);
             // Calibrated to the fitted 45 cm arm chains: bent elbows and
             // relaxed hands at the lower edge, without detached camera arms.
-            const FVector Ready=Eye+FVector(Sign*22.f,30.f+Swing*.18f,
-                -10.f+.15f*FMath::Sin(Clock*1.4f+(RightHand?.35f:0.f)));
+            const FVector Ready=Eye+FirstPersonReadyOffset(Sign,Swing);
             const int32 Middle=Index(RightHand?TEXT("middle_01_r"):TEXT("middle_01_l"));
             const int32 FingerIndex=Index(RightHand?TEXT("index_01_r"):TEXT("index_01_l"));
             const int32 Pinky=Index(RightHand?TEXT("pinky_01_r"):TEXT("pinky_01_l"));
