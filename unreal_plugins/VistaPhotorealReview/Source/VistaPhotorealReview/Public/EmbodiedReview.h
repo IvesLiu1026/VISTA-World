@@ -192,6 +192,8 @@ protected:
     virtual void AdjustFirstPersonEyeTarget(FVector& EyeTarget) const {}
     virtual bool PreserveMotionFootRotation() const { return false; }
     virtual float ProceduralGaitWeight() const { return 1.f; }
+    virtual bool UsesGroundFootIK() const { return true; }
+    virtual float UnoccupiedMovementSpeed() const { return 125.f; }
     virtual FVector FirstPersonReadyOffset(float Sign,float Swing) const
     {return FVector(Sign*22.f,30.f+Swing*.18f,-10.f+.15f*FMath::Sin(Clock*1.4f+(Sign<0?.35f:0.f)));}
     virtual bool IsSceneContactReady(FString& Reason) const { return true; }

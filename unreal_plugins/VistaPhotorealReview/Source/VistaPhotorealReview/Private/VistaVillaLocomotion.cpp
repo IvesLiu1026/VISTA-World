@@ -136,26 +136,32 @@ void AVistaVillaCharacter::UpdateFeet(float Dt)
     if (Motions.Num()<2 || MotionIdle.Num()!=Parents.Num()) {Super::UpdateFeet(Dt);return;}
     const FVector Velocity=GetVelocity();
     const float Speed=Velocity.Size2D();
-    const bool Reset=!bFeetReady || FVector::Distance(PreviousLocation,GetActorLocation())>70.f;
-    PreviousLocation=GetActorLocation();
-    // At rest the support foot is under the pelvis, not one stride ahead.
-    // Start in mid-stance so the other foot swings before support is outrun.
-    if (Reset || (Speed>8.f && PreviousLocomotionSpeed<=8.f)) StepClock=.30f;
-    PreviousLocomotionSpeed=Speed;
-    StepClock=FMath::Frac(StepClock+Dt*Speed/CycleDistance);
-    MotionWeight=FMath::FInterpTo(MotionWeight,FMath::Clamp(Speed/75.f,0.f,1.f),Dt,8.f);
-    const float Frame=StepClock*(Motions.Num()-1);
-    MotionIndex=FMath::Clamp(FMath::FloorToInt(Frame),0,Motions.Num()-2);
-    const float Fraction=Frame-MotionIndex;
-    const auto& A=Motions[MotionIndex];const auto& B=Motions[MotionIndex+1];
-    MotionBlend.SetNum(MotionIdle.Num());
-    for (int32 I=0;I<MotionBlend.Num();++I)
+    bool Reset=false;FVillaMotionFrame A,B;float Fraction=0;
+    const bool Alpine=UpdateAlpineMotion(Dt,A,B,Fraction,Reset);
+    if (Alpine && !UsesGroundFootIK()) return;
+    if (!Alpine)
     {
-        FTransform Walk;Walk.Blend(A.Pose[I],B.Pose[I],Fraction);
-        const FString Name=Poses->BoneNames[I].ToString();
-        const float Amount=Name.StartsWith(TEXT("upperarm_"))?.62f:
-            Name.StartsWith(TEXT("lowerarm_"))?.35f:Name.StartsWith(TEXT("hand_"))?0.f:1.f;
-        MotionBlend[I].Blend(MotionIdle[I],Walk,MotionWeight*Amount);
+        Reset=!bFeetReady || FVector::Distance(PreviousLocation,GetActorLocation())>70.f;
+        PreviousLocation=GetActorLocation();
+        // At rest the support foot is under the pelvis, not one stride ahead.
+        // Start in mid-stance so the other foot swings before support is outrun.
+        if (Reset || (Speed>8.f && PreviousLocomotionSpeed<=8.f)) StepClock=.30f;
+        PreviousLocomotionSpeed=Speed;
+        StepClock=FMath::Frac(StepClock+Dt*Speed/CycleDistance);
+        MotionWeight=FMath::FInterpTo(MotionWeight,FMath::Clamp(Speed/75.f,0.f,1.f),Dt,8.f);
+        const float Frame=StepClock*(Motions.Num()-1);
+        MotionIndex=FMath::Clamp(FMath::FloorToInt(Frame),0,Motions.Num()-2);
+        Fraction=Frame-MotionIndex;
+        A=Motions[MotionIndex];B=Motions[MotionIndex+1];
+        MotionBlend.SetNum(MotionIdle.Num());
+        for (int32 I=0;I<MotionBlend.Num();++I)
+        {
+            FTransform Walk;Walk.Blend(A.Pose[I],B.Pose[I],Fraction);
+            const FString Name=Poses->BoneNames[I].ToString();
+            const float Amount=Name.StartsWith(TEXT("upperarm_"))?.62f:
+                Name.StartsWith(TEXT("lowerarm_"))?.35f:Name.StartsWith(TEXT("hand_"))?0.f:1.f;
+            MotionBlend[I].Blend(MotionIdle[I],Walk,MotionWeight*Amount);
+        }
     }
     TArray<FTransform> Global;
     for (int32 I=0;I<MotionBlend.Num();++I)
@@ -178,9 +184,28 @@ void AVistaVillaCharacter::UpdateFeet(float Dt)
         // Direct travel by the player's velocity, including side/back steps,
         // while preserving left/right hip width and recorded swing height.
         const float Forward=Local.Y-1.15f;
-        Local.X=(Side==0?12.f:-12.f)+LocalVelocity.X*Forward*MotionWeight;
-        Local.Y=1.15f+LocalVelocity.Y*Forward*MotionWeight;
+        if (!Alpine)
+        {
+            Local.X=(Side==0?12.f:-12.f)+LocalVelocity.X*Forward*MotionWeight;
+            Local.Y=1.15f+LocalVelocity.Y*Forward*MotionWeight;
+        }
+        if (Alpine)
+        {
+            const float Warp=FMath::Lerp(.52f,.68f,RunBlend);
+            const float HipX=Side==0?12.f:-12.f;
+            Local.X=HipX+(Local.X-HipX)*Warp;
+            Local.Y=1.15f+(Local.Y-1.15f)*Warp;
+            Local.Z=6.22f+(Local.Z-6.22f)*FMath::Lerp(.70f,.85f,RunBlend);
+        }
         FVector Desired=Mesh.TransformPosition(Local);
+        if (Alpine)
+        {
+            // Calibrate the retargeted foot path around the moving capsule.
+            // Without this advance, a walking foot lands almost under the hip,
+            // then remains planted behind the leg's reachable range at toe-off.
+            // Move the whole swing/landing path, not an already planted anchor.
+            Desired+=Velocity.GetSafeNormal2D()*CycleDistance*.18f*(1.f-RunBlend)*MotionWeight;
+        }
         const float Contact=FMath::Lerp(A.Contact[Side],B.Contact[Side],Fraction);
         ContactWeight[Side]=FMath::Lerp(1.f,Contact,MotionWeight);
         const double Ground=Floor(Desired);
