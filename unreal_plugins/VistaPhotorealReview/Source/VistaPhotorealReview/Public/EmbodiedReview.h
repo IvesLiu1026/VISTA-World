@@ -171,7 +171,8 @@ protected:
     void ViewCup() { EmbodiedInspect(0); }
     virtual void SetPhase(EEmbodiedPhase NewPhase);
     void FeedbackMessage(const FString& Text);
-    void UpdateFeet(float DeltaSeconds);
+    virtual void UpdateFeet(float DeltaSeconds);
+    virtual void UpdateBodyFacing(float DeltaSeconds);
     void UpdateFirstPersonRest(float DeltaSeconds);
     virtual void UpdateInteraction(float DeltaSeconds);
     virtual void ReleaseCup(bool bDropped);
@@ -185,6 +186,12 @@ protected:
     virtual void OnPoseFinalized();
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) {}
     virtual void ModifyBaseBodyPose(TArray<FTransform>& LocalPose) {}
+    virtual bool WantsFirstPersonReadyPose() const { return true; }
+    virtual bool PreserveUnoccupiedArmPose() const { return false; }
+    virtual float UnoccupiedFingerCurl() const { return 0.f; }
+    virtual void AdjustFirstPersonEyeTarget(FVector& EyeTarget) const {}
+    virtual bool PreserveMotionFootRotation() const { return false; }
+    virtual float ProceduralGaitWeight() const { return 1.f; }
     virtual FVector FirstPersonReadyOffset(float Sign,float Swing) const
     {return FVector(Sign*22.f,30.f+Swing*.18f,-10.f+.15f*FMath::Sin(Clock*1.4f+(Sign<0?.35f:0.f)));}
     virtual bool IsSceneContactReady(FString& Reason) const { return true; }
