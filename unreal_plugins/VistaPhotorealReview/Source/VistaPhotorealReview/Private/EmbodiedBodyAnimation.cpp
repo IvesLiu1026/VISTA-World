@@ -137,7 +137,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         // Adapt hip height to the leg lengths at each stride. This keeps both
         // support points attainable without stretching the legs or sliding feet.
         float GroundCorrection=0.f;
-        if (bFeetReady || bSceneFeetOverride)
+        if ((bFeetReady && UsesGroundFootIK()) || bSceneFeetOverride)
         {
             for (int32 Side=0;Side<2;++Side)
             {
@@ -180,7 +180,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         const TCHAR* Lower=Side==0?TEXT("calf_l"):TEXT("calf_r");
         const TCHAR* End=Side==0?TEXT("foot_l"):TEXT("foot_r");
         const int32 U=Index(Upper), L=Index(Lower), E=Index(End);
-        if ((bFeetReady || bSceneFeetOverride) && Global.IsValidIndex(E) && FallAlpha<.05f)
+        if (((bFeetReady && UsesGroundFootIK()) || bSceneFeetOverride) && Global.IsValidIndex(E) && FallAlpha<.05f)
         {
             const FVector Target=MeshWorld.InverseTransformPosition(bSceneFeetOverride?SceneFootWorld[Side]:Feet[Side].Current);
             const float Yaw=bSceneFeetOverride?GetActorRotation().Yaw:Feet[Side].Yaw;
