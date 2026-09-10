@@ -16,6 +16,30 @@ over the base motion, then verify contact before committing an action. Keep foot
 support stable. Sine-wave walking and smoother interpolation are procedural
 components, not a complete high-quality motion library.
 
+When a walk looks wrong despite valid bone lengths, trace every layer that owns
+the feet and arms. A measured pose followed by unconditional wrist IK can replace
+its elbow plane; a second procedural stride can overwrite the recorded gait.
+Preserve unoccupied FK arms and apply reach IK only to active hands. Calibrate
+hand orientation with the forearm as well as the upper/lower arm directions.
+
+For a small clip library, a temporally ordered full cycle can be more reliable
+than selecting a different frame each tick by phase/cost. Derive source-to-target
+scale from measured limb lengths, not an assumed BVH unit conversion. Retain the
+cycle distance and duration, correct the loop seam without changing local bone
+lengths, and advance by actual traveled distance. Phase-based stance weights are
+estimates, not captured contact labels; verify the resulting world-space support
+feet. Inspect reverse/side steps and turning separately. A warped forward clip
+does not establish a complete directional or stair motion library.
+
+Check the transition from standing as well as a settled cycle. An idle support
+foot starts beneath the pelvis; beginning a heel-strike phase with that anchor
+can outrun the leg before toe-off. Align the initial phase to the standing
+support geometry, then verify the first steps without relaxing drift limits.
+Use dense fixed simulation steps for motion correctness (this runner uses
+`-UseFixedTimeStep -FPS=30`) and record actual sample deltas. A slow shared GPU
+can otherwise skip the short interval that contains a contact defect. Fixed-step
+proof timing is not evidence of real-time rendering performance.
+
 The shared clamped quintic blend is `10t³−15t⁴+6t⁵`. Verify monotonicity and zero
 endpoint velocity/acceleration. This formula alone does not establish naturalness.
 
@@ -23,6 +47,16 @@ Keep owner/world meshes synchronized with one world skeleton. Test first/third
 person switching empty, carrying, near a wall and during approach. Looking down
 should show body surfaces without stretching bones. Frustum landmarks alone can
 pass while clothing occludes feet; also check rendered surface visibility.
+
+Resolve the user's current empty-hand preference before reusing a ready pose.
+For naturally lowered hands, disable the camera-ready layer in both views and
+calibrate a lightly flexed elbow and neutral wrist. Free look needs a view/body
+yaw separation, not a constant full-body turn toward the camera. Derive eyes from
+the neck/head pose; if a small inspection-camera lean is used to clear the near
+shoulder, record that compromise, bound it, fade it out during contact and retain
+eye collision checks. Do not move wrists just to satisfy a frustum test. Capture
+neutral, left/right downward looks, straight down, walking, stopping and switching
+views; judge the actual visible shoulder, forearm, hand and clothing surfaces.
 
 Use observable phases: approach → align → reach → contact → attach/operate →
 release → settle. Verify target identity, reachability, grip pose, fingertip

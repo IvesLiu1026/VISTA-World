@@ -31,8 +31,9 @@ def main():
     p.add_argument('--project', type=Path, required=True)
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--engine', type=Path, required=True)
-    p.add_argument('--mode', choices=['poses', 'fluid', 'villa'], default='poses')
+    p.add_argument('--mode', choices=['poses', 'fluid', 'villa', 'motion'], default='poses')
     p.add_argument('--gpu', type=int, default=1)
+    p.add_argument('--cpus', default='20-23', help='taskset CPU list for this private probe')
     p.add_argument('--timeout', type=int, default=240)
     p.add_argument('--ddc-graph', choices=['VistaHomeFirstPersonR5Cache', 'VistaVillaR1Cache'], default='VistaHomeFirstPersonR5Cache')
     p.add_argument('--fluid-map', choices=['FluidLab', 'FluidLabR2'], default='FluidLab')
@@ -44,9 +45,9 @@ def main():
     if out.exists() or not 1 <= a.timeout <= 900:
         raise RuntimeError('Use a fresh attempt and a bounded timeout (1–900 seconds)')
     out.mkdir(parents=True)
-    width, height = (1920, 1080) if a.mode in ['poses','villa'] else (1280, 720)
-    level = '/Game/VISTA/PhotorealHomeR1/Maps/Home' if a.mode == 'poses' else '/Game/VISTA/VillaR1/Maps/'+('Villa' if a.mode=='villa' else a.fluid_map)
-    command = ['taskset', '-c', '20-23', 'ionice', '-c', '3', 'nice', '-n', '10',
+    width, height = (1920, 1080) if a.mode in ['poses','villa','motion'] else (1280, 720)
+    level = '/Game/VISTA/PhotorealHomeR1/Maps/Home' if a.mode == 'poses' else '/Game/VISTA/VillaR1/Maps/'+('Villa' if a.mode in ['villa','motion'] else a.fluid_map)
+    command = ['taskset', '-c', a.cpus, 'ionice', '-c', '3', 'nice', '-n', '10',
         '/usr/bin/bwrap', '--unshare-net', '--die-with-parent', '--dev-bind', '/', '/', '--',
         str(a.engine/'Engine/Binaries/Linux/UnrealEditor'), str(project), level, '-game',
         '-RenderOffscreen', '-Unattended', '-NoSplash', '-NoAnalytics', '-NOSOUND',
@@ -55,10 +56,14 @@ def main():
         '-ResX='+str(width), '-ResY='+str(height), '-ForceRes', '-ExecCmds=t.MaxFPS 30',
         '-UDPMESSAGING_TRANSPORT_ENABLE=0',
         '-ini:Engine:[/Script/TcpMessaging.TcpMessagingSettings]:EnableTransport=False']
+    if a.mode == 'motion':
+        # Sample every 1/30 s of simulation even when a shared GPU renders slowly.
+        # This is a motion correctness probe, not a real-time FPS benchmark.
+        command += ['-UseFixedTimeStep', '-FPS=30']
     if a.mode == 'poses':
         command += ['-NullRHI', '-VistaWholeHome', '-VistaFirstPersonProof']
     else:
-        command += ['-graphicsadapter='+str(a.gpu), '-VistaVillaProof' if a.mode=='villa' else '-VistaFluidLabProof']
+        command += ['-graphicsadapter='+str(a.gpu), '-VistaVillaProof' if a.mode=='villa' else '-VistaVillaMotionProof' if a.mode=='motion' else '-VistaFluidLabProof']
         index = command.index(str(a.engine/'Engine/Binaries/Linux/UnrealEditor'))
         # This host's NVIDIA ICD requires a DISPLAY even for Vulkan offscreen.
         # Own a temporary virtual display inside our network namespace.
@@ -73,8 +78,8 @@ def main():
         env['VK_ICD_FILENAMES'] = str(icd)
     started = time.monotonic()
     artifacts={}
-    if a.mode=='villa':
-        for key,relative in [('plugin_sha256','Plugins/VistaPhotorealReview/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so'),('map_sha256','Content/VISTA/VillaR1/Maps/Villa.umap')]:
+    if a.mode in ['villa','motion']:
+        for key,relative in [('plugin_sha256','Plugins/VistaPhotorealReview/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so'),('map_sha256','Content/VISTA/VillaR1/Maps/Villa.umap'),('motion_sha256','Content/VISTA/VillaR1/mocap.json')]:
             with (project.parent/relative).open('rb') as f:artifacts[key]=hashlib.file_digest(f,'sha256').hexdigest()
     timed_out = False
     with (out/'native.log').open('w') as log:
@@ -114,6 +119,16 @@ def main():
                 abs(row.get('mug_surface_ml',-1)-row.get('receiver_ml',0))<.05)
         functional=bool(functional and 'Failed to compile Material for platform' not in log_text)
         receipt['functional_sequence_passed'] = functional
+    if a.mode == 'motion':
+        proof=out/'user/Saved/VillaMotionProof/motion.json'
+        data=json.loads(proof.read_text()) if proof.exists() else {}
+        functional=(data.get('status')=='captured_pending_visual_review' and
+                    len({r['case'] for r in data.get('captures',[])})==12 and
+                    bool(data.get('frames')) and
+                    all(r.get('rest_alpha',1)==0 for r in data.get('frames',[])))
+        receipt['motion_capture_completed']=functional
+        receipt['motion_fixed_delta_seconds']=1/30
+        if proof.exists():receipt['motion_proof_sha256']=hashlib.sha256(proof.read_bytes()).hexdigest()
     (out/'process.json').write_text(json.dumps(receipt, indent=2)+'\n')
     print(json.dumps(receipt))
     if code or timed_out or not hardware_ok or not functional:

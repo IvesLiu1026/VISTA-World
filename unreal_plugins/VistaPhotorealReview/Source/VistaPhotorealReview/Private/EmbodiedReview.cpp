@@ -531,10 +531,8 @@ void AEmbodiedReviewCharacter::UpdateFeet(float Dt)
     }
 }
 
-void AEmbodiedReviewCharacter::Tick(float Dt)
+void AEmbodiedReviewCharacter::UpdateBodyFacing(float Dt)
 {
-    Super::Tick(Dt);Clock+=Dt;
-    if (!bReady) return;
     // Keep the look response immediate while the physical body and carried
     // object turn together at a finite speed.
     if ((!bThirdPerson || Phase!=EEmbodiedPhase::Idle || bSceneActionBusy) && Controller)
@@ -542,6 +540,13 @@ void AEmbodiedReviewCharacter::Tick(float Dt)
         const float TurnSpeed=Phase==EEmbodiedPhase::Held?180.f:300.f;
         SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Controller->GetControlRotation().Yaw,Dt*TurnSpeed),0));
     }
+}
+
+void AEmbodiedReviewCharacter::Tick(float Dt)
+{
+    Super::Tick(Dt);Clock+=Dt;
+    if (!bReady) return;
+    UpdateBodyFacing(Dt);
     UpdateFeet(Dt);UpdateInteraction(Dt);UpdateFirstPersonRest(Dt);
     if (TraceRemaining>0.f)
     {
@@ -567,6 +572,7 @@ void AEmbodiedReviewCharacter::Tick(float Dt)
         EyeTarget.X+=8.f*Inspection;
     }
     EyeTarget.X=FMath::Clamp(EyeTarget.X,10.f,FallAlpha>0.f?160.f:30.f);
+    if (!bThirdPerson) AdjustFirstPersonEyeTarget(EyeTarget);
     const FVector SmoothedEye=FMath::VInterpTo(ReviewCamera->GetRelativeLocation(),EyeTarget,Dt,6.f);
     FVector EyePosition=GetActorTransform().TransformPosition(SmoothedEye);
     const FVector EyeBase=GetActorTransform().TransformPosition(FVector(12.545f,0,60.645f));
