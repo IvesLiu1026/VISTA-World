@@ -1,4 +1,5 @@
 #include "VistaVillaCharacter.h"
+#include "VistaAlpineProof.h"
 #include "VistaVillaMotionProof.h"
 #include "HomeFluidAuthoring.h"
 #include "HomeActionsJson.h"
@@ -49,7 +50,7 @@ void AVistaVillaHUD::DrawHUD()
     Super::DrawHUD();if (!Canvas) return;
     auto* Body=Cast<AVistaVillaCharacter>(GetOwningPawn());if (!Body) return;
     DrawRect(FLinearColor(.025f,.04f,.03f,.82f),20,20,390,70);
-    DrawText(TEXT("VISTA  /  VILLA R2"),FColor(237,232,215),36,30,nullptr,1.35f);
+    DrawText(TEXT("VISTA  /  ALPINE VILLA R3"),FColor(237,232,215),36,30,nullptr,1.35f);
     DrawText(Body->IsThirdPerson()?TEXT("THIRD PERSON"):TEXT("FIRST PERSON"),FColor(191,209,195),36,61,nullptr,.85f);
     DrawRect(FLinearColor(.02f,.03f,.025f,.80f),20,Canvas->SizeY-52,Canvas->SizeX-40,32);
     DrawText(Body->GetInteractionHint(),FColor(238,235,221),32,Canvas->SizeY-44,nullptr,.85f);
@@ -90,6 +91,7 @@ void AVistaVillaCharacter::BeginPlay()
         Mesh->SetLinearDamping(.4);Mesh->SetAngularDamping(.8);
     }
     LoadMotionLibrary();
+    LoadAlpineMotion();
     if (Motions.Num()<2 || MotionIdle.Num()!=Parents.Num())
     {bReady=false;UE_LOG(LogTemp,Error,TEXT("VILLA_MOTION_ASSET_INVALID"));return;}
     bAllowReachDetour=true;
@@ -139,10 +141,14 @@ void AVistaVillaCharacter::SetupPlayerInputComponent(UInputComponent* Input)
     // The inherited apartment tour uses coordinates from its own map. This
     // villa owns its navigation and must not expose those unrelated shortcuts.
     Input->KeyBindings.RemoveAll([](const FInputKeyBinding& B)
-    {const FKey K=B.Chord.Key;return K==EKeys::One || K==EKeys::Two || K==EKeys::Three || K==EKeys::Four || K==EKeys::Five || K==EKeys::Six || K==EKeys::Zero || K==EKeys::V || K==EKeys::F;});
+    {const FKey K=B.Chord.Key;return K==EKeys::One || K==EKeys::Two || K==EKeys::Three || K==EKeys::Four || K==EKeys::Five || K==EKeys::Six || K==EKeys::Seven || K==EKeys::Eight || K==EKeys::Nine || K==EKeys::C || K==EKeys::Zero || K==EKeys::V || K==EKeys::F;});
     Input->BindKey(EKeys::P,IE_Pressed,this,&AVistaVillaCharacter::VillaPour);
     Input->BindKey(EKeys::F,IE_Pressed,this,&AVistaVillaCharacter::VillaTap);
     Input->BindKey(EKeys::H,IE_Pressed,this,&AVistaVillaCharacter::VillaDemo);
+    Input->BindKey(EKeys::LeftShift,IE_Pressed,this,&AVistaVillaCharacter::StartRunning);
+    Input->BindKey(EKeys::LeftShift,IE_Released,this,&AVistaVillaCharacter::StopRunning);
+    Input->BindKey(EKeys::SpaceBar,IE_Pressed,this,&AVistaVillaCharacter::StartAlpineJump);
+    Input->BindKey(EKeys::SpaceBar,IE_Released,this,&ACharacter::StopJumping);
 }
 
 FTransform AVistaVillaCharacter::DesiredGrip() const
@@ -158,6 +164,7 @@ FTransform AVistaVillaCharacter::CarryTarget() const
 }
 void AVistaVillaCharacter::EmbodiedInteract()
 {
+    if (TryGardenDoor()) return;
     if (bPouring) {FeedbackMessage(TEXT("Finish pouring before placing"));return;}
     if (Phase==EEmbodiedPhase::Idle && Jug && Mug)
     {
@@ -258,7 +265,7 @@ FString AVistaVillaCharacter::GetInteractionHint() const
 {
     if (Clock<FeedbackUntil) return Feedback;
     return bPouring?TEXT("Pouring — keeping the rim above the mug"):
-        TEXT("WASD move  |  Mouse look  |  E pick up / place  |  P pour  |  F tap  |  Tab first / third person  |  H demo  |  R reset");
+        TEXT("WASD move  |  Shift run  |  Space jump  |  E door / pick / place  |  P pour  |  F tap  |  Tab view  |  H tour  |  R reset");
 }
 void AVistaVillaCharacter::VillaDemo()
 {
@@ -371,6 +378,7 @@ void AVistaVillaCharacter::OnPoseFinalized()
 {
     Super::OnPoseFinalized();
     CaptureVillaMotionProof(this);
+    CaptureAlpineProof(this);
     if (!PendingCapture.IsEmpty())
     {
         const FString Name=PendingCapture;PendingCapture.Empty();CaptureProofNow(Name);
@@ -453,7 +461,7 @@ void AVistaVillaCharacter::Tick(float Dt)
     const double Now=FPlatformTime::Seconds();
     if (LastWallFrame>0 && bProof && bDemo) FrameTimes.Add((Now-LastWallFrame)*1000.);
     LastWallFrame=Now;
-    LastFrameDt=Dt;Super::Tick(Dt);if (!bReady) return;
+    LastFrameDt=Dt;TickAlpine(Dt);Super::Tick(Dt);if (!bReady) return;
     UpdateLiquids(Dt);ProofClock+=Dt;++ProofFrames;
     if (bProof && !bDemo && Records.IsEmpty() && ProofClock>5)
     {
@@ -464,4 +472,5 @@ void AVistaVillaCharacter::Tick(float Dt)
     }
     AdvanceDemo(Dt);
     TickVillaMotionProof(this,Dt);
+    TickAlpineProof(this,Dt);
 }
