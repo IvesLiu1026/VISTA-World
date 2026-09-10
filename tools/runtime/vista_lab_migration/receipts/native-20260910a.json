@@ -1,0 +1,385 @@
+{
+  "schema": "vista.lab-human-demo-migration/v1",
+  "release": "20260910a",
+  "catalog_sha256": "0ad1548e0dba0a786f3273521c2038e8af1bfeabc65da7c9dd5409a4b75d118b",
+  "environments": [
+    {
+      "environment": "alpine-villa-r3",
+      "files": 3556,
+      "bytes": 3836331985,
+      "native_receipt": {
+        "environment": "alpine-villa-r3",
+        "mode": "human-demo",
+        "runtime": "alpine-villa-r3-20260910T123300077334Z",
+        "catalog_sha256": "0ad1548e0dba0a786f3273521c2038e8af1bfeabc65da7c9dd5409a4b75d118b",
+        "gpu": [
+          {
+            "gpu_index": 0,
+            "name": "NVIDIA GeForce RTX 5090",
+            "memory": "4765 MiB"
+          }
+        ],
+        "window": {
+          "window_id": 10485859,
+          "title": "PhotorealHome (64-bit Development SF_VULKAN_SM6) ",
+          "resource_class": "UnrealEditor",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "map_state": 2,
+          "window_class": 1,
+          "override_redirect": false,
+          "is_normal_window": true
+        },
+        "captures": [
+          {
+            "file": "initial.png",
+            "bytes": 2349415,
+            "sha256": "eb75b5bd36b5f193f3182804ef094945cb6421be3584286e9bf80dd7dd0d9986"
+          }
+        ],
+        "keyboard_injected": false,
+        "input_path": "XTEST on dedicated display",
+        "moonlight_client_verified": false,
+        "network_namespace": false
+      }
+    },
+    {
+      "environment": "vista-world",
+      "files": 34,
+      "bytes": 1625829552,
+      "native_receipt": {
+        "environment": "vista-world",
+        "mode": "human-demo",
+        "runtime": "vista-world-20260910T123240513575Z",
+        "catalog_sha256": "0ad1548e0dba0a786f3273521c2038e8af1bfeabc65da7c9dd5409a4b75d118b",
+        "gpu": [
+          {
+            "gpu_index": 0,
+            "name": "NVIDIA GeForce RTX 5090",
+            "memory": "4190 MiB"
+          }
+        ],
+        "window": {
+          "window_id": 10485851,
+          "title": "VistaPlayableHome (64-bit Development SF_VULKAN_SM6) ",
+          "resource_class": "VistaPlayableHome",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "map_state": 2,
+          "window_class": 1,
+          "override_redirect": false,
+          "is_normal_window": true
+        },
+        "captures": [
+          {
+            "file": "initial.png",
+            "bytes": 3131350,
+            "sha256": "08ca74c4e264f70af580eb7de0a8db0dafa102a3fea60284db2649173790b015"
+          }
+        ],
+        "keyboard_injected": false,
+        "input_path": "XTEST on dedicated display",
+        "moonlight_client_verified": false,
+        "network_namespace": false
+      }
+    },
+    {
+      "environment": "photoreal-kitchen",
+      "files": 175,
+      "bytes": 98944077,
+      "native_receipt": {
+        "environment": "photoreal-kitchen",
+        "mode": "human-demo",
+        "runtime": "photoreal-kitchen-20260910T120253474318Z",
+        "catalog_sha256": "0ad1548e0dba0a786f3273521c2038e8af1bfeabc65da7c9dd5409a4b75d118b",
+        "gpu": [
+          {
+            "gpu_index": 0,
+            "name": "NVIDIA GeForce RTX 5090",
+            "memory": "2697 MiB"
+          }
+        ],
+        "window": {
+          "window_id": 10485859,
+          "title": "PhotorealKitchen (64-bit Development SF_VULKAN_SM6) ",
+          "resource_class": "UnrealEditor",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "map_state": 2,
+          "window_class": 1,
+          "override_redirect": false,
+          "is_normal_window": true
+        },
+        "captures": [
+          {
+            "file": "initial.png",
+            "bytes": 3287442,
+            "sha256": "997755fb52003ba770ab0e0ce00a6d09d4300bbe3f8f71b2203a436579a3632e"
+          }
+        ],
+        "keyboard_injected": false,
+        "input_path": "XTEST on dedicated display",
+        "moonlight_client_verified": false,
+        "network_namespace": false
+      }
+    },
+    {
+      "environment": "photoreal-home",
+      "files": 2318,
+      "bytes": 1345778987,
+      "native_receipt": {
+        "environment": "photoreal-home",
+        "mode": "human-demo",
+        "runtime": "photoreal-home-20260910T120843121598Z",
+        "catalog_sha256": "0ad1548e0dba0a786f3273521c2038e8af1bfeabc65da7c9dd5409a4b75d118b",
+        "gpu": [
+          {
+            "gpu_index": 0,
+            "name": "NVIDIA GeForce RTX 5090",
+            "memory": "4356 MiB"
+          }
+        ],
+        "window": {
+          "window_id": 10485859,
+          "title": "PhotorealHome (64-bit Development SF_VULKAN_SM6) ",
+          "resource_class": "UnrealEditor",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "map_state": 2,
+          "window_class": 1,
+          "override_redirect": false,
+          "is_normal_window": true
+        },
+        "captures": [
+          {
+            "file": "initial.png",
+            "bytes": 3900110,
+            "sha256": "a619dca32b8934fd45ca0a6d272decd841af772b12796a1dfc6654e47107f9fb"
+          }
+        ],
+        "keyboard_injected": false,
+        "input_path": "XTEST on dedicated display",
+        "moonlight_client_verified": false,
+        "network_namespace": false
+      }
+    },
+    {
+      "environment": "home-r5",
+      "files": 2438,
+      "bytes": 1509442011,
+      "native_receipt": {
+        "environment": "home-r5",
+        "mode": "human-demo",
+        "runtime": "home-r5-20260910T120948232971Z",
+        "catalog_sha256": "0ad1548e0dba0a786f3273521c2038e8af1bfeabc65da7c9dd5409a4b75d118b",
+        "gpu": [
+          {
+            "gpu_index": 0,
+            "name": "NVIDIA GeForce RTX 5090",
+            "memory": "4672 MiB"
+          }
+        ],
+        "window": {
+          "window_id": 10485859,
+          "title": "PhotorealHome (64-bit Development SF_VULKAN_SM6) ",
+          "resource_class": "UnrealEditor",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "map_state": 2,
+          "window_class": 1,
+          "override_redirect": false,
+          "is_normal_window": true
+        },
+        "captures": [
+          {
+            "file": "initial.png",
+            "bytes": 3945064,
+            "sha256": "668e13d8e2094fc86884b677f7ee30376b7f94e3a8f09e35338608632788d799"
+          }
+        ],
+        "keyboard_injected": false,
+        "input_path": "XTEST on dedicated display",
+        "moonlight_client_verified": false,
+        "network_namespace": false
+      }
+    },
+    {
+      "environment": "villa-r1",
+      "files": 2763,
+      "bytes": 2428285163,
+      "native_receipt": {
+        "environment": "villa-r1",
+        "mode": "human-demo",
+        "runtime": "villa-r1-20260910T121035191156Z",
+        "catalog_sha256": "0ad1548e0dba0a786f3273521c2038e8af1bfeabc65da7c9dd5409a4b75d118b",
+        "gpu": [
+          {
+            "gpu_index": 0,
+            "name": "NVIDIA GeForce RTX 5090",
+            "memory": "4271 MiB"
+          }
+        ],
+        "window": {
+          "window_id": 10485859,
+          "title": "PhotorealHome (64-bit Development SF_VULKAN_SM6) ",
+          "resource_class": "UnrealEditor",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "map_state": 2,
+          "window_class": 1,
+          "override_redirect": false,
+          "is_normal_window": true
+        },
+        "captures": [
+          {
+            "file": "initial.png",
+            "bytes": 2658862,
+            "sha256": "35cd6926b420bf5d9c054e1404ab75b32b04e541a1821a6564c2bcdeb002da32"
+          }
+        ],
+        "keyboard_injected": false,
+        "input_path": "XTEST on dedicated display",
+        "moonlight_client_verified": false,
+        "network_namespace": false
+      }
+    },
+    {
+      "environment": "villa-r2",
+      "files": 2848,
+      "bytes": 2432212379,
+      "native_receipt": {
+        "environment": "villa-r2",
+        "mode": "human-demo",
+        "runtime": "villa-r2-20260910T121143915428Z",
+        "catalog_sha256": "0ad1548e0dba0a786f3273521c2038e8af1bfeabc65da7c9dd5409a4b75d118b",
+        "gpu": [
+          {
+            "gpu_index": 0,
+            "name": "NVIDIA GeForce RTX 5090",
+            "memory": "4384 MiB"
+          }
+        ],
+        "window": {
+          "window_id": 10485859,
+          "title": "PhotorealHome (64-bit Development SF_VULKAN_SM6) ",
+          "resource_class": "UnrealEditor",
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "map_state": 2,
+          "window_class": 1,
+          "override_redirect": false,
+          "is_normal_window": true
+        },
+        "captures": [
+          {
+            "file": "initial.png",
+            "bytes": 3077231,
+            "sha256": "6e8a09c878d2f561664ae262f9862a6bf97e94e4a57aad093cb044546ad34010"
+          }
+        ],
+        "keyboard_injected": false,
+        "input_path": "XTEST on dedicated display",
+        "moonlight_client_verified": false,
+        "network_namespace": false
+      }
+    }
+  ],
+  "input_checks": [
+    {
+      "environment": "vista-world",
+      "runtime": "vista-world-20260910T123240513575Z",
+      "input_path": "pinned virtual keyboard -> guarded relay -> XTEST",
+      "action": "move forward/back",
+      "requires_visual_review": true,
+      "moonlight_client_verified": false,
+      "captures": [
+        {
+          "file": "before.png",
+          "sha256": "0c573b2ca43a2983cdc3e678064d931529558f982d3d9ffd7bc93a768e64d56f"
+        },
+        {
+          "file": "restored.png",
+          "sha256": "2a9aa535fcd3324aec1d786eb048a11f2e3cc602f2df06ff851cf1671f710956"
+        },
+        {
+          "file": "toggled.png",
+          "sha256": "3d100be5e7ef97fd3710a0673a3b4c7b37ee244892a576738d123fd1d8d83d25"
+        }
+      ],
+      "visual_review_complete": true
+    },
+    {
+      "environment": "alpine-villa-r3",
+      "runtime": "alpine-villa-r3-20260910T122813736852Z",
+      "input_path": "pinned virtual keyboard -> guarded relay -> XTEST",
+      "requires_visual_review": true,
+      "moonlight_client_verified": false,
+      "captures": [
+        {
+          "file": "before.png",
+          "sha256": "8c0ba29962e98a1a863592e16041588ffa2aec5c822d2e3ecef4333aff1d6049"
+        },
+        {
+          "file": "restored.png",
+          "sha256": "e103ceb24a7e268d6c5915947e24c9037b4979654a564a7ad513bba1b89ba060"
+        },
+        {
+          "file": "toggled.png",
+          "sha256": "bfad25d99cdc2f2b3dcf37355b659c49b157f624776215885edc4a3fef3691e3"
+        }
+      ],
+      "visual_review_complete": true
+    }
+  ],
+  "native_render_gpu": 0,
+  "second_gpu_presentation": "not accepted; Xvfb presentation stalled",
+  "h264_nvenc_initialized": true,
+  "virtual_input_base_groups_preserved": true,
+  "runtime_virtual_input_access": true,
+  "final_selection": {
+    "environment": "alpine-villa-r3",
+    "pid": 1562581,
+    "runtime": "alpine-villa-r3-20260910T123300077334Z",
+    "display": ":119",
+    "requested_gpu": 0,
+    "catalog_sha256": "0ad1548e0dba0a786f3273521c2038e8af1bfeabc65da7c9dd5409a4b75d118b",
+    "mode": "human-demo",
+    "network_namespace": false
+  },
+  "private_admin_setup_pending": true,
+  "moonlight_client_verified": false,
+  "sealed_evaluation_accepted": false,
+  "validation": {
+    "baseline_tests_passed": 28,
+    "migration_tests_passed": 13
+  },
+  "notes": [
+    "Payload hashes verified before and after rendering; assets are read-only.",
+    "Initial cold/black captures superseded by warmed, visually reviewed captures.",
+    "VSM cache disabled to avoid reproduced GPU fault; shadow rendering remains enabled."
+  ],
+  "visual_review": {
+    "reviewer": "user-directed Codex integrator",
+    "all_seven_scenes_reviewed": true,
+    "alpine_virtual_keyboard_camera_toggle": "passed",
+    "world_virtual_keyboard_movement": "passed",
+    "world_v_camera_toggle": "not observed; no new binding claimed for the archived package",
+    "source_demo_services": "active with unchanged main process IDs",
+    "handoff_pose": "Alpine first-person lake view after R reset",
+    "handoff_screenshot_sha256": "130b47e2d8fb5bbcf30611b5cfd96332557eeb45b2d205ffe0a270f45564dc23"
+  }
+}
