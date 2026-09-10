@@ -8,6 +8,41 @@ from tools.runtime.vista_villa_r1.launch_demo import validate
 
 
 class VillaDeliveryTests(unittest.TestCase):
+    def test_r2_requires_matching_motion_and_visual_acceptance(self):
+        with tempfile.TemporaryDirectory(prefix='vista-villa-r1-') as temp:
+            root=Path(temp);project=root/'project';project.mkdir()
+            uproject=project/'PhotorealHome.uproject';uproject.write_text('{}')
+            hashes={}
+            for key,relative in [('plugin','Plugins/VistaPhotorealReview/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so'),
+                                 ('map','Content/VISTA/VillaR1/Maps/Villa.umap'),('motion','Content/VISTA/VillaR1/mocap.json')]:
+                path=project/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(key.encode())
+                hashes[key+'_sha256']=hashlib.sha256(path.read_bytes()).hexdigest()
+            def save(name,value):
+                path=root/(name+'.json');path.write_text(json.dumps(value));return str(path)
+            config={'kind':'home','revision':'Villa R2','map':'/Game/VISTA/VillaR1/Maps/Villa','ddc_graph':'VistaVillaR1Cache',
+                    'project':str(uproject),'runtime_dir':str(root/'runtime'),'engine':str(uproject),**hashes}
+            config['native_proof']=save('functional',{'demo_completed':True,'stairs_reached_upper_floor':True,'placements':1})
+            config['native_process']=save('native',{'functional_sequence_passed':True,'hardware_backend_verified':True,**hashes})
+            movement={'motion_capture_completed':True,'hardware_backend_verified':True,'motion_proof_sha256':'native-pose-digest','motion_fixed_delta_seconds':1/30,**hashes}
+            config['motion_process']=save('movement',movement)
+            config['motion_check']=save('joints',{'status':'passed','errors':[],'proof_sha256':'native-pose-digest'})
+            visual={'status':'accepted_for_demo',**hashes};config['visual_review']=save('visual',visual)
+            self.assertEqual(validate(config),(uproject,root/'runtime'))
+            save('movement',{**movement,'motion_sha256':'stale-motion'})
+            with self.assertRaisesRegex(ValueError,'different delivery'):validate(config)
+            save('movement',movement)
+            save('movement',{**movement,'motion_fixed_delta_seconds':0})
+            with self.assertRaisesRegex(ValueError,'fixed-step motion sampling'):validate(config)
+            save('movement',movement)
+            save('joints',{'status':'passed','errors':[],'proof_sha256':'another-run'})
+            with self.assertRaisesRegex(ValueError,'different proof'):validate(config)
+            save('joints',{'status':'passed','errors':[],'proof_sha256':'native-pose-digest'})
+            save('visual',{**visual,'status':'pending'})
+            with self.assertRaisesRegex(ValueError,'Visual review'):validate(config)
+            save('visual',visual)
+            (project/'Content/VISTA/VillaR1/mocap.json').write_bytes(b'unvalidated cycle')
+            with self.assertRaisesRegex(ValueError,'Motion delivery changed'):validate(config)
+
     def test_rejects_changed_or_unvalidated_delivery(self):
         with tempfile.TemporaryDirectory(prefix='vista-villa-r1-') as temp:
             root=Path(temp);project=root/'project';project.mkdir()

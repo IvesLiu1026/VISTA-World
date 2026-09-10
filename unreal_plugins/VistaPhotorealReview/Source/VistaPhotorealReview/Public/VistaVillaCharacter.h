@@ -14,12 +14,14 @@ struct FVillaMotionFrame
     TArray<FTransform> Pose;
     float Phase=0,Speed=0;
     int32 Clip=0,SourceFrame=0;
+    float Contact[2]={0,0};
 };
 
 UCLASS()
 class VISTAPHOTOREALREVIEW_API AVistaVillaCharacter : public AEmbodiedReviewCharacter
 {
     GENERATED_BODY()
+    friend struct FVillaMotionProof;
 public:
     AVistaVillaCharacter();
     virtual ~AVistaVillaCharacter() override;
@@ -39,8 +41,15 @@ protected:
     virtual FTransform CarryTarget() const override;
     virtual void AdjustScenePoseGoals() override {SceneReachHipAdvance=bPouring?10.f:0.f;}
     virtual void OnPoseFinalized() override;
-    virtual FVector FirstPersonReadyOffset(float Sign,float Swing) const override
-    {return FVector(Sign*19.f,29.f+Swing*.15f,-22.f+.13f*FMath::Sin(Clock*1.4f));}
+    virtual bool WantsFirstPersonReadyPose() const override {return false;}
+    virtual bool PreserveUnoccupiedArmPose() const override {return true;}
+    virtual float UnoccupiedFingerCurl() const override {return .16f;}
+    virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) override;
+    virtual void AdjustFirstPersonEyeTarget(FVector& EyeTarget) const override;
+    virtual bool PreserveMotionFootRotation() const override {return !Motions.IsEmpty();}
+    virtual float ProceduralGaitWeight() const override {return Motions.IsEmpty()?1.f:0.f;}
+    virtual void UpdateBodyFacing(float Dt) override;
+    virtual void UpdateFeet(float Dt) override;
 private:
     UPROPERTY() TObjectPtr<AStaticMeshActor> Jug;
     UPROPERTY() TObjectPtr<AStaticMeshActor> Mug;
@@ -54,6 +63,12 @@ private:
     double JugRenderedMl=0,MugRenderedMl=0;
     TArray<FVillaMotionFrame> Motions;
     TArray<FTransform> MotionBlend;
+    TArray<FTransform> MotionIdle;
+    float CycleDistance=65.f;
+    float PreviousLocomotionSpeed=0.f;
+    float ContactWeight[2]={0,0};
+    bool FootLocked[2]={false,false};
+    FVector FootAnchor[2];
     VistaLiquid::Ledger Liquid,TapLedger;
     bool bPouring=false,bTap=false,bProof=false,bDemo=false;
     float PourClock=0,MotionWeight=0,LastFrameDt=0,ProofClock=0,DemoClock=0;

@@ -12,7 +12,7 @@ void AEmbodiedReviewCharacter::UpdateFirstPersonRest(float Dt)
     // feet. Keep the world and owner camera projections identical for contact.
     const float LookWeight=(1.f-Smooth((-Pitch-12.f)/40.f))*(1.f-Smooth((Pitch-20.f)/25.f));
     const float PostureWeight=1.f-FMath::Max3(CrouchAlpha,SeatedAlpha,FallAlpha);
-    float Target=bThirdPerson?0.f:LookWeight*FMath::Clamp(PostureWeight,0.f,1.f);
+    float Target=(bThirdPerson || !WantsFirstPersonReadyPose())?0.f:LookWeight*FMath::Clamp(PostureWeight,0.f,1.f);
     bFirstPersonRestObstructed=false;
     if (Target>.01f)
     {

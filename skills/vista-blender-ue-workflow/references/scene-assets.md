@@ -67,3 +67,12 @@ A continuous counter needs deliberate UV placement within a photographed slab.
 Do not magnify a tiny 2K crop into a hero surface. Use adequate source resolution
 and separately modeled floor joints; inspect close and room views. Match light
 color, exposure and proportions against the same approved design images.
+
+If the exterior clips while stairs remain dark, separate exposure/direct-sun
+balance from the architecture's access to daylight. Model actual wall/roof
+openings, jambs, sills, frames and glazing; a light above a sealed slab does not
+create a skylight. Trace both storeys and preserve stair support, clear width,
+landings and guards. Window-associated rect lights may approximate indirect
+bounce, but label the approximation. Compare the same native cameras before and
+after, then add eye-height views of the stair and landing themselves; a gallery
+camera aimed down at the living room cannot establish gallery lighting quality.
