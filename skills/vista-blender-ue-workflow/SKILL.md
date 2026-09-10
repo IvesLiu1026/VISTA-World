@@ -29,6 +29,9 @@ content does not automatically become eligible model input or benchmark data.
 - **Local execution commands and source examples:** read
   [local-runbook.md](references/local-runbook.md). These paths are version-specific;
   inspect their existence and receipts before reuse.
+- **Outdoor terrain, foliage, daylight and running/jumping:** read
+  [alpine-outdoors.md](references/alpine-outdoors.md). Keep the existing indoor
+  demo and validate collision-driven movement in the new project.
 
 For a broad quality upgrade, complete one representative room and interaction
 first. Check near/far views, both player perspectives, contact, state transitions

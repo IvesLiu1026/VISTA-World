@@ -1,0 +1,380 @@
+{
+  "schema": "vista.alpine-world-delivery/v1",
+  "revision": "Alpine Villa R3",
+  "recorded_at_utc": "2026-09-10T08:48:28.240905+00:00",
+  "status": "frozen_and_registered_unselected",
+  "source_commit": "901843c7b4699df93ea10f5934ea5f4f4a1ee022",
+  "implementation_commit": "95f8a28bc6e4dac882024619b98384a60d023e34",
+  "git": {
+    "repository": "IvesLiu1026/VISTA-World",
+    "branch": "codex/vista-alpine-world-r3",
+    "integration_base": "codex/vista-home-villa-integration",
+    "base_commit": "7b4560c19803b3878e10f3014e7fd1d547a87658",
+    "main_modified": false
+  },
+  "demo": {
+    "app_name": "VISTA Alpine Villa R3",
+    "selected": false,
+    "project": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/demo-project-a/PhotorealHome.uproject",
+    "profile": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/demo-a/sunshine-profile.json",
+      "sha256": "f5772a1088774d829cc48e4a160c5d699807e7bb4f5a6e2add6d7b1bb19f27cc",
+      "bytes": 1899
+    },
+    "frozen_inventory": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/demo-a/frozen-files.json",
+      "sha256": "db1b78304b4a20fa7c972d665114e40e1c6f7d32116a97a2ef735a6b9a2b0715",
+      "bytes": 812540
+    },
+    "file_count": 3556,
+    "total_bytes": 3836331985,
+    "plan": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/launcher-plan-final.json",
+      "sha256": "a52630b3f5ca5322e18d4aa8f746271b4b99864f7c6f321fa271e8dd773a35f9",
+      "bytes": 285
+    },
+    "read_only_project_at_runtime": true,
+    "vt_cache": "Per-session UserDir/vt-cache via Engine VirtualTextureChunkDDCCache override",
+    "registration": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/sunshine-registration-final.json",
+      "sha256": "f7e60a8dc2dbb46aff3b100b75713b0a0be093e17a3002250e0eeede3bdb247b",
+      "bytes": 2045
+    },
+    "moonlight_stream_verified": false
+  },
+  "identity": {
+    "plugin_sha256": "a31366e189e37df41ae627c18a7a39c6fccaa791daee3313a24d058018afb0c0",
+    "map_sha256": "639babf32c3244ef653daad267a1fdd216a44f6fa13e103e1a00f8c33c87a566",
+    "motion_sha256": "d7d6e6e4ccaf4394ad48fc4ed7a79d9e8316956a36e08a180753dc78650c1864",
+    "alpine_motion_sha256": "bae83f35fa626afbbf0c709ceea46d71ad3cbbc4365ee6cca6ae3785d7d81ae4",
+    "appearance_sha256": "eeb732b01a833b19e5caaa61f62204adc69af930d2c75d7cb9bb4d2b62ab8f45"
+  },
+  "validation": {
+    "editor_build": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/build-f.log",
+      "sha256": "ea2921f4adf276fb7b314b0019808acc32eef9f3f6e210fd9642de9a8aa60ebf",
+      "bytes": 6212
+    },
+    "linux_game_development_shipping_build": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/build-game-d.log",
+      "sha256": "14f1a3866bd4d00a385475f232c881dd7188aff2de12c4e50c364044e36ad6f2",
+      "bytes": 10797
+    },
+    "compiled_source_identity": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/build-source-check-final.json",
+      "sha256": "18c06cd40e1af4ebcc86c1d9b5bc3226d0c5159a2614f924a0d8f8a70fe6b53d",
+      "bytes": 6305
+    },
+    "python_tests": {
+      "distinct_cases_passed": 47,
+      "baseline_contract_compiler_cases": 28,
+      "baseline_evidence": "Successful tool output earlier in this task; no standalone log was retained.",
+      "mocked_review_lifecycle_cases": 8,
+      "r3_proof_and_delivery_cases": 11,
+      "r3_log": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/delivery-checks-final.log",
+        "sha256": "13c5f4056dade49220b53e133ab1dc9d51fd3bbd669ebb73a60424f675545bdd",
+        "bytes": 1627
+      },
+      "lifecycle_and_delivery_recheck": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/frozen-launcher-checks-b.log",
+        "sha256": "1bfc2929e4c1b1401d429283daadd71c28ec7f94608219d59163e3db46b4873c",
+        "bytes": 3470
+      },
+      "lifecycle_tests_touch_live_services": false
+    },
+    "outdoor": {
+      "process": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/native-e/process.json",
+        "sha256": "68f22af65e16f4da688335f0d94818986110c19eadbcd6c6311588992e733af5",
+        "bytes": 2139
+      },
+      "proof": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/native-e/user/Saved/AlpineProof/proof.json",
+        "sha256": "10eeba81e1beba70a2b8b817628b038c84aec3f9023fd397724b3dfc20d6e3ec",
+        "bytes": 1013718
+      },
+      "check": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/outdoor-check-final-e.json",
+        "sha256": "852646bd287261b386e56feabafd9d0452259be0811801de60b372b348548fa0",
+        "bytes": 515
+      },
+      "metrics": {
+        "frames": 850,
+        "max_step_cm": 16.35056241946423,
+        "max_run_speed_cm_s": 350.00000000000307,
+        "air_frames": 22,
+        "max_limb_length_variation_cm": 6.856737400084967e-13,
+        "start_cm": [
+          439.5,
+          -1110,
+          83
+        ],
+        "exit_cm": [
+          439.5,
+          -1725.0000326016234,
+          85.65000343322754
+        ]
+      }
+    },
+    "motion": {
+      "process": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/movement-native-a/process.json",
+        "sha256": "ad7a99786b5494daf1648c6ca8ae20f0620ceff06c0733ff6444d5c46daf2ad4",
+        "bytes": 2122
+      },
+      "proof": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/movement-native-a/user/Saved/VillaMotionProof/motion.json",
+        "sha256": "79bb294ebf52fa684d4d619835c5d2a0689f09cbb724bd005f1585df3757eb2b",
+        "bytes": 2077206
+      },
+      "check": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/motion-check-final-a.json",
+        "sha256": "12681be6239f106144a23bda3cbbff1086c34b796df500a247003ec27fa780ae",
+        "bytes": 1300
+      },
+      "frames": 650,
+      "case_count": 12,
+      "maximum_full_stance_excursion_cm": 0.6131121676811201
+    },
+    "kitchen_and_stairs": {
+      "process": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/kitchen-native-a/process.json",
+        "sha256": "ebfd3c341bb5cb752ab16adedc4f58f80750ade2be9861721b800a8b0b18698b",
+        "bytes": 1930
+      },
+      "proof": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/kitchen-native-a/user/Saved/VillaProof/proof.json",
+        "sha256": "bfa2f63df1ff9b0acc3eb7971c9a22b408e16ae0d50072519b99ed80858bf68a",
+        "bytes": 45186
+      },
+      "demo_completed": true,
+      "stairs_reached_upper_floor": true,
+      "pickups": 1,
+      "placements": 1,
+      "receiver_ml": 207.34187906607985,
+      "mass_residual_ml": 0,
+      "engine_exit_code": 0,
+      "outer_tool_wrapper_exit_code": 143,
+      "wrapper_note": "The wrapper reported 143 after the complete inner receipt printed. The inner Unreal process exited 0 without timeout. The outer status is not presented as a clean exit."
+    },
+    "original_home_regression": {
+      "process": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/poses-b/process.json",
+        "sha256": "b9d2c7e746bf9575587fe2319e1c9a1f971b8dcc35ac61cfe4b13ddcff678a43",
+        "bytes": 1361
+      },
+      "check": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/poses-check-b.json",
+        "sha256": "7745b30ac39a800376c45a5096108bfff1a35c506666b03c9cd1f4ebd24a94a5",
+        "bytes": 20235
+      },
+      "cases": 12,
+      "status": "passed",
+      "binary": "build-d",
+      "final_binary_rerun": false,
+      "scope": "Later changes were confined to Villa camera/gait and did not alter the shared Home implementation."
+    },
+    "saved_frozen_readback": {
+      "receipt": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/frozen-inspection-b.json",
+        "sha256": "835449cbaa71ac6f3e286595b767a02edb0b9ae2f4cc2e2ae8488e34e83a6a0d",
+        "bytes": 33713
+      },
+      "log": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/frozen-inspection-b.log",
+        "sha256": "1c2aa58485a4e9ef7054f9b03b5127d56079f61876402b4a82a9de8df8940c9a",
+        "bytes": 123867
+      },
+      "process_exit_code": 0,
+      "commandlet_errors": 0,
+      "commandlet_warnings": 0,
+      "collision_material_light_bindings_checked": true,
+      "external_vt_cache_directory_verified": true
+    },
+    "visual_review": {
+      "receipt": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/visual-review-final-a.json",
+        "sha256": "d3667aab41cb90715d1e5028fb6727353058b1c4b4dc63e962b24bfb5f27fde9",
+        "bytes": 13364
+      },
+      "actually_reviewed_pngs": 48,
+      "source_reviews": [
+        {
+          "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/motion-visual-review-a.json",
+          "sha256": "0793d96f547977763de2afa19cd1b12f50d52d2aa3b5aae1734eba515e284cfd",
+          "bytes": 4272
+        },
+        {
+          "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/outdoor-visual-review-e.json",
+          "sha256": "0eddedce8f852cf72d1c5cb763de51bbfe78b04a5a2fc4e8be1186cc7623e7d2",
+          "bytes": 3951
+        },
+        {
+          "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/kitchen-visual-review-a.json",
+          "sha256": "596d69fe19e272a4294371240da4ac8f9e1f3c938fd1a5b542cf6c223affde3a",
+          "bytes": 6779
+        }
+      ]
+    },
+    "performance": {
+      "real_time_fps_validated": false,
+      "motion_fixed_sample_hz": 30,
+      "kitchen_median_frame_ms": 206.58784499391913,
+      "kitchen_p95_frame_ms": 2561.9794582016766,
+      "limits": "Shared GPU load and screenshot stalls; no exclusive-GPU or Moonlight frame-rate benchmark."
+    }
+  },
+  "authoring": {
+    "engine": "Unreal Engine 5.7.3",
+    "blender": "4.5.8",
+    "source_asset_batches": [
+      {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/sources-b/sources.json",
+        "sha256": "3d1932f3cdad827936ef6b7c933ed67a51c4f10e9a0e5ee16d2e66effb6dbcac",
+        "bytes": 28188
+      },
+      {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/hdri8k-a/sources.json",
+        "sha256": "194dc939dcae2903bbd05942303f002fc105a183dad0fb778b13852102a10b9c",
+        "bytes": 756
+      }
+    ],
+    "source_download_bytes": 909334315,
+    "paid_model_calls": 0,
+    "paid_assets": 0,
+    "landscape": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/landscape-c/manifest.json",
+      "sha256": "ca1f0076520c578f80ee6e36525aafb39c7f075285631532ea049cb9486f7d6a",
+      "bytes": 1783545
+    },
+    "nature": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/nature-b/manifest.json",
+      "sha256": "b3953fd959ac4bac61c833b5aa7949f80884b05d145fcdf0942522c5acbfeb7a",
+      "bytes": 26855
+    },
+    "character": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/hero-b/manifest.json",
+      "sha256": "ed37ca8beddcc518e6ab2fe7d9d06a0847dd43b23cd57a5e6f2a8a76d07bbcbc",
+      "bytes": 3445
+    },
+    "motion_clip_count": 19,
+    "motion": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/motion-a/locomotion.json",
+      "sha256": "bae83f35fa626afbbf0c709ceea46d71ad3cbbc4365ee6cca6ae3785d7d81ae4",
+      "bytes": 9768386
+    },
+    "motion_license_scope": "Locally available Epic UE motion clips; keep source and retargeted binary data in the licensed local UE workflow, outside Git and restricted model prediction inputs.",
+    "native_authoring_receipts": [
+      {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/author-e.json",
+        "sha256": "5cfb5164aa7a3a3180df3b5b1b9de9f69b6fec67b983cc92c1763ccee32f644a",
+        "bytes": 47577
+      },
+      {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/hero-native-b.json",
+        "sha256": "c9223a19d030bf152d39b1ab29230bf4da9e7d2dd677b3589b0e338142e1e7a7",
+        "bytes": 3252
+      },
+      {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/polish-a.json",
+        "sha256": "3281a5e6fd1ae9350434ece71945342aeb2e896077b7334244a0ac8dda0503a5",
+        "bytes": 13642
+      },
+      {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/finish-a.json",
+        "sha256": "de283686054ab6b04072971faf8d95de2d8b03a4c029454b8514811cdb85e207",
+        "bytes": 443656
+      },
+      {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/surfaces-a.json",
+        "sha256": "d7e2a740115ab09e2c2abe8ec18b2522fc980d20c9d01a35cc273814b8374354",
+        "bytes": 2750994
+      }
+    ],
+    "rendered_instances": 23830,
+    "tree_trunk_colliders": 3330,
+    "sun_lux_parameter": 20000,
+    "auto_exposure_ev100": [
+      10,
+      12.5
+    ]
+  },
+  "preservation": {
+    "baseline": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/preservation-before-registration.json",
+      "sha256": "a9851604916557e3f67303613e5dfd9e1d40f0dc8ec4fbb0120a7e316660c049",
+      "bytes": 1390
+    },
+    "final": {
+      "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/sunshine-registration-final.json",
+      "sha256": "f7e60a8dc2dbb46aff3b100b75713b0a0be093e17a3002250e0eeede3bdb247b",
+      "bytes": 2045
+    },
+    "original_apps_preserved": 9,
+    "previous_game_and_input_pids_preserved": true,
+    "production_ports_modified": false,
+    "vistas_dataset_modified": false
+  },
+  "limitations": [
+    "Minor cuff/sock intersection is still visible in an extreme lateral pose.",
+    "Hands, skin, hair and cloth deformation remain prototype assets, not AAA character quality.",
+    "This is a finite motion library with blended transitions, not a production motion-matching database.",
+    "Distant procedural slopes remain visibly coarse and simplified.",
+    "Far foliage detail thins with distance; the forest and grass are still a limited asset set.",
+    "Bright midday foliage, skin/hair and cloth need further art direction for GTA/AAA quality.",
+    "The panoramic mountain skyline is a non-traversable background; lake water has no swimming/buoyancy.",
+    "Kitchen water remains a dark/faceted visual prototype; the surface is not a complete measured fluid simulation.",
+    "Midday highlights, simplified foliage and distant grass slopes still need further art refinement.",
+    "Shared-GPU captures have visible temporal noise and cannot establish interactive stream performance.",
+    "This is a playable research prototype, below GTA/AAA finished visual quality.",
+    "No new annotated benchmark, NL agent policy evaluation, or validated causal counterfactual simulation was produced in this increment."
+  ],
+  "earlier_attempts": [
+    {
+      "receipt": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/outdoor-check-c.json",
+        "sha256": "352c8acb104342ecffe5cc3d5be21fcd18aa54a885325a57b3bbee053a9cbd59",
+        "bytes": 593
+      },
+      "status": "rejected",
+      "reason": "Initial overlap with dining chair produced a 41 cm depenetration step; corrected the test spawn on free floor."
+    },
+    {
+      "receipt": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/motion-joints-check-a.json",
+        "sha256": "3bbbcd5190f15f4e4209f91bb869595830d53257ef757d758924e31f229ec1a3",
+        "bytes": 1403
+      },
+      "status": "rejected",
+      "reason": "Excessive support-foot drift; calibrated swing/landing path without moving planted anchors or relaxing tolerance."
+    },
+    {
+      "receipt": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/finish-a.json",
+        "sha256": "de283686054ab6b04072971faf8d95de2d8b03a4c029454b8514811cdb85e207",
+        "bytes": 443656
+      },
+      "status": "saved_then_shutdown_failure",
+      "reason": "Commandlet wrote saved assets then exited 139 on allocator shutdown; later independent readback and GPU runs verified the saved result."
+    },
+    {
+      "log": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/frozen-inspection-a.log",
+        "sha256": "9ca34735aa33c146abd8480dff14e5b12c20fd551bf0dee292ca4e5a83ef1dd1",
+        "bytes": 127782
+      },
+      "status": "passed_with_cache_warnings",
+      "reason": "Read-only project exposed the separate VT cache default; launcher now redirects it externally; frozen-inspection-b is clean."
+    },
+    {
+      "log": {
+        "file": "/data/sysx/vista-world/runs/vista-villa-r3-20260910a/frozen-launcher-checks.log",
+        "sha256": "ee46eb802af639e4313d86fe1fc5ffd1028480ce7dfdf6e3b9a50304ceee0615",
+        "bytes": 3643
+      },
+      "status": "test_import_failure",
+      "reason": "Combined command omitted PYTHONPATH=tools; corrected invocation passed all 13 selected tests."
+    }
+  ]
+}
