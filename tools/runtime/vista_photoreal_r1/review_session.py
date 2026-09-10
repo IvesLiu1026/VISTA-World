@@ -85,11 +85,19 @@ def start(config,state_path):
         if not math.isfinite(exposure):raise ValueError("Exposure must be finite")
         command=[x if not x.startswith("-ExecCmds=") else f"-ExecCmds=t.MaxFPS 30,r.ScreenPercentage 100,r.ExposureOffset {exposure}" for x in command]
         graph=config.get("ddc_graph","InstalledNoZenLocalFallback")
-        if graph not in ("InstalledNoZenLocalFallback","VistaHomeActionsCache","VistaHomeFirstPersonR5Cache","VistaVillaR1Cache"):
+        if graph not in ("InstalledNoZenLocalFallback","VistaHomeActionsCache","VistaHomeFirstPersonR5Cache","VistaVillaR1Cache","VistaAlpineR3Cache"):
             raise ValueError("Unknown reviewed DDC graph")
-        if graph=="VistaVillaR1Cache" and selected_map!="/Game/VISTA/VillaR1/Maps/Villa":raise ValueError("Villa cache requires the Villa map")
+        if graph in ("VistaVillaR1Cache","VistaAlpineR3Cache") and selected_map!="/Game/VISTA/VillaR1/Maps/Villa":raise ValueError("Villa cache requires the Villa map")
         command=["-ddc="+graph if x.startswith("-ddc=") else x for x in command]
         command=[selected_map if x==MAP else x for x in command]
+        if graph=="VistaAlpineR3Cache":
+            # VT chunks have a separate cache from the selected DDC graph.
+            # Keep them outside the file-hashed delivery on every reconnect.
+            command.append("-ini:Engine:[VirtualTextureChunkDDCCache]:Path="+str(user/"vt-cache"))
+            if config.get("frozen_manifest"):
+                frozen=str(Path(config["project"]).resolve(strict=True).parent)
+                boundary=command.index("--")
+                command[boundary:boundary]=["--ro-bind",frozen,frozen]
         if config.get("home_actions_bridge"):
             if KIND!="home":raise ValueError("Home bridge requires the Home review")
             command.append("-VistaHomeBridge="+str(user/"home-bridge"))

@@ -17,11 +17,18 @@ struct FVillaMotionFrame
     float Contact[2]={0,0};
 };
 
+struct FAlpineMotionClip
+{
+    TArray<FVillaMotionFrame> Frames;
+    float Duration=1,Distance=100;
+};
+
 UCLASS()
 class VISTAPHOTOREALREVIEW_API AVistaVillaCharacter : public AEmbodiedReviewCharacter
 {
     GENERATED_BODY()
     friend struct FVillaMotionProof;
+    friend struct FAlpineProof;
 public:
     AVistaVillaCharacter();
     virtual ~AVistaVillaCharacter() override;
@@ -34,6 +41,10 @@ public:
     UFUNCTION(Exec) void VillaPour();
     UFUNCTION(Exec) void VillaTap();
     UFUNCTION(Exec) void VillaDemo();
+    void StartRunning();
+    void StopRunning();
+    void StartAlpineJump();
+    virtual void Landed(const FHitResult& Hit) override;
 protected:
     virtual void ModifyBaseBodyPose(TArray<FTransform>& LocalPose) override;
     virtual void UpdateInteraction(float Dt) override;
@@ -50,6 +61,8 @@ protected:
     virtual float ProceduralGaitWeight() const override {return Motions.IsEmpty()?1.f:0.f;}
     virtual void UpdateBodyFacing(float Dt) override;
     virtual void UpdateFeet(float Dt) override;
+    virtual bool UsesGroundFootIK() const override;
+    virtual float UnoccupiedMovementSpeed() const override;
 private:
     UPROPERTY() TObjectPtr<AStaticMeshActor> Jug;
     UPROPERTY() TObjectPtr<AStaticMeshActor> Mug;
@@ -90,6 +103,16 @@ private:
     bool bEmptyCaptured=false,bDownCaptured=false,bPourCaptured=false,bFlightCaptured=false;
     bool bPlacedCaptured=false,bTapCaptured=false;
     void LoadMotionLibrary();
+    void LoadAlpineMotion();
+    bool UpdateAlpineMotion(float Dt, FVillaMotionFrame& A, FVillaMotionFrame& B, float& Fraction, bool& Reset);
+    bool TryGardenDoor();
+    void TickAlpine(float Dt);
+    TMap<FString,FAlpineMotionClip> AlpineClips;
+    TArray<TWeakObjectPtr<AStaticMeshActor>> GardenPanels;
+    TArray<FVector> GardenClosed;
+    bool bRunning=false,bGardenOpen=false,bAlpineAir=false;
+    float GardenAlpha=0,AirClock=0,LandClock=10,RunBlend=0;
+    FString AlpineMotionName;
     void UpdateLiquids(float Dt);
     void AdvanceDemo(float Dt);
     void CaptureProof(const FString& Name);

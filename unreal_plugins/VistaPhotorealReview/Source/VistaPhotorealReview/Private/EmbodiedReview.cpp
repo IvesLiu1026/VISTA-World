@@ -554,7 +554,7 @@ void AEmbodiedReviewCharacter::Tick(float Dt)
     }
     ReviewCamera->SetFirstPersonFieldOfView(ReviewCamera->FieldOfView);
     const bool Busy=Phase==EEmbodiedPhase::Reaching || Phase==EEmbodiedPhase::Closing || Phase==EEmbodiedPhase::Placing || Phase==EEmbodiedPhase::Releasing;
-    GetCharacterMovement()->MaxWalkSpeed=(Busy || bSceneActionBusy || SeatedAlpha>.01f)?0.f:(Phase==EEmbodiedPhase::Held?95.f:125.f);
+    GetCharacterMovement()->MaxWalkSpeed=(Busy || bSceneActionBusy || SeatedAlpha>.01f)?0.f:(Phase==EEmbodiedPhase::Held?95.f:UnoccupiedMovementSpeed());
     // Calibrated from the fitted eye mesh, rather than from the head joint's
     // centre. A camera at the joint can look through the open shirt collar.
     const int32 HeadIndex=BoneIndex.FindChecked(TEXT("head"));
