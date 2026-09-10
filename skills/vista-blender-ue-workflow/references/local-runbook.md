@@ -114,3 +114,42 @@ compiler jobs off the same CPU cores while measuring interactive performance.
 starting it. The Villa app must select `/Game/VISTA/VillaR1/Maps/Villa`, its cache
 and its verified plugin; it must not inherit the apartment's `-VistaWholeHome`.
 Do not launch or send input to the live R5 merely to validate a private revision.
+
+
+## Villa R2 lighting and locomotion correction
+
+Source: `/data/sysx/vista-world/worktrees/vista-villa-locomotion-lighting-r2`.
+Evidence: `/data/sysx/vista-world/runs/vista-villa-r1-20260910c`.
+R1's frozen demo and its launcher remain independent. R2 still uses the VillaR1
+map package name, so the map name alone cannot identify this revision.
+
+`tools/blender/vista_villa_r1/build_walk_cycle.py` takes `--character` (the fitted
+Blender source), `--source` (one CMU BVH), and `--out` (fresh directory). Its v2
+library supplies ordered samples, idle pose, source scale, cycle distance and
+estimated stance weights. Copy the accepted JSON to the private project's
+`Content/VISTA/VillaR1/mocap.json`; the R2 plugin rejects the earlier v1 library.
+
+`build_daylight.py --out <fresh>` exports roof and wall panels with real openings.
+In a fresh copy of the frozen R1 project, `apply_daylight.py` uses
+`VISTA_VILLA_CONFIG` with `private_run`, `geometry` (manifest), and `out` (receipt).
+It checks the old panels' actual bounds before replacing them. Follow with
+`add_daylight_views.py`, configured with `private_run` and a new `out`, to save
+stair and gallery cameras. Neither script accepts a frozen `demo*` project.
+
+Run `run_native.py --mode motion` with the usual private project/engine/GPU/cache
+arguments. This mode uses fixed 1/30-second simulation steps; the verifier rejects
+sparse or variable-step recordings. Then run `verify_motion.py --proof <.../VillaMotionProof/motion.json>
+--out <fresh.json>`. Review the native PNGs: joint/frustum checks missed a shoulder
+occluding the lowered hand. `--mode villa` rechecks pickup, pour, place, source-off,
+stairs and the architectural cameras; `--mode poses` retains the original Home
+regression cases. Local GPU contention and screenshot stalls must be recorded
+before interpreting frame-time data as interactive performance.
+
+R2 `launch_demo.py` validates the map, plugin and motion hashes against both native
+runs, the matching joint-check receipt and a visual review. Freeze the tested
+copy and its full file manifest before registering the R2 app. Run `--action plan`
+before explicit selection. Keep older Sunshine app names and profiles available.
+
+Build the plugin for Editor and Game Development/Shipping before delivery. Editor
+precompiled headers can hide missing includes such as `Engine/World.h`; an Editor
+success alone does not establish that the Game target compiles.
