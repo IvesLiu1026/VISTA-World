@@ -97,7 +97,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     const auto Index=[this](const TCHAR* Name) { const int32* I=BoneIndex.Find(FName(Name)); return I ? *I : INDEX_NONE; };
     const FTransform MeshWorld=GetMesh()->GetComponentTransform();
     const float Speed=GetVelocity().Size2D();
-    const float Walking=FMath::Clamp(Speed/150.f,0.f,1.f)*(1-SeatedAlpha)*(1-FallAlpha);
+    const float Walking=FMath::Clamp(Speed/150.f,0.f,1.f)*(1-SeatedAlpha)*(1-FallAlpha)*ProceduralGaitWeight();
     const float Unoccupied=(1-FMath::Max(ReachAlpha,LeftReachAlpha))*(1-SeatedAlpha)*(1-FallAlpha);
     const float Quiet=(1-Walking)*Unoccupied;
     const float Stride=FMath::Sin(StepClock*2.f*PI);
@@ -187,8 +187,9 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             const FQuat YawDelta=MeshWorld.GetRotation().Inverse()*FRotator(0,Yaw,0).Quaternion()*FRotator(0,-90,0).Quaternion();
             const FVector RollAxis=MeshWorld.GetRotation().Inverse().RotateVector(
                 FRotator(0,Yaw,0).Quaternion().RotateVector(FVector::RightVector));
-            SolveLimb(Global,Parents,U,L,E,Target,Global[U].GetLocation()+FVector(0,55,-15),
-                      FQuat(RollAxis,FMath::DegreesToRadians(bSceneFeetOverride?0.f:Feet[Side].Roll))*YawDelta*ReferenceGlobal[E].GetRotation());
+            const FQuat EndRotation=PreserveMotionFootRotation() && !bSceneFeetOverride?
+                Global[E].GetRotation():FQuat(RollAxis,FMath::DegreesToRadians(bSceneFeetOverride?0.f:Feet[Side].Roll))*YawDelta*ReferenceGlobal[E].GetRotation();
+            SolveLimb(Global,Parents,U,L,E,Target,Global[U].GetLocation()+FVector(0,55,-15),EndRotation);
         }
     }
     for (int32 Side=0;Side<2;++Side)
@@ -197,8 +198,12 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         const int32 U=Index(RightHand?TEXT("upperarm_r"):TEXT("upperarm_l"));
         const int32 L=Index(RightHand?TEXT("lowerarm_r"):TEXT("lowerarm_l"));
         const int32 E=Index(RightHand?TEXT("hand_r"):TEXT("hand_l"));
+        // An inactive arm already has a calibrated animation. Re-solving its
+        // wrist against a fixed elbow pole destroys the recorded elbow plane.
+        if (PreserveUnoccupiedArmPose() && RestBlend<=0.f &&
+            (RightHand?ReachAlpha:LeftReachAlpha)<=0.f) continue;
         FVector Target=Global[E].GetLocation();
-        const float Swing=FMath::Sin(StepClock*2.f*PI)*(RightHand?-1.f:1.f)*FMath::Min(Speed/125.f,1.f)*6.f;
+        const float Swing=FMath::Sin(StepClock*2.f*PI)*(RightHand?-1.f:1.f)*FMath::Min(Speed/125.f,1.f)*6.f*ProceduralGaitWeight();
         Target.Y+=Swing;
         FQuat Rotation=Global[E].GetRotation();
         if (RestBlend>0.f)
@@ -250,14 +255,14 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         if (Name.EndsWith(TEXT("_r")) && (Name.StartsWith(TEXT("index_")) || Name.StartsWith(TEXT("middle_")) ||
             Name.StartsWith(TEXT("ring_")) || Name.StartsWith(TEXT("pinky_")) || Name.StartsWith(TEXT("thumb_"))))
         {
-            FTransform Idle;Idle.Blend(Poses->Relaxed[I],Poses->Grip[I],.08f*RestBlend);
+            FTransform Idle;Idle.Blend(Poses->Relaxed[I],Poses->Grip[I],FMath::Max(UnoccupiedFingerCurl(),.08f*RestBlend));
             FTransform Open;Open.Blend(Idle,Poses->OpenHand[I],ReachAlpha);
             Local[I].Blend(Open,Poses->Grip[I],FingerProgress(FingerAlpha));
         }
         if (Name.EndsWith(TEXT("_l")) && (Name.StartsWith(TEXT("index_")) || Name.StartsWith(TEXT("middle_")) ||
             Name.StartsWith(TEXT("ring_")) || Name.StartsWith(TEXT("pinky_")) || Name.StartsWith(TEXT("thumb_"))))
         {
-            FTransform Idle;Idle.Blend(Poses->Relaxed[I],Poses->Grip[I],.08f*RestBlend);
+            FTransform Idle;Idle.Blend(Poses->Relaxed[I],Poses->Grip[I],FMath::Max(UnoccupiedFingerCurl(),.08f*RestBlend));
             FTransform Open;Open.Blend(Idle,Poses->OpenHand[I],LeftReachAlpha);
             Local[I].Blend(Open,Poses->Grip[I],FingerProgress(LeftFingerAlpha));
         }

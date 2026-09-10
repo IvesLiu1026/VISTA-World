@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 
 
 def validate(config):
-    if config.get('kind')!='home' or config.get('revision')!='Villa R1':raise ValueError('Expected Villa R1 profile')
+    if config.get('kind')!='home' or config.get('revision') not in {'Villa R1','Villa R2'}:raise ValueError('Expected a validated Villa profile')
     if config.get('map')!='/Game/VISTA/VillaR1/Maps/Villa' or config.get('ddc_graph')!='VistaVillaR1Cache':raise ValueError('Wrong Villa map/cache')
     project=Path(config['project']).resolve(strict=True);runtime=Path(config['runtime_dir']).resolve()
     if 'vista-villa-r1-' not in str(project) or runtime==project.parent or project.parent in runtime.parents:raise ValueError('Expected an isolated project and external runtime')
@@ -23,6 +23,19 @@ def validate(config):
     process=json.loads(Path(config['native_process']).read_text())
     if not process.get('functional_sequence_passed') or not process.get('hardware_backend_verified'):raise ValueError('Native GPU acceptance is incomplete')
     if any(process.get(k)!=config[k] for k in ['plugin_sha256','map_sha256']):raise ValueError('Native proof belongs to a different delivery')
+    if config['revision']=='Villa R2':
+        motion=project.parent/'Content/VISTA/VillaR1/mocap.json'
+        with motion.open('rb') as f:digest=hashlib.file_digest(f,'sha256').hexdigest()
+        if digest!=config.get('motion_sha256') or digest!=process.get('motion_sha256'):raise ValueError('Motion delivery changed')
+        movement=json.loads(Path(config['motion_process']).read_text())
+        if abs(movement.get('motion_fixed_delta_seconds',0)-1/30)>1e-6:raise ValueError('Incomplete fixed-step motion sampling')
+        if not movement.get('motion_capture_completed') or not movement.get('hardware_backend_verified'):raise ValueError('Incomplete motion GPU proof')
+        if any(movement.get(k)!=config[k] for k in ['plugin_sha256','map_sha256','motion_sha256']):raise ValueError('Motion proof belongs to a different delivery')
+        check=json.loads(Path(config['motion_check']).read_text())
+        if check.get('status')!='passed' or check.get('errors'):raise ValueError('Motion joint checks failed')
+        if check.get('proof_sha256')!=movement.get('motion_proof_sha256'):raise ValueError('Motion check belongs to a different proof')
+        visual=json.loads(Path(config['visual_review']).read_text())
+        if visual.get('status')!='accepted_for_demo' or any(visual.get(k)!=config[k] for k in ['plugin_sha256','map_sha256','motion_sha256']):raise ValueError('Visual review is incomplete or mismatched')
     if not Path(config['engine']).is_file():raise ValueError('Missing Unreal engine')
     return project,runtime
 
@@ -43,7 +56,7 @@ def main():
         return
     if args.action=='start':
         with urllib.request.urlopen(config['serverinfo_url'],timeout=5) as response:server=ET.fromstring(response.read())
-        if server.findtext('state')!='SUNSHINE_SERVER_FREE':raise RuntimeError('Select VISTA Villa R1 in Moonlight while Sunshine is in use')
+        if server.findtext('state')!='SUNSHINE_SERVER_FREE':raise RuntimeError('Select '+config['revision']+' in Moonlight while Sunshine is in use')
     runtime.mkdir(parents=True,exist_ok=True)
     if selected and selected!=str(project):review.run(['systemctl','--user','stop',r5.RELAY,r5.GAME])
     try:review.start(config,state)

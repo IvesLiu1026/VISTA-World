@@ -1,4 +1,5 @@
 #include "VistaVillaCharacter.h"
+#include "VistaVillaMotionProof.h"
 #include "HomeFluidAuthoring.h"
 #include "HomeActionsJson.h"
 #include "VistaMotionCurves.h"
@@ -48,7 +49,7 @@ void AVistaVillaHUD::DrawHUD()
     Super::DrawHUD();if (!Canvas) return;
     auto* Body=Cast<AVistaVillaCharacter>(GetOwningPawn());if (!Body) return;
     DrawRect(FLinearColor(.025f,.04f,.03f,.82f),20,20,390,70);
-    DrawText(TEXT("VISTA  /  VILLA"),FColor(237,232,215),36,30,nullptr,1.35f);
+    DrawText(TEXT("VISTA  /  VILLA R2"),FColor(237,232,215),36,30,nullptr,1.35f);
     DrawText(Body->IsThirdPerson()?TEXT("THIRD PERSON"):TEXT("FIRST PERSON"),FColor(191,209,195),36,61,nullptr,.85f);
     DrawRect(FLinearColor(.02f,.03f,.025f,.80f),20,Canvas->SizeY-52,Canvas->SizeX-40,32);
     DrawText(Body->GetInteractionHint(),FColor(238,235,221),32,Canvas->SizeY-44,nullptr,.85f);
@@ -89,6 +90,9 @@ void AVistaVillaCharacter::BeginPlay()
         Mesh->SetLinearDamping(.4);Mesh->SetAngularDamping(.8);
     }
     LoadMotionLibrary();
+    if (Motions.Num()<2 || MotionIdle.Num()!=Parents.Num())
+    {bReady=false;UE_LOG(LogTemp,Error,TEXT("VILLA_MOTION_ASSET_INVALID"));return;}
+    bAllowReachDetour=true;
     auto* System=LoadObject<UNiagaraSystem>(nullptr,TEXT("/Game/VISTA/VillaR1/Fluids/NS_ControlledHose.NS_ControlledHose"));
     for (int32 I=0;I<2;++I)
     {
@@ -139,88 +143,6 @@ void AVistaVillaCharacter::SetupPlayerInputComponent(UInputComponent* Input)
     Input->BindKey(EKeys::P,IE_Pressed,this,&AVistaVillaCharacter::VillaPour);
     Input->BindKey(EKeys::F,IE_Pressed,this,&AVistaVillaCharacter::VillaTap);
     Input->BindKey(EKeys::H,IE_Pressed,this,&AVistaVillaCharacter::VillaDemo);
-}
-
-void AVistaVillaCharacter::LoadMotionLibrary()
-{
-    FString Text;const FString Path=FPaths::ProjectContentDir()/TEXT("VISTA/VillaR1/mocap.json");
-    if (!FFileHelper::LoadFileToString(Text,*Path)) return;
-    auto Data=Decode(Text);if (!Data) return;
-    const auto& Names=Data->GetArrayField(TEXT("bone_names"));TArray<int32> Mapping;
-    for (FName Bone:Poses->BoneNames)
-    {
-        int32 Index=Names.IndexOfByPredicate([&](const auto& N){return N->AsString()==Bone.ToString();});
-        if (Index==INDEX_NONE) return;Mapping.Add(Index);
-    }
-    int32 Clip=0;
-    TArray<FTransform> SourceRest;
-    const auto& RestRows=Data->GetArrayField(TEXT("rest"));
-    for (int32 I=0;I<Mapping.Num();++I)
-    {
-        const auto& V=RestRows[Mapping[I]]->AsArray();
-        FTransform T(FQuat(V[3]->AsNumber(),V[4]->AsNumber(),V[5]->AsNumber(),V[6]->AsNumber()).GetNormalized(),
-            FVector(V[0]->AsNumber(),V[1]->AsNumber(),V[2]->AsNumber()));
-        SourceRest.Add(Parents[I]>=0?T*SourceRest[Parents[I]]:T);
-    }
-    for (const auto& C:Data->GetArrayField(TEXT("clips")))
-    {
-        for (const auto& Frame:C->AsObject()->GetArrayField(TEXT("frames")))
-        {
-            const auto F=Frame->AsObject();FVillaMotionFrame M;M.Clip=Clip;
-            M.Speed=Number(F,TEXT("speed_cm_s"));M.Phase=Number(F,TEXT("phase"));M.SourceFrame=Number(F,TEXT("source_frame"));
-            const auto& Pose=F->GetArrayField(TEXT("pose"));
-            for (int32 I=0;I<Mapping.Num();++I)
-            {
-                const auto& V=Pose[Mapping[I]]->AsArray();
-                if (V.Num()!=7) {Motions.Empty();return;}
-                FQuat Q(V[3]->AsNumber(),V[4]->AsNumber(),V[5]->AsNumber(),V[6]->AsNumber());
-                M.Pose.Add(FTransform(Q.GetNormalized(),FVector(V[0]->AsNumber(),V[1]->AsNumber(),V[2]->AsNumber())));
-            }
-            TArray<FTransform> SourceGlobal;TArray<FQuat> TargetRot;
-            for (int32 I=0;I<M.Pose.Num();++I)
-            {
-                SourceGlobal.Add(Parents[I]>=0?M.Pose[I]*SourceGlobal[Parents[I]]:M.Pose[I]);
-                TargetRot.Add((SourceGlobal[I].GetRotation()*SourceRest[I].GetRotation().Inverse()*ReferenceGlobal[I].GetRotation()).GetNormalized());
-            }
-            for (int32 I=0;I<M.Pose.Num();++I)
-            {
-                M.Pose[I]=FTransform(Parents[I]>=0?TargetRot[Parents[I]].Inverse()*TargetRot[I]:TargetRot[I],
-                    Poses->Relaxed[I].GetTranslation());
-            }
-            Motions.Add(M);
-        }
-        ++Clip;
-    }
-}
-
-void AVistaVillaCharacter::ModifyBaseBodyPose(TArray<FTransform>& Local)
-{
-    if (Motions.IsEmpty()) return;
-    const float Speed=GetVelocity().Size2D();float Best=MAX_flt;int32 Selected=0;
-    // Small-library matching: desired speed, current planted-foot phase and
-    // pose continuity. This is not Epic's large Pose Search database.
-    const float DesiredPhase=FMath::Frac(StepClock);
-    for (int32 I=0;I<Motions.Num();++I)
-    {
-        const auto& M=Motions[I];float D=FMath::Abs(M.Phase-DesiredPhase);D=FMath::Min(D,1-D);
-        float Cost=D*D*9+FMath::Square((M.Speed-Speed)/125.f)*.18f;
-        if (MotionIndex!=INDEX_NONE)
-            for (const TCHAR* Name:{TEXT("spine_01"),TEXT("upperarm_l"),TEXT("upperarm_r")})
-            {
-                const int32 B=BoneIndex.FindChecked(Name);
-                Cost+=M.Pose[B].GetRotation().AngularDistance(MotionBlend.IsValidIndex(B)?MotionBlend[B].GetRotation():Local[B].GetRotation())*.07f;
-            }
-        if (Cost<Best) {Best=Cost;Selected=I;}
-    }
-    MotionIndex=Selected;
-    const float Blend=1-FMath::Exp(-LastFrameDt*12.f);
-    if (MotionBlend.Num()!=Local.Num()) MotionBlend=Local;
-    MotionWeight=FMath::FInterpTo(MotionWeight,FMath::Clamp(Speed/65.f,0.f,1.f),LastFrameDt,7.f);
-    for (int32 I=0;I<Local.Num();++I)
-    {
-        FTransform Smooth;Smooth.Blend(MotionBlend[I],Motions[Selected].Pose[I],Blend);MotionBlend[I]=Smooth;
-        Local[I].Blend(Local[I],Smooth,MotionWeight*.82f);
-    }
 }
 
 FTransform AVistaVillaCharacter::DesiredGrip() const
@@ -448,6 +370,7 @@ void AVistaVillaCharacter::CaptureProof(const FString& Name)
 void AVistaVillaCharacter::OnPoseFinalized()
 {
     Super::OnPoseFinalized();
+    CaptureVillaMotionProof(this);
     if (!PendingCapture.IsEmpty())
     {
         const FString Name=PendingCapture;PendingCapture.Empty();CaptureProofNow(Name);
@@ -540,4 +463,5 @@ void AVistaVillaCharacter::Tick(float Dt)
         VillaDemo();
     }
     AdvanceDemo(Dt);
+    TickVillaMotionProof(this,Dt);
 }
