@@ -61,6 +61,24 @@ class ReviewSelectionTests(unittest.TestCase):
         command=next(c for c in self.calls if c[0]=="systemd-run" and "--unit="+review.GAME in c)
         self.assertIn("-ddc=InstalledNoZenLocalFallback",command)
         self.assertFalse(any(c.startswith("-VistaHomeBridge=") for c in command))
+        self.assertNotIn("--ro-bind",command)
+        self.assertFalse(any("VirtualTextureChunkDDCCache" in c for c in command))
+
+    def test_frozen_alpine_assets_stay_read_only_with_external_vt_cache(self):
+        frozen=self.root/"demo-project-a";frozen.mkdir()
+        project=frozen/"PhotorealHome.uproject";project.touch()
+        profile={"runtime_dir":str(self.root),"engine":"/engine","project":str(project),
+                 "map":"/Game/VISTA/VillaR1/Maps/Villa","ddc_graph":"VistaAlpineR3Cache",
+                 "frozen_manifest":str(self.root/"frozen-files.json")}
+        with patch.object(review,"focus_review",return_value=123):review.start(profile,self.state)
+        command=next(c for c in self.calls if c[0]=="systemd-run" and "--unit="+review.GAME in c)
+        mount=command.index("--ro-bind")
+        self.assertEqual(command[mount+1:mount+3],[str(frozen),str(frozen)])
+        self.assertLess(mount,command.index("--"))
+        user=Path(next(c.removeprefix("-UserDir=") for c in command if c.startswith("-UserDir=")))
+        cache=Path(next(c.split(":Path=",1)[1] for c in command if "VirtualTextureChunkDDCCache" in c))
+        self.assertTrue(cache.is_relative_to(user))
+        self.assertFalse(cache.is_relative_to(frozen))
 
     def test_villa_selects_its_map_without_enabling_the_old_apartment(self):
         profile={"runtime_dir":str(self.root),"engine":"/engine","project":"/villa",
