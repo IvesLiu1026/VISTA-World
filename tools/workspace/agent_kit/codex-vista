@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+work=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+export PATH="$work/bin:$PATH"
+export UV_CACHE_DIR="$work/cache/uv"
+if [ "$#" -eq 0 ]; then
+    exec "$work/bin/codex" -C "$work"
+fi
+exec "$work/bin/codex" "$@"
