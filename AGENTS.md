@@ -5,6 +5,10 @@ contracts, provenance, and other agents' work before making changes.
 
 ## Required entry checks
 
+- When this checkout is inside a research workspace identified by an ancestor
+  `workspace.json`, first read that workspace's `AGENTS.md`,
+  `.agent/CURRENT_STATE.md` and `.agent/ACTIVE_WORK.md`. Historical source-host
+  paths and ownership ledgers do not describe the migrated host.
 - Run `git status --short --branch` before editing or staging.
 - Treat unrelated dirty files as user or agent work; never reset or discard them.
 - Use an isolated branch/worktree for every writing worker.
