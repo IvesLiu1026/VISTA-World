@@ -2,7 +2,8 @@
 
 Owner: this user-directed Codex task, solo; 2026-09-12.
 Base: accepted environment integration after PR 18.
-Owns: `tools/workspace/dev_stream.py`, `tools/workspace/agent_kit/`,
+Owns: the conditional workspace pointer in `AGENTS.md`,
+`tools/workspace/dev_stream.py`, `tools/workspace/agent_kit/`,
 `tools/tests/test_workspace_dev_stream.py`, `docs/workspace/agent-handoff.md`,
 this handoff; target workspace agent kit and workspace-local Codex/tooling.
 
@@ -20,3 +21,9 @@ installed code from authenticated/callable app integrations.
 Validation: contract/compiler baseline, focused lifecycle/profile tests, target
 skill/MCP discovery, native development rendering and virtual input, frozen
 release rollback selection. Windows pairing remains a separate user action.
+
+Completed: editable DEV entry with native/virtual-input evidence and stable-demo
+rollback; workspace-local Codex/Blender/Node tooling; 14 user skills, 68 indexed
+spec files; 17 plugin entries, 11 accessible apps, 451 app MCP tools and 5 docs
+MCP tools. Cloudflare OAuth and Windows pairing are explicitly unverified.
+Detailed handoff: `docs/workspace/agent-handoff.md` and target workspace `.agent/`.
