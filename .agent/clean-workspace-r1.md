@@ -19,3 +19,10 @@ Record upstream provenance and exclusions. Keep host paths and private endpoints
 out of Git. Shared scene content must be versioned and verified; do not alter old
 payloads to reclaim space. New host and scene configuration must not require
 editing historical launch scripts.
+
+Completed: three clean pinned repos, two versioned published papers, seven scene
+manifests backed by verified deduplicated assets, one independent editable Villa,
+workspace-local tooling, 36 passing tests on both hosts and scene compilation.
+Four original demo service process identities remain unchanged. No runtime
+activation or GPU 1 acceptance is claimed. Detailed sanitized evidence and
+remaining boundaries: `docs/workspace/acceptance-20260912.md`.
