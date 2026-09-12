@@ -1,0 +1,7 @@
+#!/bin/sh
+# Install in WORKSPACE/bin alongside a separately acquired, verified uv binary.
+set -eu
+work=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+export UV_CACHE_DIR="$work/cache/uv"
+exec "$work/bin/uv" run --offline --no-project --python python3 python \
+  "$work/repos/VISTA-World/tools/workspace/workspace.py" --root "$work" "$@"
