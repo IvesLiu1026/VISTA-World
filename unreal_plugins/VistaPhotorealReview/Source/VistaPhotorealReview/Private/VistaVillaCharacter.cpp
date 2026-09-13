@@ -1,6 +1,7 @@
 #include "VistaVillaCharacter.h"
 #include "VistaAlpineProof.h"
 #include "VistaVillaMotionProof.h"
+#include "VistaVillaPourProof.h"
 #include "HomeFluidAuthoring.h"
 #include "HomeActionsJson.h"
 #include "VistaMotionCurves.h"
@@ -16,6 +17,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/Canvas.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -112,6 +114,19 @@ void AVistaVillaCharacter::BeginPlay()
         if (I) TapFluid=Fluid;else PourFluid=Fluid;
     }
     TapLedger.Source=TapLedger.Initial=0;
+    auto ReadVolume=[](const TCHAR* Key,double& Value)
+    {
+        FString Text;
+        if (!FParse::Value(FCommandLine::Get(),Key,Text)) return true;
+        return LexTryParseString(Value,*Text) && FMath::IsFinite(Value);
+    };
+    if (!ReadVolume(TEXT("VistaJugInitialMl="),InitialJugMl) || !ReadVolume(TEXT("VistaMugInitialMl="),InitialMugMl) ||
+        !VistaPour::Initialize(Liquid,InitialJugMl,InitialMugMl))
+    {bReady=false;UE_LOG(LogTemp,Error,TEXT("VILLA_POUR_INITIAL_VOLUME_INVALID"));return;}
+    const FString ActionDir=FPaths::ProjectSavedDir()/TEXT("VillaPourActions");
+    IFileManager::Get().MakeDirectory(*ActionDir,true);
+    PourEventsPath=ActionDir/(FGuid::NewGuid().ToString(EGuidFormats::Digits)+TEXT(".jsonl"));
+    RecordPourEvent(TEXT("session_started"));
     auto* WaterMaterial=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/VISTA/VillaR1/Fluids/M_VesselWater.M_VesselWater"));
     Streams.Reset(new FVillaStreams());
     for (int32 I=0;I<4;++I)
@@ -185,10 +200,47 @@ void AVistaVillaCharacter::EmbodiedInteract()
 }
 void AVistaVillaCharacter::VillaPour()
 {
-    if (Phase!=EEmbodiedPhase::Held || Cup!=Jug || bPouring) {FeedbackMessage(TEXT("Pick up the glass carafe, then P to pour"));return;}
+    if (bPouring) {VillaStopPour();return;}
+    if (Phase!=EEmbodiedPhase::Held || Cup!=Jug) {FeedbackMessage(TEXT("Pick up the glass carafe, then P to pour"));return;}
     if (FVector::Dist2D(Mug->GetActorLocation(),GetActorLocation())>70) {FeedbackMessage(TEXT("Move close to the mug"));return;}
     if (Liquid.Source<=0) {FeedbackMessage(TEXT("The carafe is empty"));return;}
+    if (!PourControl.Start()) return;
     PourStart=CupMesh->GetComponentTransform();PourClock=0;bPouring=true;bSceneActionBusy=true;
+    ++PourActionId;bPourSettlementPending=true;RecordPourEvent(TEXT("pour_started"));
+}
+void AVistaVillaCharacter::VillaStopPour()
+{
+    if (!bPouring || PourControl.State!=VistaPour::Phase::Pouring) return;
+    BeginPourReturn(true);
+    FeedbackMessage(TEXT("Stopping - straighten the carafe, then bring it back"));
+}
+void AVistaVillaCharacter::BeginPourReturn(bool Interrupted)
+{
+    if (!PourControl.Return(Interrupted)) return;
+    // Capture the measured vessel pose. Never teleport it or restore liquid.
+    PourReturnStart=CupMesh->GetComponentTransform();
+    RecordPourEvent(Interrupted?TEXT("stop_requested"):TEXT("automatic_return"));
+}
+void AVistaVillaCharacter::RecordPourEvent(const TCHAR* Event)
+{
+    if (PourEventsPath.IsEmpty()) return;
+    auto O=MakeShared<FJsonObject>();
+    O->SetStringField(TEXT("schema"),TEXT("vista.pour-action/v1"));
+    O->SetStringField(TEXT("audience"),TEXT("privileged_runtime_review_only"));
+    O->SetStringField(TEXT("event"),Event);O->SetNumberField(TEXT("action_id"),PourActionId);
+    O->SetNumberField(TEXT("simulation_time_s"),Clock);O->SetNumberField(TEXT("action_time_s"),PourControl.Elapsed);
+    O->SetNumberField(TEXT("initial_jug_ml"),InitialJugMl);O->SetNumberField(TEXT("initial_mug_ml"),InitialMugMl);
+    O->SetNumberField(TEXT("source_ml"),Liquid.Source);O->SetNumberField(TEXT("receiver_ml"),Liquid.Receiver);
+    O->SetNumberField(TEXT("spill_ml"),Liquid.Spill);O->SetNumberField(TEXT("airborne_ml"),Liquid.Airborne());
+    O->SetNumberField(TEXT("mass_residual_ml"),Liquid.Residual());
+    O->SetBoolField(TEXT("interrupted"),PourControl.Interrupted);
+    if (!FFileHelper::SaveStringToFile(Encode(O)+TEXT("\n"),*PourEventsPath,FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM,&IFileManager::Get(),FILEWRITE_Append))
+        UE_LOG(LogTemp,Error,TEXT("VILLA_POUR_EVENT_WRITE_FAILED"));
+}
+void AVistaVillaCharacter::EndPlay(const EEndPlayReason::Type Reason)
+{
+    RecordPourEvent(bPouring?TEXT("session_ended_during_action"):TEXT("session_ended"));
+    Super::EndPlay(Reason);
 }
 void AVistaVillaCharacter::VillaTap()
 {
@@ -199,21 +251,35 @@ void AVistaVillaCharacter::VillaTap()
 void AVistaVillaCharacter::UpdateInteraction(float Dt)
 {
     if (!bPouring) {Super::UpdateInteraction(Dt);return;}
-    if (!GripHandle->GrabbedComponent) {bPouring=false;bSceneActionBusy=false;return;}
-    PourClock+=Dt;
+    if (!GripHandle->GrabbedComponent)
+    {RecordPourEvent(TEXT("grip_lost"));PourControl=VistaPour::Control();bPouring=false;bSceneActionBusy=false;return;}
+    PourControl.Step(Dt);PourClock=PourControl.Elapsed;
+    if (PourControl.AutoReturnDue()) BeginPourReturn(false);
     const float Into=VistaMotion::Ease(PourClock/1.15f);
-    const float Out=VistaMotion::Ease((PourClock-4.5f)/1.25f);
     const FQuat Tilt=FQuat(GetActorRightVector(),FMath::DegreesToRadians(78.f));
     const FQuat R=Tilt*PourStart.GetRotation();
     const FVector LipLocal(0,0,25.3f);
     const FVector Mouth=Mug->GetActorLocation()+FVector(0,0,19.f);
     const FTransform Tilted(R,Mouth-R.RotateVector(LipLocal));
-    FTransform Goal;Goal.Blend(PourStart,Tilted,Into);FTransform Return=CarryTarget();
-    Goal.Blend(Goal,Return,Out);
+    FTransform Goal;Goal.Blend(PourStart,Tilted,Into);
+    if (PourControl.State!=VistaPour::Phase::Pouring)
+    {
+        const FVector Pivot=PourReturnStart.TransformPosition(LipLocal);
+        const FQuat Upright=PourStart.GetRotation();
+        const float Alpha=VistaMotion::Ease(PourControl.ReturnElapsed/VistaPour::Control::UprightDuration);
+        const FQuat Rotation=FQuat::Slerp(PourReturnStart.GetRotation(),Upright,Alpha);
+        Goal=FTransform(Rotation,Pivot-Rotation.RotateVector(LipLocal));
+        const float Withdraw=VistaMotion::Ease((PourControl.ReturnElapsed-VistaPour::Control::UprightDuration)/VistaPour::Control::WithdrawDuration);
+        const FTransform Return=CarryTarget();Goal.Blend(Goal,Return,Withdraw);
+    }
     GripHandle->SetTargetLocationAndRotation(Goal.GetLocation(),Goal.Rotator());
     LastHandGoal=HandRelativeToCup*CupMesh->GetComponentTransform();ReachAlpha=FingerAlpha=1;
-    if (PourClock>5.9f)
-    {bPouring=false;bSceneActionBusy=false;HoldStart=CupMesh->GetComponentTransform();PhaseTime=0;FeedbackMessage(TEXT("Pour complete — look at the counter and E to place"));}
+    if (PourControl.Finished())
+    {
+        RecordPourEvent(TEXT("return_completed"));PourControl.State=VistaPour::Phase::Idle;
+        bPouring=false;bSceneActionBusy=false;HoldStart=CupMesh->GetComponentTransform();PhaseTime=0;
+        FeedbackMessage(TEXT("Carafe upright - look at the counter and E to place"));
+    }
 }
 void AVistaVillaCharacter::UpdateLiquids(float Dt)
 {
@@ -221,10 +287,12 @@ void AVistaVillaCharacter::UpdateLiquids(float Dt)
     const auto Transform=Jug->GetActorTransform();const FVector Lip=Transform.TransformPosition(FVector(0,0,25.3f));
     const FVector Receiver=Mug->GetActorLocation()+FVector(0,0,9.5f);
     const float Angle=FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(Jug->GetActorUpVector().Z,-1.f,1.f)));
-    const float Rate=bPouring && PourClock>1.1f && PourClock<4.5f?FMath::Clamp((Angle-48.f)/22.f,0.f,1.f)*65.f:0.f;
+    const double Rate=bPouring?PourControl.Rate(Angle):0.;
     const double Flight=FMath::Sqrt(FMath::Max(0.,2.*(Lip.Z-Receiver.Z)/980.));
     const bool Hits=FVector::Dist2D(Lip,Receiver)<3.4f && Lip.Z>Receiver.Z && Mug->GetActorUpVector().Z>.95;
     Liquid.Step(Dt);const double Emitted=Liquid.Emit(Rate,Dt,Flight,Hits);
+    if (bPourSettlementPending && !bPouring && Liquid.Airborne()==0)
+    {bPourSettlementPending=false;RecordPourEvent(TEXT("flow_settled"));}
     if (Emitted>0) PourFluid->SetPaused(false);
     PourFluid->SetVariableFloat(TEXT("User.SourceRate"),Emitted>0?float(Emitted/Dt)*35.f:0.f);
     PourFluid->SetVariableVec3(TEXT("User.SourcePosition"),Lip-PourOrigin);
@@ -246,6 +314,9 @@ void AVistaVillaCharacter::UpdateLiquids(float Dt)
 void AVistaVillaCharacter::EmbodiedReset()
 {
     if (!Jug || !Mug) return;
+    RecordPourEvent(TEXT("reset_before_restore"));
+    bPourSettlementPending=false;
+    PourControl=VistaPour::Control();
     bDemo=bPouring=bSceneActionBusy=bTap=false;GripHandle->ReleaseComponent();
     for (auto* Item:{Jug.Get(),Mug.Get()})
     {
@@ -253,7 +324,8 @@ void AVistaVillaCharacter::EmbodiedReset()
         Item->SetActorTransform(Item==Jug?JugInitial:MugInitial,false,nullptr,ETeleportType::TeleportPhysics);
         Mesh->SetCollisionResponseToChannel(ECC_Pawn,ECR_Block);GetCapsuleComponent()->IgnoreActorWhenMoving(Item,false);
     }
-    Liquid=VistaLiquid::Ledger();TapLedger=VistaLiquid::Ledger();TapLedger.Source=TapLedger.Initial=0;
+    VistaPour::Initialize(Liquid,InitialJugMl,InitialMugMl);TapLedger=VistaLiquid::Ledger();TapLedger.Source=TapLedger.Initial=0;
+    RecordPourEvent(TEXT("reset_completed"));
     if (Streams) {Streams->Pour.Reset();Streams->Tap.Reset();}
     for (auto* Fluid:{PourFluid.Get(),TapFluid.Get()})
         if (Fluid) {Fluid->SetVariableFloat(TEXT("User.SourceRate"),0);Fluid->ReinitializeSystem();Fluid->SetPaused(true);}
@@ -264,7 +336,7 @@ void AVistaVillaCharacter::EmbodiedReset()
 FString AVistaVillaCharacter::GetInteractionHint() const
 {
     if (Clock<FeedbackUntil) return Feedback;
-    return bPouring?TEXT("Pouring — keeping the rim above the mug"):
+    return bPouring?(PourControl.State==VistaPour::Phase::Pouring?TEXT("Pouring - press P to stop and bring the carafe back"):TEXT("Straightening and bringing the carafe back")):
         TEXT("WASD move  |  Shift run  |  Space jump  |  E door / pick / place  |  P pour  |  F tap  |  Tab view  |  H tour  |  R reset");
 }
 void AVistaVillaCharacter::VillaDemo()
@@ -379,6 +451,7 @@ void AVistaVillaCharacter::OnPoseFinalized()
     Super::OnPoseFinalized();
     CaptureVillaMotionProof(this);
     CaptureAlpineProof(this);
+    CaptureVillaPourProof(this);
     if (!PendingCapture.IsEmpty())
     {
         const FString Name=PendingCapture;PendingCapture.Empty();CaptureProofNow(Name);
@@ -473,4 +546,5 @@ void AVistaVillaCharacter::Tick(float Dt)
     AdvanceDemo(Dt);
     TickVillaMotionProof(this,Dt);
     TickAlpineProof(this,Dt);
+    TickVillaPourProof(this,Dt);
 }
