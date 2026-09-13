@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "EmbodiedReview.h"
 #include "VistaLiquidLedger.h"
+#include "VistaPourControl.h"
 #include "VistaVillaCharacter.generated.h"
 class UNiagaraComponent;
 class ACameraActor;
@@ -29,16 +30,19 @@ class VISTAPHOTOREALREVIEW_API AVistaVillaCharacter : public AEmbodiedReviewChar
     GENERATED_BODY()
     friend struct FVillaMotionProof;
     friend struct FAlpineProof;
+    friend struct FVillaPourProof;
 public:
     AVistaVillaCharacter();
     virtual ~AVistaVillaCharacter() override;
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type Reason) override;
     virtual void Tick(float Dt) override;
     virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
     virtual void EmbodiedInteract() override;
     virtual void EmbodiedReset() override;
     virtual FString GetInteractionHint() const override;
     UFUNCTION(Exec) void VillaPour();
+    UFUNCTION(Exec) void VillaStopPour();
     UFUNCTION(Exec) void VillaTap();
     UFUNCTION(Exec) void VillaDemo();
     void StartRunning();
@@ -83,6 +87,14 @@ private:
     bool FootLocked[2]={false,false};
     FVector FootAnchor[2];
     VistaLiquid::Ledger Liquid,TapLedger;
+    VistaPour::Control PourControl;
+    double InitialJugMl=600,InitialMugMl=0;
+    int32 PourActionId=0;
+    FString PourEventsPath;
+    bool bPourSettlementPending=false;
+    FTransform PourReturnStart;
+    void BeginPourReturn(bool Interrupted);
+    void RecordPourEvent(const TCHAR* Event);
     bool bPouring=false,bTap=false,bProof=false,bDemo=false;
     float PourClock=0,MotionWeight=0,LastFrameDt=0,ProofClock=0,DemoClock=0;
     int32 MotionIndex=INDEX_NONE,DemoStage=0,ProofFrames=0;
