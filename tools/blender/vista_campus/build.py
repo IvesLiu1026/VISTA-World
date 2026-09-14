@@ -18,6 +18,7 @@ from mathutils import Vector
 p = argparse.ArgumentParser()
 p.add_argument('--out', type=Path, required=True)
 p.add_argument('--lettering-only-from',type=Path,help='Reuse saved mesh groups and regenerate lettering only')
+p.add_argument('--vehicles-only-from',type=Path,help='Retain outdoor modules and rebuild articulated vehicles')
 args = p.parse_args(sys.argv[sys.argv.index('--')+1:])
 args.out.mkdir(parents=True, exist_ok=False)
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'runtime/vista_campus'))
@@ -181,22 +182,31 @@ def vehicle(kind):
  global groups
  groups={}
  if kind=='car':
-  box('car_body','WhiteCar',(0,0,.63),(4.3,1.77,.62),.19)
+  # A real cabin opening leaves room for legs and the entry animation.
+  box('car_body','WhiteCar',(1.48,0,.63),(1.34,1.77,.62),.16)
+  box('car_body','WhiteCar',(-1.75,0,.63),(.8,1.77,.62),.14)
+  box('car_body','WhiteCar',(-.28,.855,.63),(2.14,.08,.62),.035)
+  box('car_door','WhiteCar',(-.27,-.855,.63),(2.14,.08,.62),.035)
   box('car_body','Steel',(0,0,.34),(4.25,1.7,.22),.065)
   box('car_body','WhiteCar',(-.2,0,1.65),(2.25,1.66,.12),.055)
   for end in [-1.27,.82]:
    for side in [-1,1]:box('car_body','WhiteCar',(end,side*.8,1.3),(.085,.08,.64),.025)
   box('car_body','Seat',(.58,0,.95),(.3,1.5,.17),.04)
-  cylinder('car_body','Rubber',(.6,-.4,1.02),.18,.035,'X',32)
+  bpy.ops.mesh.primitive_torus_add(major_radius=.17,minor_radius=.018,major_segments=48,minor_segments=10,location=(.35,.4,1.04),rotation=(0,math.pi/2,0))
+  add(bpy.context.object,'car_steering','Rubber')
+  cylinder('car_steering','Steel',(.35,-.4,1.04),.055,.035,'X',24)
+  for angle in [0,math.tau/3,2*math.tau/3]:
+   bar('car_steering','Steel',(.35,-.4,1.04),(.35,-.4+.15*math.cos(angle),1.04+.15*math.sin(angle)),.018)
   for side in [-1,1]:
    box('car_body','Seat',(-.15,side*.4,.67),(.62,.57,.12),.06)
    box('car_body','Seat',(-.46,side*.4,.94),(.12,.57,.6),.05)
   box('car_body','CarGlass',(.82,0,1.3),(.08,1.43,.49),.065)
   box('car_body','CarGlass',(-1.27,0,1.3),(.07,1.43,.42),.06)
   for side in [-1,1]:
-   box('car_body','CarGlass',(-.13,side*.832,1.31),(1.8,.035,.44),.045)
-   box('car_body','WhiteCar',(-.2,side*.86,1.29),(.08,.05,.57),.01)
-   box('car_body','Chrome',(-.8,side*.901,.95),(.22,.045,.035),.009)
+   door='car_door' if side<0 else 'car_body'
+   box(door,'CarGlass',(-.13,side*.832,1.31),(1.8,.035,.44),.045)
+   box(door,'WhiteCar',(-.2,side*.86,1.29),(.08,.05,.57),.01)
+   box(door,'Chrome',(-.8,side*.901,.95),(.22,.045,.035),.009)
    box('car_body','WhiteCar',(.55,side*.98,1.13),(.25,.23,.12),.05)
    box('car_body','Lamp',(2.115,side*.59,.78),(.05,.45,.17),.03)
    box('car_body','Red',(-2.13,side*.63,.78),(.04,.36,.18),.025)
@@ -204,19 +214,19 @@ def vehicle(kind):
   box('car_body','Paint',(2.18,0,.62),(.02,.45,.12),.005)
   group='car_wheel';radius=.33;width=.23
  else:
-  box('scooter_body','Teal',(-.37,0,.6),(1.05,.57,.62),.2)
-  box('scooter_body','Seat',(-.27,0,.87),(.95,.59,.15),.12)
+  box('scooter_body','Teal',(-.37,0,.46),(1.05,.53,.4),.14)
+  box('scooter_body','Seat',(-.27,0,.72),(.95,.53,.15),.07)
   box('scooter_body','Rubber',(.17,0,.32),(.9,.58,.1),.03)
   o=box('scooter_body','Teal',(.58,0,.67),(.2,.55,.8),.08);o.rotation_euler[1]=-.15
   bar('scooter_body','Steel',(.67,0,.3),(.53,0,1.06),.045)
-  bar('scooter_body','Steel',(.53,-.34,1.08),(.53,.34,1.08),.035)
+  bar('scooter_steering','Steel',(.53,-.34,1.08),(.53,.34,1.08),.025)
   for side in [-1,1]:
-   bar('scooter_body','Steel',(.53,side*.29,1.08),(.5,side*.42,1.37),.012)
-   box('scooter_body','Chrome',(.5,side*.43,1.39),(.035,.17,.1),.035)
-   cylinder('scooter_body','Rubber',(.53,side*.3,1.08),.043,.14,'Y')
+   bar('scooter_steering','Steel',(.53,side*.29,1.08),(.5,side*.42,1.37),.012)
+   box('scooter_steering','Chrome',(.5,side*.43,1.39),(.035,.17,.1),.035)
+   cylinder('scooter_steering','Rubber',(.53,side*.3,1.08),.022,.14,'Y')
   box('scooter_body','Lamp',(.71,0,1.02),(.07,.28,.15),.045)
-  box('scooter_body','Red',(-.92,0,.73),(.04,.32,.13),.025)
-  box('scooter_body','Paint',(-.95,0,.53),(.02,.24,.16),.006)
+  box('scooter_body','Red',(-.92,0,.60),(.04,.32,.13),.025)
+  box('scooter_body','Paint',(-.95,0,.43),(.02,.24,.16),.006)
   cylinder('scooter_body','Steel',(-.56,.31,.32),.08,.53,'X')
   group='scooter_wheel';radius=.26;width=.14
  cylinder(group,'Rubber',(0,0,0),radius,width,'Y',40)
@@ -233,6 +243,10 @@ def export(name):
   bpy.context.view_layer.objects.active=objects[0];bpy.ops.object.join()
   ob=bpy.context.object;ob.name=group
   bpy.ops.object.transform_apply(location=True,rotation=True,scale=True)
+  pivot={'car_door':(.82,-.855,.95),'car_steering':(.35,-.4,1.04),'scooter_steering':(.53,0,1.08)}.get(group)
+  if pivot:
+   offset=Vector((pivot[0],-pivot[1],pivot[2]))
+   for vertex in ob.data.vertices:vertex.co-=offset
   counts[group]=dict(vertices=len(ob.data.vertices),polygons=len(ob.data.polygons))
   merged.append(ob)
  bpy.ops.object.select_all(action='DESELECT')
@@ -246,7 +260,15 @@ def export(name):
 
 report={'schema':'vista.campus-geometry/v1','units':'metres; Blender y flips UE y','reference':OFFICIAL_REFERENCE,
         'fidelity':'authored approximate exteriors; not surveyed buildings or actual signal timing','assets':{}}
-if args.lettering_only_from:
+if args.vehicles_only_from:
+ original=json.loads((args.vehicles_only_from/'geometry.json').read_text())
+ for kind in ['car','scooter']:
+  vehicle(kind);report['assets'][kind]=export(kind)
+ for scene in ['campus','gate','daxue']:
+  receipt=dict(original['assets'][scene])
+  for suffix in ['.glb','.blend']:shutil.copy2(args.vehicles_only_from/(scene+suffix),args.out/(scene+suffix))
+  receipt['glb']=str(args.out/(scene+'.glb'));report['assets'][scene]=receipt
+elif args.lettering_only_from:
  original=json.loads((args.lettering_only_from/'geometry.json').read_text())
  report['lettering_source_sha256']=hashlib.sha256((args.lettering_only_from/'geometry.json').read_bytes()).hexdigest()
  for kind in ['car','scooter']:
