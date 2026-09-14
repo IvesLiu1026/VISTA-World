@@ -1,9 +1,8 @@
 """Assemble an offline review from complete, matching native runs; never edit pixels."""
 import argparse
+import base64
 import hashlib
-from html import escape
 import json
-import os
 from pathlib import Path
 
 
@@ -16,7 +15,33 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--runs', type=Path, nargs='+', required=True)
     parser.add_argument('--out', type=Path, required=True)
+    parser.add_argument('--background-cleanup', type=Path)
     args = parser.parse_args()
+    cleanup, allowed = None, {}
+    if args.background_cleanup:
+        cleanup = json.loads(args.background_cleanup.read_text())
+        assert cleanup['schema'] == 'vista.six-spaces-background-only/v1'
+        folder = args.background_cleanup.parent
+        before = json.loads((folder/'contract-before.json').read_text())
+        after = json.loads((folder/'contract-after.json').read_text())
+        source_map, target_map = before.pop('scene_map'), after.pop('scene_map')
+        assert before.pop('revision') == cleanup['source_revision']
+        assert after.pop('revision') == cleanup['target_revision']
+        assert before == after, 'Background cleanup changed the functional contract'
+        before_bindings = json.loads((folder/'bindings-before.json').read_text())
+        after_bindings = json.loads((folder/'bindings-after.json').read_text())
+        assert len(before_bindings) == 43 and before_bindings == after_bindings
+        allowed = cleanup['allowed_input_versions']
+        for path, versions in allowed.items():
+            assert len(versions) == 2
+            current = Path(path).read_bytes()
+            assert hashlib.sha256(current).hexdigest() == versions[1]
+            if Path(path).name == 'DefaultEngine.ini':
+                assert hashlib.sha256(current.replace(target_map.encode(), source_map.encode())).hexdigest() == versions[0]
+            else:
+                assert Path(path).name == 'VistaHomeActions.json'
+                for name, version in zip(['contract-before.json', 'contract-after.json'], versions):
+                    assert hashlib.sha256((folder/name).read_bytes()).hexdigest() == version
     runs, pins, artifacts, cases_by_suite, attempts = {}, {}, {}, {}, []
     for directory in args.runs:
         directory = directory.resolve(strict=True)
@@ -31,7 +56,10 @@ def main():
             # Keep both driver digests; the native map, plugin and contracts must match.
             if Path(path).name == 'run_native.py':
                 continue
-            assert path not in pins or pins[path] == digest, 'Mixed native inputs: '+path
+            if path in allowed:
+                assert digest in allowed[path]
+            else:
+                assert path not in pins or pins[path] == digest, 'Mixed native inputs: '+path
             pins[path] = digest
         checks = json.loads((directory/'checks/results.json').read_text())
         cases = checks.get('cases', [])
@@ -42,8 +70,9 @@ def main():
             merged[case.get('name', case.get('target'))] = dict(status=case['status'], run=str(directory))
         attempts.append(dict(path=str(directory), suite=suite, passed=result['passed_cases'],
                              failed=result['failed_cases'], input_sha256=result['input_sha256']))
-        row = runs.setdefault(suite, dict(paths=[], revision=result['initial_state']['revision'], elapsed_s=0))
-        assert row['revision'] == result['initial_state']['revision']
+        row = runs.setdefault(suite, dict(paths=[], revisions=[], elapsed_s=0))
+        if result['initial_state']['revision'] not in row['revisions']:
+            row['revisions'].append(result['initial_state']['revision'])
         row['paths'].append(str(directory))
         row['elapsed_s'] += result['elapsed_s']
         for path in [directory/'process.json', directory/'checks/results.json',
@@ -54,13 +83,21 @@ def main():
         assert len(cases_by_suite[suite]) == count
         assert all(c['status'] == 'passed' for c in cases_by_suite[suite].values())
         runs[suite]['passed'] = count
-    assert len({row['revision'] for row in runs.values()}) == 1
+    revisions = {revision for row in runs.values() for revision in row['revisions']}
+    if cleanup:
+        assert revisions == {cleanup['source_revision'], cleanup['target_revision']}
+        assert runs['tour']['revisions'] == [cleanup['target_revision']]
+        assert cleanup['target_revision'] in runs['sequences']['revisions']
+        assert cleanup['target_revision'] in runs['actions']['revisions']
+    else:
+        assert len(revisions) == 1
     for path, digest in pins.items():
         assert hashlib.sha256(Path(path).read_bytes()).hexdigest() == digest, 'Inputs changed since validation: '+path
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
     report = dict(schema='vista.six-spaces-review/v1', native_checks=sum(EXPECTED.values()),
                   runs=runs, attempts=attempts, cases=cases_by_suite, input_sha256=pins, artifact_sha256=artifacts,
+                  background_cleanup=cleanup,
                   model_evaluation=False, client_streaming_verified=False,
                   tour_is_fixture_only=True, screenshots_modified=False)
     (out/'summary.json').write_text(json.dumps(report, indent=2)+'\n')
@@ -68,6 +105,9 @@ def main():
     intro = ('六個空間、43 個具名互動物件與七個既有事件已接回 Villa。'
              '以下是私人測試專案的 UE 原生截圖；空間取景使用空手定位，'
              '鑰匙／手機搬運另以實際 WASD、碰撞及持物約束驗證。')
+    if cleanup:
+        intro += ('功能基準為 R4；R5 清除了合併欄杆模型中的舊水龍頭，43 個互動綁定與功能契約逐項相同。'
+                  'R5 另補驗跨樓層搬運、廚房操作及六空間畫面；下表合併各案例最新的通過紀錄，並非宣稱全部案例皆在 R5 重跑。')
     boundary = ('這是工程驗證，尚未進行模型評測或 Windows／Mac 串流驗收。'
                 '液體仍是容量與狀態模型；人物與布料細節留待後續改進。'
                 '共享 Sunshine 尚未切換至此私人版本。')
@@ -92,11 +132,12 @@ def main():
             path = Path(cases_by_suite['tour'][key]['run'])/'checks'/f'{key}-{view}.png'
             assert path.is_file()
             markdown.append(f'![{name}・{label}]({path})')
-            relative = escape(os.path.relpath(path, out), quote=True)
-            html.append(f'<figure><a href="{relative}"><img src="{relative}" loading="lazy"></a><figcaption>{label}</figcaption></figure>')
+            encoded = base64.b64encode(path.read_bytes()).decode('ascii')
+            html.append(f'<figure><img src="data:image/png;base64,{encoded}" loading="lazy"><figcaption>{label}</figcaption></figure>')
         html += ['</div></section>']
     markdown += ['', '## 診斷紀錄', '', incident, '', '[驗證索引]('+str(out/'summary.json')+')', '']
-    html += [f'<p>{incident}</p><p><a href="summary.json">驗證索引與 SHA-256</a></p></html>']
+    encoded_summary = base64.b64encode((out/'summary.json').read_bytes()).decode('ascii')
+    html += [f'<p>{incident}</p><p><a download="summary.json" href="data:application/json;base64,{encoded_summary}">驗證索引與 SHA-256</a></p></html>']
     (out/'REVIEW.zh-TW.md').write_text('\n'.join(markdown))
     (out/'index.html').write_text('\n'.join(html))
 
