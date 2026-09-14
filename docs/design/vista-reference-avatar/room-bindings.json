@@ -1,0 +1,78 @@
+{
+  "schema": "vista.six-room-binding-audit/v1",
+  "date": "2026-09-14",
+  "source_commit": "e6be510",
+  "map_inspection_sha256": "94c539f51c5ea6e91cbf77c164b843600ccae9a287a7613c81c854f18aae339a",
+  "maps": [
+    {
+      "map": "/Game/VISTA/VillaR1/Maps/Villa",
+      "default_game_mode": "/Script/VistaPhotorealReview.VistaVillaGameMode",
+      "actor_count": 213,
+      "named_bindings": 43,
+      "unique_matches": 0,
+      "runtime_hazards_not_executed": 3,
+      "rooms": {
+        "home.r1/room.bathroom_laundry": {
+          "named": 8,
+          "matched": 0
+        },
+        "home.r1/room.bedroom": {
+          "named": 9,
+          "matched": 0
+        },
+        "home.r1/room.entry_hall": {
+          "named": 7,
+          "matched": 0
+        },
+        "home.r1/room.kitchen_dining": {
+          "named": 6,
+          "matched": 0
+        },
+        "home.r1/room.living_room": {
+          "named": 6,
+          "matched": 0
+        },
+        "home.r1/room.office": {
+          "named": 7,
+          "matched": 0
+        }
+      }
+    },
+    {
+      "map": "/Game/VISTA/PhotorealHomeR1/Maps/Home",
+      "default_game_mode": "/Script/VistaPhotorealReview.HomeActionsGameMode",
+      "actor_count": 190,
+      "named_bindings": 43,
+      "unique_matches": 43,
+      "runtime_hazards_not_executed": 3,
+      "rooms": {
+        "home.r1/room.bathroom_laundry": {
+          "named": 8,
+          "matched": 8
+        },
+        "home.r1/room.bedroom": {
+          "named": 9,
+          "matched": 9
+        },
+        "home.r1/room.entry_hall": {
+          "named": 7,
+          "matched": 7
+        },
+        "home.r1/room.kitchen_dining": {
+          "named": 6,
+          "matched": 6
+        },
+        "home.r1/room.living_room": {
+          "named": 6,
+          "matched": 6
+        },
+        "home.r1/room.office": {
+          "named": 7,
+          "matched": 7
+        }
+      }
+    }
+  ],
+  "interaction_execution_verified": false,
+  "interpretation": "Original Home label bindings are retained; Villa has separate interactions but has not adopted these bindings."
+}
