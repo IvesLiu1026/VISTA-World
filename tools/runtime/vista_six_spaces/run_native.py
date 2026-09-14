@@ -171,6 +171,9 @@ def probes(args, home):
             ('kitchen_dining', (1430,-790,86,-135)), ('bedroom', (470,-890,406,-150)),
             ('office', (820,-840,406,-90)), ('bathroom_laundry', (1248,-870,406,-90)),
         ]
+        # Leave room behind the avatar for the collision-aware third-person camera.
+        third_views = {'kitchen_dining': (1140,-1080,86,-90),
+                       'bedroom': (420,-990,406,-90), 'office': (800,-1050,406,-90)}
         cases = []
         for name, position in rooms:
             home.command('reset')
@@ -183,8 +186,15 @@ def probes(args, home):
             assert state['player_room'] == 'home.r1/room.'+name, state['player_room']
             review.snapshot(name+'-first')
             review.send('Tab', settle=.5)
+            if name in third_views:
+                third = third_views[name]
+                review.console('EmbodiedPosition '+' '.join(map(str, third)))
+                review.console(f'EmbodiedCamera -20 {third[3]}')
+                time.sleep(.5)
+            third_state = home.state()
+            assert third_state['player_room'] == 'home.r1/room.'+name
             review.snapshot(name+'-third')
-            cases.append(dict(name=name, status='passed', state=state, fixture_only=True))
+            cases.append(dict(name=name, status='passed', state=state, third_state=third_state, fixture_only=True))
             (args.out/'checks/results.json').write_text(json.dumps(dict(cases=cases), indent=2)+'\n')
         return
     if args.suite in ('details', 'sequences', 'protocol'):

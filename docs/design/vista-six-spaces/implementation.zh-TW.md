@@ -65,6 +65,17 @@ Home 狀態機負責室內操作，原 Villa 的獨立倒水示範不會與 Home
 Home contract，`VISTA_SIX_REVISION=R4` 與 `VISTA_SIX_PLANT` 為修訂後盆栽輸出目錄。
 所有輸出路徑必須新建。二進位資產、原始人物照片、執行紀錄與畫面均不放入 Git。
 
+R5 的背景收尾另由 `export_background_fixture.py`、`remove_stale_tap.py`、
+`finish_background.py` 完成：舊水龍頭與欄杆在同一個金屬模型中，只移除水龍頭的
+7,512 個頂點，保留其餘欄杆及原材質。FBX 匯出必須同時啟用 `export_source_mesh`
+並停用 `collision`，才能取得完整來源幾何。另存 R5 後核對 43 個互動綁定完全相同，
+功能契約只改版本與地圖路徑；保留 R4 作為完整功能驗證基準。欄杆新模型使用實際
+三角網格碰撞，R5 補驗手機下樓、廚房操作與六空間取景。
+
+檢視頁可用 `make_review.py --runs ... --background-cleanup .../cleanup.json --out ...`
+合併基準與背景收尾的補驗。它驗證契約及綁定沒有功能差異，明列每一案例的來源版本；
+不將 R4 的全部檢查宣稱為在 R5 重跑。HTML 內嵌原始 PNG，可單獨下載開啟。
+
 Native runner 的必要參數為 `--project`、`--engine`、`--ddc`、`--source-contract`、
 `--out`；由 `xvfb-run -a` 啟動，不能使用共享的 `:119`。
 可用 `--only` 選定案例，`--suite sequences --timeouts` 加上兩個超時案例。
