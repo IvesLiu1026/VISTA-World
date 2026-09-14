@@ -10,6 +10,12 @@ import unreal
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'runtime/vista_campus'))
 from layout import ROOT, SCENES, VEHICLES, validate
 validate()
+# The baseline import and the final game registry have independent namespaces.
+# This lets a clean private project reproduce the surface/vehicle passes without
+# checking out an older version of the tool source.
+initial_root=ROOT
+ROOT=os.environ.get('VISTA_CAMPUS_ROOT',ROOT)
+SCENES=[dict(s,map=s['map'].replace(initial_root,ROOT,1)) for s in SCENES]
 project=Path(unreal.Paths.project_dir()).resolve()
 assert project.parent.name=='vista-campus'
 source=Path(os.environ['VISTA_CAMPUS_SOURCE'])

@@ -22,6 +22,9 @@ for kind in ['car','scooter']:
  positions=[data['accessors'][p['attributes']['POSITION']] for p in mesh['primitives']]
  expected_length[kind]=100*(max(p['max'][0] for p in positions)-min(p['min'][0] for p in positions))
 project=Path(unreal.Paths.project_dir()).resolve();assert project.parent.name=='vista-campus'
+explorer=json.loads((project/'Config/VistaExplorer.json').read_text())
+assert explorer['scenes']==SCENES and explorer['vehicles']==VEHICLES
+assert json.loads((project/'Config/VistaHomeActions.json').read_text())['scene_map']==SCENES[0]['map']
 out=Path(os.environ['VISTA_CAMPUS_OUT']);assert not out.exists()
 level=unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 actors=unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
@@ -76,5 +79,5 @@ for scene in SCENES:
 contract=json.loads((project/'Config/VistaHomeActions.json').read_text())
 donor=json.loads((project.parents[1]/'villa-six-spaces/payload/Config/VistaHomeActions.json').read_text())
 assert contract['entities']==donor['entities'] and contract['events']==donor['events']
-out.write_text(json.dumps(dict(schema='vista.campus-saved-verification/v1',maps=rows,home_contract_preserved=True),indent=2)+'\n')
+out.write_text(json.dumps(dict(schema='vista.campus-saved-verification/v1',maps=rows,home_contract_preserved=True,scene_menu_matches_verified_maps=True),indent=2)+'\n')
 unreal.log('VISTA_CAMPUS_SAVED_VERIFIED')
