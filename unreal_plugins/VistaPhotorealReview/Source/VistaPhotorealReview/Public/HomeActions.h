@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "EmbodiedReview.h"
+#include "VistaVillaCharacter.h"
 #include "Dom/JsonObject.h"
 #include "HomeActions.generated.h"
 
@@ -59,7 +59,7 @@ struct FHomeFineSurface
 };
 
 UCLASS()
-class VISTAPHOTOREALREVIEW_API AHomeActionsCharacter : public AEmbodiedReviewCharacter
+class VISTAPHOTOREALREVIEW_API AHomeActionsCharacter : public AVistaVillaCharacter
 {
     GENERATED_BODY()
 public:
@@ -75,6 +75,7 @@ public:
     UFUNCTION(Exec) void HomeAction(const FString& Action,const FString& Target,const FString& Secondary=TEXT(""));
     UFUNCTION(Exec) void HomeEvent(const FString& EventId);
     UFUNCTION(Exec) void HomeState();
+    UFUNCTION(Exec) void HomeRoom(int32 Index);
     UFUNCTION(Exec) void HomeFocus(const FString& Target);
     UFUNCTION(Exec) void HomeCancel();
     UFUNCTION(Exec) void HomeObserve(bool Clean);
@@ -82,6 +83,7 @@ public:
     FString GetEventHint() const;
     bool IsCleanObservation() const { return bCleanObservation; }
 protected:
+    virtual bool UsesHomeActions() const override {return true;}
     virtual void SetView(FVector Position,FRotator Rotation) override;
     virtual void SetPhase(EEmbodiedPhase NewPhase) override;
     virtual void UpdateInteraction(float Dt) override;
@@ -182,6 +184,13 @@ private:
     bool ResetScene(FString& Code);
     bool EvaluateCondition(const TSharedPtr<FJsonObject>& Condition) const;
     FString RoomAt(const FVector& Location) const;
+    FVector ScenePoint(const FString& Room,const FVector& Legacy) const;
+    void RoomOne() {HomeRoom(1);}
+    void RoomTwo() {HomeRoom(2);}
+    void RoomThree() {HomeRoom(3);}
+    void RoomFour() {HomeRoom(4);}
+    void RoomFive() {HomeRoom(5);}
+    void RoomSix() {HomeRoom(6);}
     void PollBridge();
     void PublishState();
     void AppendReceipt(const TSharedPtr<FJsonObject>& Record);

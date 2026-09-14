@@ -72,6 +72,7 @@ void AVistaVillaCharacter::LoadMotionLibrary()
 
 void AVistaVillaCharacter::UpdateBodyFacing(float Dt)
 {
+    if (!bVillaEmbodiment) {Super::UpdateBodyFacing(Dt);return;}
     if (!Controller) return;
     if (bThirdPerson || Phase!=EEmbodiedPhase::Idle || bSceneActionBusy)
     {Super::UpdateBodyFacing(Dt);return;}
@@ -92,7 +93,7 @@ void AVistaVillaCharacter::ModifyBaseBodyPose(TArray<FTransform>& Local)
 
 void AVistaVillaCharacter::RefineSceneBodyPose(TArray<FTransform>& Local)
 {
-    if (!Controller || bThirdPerson || Local.Num()!=Parents.Num()) return;
+    if (!bVillaEmbodiment || !Controller || bThirdPerson || Local.Num()!=Parents.Num()) return;
     // Rotate the same neck/head that defines the eye position, so looking to
     // the side moves the eyes around the neck instead of around the pelvis.
     // Active contact keeps its established eye/contact calibration.
@@ -121,7 +122,7 @@ void AVistaVillaCharacter::RefineSceneBodyPose(TArray<FTransform>& Local)
 
 void AVistaVillaCharacter::AdjustFirstPersonEyeTarget(FVector& EyeTarget) const
 {
-    if (!Controller) return;
+    if (!bVillaEmbodiment || !Controller) return;
     const float Side=FMath::Abs(FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Controller->GetControlRotation().Yaw));
     const float Pitch=FRotator::NormalizeAxis(Controller->GetControlRotation().Pitch);
     const float Lean=FMath::Clamp((Side-35.f)/35.f,0.f,1.f)*FMath::Clamp((-Pitch-30.f)/25.f,0.f,1.f)*
@@ -133,6 +134,7 @@ void AVistaVillaCharacter::AdjustFirstPersonEyeTarget(FVector& EyeTarget) const
 
 void AVistaVillaCharacter::UpdateFeet(float Dt)
 {
+    if (bSceneFeetOverride || SeatedAlpha>.01f) {Super::UpdateFeet(Dt);return;}
     if (Motions.Num()<2 || MotionIdle.Num()!=Parents.Num()) {Super::UpdateFeet(Dt);return;}
     const FVector Velocity=GetVelocity();
     const float Speed=Velocity.Size2D();
