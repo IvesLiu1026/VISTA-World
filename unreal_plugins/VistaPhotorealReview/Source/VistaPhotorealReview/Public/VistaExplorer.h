@@ -28,15 +28,24 @@ public:
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Campus") bool bTraffic=false;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Campus") FString VehicleId;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Campus") TObjectPtr<UStaticMesh> WheelAsset;
+    UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Campus") TObjectPtr<UStaticMesh> SteeringAsset;
+    UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Campus") TObjectPtr<UStaticMesh> DoorAsset;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Campus") float CruiseSpeed=350.f;
     UPROPERTY(EditAnywhere,BlueprintReadWrite,Category="Campus") float RouteHalfLength=7000.f;
     UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Wheels;
+    UPROPERTY() TObjectPtr<UStaticMeshComponent> SteeringPart;
+    UPROPERTY() TObjectPtr<UStaticMeshComponent> DoorPart;
     TWeakObjectPtr<class AVistaExplorerCharacter> Driver;
     float Speed=0, Steering=0, Travel=0;
+    float ThrottleInput=0;
     int32 Contacts=0;
     bool bBrake=true;
     void Drive(float Throttle,float Steer,bool Brake,float Dt);
     FVector SeatPoint() const;
+    FVector GripPoint(bool Left) const;
+    FQuat GripRotation() const;
+    float GripSurface(FVector WorldPoint,bool Left,FVector& ClosestWorld) const;
+    void SetDoor(float Alpha);
     bool FindExit(FVector& Out) const;
 private:
     FVector RouteStart;
@@ -71,12 +80,25 @@ public:
     FString CrossingStatus;
     int32 CrossingCount=0, RedEntries=0;
     bool bChangingScene=false;
+    FString RidePhase=TEXT("on_foot");
+    float RideProgress=0;
 protected:
     virtual bool UsesReviewBookmarks() const override { return false; }
     virtual void UpdateInteraction(float Dt) override;
     virtual void RefreshScenePoseGoals() override;
     virtual void UpdateBodyFacing(float Dt) override;
+    virtual float ReachTorsoLeanScale() const override {return Riding.IsValid()?.20f:1.f;}
+    virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) override;
+    virtual void OnPoseFinalized() override;
 private:
+    void TickRideTransition(float Dt);
+    FTransform VehicleHandGoal(bool Left) const;
+    FVector RideStart, RideApproach, RideExit, StartPelvis, StartFeet[2];
+    FQuat RideStartRotation;
+    float RideElapsed=0, FootPlant=1;
+    double LastPoseClock=-1;
+    TMap<FName,FVector> VehicleTipOffsets;
+    TMap<FName,FVector> VehicleFlexAxes;
     void SetMenu(int32 Value);
     void BindExploreKeys(UInputComponent* Input);
     void ToggleExplorerView();
