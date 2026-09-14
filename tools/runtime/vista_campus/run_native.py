@@ -26,14 +26,17 @@ from proof import verify_motion_trace
 
 p=argparse.ArgumentParser()
 for name in ['project','engine','out','ddc']:p.add_argument('--'+name,type=Path,required=True)
-p.add_argument('--suite',choices=['tour','vehicles','crossing','home'],default='tour')
+p.add_argument('--suite',choices=['tour','vehicles','crossing','home','surfaces','animations'],default='tour')
 p.add_argument('--timeout',type=int,default=800)
 a=p.parse_args()
 a.project=a.project.resolve(strict=True);a.out=a.out.resolve()
 assert a.project.parent.parent.name=='vista-campus'
+installed=json.loads((a.project.parent/'Config/VistaExplorer.json').read_text())
+assert installed['scenes']==SCENES,'Scene menu must select the revision under test'
+assert json.loads((a.project.parent/'Config/VistaHomeActions.json').read_text())['scene_map']==SCENES[0]['map']
 assert os.environ.get('DISPLAY') not in (None,':119',':119.0')
 a.out.mkdir(parents=True,exist_ok=False);(a.out/'checks').mkdir()
-scene=next(s for s in SCENES if s['id']==('home' if a.suite=='home' else 'gate' if a.suite in ['vehicles','crossing'] else 'campus'))
+scene=next(s for s in SCENES if s['id']==('home' if a.suite=='home' else 'gate' if a.suite in ['vehicles','crossing','animations'] else 'campus'))
 cmd=[str(a.engine/'Engine/Binaries/Linux/UnrealEditor'),str(a.project),scene['map'],
  '-game','-vulkan','-graphicsadapter=0','-Windowed','-ForceRes','-ResX=1920','-ResY=1080','-NoVSync',
  '-UserDir='+str(a.out/'user'),'-SaveToUserDir','-VistaExplorerProof='+str(a.out/'proof'),
@@ -153,6 +156,56 @@ try:
    snapshot(label+'-first');key('Tab');snapshot(label+'-third');key('Tab')
    check('scene_travel_'+label,state()['map']==item['map'])
    key('q');wait_for(lambda s:s['menu']==2);snapshot(label+'-actions');key('Escape')
+ elif a.suite=='surfaces':
+  for scene_id,views in [
+   ('campus',[('plaza',-400,-2200,108,-90,3),('brick',-3300,-2900,108,-90,17),('library',0,-6000,108,-90,20)]),
+   ('gate',[('gate',0,1650,108,90,8),('granite',-900,1550,108,90,-3)]),
+   ('daxue',[('arcade',-700,-950,108,-85,16),('frontage',400,950,108,90,18)])]:
+   item=next(v for v in SCENES if v['id']==scene_id)
+   if state()['map']!=item['map']:
+    key('Escape');index=SCENES.index(item);click(400+(index%2)*735,312+(index//2)*145)
+    wait_for(lambda st:st['map']==item['map'] and st['body_ready'] and st['menu']==0,120);time.sleep(5)
+   for label,x,y,z,yaw,pitch in views:
+    fixture(x,y,z,yaw);console(f'EmbodiedCamera {pitch} {yaw}');time.sleep(2)
+    snapshot(scene_id+'-'+label)
+    check('surface_view_'+scene_id+'_'+label,state()['map']==item['map'])
+ elif a.suite=='animations':
+  report['videos']=[]
+  for kind,x,y in [('car_player',1250,-1380),('scooter_player',200,-1370)]:
+   fixture(x,y,108,90);wait_for(lambda st:st['nearby']==kind);key('Tab')
+   movie=a.out/(kind+'-actions.mp4')
+   recorder=subprocess.Popen(['ffmpeg','-nostdin','-y','-loglevel','error','-f','x11grab','-framerate','15','-video_size','1920x1080','-i',os.environ['DISPLAY'],
+      '-c:v','libx264','-preset','veryfast','-crf','21','-pix_fmt','yuv420p',str(movie)],stdout=subprocess.DEVNULL,stderr=(a.out/(kind+'-record.log')).open('w'))
+   try:
+    key('e',settle=.1);entry=[]
+    console('EmbodiedCamera -8 40')
+    while True:
+     sample=state()
+     if sample['ride_phase']=='riding':break
+     entry.append(sample);time.sleep(.12)
+    check(kind+'_animated_entry',len(entry)>3 and all(st['ride_phase']=='entering' for st in entry),entry)
+    check(kind+'_entry_progresses',entry[-1]['ride_progress']-entry[0]['ride_progress']>.25,entry)
+    check(kind+'_entry_vehicle_stationary',all(abs(vehicle(st,kind)['speed_cm_s'])<.1 for st in entry),entry)
+    time.sleep(.8);snapshot(kind+'-seated-side');key('Tab');console('EmbodiedCamera -14 0');snapshot(kind+'-seated-first');key('Tab');console('EmbodiedCamera -8 40')
+    seated=state();check(kind+'_seated_contact',seated['pelvis_error_cm']<2 and max(seated['hand_l_error_cm'],seated['hand_r_error_cm'])<8,seated)
+    check(kind+'_finger_surface_contact',len(seated['finger_surface_gap_cm'])==10 and all(-.5<=g<=1.0 for g in seated['finger_surface_gap_cm'].values()),seated)
+    if kind=='car_player':check('car_door_opened_and_closed',max(vehicle(st,kind)['door_yaw'] for st in entry)>35 and vehicle(seated,kind)['door_yaw']<1,entry)
+    else:check('scooter_stationary_foot_down',seated['foot_l_cm'][2]<seated['foot_r_cm'][2]-10 and 4<=seated['left_foot_floor_clearance_cm']<=10,seated)
+    key('w',hold=1.25);steering_trace=key('d',hold=.7,sample=True);moving=max(steering_trace,key=lambda st:abs(vehicle(st,kind)['steering']));snapshot(kind+'-steering-side')
+    check(kind+'_moving_hand_contacts',all(st['pose_finalized_this_frame'] and max(st['hand_l_error_cm'],st['hand_r_error_cm'])<8 for st in steering_trace),steering_trace)
+    check(kind+'_steering_component',vehicle(moving,kind)['articulated_steering'] and abs(vehicle(moving,kind)['steering'])>.2 and abs(vehicle(moving,kind)['steering_part_angle'])>5,moving)
+    if kind=='scooter_player':check('scooter_moving_foot_on_board',moving['foot_plant']<.15,moving)
+    key('space',hold=1.5);time.sleep(.5);key('e',settle=.1);wait_for(lambda st:st['ride_phase']=='exiting',5);leaving=[]
+    while True:
+     sample=state()
+     if not sample['riding']:break
+     leaving.append(sample);time.sleep(.12)
+    check(kind+'_animated_exit',len(leaving)>3 and all(st['ride_phase']=='exiting' for st in leaving),leaving)
+    snapshot(kind+'-exit-finished');time.sleep(.6)
+   finally:
+    recorder.send_signal(signal.SIGINT);recorder.wait(timeout=15)
+   assert recorder.returncode in (0,255) and movie.stat().st_size>10000
+   report['videos'].append({'path':str(movie),'sha256':hashlib.sha256(movie.read_bytes()).hexdigest(),'source':'native private X11 window, continuous capture, 15 fps'});save()
  elif a.suite=='vehicles':
   traffic_trace=[]
   for _ in range(12):traffic_trace.append(state());time.sleep(.1)
@@ -160,7 +213,7 @@ try:
   check('ambient_traffic_moves_continuously',True,traffic_trace)
   for kind,x,y in [('car_player',1250,-1380),('scooter_player',200,-1370)]:
    fixture(x,y,108,90);wait_for(lambda s:s['nearby']==kind)
-   snapshot(kind+'-approach');key('e');wait_for(lambda s:s['riding']==kind)
+   snapshot(kind+'-approach');key('e');wait_for(lambda s:s['riding']==kind and s['ride_phase']=='riding')
    check(kind+'_mount',state()['riding']==kind)
    snapshot(kind+'-first');key('Tab');snapshot(kind+'-third')
    trace=key('w',hold=1.35,sample=True,settle=.1);trace_motion(trace,kind)
@@ -178,7 +231,7 @@ try:
   key('Escape');click(400,457)
   wait_for(lambda s:s['menu']==0 and s['clock_s']<5 and s['body_ready'],120)
   fixture(1250,-1380,108,90);wait_for(lambda s:s['nearby']=='car_player')
-  key('e');wait_for(lambda s:s['riding']=='car_player')
+  key('e');wait_for(lambda s:s['riding']=='car_player' and s['ride_phase']=='riding')
   trace=key('w',hold=4.2,sample=True);trace_motion(trace,'car_player')
   stopped=vehicle(state(),'car_player')
   check('vehicle_obstacle_contact',stopped['contacts']>0 and stopped['position_cm'][0]<1850,trace)
@@ -188,10 +241,21 @@ try:
   key('Escape');click(400,457)
   wait_for(lambda s:s['menu']==0 and s['clock_s']<5 and s['body_ready'],120)
   fixture(1250,-1380,108,90);wait_for(lambda s:s['nearby']=='car_player')
-  key('e');wait_for(lambda s:s['riding']=='car_player')
-  steer=d.keysym_to_keycode(XK.string_to_keysym('d'));xtest.fake_input(d,X.KeyPress,steer);d.sync()
-  try:trace=key('w',hold=3.1,sample=True,settle=.05)
-  finally:xtest.fake_input(d,X.KeyRelease,steer);d.sync()
+  key('e');wait_for(lambda s:s['riding']=='car_player' and s['ride_phase']=='riding')
+  # Follow heading and road position, so shader/frame timing cannot turn a
+  # fixed-duration input into an incomplete manoeuvre. No vehicle teleport.
+  window();steer=d.keysym_to_keycode(XK.string_to_keysym('d'));forward=d.keysym_to_keycode(XK.string_to_keysym('w'))
+  xtest.fake_input(d,X.KeyPress,steer);xtest.fake_input(d,X.KeyPress,forward);d.sync()
+  trace=[];turning=True;end=time.monotonic()+8
+  try:
+   while time.monotonic()<end:
+    sample=state();trace.append(sample);car=vehicle(sample,'car_player')
+    if turning and car['yaw']>=80:
+     xtest.fake_input(d,X.KeyRelease,steer);d.sync();turning=False
+    if car['position_cm'][1]>-450:break
+    time.sleep(.1)
+  finally:
+   xtest.fake_input(d,X.KeyRelease,steer);xtest.fake_input(d,X.KeyRelease,forward);d.sync()
   trace_motion(trace,'car_player')
   check('drive_from_parking_onto_road',vehicle(state(),'car_player')['position_cm'][1]>-500,trace)
   key('space',hold=1.2);snapshot('car-on-road')
