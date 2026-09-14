@@ -86,7 +86,8 @@ bool AVistaVillaCharacter::TryGardenDoor()
     // door's centre. Use the closed portal bounds even while its leaf is open.
     const FVector Portal(439.5,-1201,132);
     FVector Eye;FRotator View;Cast<APlayerController>(Controller)->GetPlayerViewPoint(Eye,View);
-    if (FVector::Dist2D(GetActorLocation(),Portal)>240 || FVector::DotProduct((Portal-Eye).GetSafeNormal(),View.Vector())<.55f) return false;
+    if (FVector::Dist2D(GetActorLocation(),Portal)>240 || FMath::Abs(GetActorLocation().Z-Portal.Z)>170 ||
+        FVector::DotProduct((Portal-Eye).GetSafeNormal(),View.Vector())<.55f) return false;
     if (bGardenOpen && FMath::Abs(GetActorLocation().Y-Portal.Y)<55 && FMath::Abs(GetActorLocation().X-Portal.X)<135)
     {FeedbackMessage(TEXT("Step clear of the sliding door before closing"));return true;}
     bGardenOpen=!bGardenOpen;FeedbackMessage(bGardenOpen?TEXT("Garden door opening"):TEXT("Garden door closing"));return true;
