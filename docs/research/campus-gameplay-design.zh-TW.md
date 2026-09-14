@@ -21,7 +21,8 @@
 ## 原型邊界
 
 - 車輛使用帶碰撞掃掠的加速、轉向、煞車與輪子動畫；不是校準的輪胎／懸吊模擬。NPC 車流是有障礙停車和號誌限制的固定路線，抵達末端會停止，尚非城市交通系統。
-- 汽車與機車的上下車是狀態切換，騎乘姿勢是既有骨架上的接觸目標；仍須打磨上車動畫、手掌接觸與座艙細節。
+- 汽車與機車已接上程序化上下車、入座、握持與轉向動畫；機車停車落腳、起步收腳，汽車開合車門與踏板腳部動作。手指使用皮膚標記近似與關節調整；過渡步態、門把抓取與自碰撞仍須打磨。
+- 建築、道路與車輛已有實際 PBR 貼圖、粗糙度及法線，幾何外型與植栽仍簡化。貼圖尺度採公分設定；這不等於現地掃描或完成 GTA 等級美術。
 - 號誌是 32 秒的研究控制週期，車行綠燈在前 15 秒，行人通行在第 18–28 秒。不是實際交大路口時序。
 - 目前是有限街區，尚未完成城市串流、地圖邊界與外圍重生機制；遊玩與驗證範圍限於所建道路、廣場和停車區。
 - 建築外殼、車輛及路面為本次 Blender 程序新建；招牌使用本機 Noto CJK 字型轉幾何。人物和室內繼承私人專案的既有資產使用範圍；不自動授權資料集發布或模型評測。
@@ -32,8 +33,9 @@
 1. `tools/blender/vista_campus/build.py --out NEW_DIRECTORY` 由 Blender 執行，輸出新 GLB、來源 `.blend`、雜湊與場景登錄。
 2. 建置 `unreal_plugins/VistaPhotorealReview` 的 Editor 與 Game；放入獨立 `vista-campus/payload` 專案。
 3. UE 內執行 `tools/ue/vista_campus/author.py`；環境變數 `VISTA_CAMPUS_SOURCE` 與 `VISTA_CAMPUS_OUT` 指向輸入與新輸出目錄。只接受私人專案和不存在的資產 namespace。
-4. 另一個 UE 程序執行 `verify_saved.py`，比對原本室內綁定、地圖類別、車輛尺寸和互動契約。
-5. `tools/runtime/vista_campus/run_native.py` 在私人 X11 上分別執行 `tour`、`vehicles`、`crossing`、`home`。定位指令僅建立測試起點；運動與 UI 使用真實鍵鼠輸入。
+4. 材質與可動車輛重建依 [交付記錄](campus-delivery-20260915.zh-TW.md) 的順序進行；每輪明確選取全部四張地圖，不依賴前一輪設定值。
+5. 另一個 UE 程序執行 `verify_saved.py` 與 `verify_surfaces.py`，比對選單目的地、原本室內綁定、地圖類別、車輛尺寸、材質和互動契約。
+6. `tools/runtime/vista_campus/run_native.py` 在私人 X11 上分別執行 `tour`、`vehicles`、`crossing`、`home`、`surfaces`、`animations`。定位指令僅建立測試起點；運動與 UI 使用真實鍵鼠輸入。
 
 原生測試狀態含隱藏資訊，只是工程驗證，不提供給研究 agent。F8 截圖與 proof JSON 不等於 Windows／Mac Moonlight 串流驗收；共享 Sunshine 選取須另以實際用戶端檢查。
 
