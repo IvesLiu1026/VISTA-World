@@ -131,7 +131,7 @@ void AEmbodiedReviewCharacter::BeginPlay()
     }
     EmbodiedView(0);
     FTimerHandle StartTimer;
-    GetWorldTimerManager().SetTimer(StartTimer,[this](){ EmbodiedInspect(0); },1.1f,false);
+    if (UsesReviewBookmarks()) GetWorldTimerManager().SetTimer(StartTimer,[this](){ EmbodiedInspect(0); },1.1f,false);
     UE_LOG(LogTemp,Display,TEXT("EMBODIED_READY bones=%d cup_mass=%.3f"),Ref.GetNum(),CupMesh->GetMass());
 }
 

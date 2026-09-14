@@ -43,7 +43,7 @@ void APhotorealReviewCharacter::BeginPlay()
         PC->bShowMouseCursor = false;
     }
     FTimerHandle InitialView;
-    GetWorldTimerManager().SetTimer(InitialView, this, &APhotorealReviewCharacter::ViewOne, .75f, false);
+    if (UsesReviewBookmarks()) GetWorldTimerManager().SetTimer(InitialView, this, &APhotorealReviewCharacter::ViewOne, .75f, false);
 }
 
 void APhotorealReviewCharacter::SetupPlayerInputComponent(UInputComponent* Input)
