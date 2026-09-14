@@ -1,0 +1,67 @@
+{
+  "schema": "vista.reference-avatar-delivery/v1",
+  "date": "2026-09-14",
+  "source_base_commit": "e6be510",
+  "base_character": "retained MakeHuman CC0 VISTA character",
+  "new_geometry": "procedural utility vest, cargo pockets, spectacles, short black fringe",
+  "photo_embedded_or_uploaded_by_workflow": false,
+  "likeness_status": "approximate; not accepted as photo-accurate",
+  "exports": [
+    {
+      "file": "world-body.glb",
+      "bytes": 16806332,
+      "sha256": "9a73d05fb4fea549092c27acff6d07140a17bb58afbed91f04210103094d3e0d",
+      "skin_joints": 53,
+      "mesh_primitives": 63,
+      "exported_vertices": 156345,
+      "max_weight_sum_error": 1.7881393432617188e-07,
+      "finite": true
+    },
+    {
+      "file": "owner-body.glb",
+      "bytes": 8352140,
+      "sha256": "4291a3d35ba226789c75f9fd80d4ce99b848820e386784444da2a3b1662ee478",
+      "skin_joints": 53,
+      "mesh_primitives": 49,
+      "exported_vertices": 44913,
+      "max_weight_sum_error": 1.7881393432617188e-07,
+      "finite": true
+    }
+  ],
+  "retained_joint_position_max_error_m": 6.556510925292969e-07,
+  "native_bone_order_matches": true,
+  "appearance": {
+    "world": "/Game/VISTA/ReferenceAvatar/R4/world/world-body/SkeletalMeshes/world-body.world-body",
+    "owner": "/Game/VISTA/ReferenceAvatar/R4/owner/owner-body/SkeletalMeshes/owner-body.owner-body"
+  },
+  "import_receipt_sha256": "bfdd14cf4dae7446aa649a92a3f80bf93fba9340232d3ada4936dfbd5227e3a8",
+  "native_motion": {
+    "frames": 650,
+    "captures": 45,
+    "cases": 12,
+    "exit_code": 0,
+    "proof_sha256": "a7a8e3816f11f5ce685739caddfff62acc98d54947708e28aa235e89c751d7b6"
+  },
+  "native_outdoor": {
+    "frames": 850,
+    "captures": 12,
+    "stages": 10,
+    "exit_code": 0,
+    "proof_sha256": "09386a50c1cf65320b363322a8e440482701c5a3d3b8808a6de4199daca8db27"
+  },
+  "validation": {
+    "baseline_tests_passed": 28,
+    "native_gpu_model": "RTX 5090",
+    "fixed_simulation_hz": 30,
+    "realtime_fps_measured": false,
+    "reviewed_pose_pixels_show_gross_deformation": false,
+    "full_contact_cloth_or_likeness_acceptance": false
+  },
+  "limitations": [
+    "Indoor dark cloth loses detail; native lighting needs further tuning",
+    "Face, clothing drape, seams and hand grasp need further refinement",
+    "Pocket geometry has no item storage or cloth physics",
+    "Six-space legacy task runtime has not been ported to Villa by this change"
+  ],
+  "shared_runtime_promoted": false
+}
