@@ -15,8 +15,8 @@ void AHomeActionsCharacter::UpdateClimb(float Dt)
     const FVector Offset=E->Actor->GetActorLocation()-E->Baseline.GetLocation();
     const FVector Stand=Vector(E->Spec,TEXT("stand_cm"))+Offset;
     // Each node is the physical tread top, not an animation-only landing.
-    const FVector Nodes[]={FVector(Stand.X,Stand.Y,0),FVector(284,-272.125,26.3)+Offset,
-        FVector(284,-279.535,52.3)+Offset,FVector(284,-286.945,78.3)+Offset,FVector(284,-297,106.3)+Offset};
+    const FVector Nodes[]={FVector(Stand.X,Stand.Y,ScenePoint(TEXT("office"),FVector::ZeroVector).Z+Offset.Z),ScenePoint(TEXT("office"),FVector(284,-272.125,26.3))+Offset,
+        ScenePoint(TEXT("office"),FVector(284,-279.535,52.3))+Offset,ScenePoint(TEXT("office"),FVector(284,-286.945,78.3))+Offset,ScenePoint(TEXT("office"),FVector(284,-297,106.3))+Offset};
     if (ActionStage==0)
     {
         FineSupportLossTime=0;FineSupportSamples=0;
@@ -70,8 +70,9 @@ void AHomeActionsCharacter::UpdateClimb(float Dt)
     // before standing above them on the top platform.
     const float HandBlend=Up?Ease(ActionTime/.6f)*(1-Ease((ActionTime-3.6f)/1.f)):
         Ease((ActionTime-1.3f)/.8f)*(1-Ease((ActionTime-5.5f)/.8f));
-    const float Height=FMath::Clamp(GetActorLocation().Z+20.f,100.f,137.f);
-    const FVector Rail(284+Offset.X,-(265+Height*.285f)+Offset.Y,Height+Offset.Z);
+    const float FloorZ=ScenePoint(TEXT("office"),FVector::ZeroVector).Z+Offset.Z;
+    const float Height=FMath::Clamp(GetActorLocation().Z-FloorZ+20.f,100.f,137.f);
+    const FVector Rail=ScenePoint(TEXT("office"),FVector(284,-(265+Height*.285f),Height))+Offset;
     ActionHandEnd=WristAt(Rail+FVector(22,0,0),false,false,FVector(0,-.28f,.96f));LastHandGoal=ActionHandEnd;
     LeftHandGoal=WristAt(Rail-FVector(22,0,0),true,false,FVector(0,-.28f,.96f));
     ReachAlpha=LeftReachAlpha=HandBlend;FingerAlpha=LeftFingerAlpha=HandBlend;
