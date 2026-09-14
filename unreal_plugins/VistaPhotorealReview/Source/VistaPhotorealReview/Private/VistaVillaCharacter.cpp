@@ -61,7 +61,8 @@ void AVistaVillaHUD::DrawHUD()
 void AVistaVillaCharacter::BeginPlay()
 {
     Super::BeginPlay();
-    if (UsesHomeActions() && !GetWorld()->GetWorldSettings()->ActorHasTag(TEXT("VistaSixSpaces"))) return;
+    if (UsesHomeActions() && !GetWorld()->GetWorldSettings()->ActorHasTag(TEXT("VistaSixSpaces")) &&
+        !GetWorld()->GetWorldSettings()->ActorHasTag(TEXT("VistaCampus"))) return;
     for (TActorIterator<AStaticMeshActor> It(GetWorld());It;++It)
     {
         if (It->ActorHasTag(TEXT("VillaJug"))) Jug=*It;

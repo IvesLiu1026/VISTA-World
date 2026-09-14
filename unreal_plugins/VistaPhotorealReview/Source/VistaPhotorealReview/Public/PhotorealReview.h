@@ -20,6 +20,7 @@ public:
     UFUNCTION(Exec) void ReviewPortal(int32 Index);
     virtual void ReviewSnapshot();
 protected:
+    virtual bool UsesReviewBookmarks() const { return true; }
     UPROPERTY() TObjectPtr<UCameraComponent> ReviewCamera;
     bool bFridgeOpen = false;
     bool bFreeFlight = false;

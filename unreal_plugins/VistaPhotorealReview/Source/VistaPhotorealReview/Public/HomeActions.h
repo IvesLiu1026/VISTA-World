@@ -82,6 +82,11 @@ public:
     bool HasSceneReady() const { return bSceneReady; }
     FString GetEventHint() const;
     bool IsCleanObservation() const { return bCleanObservation; }
+    TArray<FString> VisibleActionIds() const { return AvailableActions(); }
+    FString VisibleActionName(const FString& Id) const;
+    void ExecuteVisibleAction(const FString& Id);
+    bool CanLeaveSpace() const;
+    TArray<TPair<FString,FString>> VisibleEvents() const;
 protected:
     virtual bool UsesHomeActions() const override {return true;}
     virtual void SetView(FVector Position,FRotator Rotation) override;
