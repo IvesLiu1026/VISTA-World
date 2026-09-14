@@ -185,6 +185,7 @@ protected:
     void MeasureContact();
     virtual void OnPoseFinalized();
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) {}
+    virtual float ReachTorsoLeanScale() const { return 1.f; }
     virtual void ModifyBaseBodyPose(TArray<FTransform>& LocalPose) {}
     virtual bool WantsFirstPersonReadyPose() const { return true; }
     virtual bool PreserveUnoccupiedArmPose() const { return false; }
