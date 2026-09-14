@@ -38,6 +38,18 @@ void AVistaCampusVehicle::BeginPlay()
 {
     Super::BeginPlay();RouteStart=GetActorLocation();RouteYaw=GetActorRotation().Yaw;
     if (bScooter) {Collision->SetBoxExtent(FVector(100,37,62));Body->SetRelativeLocation(FVector(0,0,-62));}
+    if (SteeringAsset)
+    {
+        SteeringPart=NewObject<UStaticMeshComponent>(this);SteeringPart->SetupAttachment(Collision);
+        SteeringPart->SetStaticMesh(SteeringAsset);SteeringPart->SetRelativeLocation(bScooter?FVector(53,0,46):FVector(35,-40,37));
+        SteeringPart->SetCollisionEnabled(ECollisionEnabled::NoCollision);SteeringPart->RegisterComponent();
+    }
+    if (DoorAsset && !bScooter)
+    {
+        DoorPart=NewObject<UStaticMeshComponent>(this);DoorPart->SetupAttachment(Collision);
+        DoorPart->SetStaticMesh(DoorAsset);DoorPart->SetRelativeLocation(FVector(82,-85.5f,28));
+        DoorPart->SetCollisionEnabled(ECollisionEnabled::NoCollision);DoorPart->RegisterComponent();
+    }
     if (!WheelAsset) return;
     const TArray<FVector> Points=bScooter?TArray<FVector>{FVector(68,0,-36),FVector(-65,0,-36)}:
         TArray<FVector>{FVector(135,-83,-34),FVector(135,83,-34),FVector(-130,-83,-34),FVector(-130,83,-34)};
@@ -49,11 +61,33 @@ void AVistaCampusVehicle::BeginPlay()
     }
 }
 FVector AVistaCampusVehicle::SeatPoint() const
-{return GetActorTransform().TransformPosition(bScooter?FVector(-17,0,20):FVector(-12,-40,-4));}
+{return GetActorTransform().TransformPosition(bScooter?FVector(10,0,22):FVector(-15,-40,12));}
+FQuat AVistaCampusVehicle::GripRotation() const
+{return bScooter?FQuat(FVector::UpVector,FMath::DegreesToRadians(Steering*27.5f)):FQuat(FVector::ForwardVector,FMath::DegreesToRadians(Steering*75.f));}
+FVector AVistaCampusVehicle::GripPoint(bool Left) const
+{
+    const FVector Centre=bScooter?FVector(53,0,46):FVector(35,-40,37);
+    const FVector Offset=bScooter?FVector(0,Left?-30:30,0):FVector(0,Left?-14:14,9.65f);
+    return GetActorTransform().TransformPosition(Centre+GripRotation().RotateVector(Offset));
+}
+void AVistaCampusVehicle::SetDoor(float Alpha)
+{if (DoorPart) DoorPart->SetRelativeRotation(FRotator(0,FMath::Clamp(Alpha,0.f,1.f)*68.f,0));}
+float AVistaCampusVehicle::GripSurface(FVector WorldPoint,bool Left,FVector& ClosestWorld) const
+{
+    const FVector Centre=bScooter?FVector(53,0,46):FVector(35,-40,37);
+    const FVector P=GripRotation().Inverse().RotateVector(GetActorTransform().InverseTransformPosition(WorldPoint)-Centre);
+    FVector Axis;float Radius;
+    if (bScooter) {const float Side=Left?-1:1;Axis=FVector(0,FMath::Clamp(P.Y,Side*30-7,Side*30+7),0);Radius=2.2f;}
+    else {Axis=FVector(0,P.Y,P.Z).GetSafeNormal()*17;Radius=1.8f;}
+    const FVector Normal=(P-Axis).GetSafeNormal(SMALL_NUMBER,FVector::UpVector);
+    ClosestWorld=GetActorTransform().TransformPosition(Centre+GripRotation().RotateVector(Axis+Normal*(Radius+.12f)));
+    return FVector::Distance(P,Axis)-Radius;
+}
 bool AVistaCampusVehicle::FindExit(FVector& Out) const
 {
     for (float Side:{-1.f,1.f})
     {
+        if (!bScooter && Side>0) continue; // The authored car has a left driver door.
         const FVector Candidate=GetActorTransform().TransformPosition(FVector(0,Side*(bScooter?100:160),140));
         FCollisionQueryParams Query(SCENE_QUERY_STAT(CampusExit),false,this);Query.AddIgnoredActor(Driver.Get());
         FHitResult Ground;
@@ -65,6 +99,7 @@ bool AVistaCampusVehicle::FindExit(FVector& Out) const
 }
 void AVistaCampusVehicle::Drive(float Throttle,float Steer,bool Brake,float Dt)
 {
+    ThrottleInput=Brake?0:Throttle;
     // Bounded substeps plus a swept root prevent tunnelling under low frame rates.
     int32 Steps=FMath::Clamp(FMath::CeilToInt(Dt/.025f),1,20);float H=FMath::Min(Dt,.5f)/Steps;
     for (int32 I=0;I<Steps;++I)
@@ -120,6 +155,7 @@ void AVistaCampusVehicle::Drive(float Throttle,float Steer,bool Brake,float Dt)
         WheelAngle+=FMath::RadiansToDegrees(Distance/(bScooter?26.f:33.f))*Sign;
         for (int32 W=0;W<Wheels.Num();++W)
         {const bool Front=bScooter?W==0:W<2;Wheels[W]->SetRelativeRotation(FRotator(-WheelAngle,Front?Steering*27.5f:0,0));}
+        if (SteeringPart) SteeringPart->SetRelativeRotation(GripRotation());
         const FVector P=GetActorLocation();const float GroundZ=SupportZ(P,GetActorRotation());
         if (GroundZ>-FLT_MAX && FMath::Abs(GroundZ-P.Z)<=25)
             SetActorLocation(FVector(P.X,P.Y,GroundZ),false);
@@ -146,6 +182,27 @@ void AVistaExplorerCharacter::BeginPlay()
     bCampus=GetWorld()->GetWorldSettings()->ActorHasTag(TEXT("VistaCampus"));
     Super::BeginPlay();
     FString Text;
+    if (bReady && FFileHelper::LoadFileToString(Text,*(FPaths::ProjectConfigDir()/TEXT("VistaFineContacts.json"))))
+    {
+        const auto Data=Decode(Text);const TSharedPtr<FJsonObject>* Tips;
+        if (Data && Data->TryGetObjectField(TEXT("tip_landmarks"),Tips))
+            for (const auto& Pair:(*Tips)->Values)
+            {
+                const FName Bone(*Pair.Key);if (!BoneIndex.Contains(Bone)) continue;
+                const auto Item=Pair.Value->AsObject();const auto& V=Item->GetArrayField(TEXT("source_component_cm"));
+                if (V.Num()==3) VehicleTipOffsets.Add(Bone,ReferenceGlobal[BoneIndex.FindChecked(Bone)].InverseTransformPosition(FVector(V[0]->AsNumber(),V[1]->AsNumber(),V[2]->AsNumber())));
+            }
+        const TSharedPtr<FJsonObject>* Frames;
+        if (Data && Data->TryGetObjectField(TEXT("joint_frames"),Frames))
+            for (const auto& Pair:(*Frames)->Values)
+            {
+                const FName Bone(*Pair.Key);if (!BoneIndex.Contains(Bone)) continue;
+                const auto& Q=Pair.Value->AsObject()->GetArrayField(TEXT("source_component_rotation_xyzw"));
+                if (Q.Num()!=4) continue;
+                FQuat Source(Q[0]->AsNumber(),Q[1]->AsNumber(),Q[2]->AsNumber(),Q[3]->AsNumber());Source.Normalize();
+                VehicleFlexAxes.Add(Bone,ReferenceGlobal[BoneIndex.FindChecked(Bone)].InverseTransformVectorNoScale(Source.RotateVector(FVector::ForwardVector)).GetSafeNormal());
+            }
+    }
     if (FFileHelper::LoadFileToString(Text,*(FPaths::ProjectConfigDir()/TEXT("VistaExplorer.json"))))
     {
         const auto Data=Decode(Text);
@@ -244,22 +301,28 @@ void AVistaExplorerCharacter::EmbodiedInteract()
     if (Menu || bChangingScene) return;
     if (auto* Vehicle=Riding.Get())
     {
+        if (RidePhase!=TEXT("riding")) {FeedbackMessage(TEXT("Complete the entry / exit movement first"));return;}
         if (FMath::Abs(Vehicle->Speed)>20) {FeedbackMessage(TEXT("Brake to a stop before getting off"));return;}
-        FVector Exit;if (!Vehicle->FindExit(Exit)) {FeedbackMessage(TEXT("Both exit sides are blocked"));return;}
-        Vehicle->Driver.Reset();Vehicle->Speed=0;Riding.Reset();
-        SeatedAlpha=ReachAlpha=LeftReachAlpha=FingerAlpha=LeftFingerAlpha=0;bSceneFeetOverride=false;bSceneActionBusy=false;
-        GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-        SetActorLocation(Exit,false,nullptr,ETeleportType::TeleportPhysics);GetCharacterMovement()->SetMovementMode(MOVE_Walking);bFeetReady=false;
-        FeedbackMessage(TEXT("On foot"));PublishExplorerState();return;
+        if (!Vehicle->FindExit(RideExit)) {FeedbackMessage(TEXT("The exit is blocked"));return;}
+        Vehicle->Speed=0;RidePhase=TEXT("exiting");RideElapsed=RideProgress=0;
+        RideStart=GetActorLocation();StartPelvis=GetMesh()->GetBoneLocation(TEXT("pelvis"));
+        for (int32 I=0;I<2;++I) StartFeet[I]=GetMesh()->GetBoneLocation(I?TEXT("foot_r"):TEXT("foot_l"));
+        FeedbackMessage(TEXT("Getting off - wait for both feet to reach the ground"));return;
     }
     if (auto* Vehicle=Nearby.Get())
     {
         if (!CanLeaveSpace()) {FeedbackMessage(TEXT("Put down the carried item first"));return;}
-        Riding=Vehicle;Vehicle->Driver=this;Vehicle->Speed=0;
-        GetCharacterMovement()->StopMovementImmediately();GetCharacterMovement()->DisableMovement();
+        if (!Vehicle->FindExit(RideApproach)) {FeedbackMessage(TEXT("The entry side is blocked"));return;}
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(CampusEntry),false,this);Query.AddIgnoredActor(Vehicle);FHitResult Hit;
+        if (GetWorld()->SweepSingleByChannel(Hit,GetActorLocation(),RideApproach,FQuat::Identity,ECC_Pawn,
+            FCollisionShape::MakeCapsule(30,85),Query)) {FeedbackMessage(TEXT("Walk around the obstacle to enter"));return;}
+        RideStart=GetActorLocation();RideStartRotation=GetActorQuat();StartPelvis=GetMesh()->GetBoneLocation(TEXT("pelvis"));
+        for (int32 I=0;I<2;++I) StartFeet[I]=GetMesh()->GetBoneLocation(I?TEXT("foot_r"):TEXT("foot_l"));
+        Riding=Vehicle;Vehicle->Driver=this;Vehicle->Speed=0;RidePhase=TEXT("entering");RideElapsed=RideProgress=0;FootPlant=1;
+        bSceneActionBusy=true;GetCharacterMovement()->StopMovementImmediately();GetCharacterMovement()->DisableMovement();
         GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         if (Controller) Controller->SetControlRotation(Vehicle->GetActorRotation());
-        FeedbackMessage(Vehicle->bScooter?TEXT("On scooter - W / S throttle, A / D steer, Space brake"):TEXT("In car - W / S throttle, A / D steer, Space brake"));
+        FeedbackMessage(Vehicle->bScooter?TEXT("Mounting scooter"):TEXT("Opening the driver door and getting in"));
         PublishExplorerState();return;
     }
     if (bCampus) AEmbodiedReviewCharacter::EmbodiedInteract();else Super::EmbodiedInteract();
@@ -296,18 +359,22 @@ void AVistaExplorerCharacter::Tick(float Dt)
     if (auto* Vehicle=Riding.Get())
     {
         const auto* PC=Cast<APlayerController>(Controller);
-        const float Throttle=!Menu && PC?(float(PC->IsInputKeyDown(EKeys::W))-float(PC->IsInputKeyDown(EKeys::S))):0;
-        const float Steer=!Menu && PC?(float(PC->IsInputKeyDown(EKeys::D))-float(PC->IsInputKeyDown(EKeys::A))):0;
+        const float Throttle=RidePhase==TEXT("riding") && !Menu && PC?(float(PC->IsInputKeyDown(EKeys::W))-float(PC->IsInputKeyDown(EKeys::S))):0;
+        const float Steer=RidePhase==TEXT("riding") && !Menu && PC?(float(PC->IsInputKeyDown(EKeys::D))-float(PC->IsInputKeyDown(EKeys::A))):0;
         const float PreviousYaw=Vehicle->GetActorRotation().Yaw;
-        Vehicle->Drive(Throttle,Steer,Menu!=0 || (PC && PC->IsInputKeyDown(EKeys::SpaceBar)),Dt);
+        Vehicle->Drive(Throttle,Steer,RidePhase!=TEXT("riding") || Menu!=0 || (PC && PC->IsInputKeyDown(EKeys::SpaceBar)),Dt);
         if (Controller)
         {
             FRotator Look=Controller->GetControlRotation();
             Look.Yaw+=FMath::FindDeltaAngleDegrees(PreviousYaw,Vehicle->GetActorRotation().Yaw);
             Controller->SetControlRotation(Look);
         }
-        SetActorLocation(Vehicle->SeatPoint()+FVector(0,0,25),false);
-        SetActorRotation(Vehicle->GetActorRotation());
+        if (RidePhase==TEXT("riding"))
+        {
+            SetActorLocation(Vehicle->SeatPoint()+FVector(0,0,25),false);SetActorRotation(Vehicle->GetActorRotation());
+            FootPlant=FMath::FInterpTo(FootPlant,FMath::Abs(Vehicle->Speed)<25?1.f:0.f,Dt,4);
+        }
+        else TickRideTransition(Dt);
     }
     Super::Tick(Dt);
     if (bCampus && !Riding.IsValid()) GetCharacterMovement()->MaxWalkSpeed=bRun?350:180;
@@ -326,31 +393,18 @@ void AVistaExplorerCharacter::Tick(float Dt)
         }
     }
     TickTrafficSignals(Dt);PublishClock+=Dt;
-    if (PublishClock>.1f) {PublishClock=0;PublishExplorerState();}
+    if (PublishClock>.1f && !Riding.IsValid()) {PublishClock=0;PublishExplorerState();}
 }
 void AVistaExplorerCharacter::UpdateBodyFacing(float Dt)
 {if (!Riding.IsValid()) Super::UpdateBodyFacing(Dt);}
 void AVistaExplorerCharacter::UpdateInteraction(float Dt)
 {if (!Riding.IsValid()) Super::UpdateInteraction(Dt);else RefreshScenePoseGoals();}
-void AVistaExplorerCharacter::RefreshScenePoseGoals()
-{
-    if (auto* V=Riding.Get())
-    {
-        const auto T=V->GetActorTransform();SeatedAlpha=1;SeatPelvisWorld=V->SeatPoint();bSceneFeetOverride=true;
-        for (int32 S=0;S<2;++S) SceneFootWorld[S]=T.TransformPosition(FVector(V->bScooter?25:80,(S?1:-1)*(V->bScooter?20:18)+(V->bScooter?0:-40),V->bScooter?-45:-48));
-        const FVector Hand=V->bScooter?FVector(48,0,47):FVector(62,-40,33);
-        LastHandGoal=FTransform(GetMesh()->GetComponentQuat(),T.TransformPosition(Hand+FVector(0,22,0)));
-        LeftHandGoal=FTransform(GetMesh()->GetComponentQuat(),T.TransformPosition(Hand-FVector(0,22,0)));
-        ReachAlpha=LeftReachAlpha=1;FingerAlpha=LeftFingerAlpha=.75f;
-    }
-    else Super::RefreshScenePoseGoals();
-}
 void AVistaExplorerCharacter::CalcCamera(float Dt,FMinimalViewInfo& Out)
 {
     if (const auto* V=Riding.Get())
     {
         const FRotator View=Controller?Controller->GetControlRotation():V->GetActorRotation();
-        const FVector Eye=V->SeatPoint()+FVector(0,0,64);
+        const FVector Eye=RidePhase==TEXT("riding")?V->SeatPoint()+FVector(0,0,64):GetMesh()->GetBoneLocation(TEXT("head"))+V->GetActorForwardVector()*8+FVector(0,0,3);
         Out.Location=Eye;Out.Rotation=View;Out.FOV=82;
         if (bThirdPerson)
         {
@@ -381,6 +435,30 @@ void AVistaExplorerCharacter::PublishExplorerState()
     O->SetBoolField(TEXT("campus"),bCampus);O->SetBoolField(TEXT("third_person"),bThirdPerson);
     O->SetArrayField(TEXT("player_cm"),Values(GetActorLocation()));O->SetStringField(TEXT("nearby"),Nearby.IsValid()?Nearby->VehicleId:TEXT(""));
     O->SetStringField(TEXT("riding"),Riding.IsValid()?Riding->VehicleId:TEXT(""));
+    O->SetStringField(TEXT("ride_phase"),RidePhase);O->SetNumberField(TEXT("ride_progress"),RideProgress);
+    O->SetNumberField(TEXT("foot_plant"),FootPlant);
+    O->SetBoolField(TEXT("pose_finalized_this_frame"),FMath::Abs(LastPoseClock-GetWorld()->GetTimeSeconds())<.001);
+    if (Riding.IsValid() && bReady)
+    {
+        O->SetArrayField(TEXT("pelvis_cm"),Values(GetMesh()->GetBoneLocation(TEXT("pelvis"))));
+        O->SetArrayField(TEXT("hand_r_cm"),Values(GetMesh()->GetBoneLocation(TEXT("hand_r"))));
+        O->SetArrayField(TEXT("hand_l_cm"),Values(GetMesh()->GetBoneLocation(TEXT("hand_l"))));
+        O->SetArrayField(TEXT("foot_l_cm"),Values(GetMesh()->GetBoneLocation(TEXT("foot_l"))));
+        O->SetArrayField(TEXT("foot_r_cm"),Values(GetMesh()->GetBoneLocation(TEXT("foot_r"))));
+        O->SetNumberField(TEXT("pelvis_error_cm"),FVector::Distance(GetMesh()->GetBoneLocation(TEXT("pelvis")),SeatPelvisWorld));
+        const FVector Foot=GetMesh()->GetBoneLocation(TEXT("foot_l"));FHitResult Floor;
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(CampusFootProof),false,this);Query.AddIgnoredActor(Riding.Get());
+        if (GetWorld()->LineTraceSingleByChannel(Floor,Foot+FVector(0,0,5),Foot-FVector(0,0,160),ECC_Visibility,Query))
+            O->SetNumberField(TEXT("left_foot_floor_clearance_cm"),Foot.Z-Floor.ImpactPoint.Z);
+        O->SetNumberField(TEXT("hand_r_error_cm"),FVector::Distance(GetMesh()->GetBoneLocation(TEXT("hand_r")),LastHandGoal.GetLocation()));
+        O->SetNumberField(TEXT("hand_l_error_cm"),FVector::Distance(GetMesh()->GetBoneLocation(TEXT("hand_l")),LeftHandGoal.GetLocation()));
+        auto Gaps=MakeShared<FJsonObject>();const auto* V=Riding.Get();
+        for (const auto& Tip:VehicleTipOffsets)
+        {
+            FVector Closest;Gaps->SetNumberField(Tip.Key.ToString(),V->GripSurface(GetMesh()->GetSocketTransform(Tip.Key).TransformPosition(Tip.Value),Tip.Key.ToString().EndsWith(TEXT("_l")),Closest));
+        }
+        O->SetObjectField(TEXT("finger_surface_gap_cm"),Gaps);
+    }
     O->SetNumberField(TEXT("crossings"),CrossingCount);O->SetNumberField(TEXT("red_entries"),RedEntries);O->SetBoolField(TEXT("walk_signal"),WalkSignal());
     O->SetBoolField(TEXT("can_change_scene"),!Riding.IsValid() && CanLeaveSpace());O->SetStringField(TEXT("hint"),GetInteractionHint());
     TArray<TSharedPtr<FJsonValue>> Vehicles;
@@ -389,6 +467,11 @@ void AVistaExplorerCharacter::PublishExplorerState()
         auto V=MakeShared<FJsonObject>();V->SetStringField(TEXT("id"),It->VehicleId);V->SetBoolField(TEXT("traffic"),It->bTraffic);
         V->SetArrayField(TEXT("position_cm"),Values(It->GetActorLocation()));V->SetNumberField(TEXT("yaw"),It->GetActorRotation().Yaw);
         V->SetNumberField(TEXT("speed_cm_s"),It->Speed);V->SetNumberField(TEXT("travel_cm"),It->Travel);V->SetNumberField(TEXT("contacts"),It->Contacts);
+        V->SetNumberField(TEXT("steering"),It->Steering);
+        V->SetNumberField(TEXT("steering_part_angle"),It->SteeringPart?(It->bScooter?It->SteeringPart->GetRelativeRotation().Yaw:It->SteeringPart->GetRelativeRotation().Roll):0);
+        V->SetNumberField(TEXT("throttle"),It->ThrottleInput);V->SetBoolField(TEXT("brake"),It->bBrake);
+        V->SetNumberField(TEXT("door_yaw"),It->DoorPart?It->DoorPart->GetRelativeRotation().Yaw:0);
+        V->SetBoolField(TEXT("articulated_steering"),It->SteeringPart!=nullptr);
         Vehicles.Add(MakeShared<FJsonValueObject>(V));
     }
     O->SetArrayField(TEXT("vehicles"),Vehicles);

@@ -119,6 +119,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         const float PassiveLookLean=bThirdPerson?.32f:.04f;
         Lean+=FMath::Clamp((-Pitch-55.f)/34.f,0.f,1.f)*PassiveLookLean*(1.f-ReachAlpha);
     }
+    Lean*=ReachTorsoLeanScale();
     const int32 Pelvis=Index(TEXT("pelvis"));
     TArray<FTransform> Global;Global.SetNum(Local.Num());
     for (int32 I=0;I<Local.Num();++I) Global[I]=Parents[I]>=0 ? Local[I]*Global[Parents[I]] : Local[I];
