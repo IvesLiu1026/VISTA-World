@@ -46,15 +46,18 @@ public:
     void StartAlpineJump();
     virtual void Landed(const FHitResult& Hit) override;
 protected:
+    virtual bool UsesHomeActions() const {return false;}
+    bool bVillaEmbodiment=false;
+    bool TryEnvironmentInteraction() {return TryGardenDoor();}
     virtual void ModifyBaseBodyPose(TArray<FTransform>& LocalPose) override;
     virtual void UpdateInteraction(float Dt) override;
     virtual FTransform DesiredGrip() const override;
     virtual FTransform CarryTarget() const override;
     virtual void AdjustScenePoseGoals() override {SceneReachHipAdvance=bPouring?10.f:0.f;}
     virtual void OnPoseFinalized() override;
-    virtual bool WantsFirstPersonReadyPose() const override {return false;}
-    virtual bool PreserveUnoccupiedArmPose() const override {return true;}
-    virtual float UnoccupiedFingerCurl() const override {return .16f;}
+    virtual bool WantsFirstPersonReadyPose() const override {return bVillaEmbodiment?false:Super::WantsFirstPersonReadyPose();}
+    virtual bool PreserveUnoccupiedArmPose() const override {return bVillaEmbodiment?true:Super::PreserveUnoccupiedArmPose();}
+    virtual float UnoccupiedFingerCurl() const override {return bVillaEmbodiment?.16f:Super::UnoccupiedFingerCurl();}
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) override;
     virtual void AdjustFirstPersonEyeTarget(FVector& EyeTarget) const override;
     virtual bool PreserveMotionFootRotation() const override {return !Motions.IsEmpty();}

@@ -15,6 +15,7 @@
 #include "HAL/FileManager.h"
 #include "InputCoreTypes.h"
 #include "Misc/CommandLine.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
@@ -78,6 +79,14 @@ const FHomeEntity* AHomeActionsCharacter::Resolve(const FString& Name) const
 
 void AHomeActionsCharacter::BeginPlay()
 {
+    if (FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")))
+    {
+        bool StartCrashReporter=true;
+        if (GConfig) GConfig->GetBool(TEXT("CrashReportClient"),TEXT("bStartCRCFromEngineHandler"),StartCrashReporter,GEngineIni);
+        if (StartCrashReporter)
+        {UE_LOG(LogTemp,Error,TEXT("VISTA_PRIVATE_REVIEW_CRC_NOT_DISABLED"));FGenericPlatformMisc::RequestExit(false);return;}
+        UE_LOG(LogTemp,Display,TEXT("VISTA_PRIVATE_REVIEW_CRC_DISABLED"));
+    }
     Super::BeginPlay();
     FString Text;
     if (!FFileHelper::LoadFileToString(Text,*(FPaths::ProjectConfigDir()/TEXT("VistaHomeActions.json")))) return;
@@ -167,6 +176,8 @@ void AHomeActionsCharacter::BeginPlay()
     bSceneReady=true;
     UE_LOG(LogTemp,Display,TEXT("HOME_ACTIONS_READY entities=%d bridge=%s revision=%s"),Entities.Num(),*BridgeDir,*Revision);
     PublishState();
+    if (Contract->HasField(TEXT("rooms")))
+    {FTimerHandle Start;GetWorldTimerManager().SetTimer(Start,[this](){HomeRoom(1);},1.4f,false);}
 }
 
 void AHomeActionsCharacter::SetupPlayerInputComponent(UInputComponent* Input)
@@ -182,6 +193,16 @@ void AHomeActionsCharacter::SetupPlayerInputComponent(UInputComponent* Input)
     Input->BindKey(EKeys::F2,IE_Pressed,this,&AHomeActionsCharacter::NextEvent);
     Input->BindKey(EKeys::LeftShift,IE_Pressed,this,&AHomeActionsCharacter::JogOn);
     Input->BindKey(EKeys::LeftShift,IE_Released,this,&AHomeActionsCharacter::JogOff);
+    Input->KeyBindings.RemoveAll([](const FInputKeyBinding& K)
+    {return K.Chord.Key==EKeys::One || K.Chord.Key==EKeys::Two || K.Chord.Key==EKeys::Three || K.Chord.Key==EKeys::Four || K.Chord.Key==EKeys::Five || K.Chord.Key==EKeys::Six;});
+    Input->BindKey(EKeys::One,IE_Pressed,this,&AHomeActionsCharacter::RoomOne);
+    Input->BindKey(EKeys::Two,IE_Pressed,this,&AHomeActionsCharacter::RoomTwo);
+    Input->BindKey(EKeys::Three,IE_Pressed,this,&AHomeActionsCharacter::RoomThree);
+    Input->BindKey(EKeys::Four,IE_Pressed,this,&AHomeActionsCharacter::RoomFour);
+    Input->BindKey(EKeys::Five,IE_Pressed,this,&AHomeActionsCharacter::RoomFive);
+    Input->BindKey(EKeys::Six,IE_Pressed,this,&AHomeActionsCharacter::RoomSix);
+    Input->BindKey(EKeys::SpaceBar,IE_Pressed,this,&AVistaVillaCharacter::StartAlpineJump);
+    Input->BindKey(EKeys::SpaceBar,IE_Released,this,&ACharacter::StopJumping);
 }
 
 FVector AHomeActionsCharacter::ControlPoint(const FHomeEntity& E) const
@@ -269,6 +290,19 @@ void AHomeActionsCharacter::SetView(FVector Position,FRotator Rotation)
     {FeedbackMessage(TEXT("Finish the current interaction before changing rooms"));return;}
     Super::SetView(Position,Rotation);
 }
+void AHomeActionsCharacter::HomeRoom(int32 Index)
+{
+    const TArray<TSharedPtr<FJsonValue>>* Rooms;
+    if (Contract && Contract->TryGetArrayField(TEXT("rooms"),Rooms))
+    {
+        if (!Rooms->IsValidIndex(Index-1)) return;
+        const auto R=(*Rooms)[Index-1]->AsObject();
+        SetView(Vector(R,TEXT("view_cm")),FRotator(-12,Number(R,TEXT("view_yaw")),0));return;
+    }
+    switch(Index) {case 1:ViewOne();break;case 2:ViewTwo();break;case 3:ViewThree();break;
+        case 4:ViewFour();break;case 5:ViewFive();break;case 6:ViewSix();break;}
+}
+
 void AHomeActionsCharacter::HomeFocus(const FString& Target)
 {
     if (FHomeEntity* E=Resolve(Target))
@@ -283,6 +317,7 @@ void AHomeActionsCharacter::HomeFocus(const FString& Target)
 void AHomeActionsCharacter::EmbodiedInteract()
 {
     if (!bSceneReady || !ActiveId.IsEmpty()) return;
+    if (SeatId.IsEmpty() && StandingOn.IsEmpty() && TryEnvironmentInteraction()) return;
     if (FallAlpha>.5f) {HomeAction(TEXT("recover"),TEXT(""),TEXT(""));return;}
     if (!SeatId.IsEmpty()) {HomeAction(TEXT("stand_up"),SeatId,TEXT(""));return;}
     const auto Actions=AvailableActions();
