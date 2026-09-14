@@ -88,6 +88,8 @@ void AHomeActionsCharacter::BeginPlay()
         UE_LOG(LogTemp,Display,TEXT("VISTA_PRIVATE_REVIEW_CRC_DISABLED"));
     }
     Super::BeginPlay();
+    // Outdoor worlds share the reference body, but do not bind the indoor contract.
+    if (GetWorld()->GetWorldSettings()->ActorHasTag(TEXT("VistaCampus"))) return;
     FString Text;
     if (!FFileHelper::LoadFileToString(Text,*(FPaths::ProjectConfigDir()/TEXT("VistaHomeActions.json")))) return;
     Contract=Decode(Text);
@@ -95,6 +97,7 @@ void AHomeActionsCharacter::BeginPlay()
     Revision=String(Contract,TEXT("revision"));SessionId=FGuid::NewGuid().ToString(EGuidFormats::Digits);
     if (!FParse::Value(FCommandLine::Get(),TEXT("VistaHomeBridge="),BridgeDir))
         BridgeDir=FPaths::ProjectSavedDir()/TEXT("HomeActions")/SessionId;
+    else if (!UsesReviewBookmarks()) BridgeDir/=SessionId;
     IFileManager::Get().MakeDirectory(*BridgeDir,true);
     if (IFileManager::Get().FileExists(*(BridgeDir/TEXT("session.json"))))
     { UE_LOG(LogTemp,Error,TEXT("HOME_BRIDGE_ALREADY_USED"));return; }
@@ -274,6 +277,28 @@ void AHomeActionsCharacter::UpdateFocus()
 }
 
 void AHomeActionsCharacter::NextAction() { const auto A=AvailableActions();if (A.Num()) SelectedAction=(SelectedAction+1)%A.Num(); }
+FString AHomeActionsCharacter::VisibleActionName(const FString& Id) const { return ActionLabel(Id); }
+void AHomeActionsCharacter::ExecuteVisibleAction(const FString& Id)
+{
+    const auto Options=AvailableActions();const int32 Index=Options.IndexOfByKey(Id);
+    if (Index==INDEX_NONE) {FeedbackMessage(TEXT("That action is no longer available"));return;}
+    SelectedAction=Index;EmbodiedInteract();
+}
+bool AHomeActionsCharacter::CanLeaveSpace() const
+{
+    return ActiveId.IsEmpty() && HeldId.IsEmpty() && SeatId.IsEmpty() && StandingOn.IsEmpty() &&
+        EventStatus!=TEXT("active") && EventStatus!=TEXT("applying") && Phase==EEmbodiedPhase::Idle;
+}
+TArray<TPair<FString,FString>> AHomeActionsCharacter::VisibleEvents() const
+{
+    TArray<TPair<FString,FString>> Out;if (!Contract) return Out;
+    for (const auto& V:Contract->GetArrayField(TEXT("events")))
+    {
+        const auto Event=V->AsObject();const auto& Goals=Event->GetArrayField(TEXT("public_goals"));
+        if (Goals.Num()) Out.Emplace(String(Event,TEXT("event_id")),String(Goals[0]->AsObject(),TEXT("description")));
+    }
+    return Out;
+}
 void AHomeActionsCharacter::PreviousAction() { const auto A=AvailableActions();if (A.Num()) SelectedAction=(SelectedAction+A.Num()-1)%A.Num(); }
 void AHomeActionsCharacter::InspectFocus() { HomeAction(TEXT("inspect"),FocusId,TEXT("")); }
 void AHomeActionsCharacter::ToggleCrouch() { HomeAction(TEXT("crouch"),TEXT(""),TEXT("")); }
