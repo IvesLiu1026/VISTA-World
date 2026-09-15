@@ -50,11 +50,11 @@ FString AHomeActionsCharacter::RoomAt(const FVector& P) const
     return Room.IsEmpty()?TEXT("outside"):TEXT("home.r1/room.")+Room;
 }
 
-bool AHomeActionsCharacter::EvaluateCondition(const TSharedPtr<FJsonObject>& C) const
+bool AHomeActionsCharacter::EvaluateCondition(const TSharedPtr<FJsonObject>& C,const FHomeConcurrentEvent* Context) const
 {
     const FString Type=String(C,TEXT("type"));const auto* E=Resolve(String(C,TEXT("target_id")));
-    if (Type==TEXT("elapsed")) return EventTime>=Number(C,TEXT("seconds"));
-    if (Type==TEXT("interaction")) return E && Interactions.Contains(E->Id+TEXT("#")+String(C,TEXT("affordance")));
+    if (Type==TEXT("elapsed")) return (Context?Context->Elapsed:EventTime)>=Number(C,TEXT("seconds"));
+    if (Type==TEXT("interaction")) return E && (Context?Context->Interactions:Interactions).Contains(E->Id+TEXT("#")+String(C,TEXT("affordance")));
     if (Type==TEXT("player_room")) return RoomAt(GetActorLocation())==String(C,TEXT("room_id"));
     if (Type==TEXT("entity_room")) return E && E->Actor.IsValid() && RoomAt(E->Actor->GetActorLocation())==String(C,TEXT("room_id"));
     if (Type==TEXT("entity_state") && E)
@@ -94,6 +94,7 @@ bool AHomeActionsCharacter::ResetScene(FString& Code)
         {auto A=Container->State->GetArrayField(TEXT("contents"));A.Add(MakeShared<FJsonValueString>(Pair.Key));Container->State->SetArrayField(TEXT("contents"),A);}
     HeldId.Empty();SeatId.Empty();TargetId.Empty();SecondaryId.Empty();Interactions.Empty();
     EventId.Empty();EventStatus=TEXT("inactive");TerminalCondition.Empty();EventTime=0;
+    ConcurrentEvents.Empty();bPhoneCall=false;PhoneBlend=0;
     Phase=EEmbodiedPhase::Idle;PhaseTime=0;ReachAlpha=FingerAlpha=LeftReachAlpha=LeftFingerAlpha=0;
     CrouchAlpha=SeatedAlpha=FallAlpha=0;bFeetReady=false;bSceneActionBusy=false;
     if (auto* Platform=Resolve(StandingOn)) GetCapsuleComponent()->IgnoreActorWhenMoving(Platform->Actor.Get(),false);
@@ -103,14 +104,46 @@ bool AHomeActionsCharacter::ResetScene(FString& Code)
     bSuppressReceipt=false;++Generation;if (Contract->HasField(TEXT("rooms"))) HomeRoom(1);else EmbodiedInspect(0);Code=TEXT("SCENE_RESET");PublishState();return true;
 }
 
-bool AHomeActionsCharacter::StartEvent(const FString& Id,FString& Code)
+bool AHomeActionsCharacter::StartEvent(const FString& Id,FString& Code,bool bReset)
 {
     if (!bSceneReady) {Code=TEXT("SCENE_NOT_READY");return false;}
     TSharedPtr<FJsonObject> Definition;
     for (const auto& V:Contract->GetArrayField(TEXT("events")))
         if (String(V->AsObject(),TEXT("event_id"))==Id) Definition=V->AsObject();
     if (!Definition) {Code=TEXT("EVENT_NOT_FOUND");return false;}
-    if (!ResetScene(Code)) return false;
+    TSet<FString> Writes;
+    if (!bReset)
+    {
+        if (!bStreamingEnabled) {Code=TEXT("STREAMING_DISABLED");return false;}
+        if (!ActiveId.IsEmpty() || EventStatus==TEXT("running")) {Code=TEXT("EVENT_ADD_BUSY");return false;}
+        int32 Running=0;
+        for (const auto& Pair:ConcurrentEvents)
+            if (Pair.Value.Status==TEXT("running"))
+            {
+                ++Running;
+                if (Pair.Value.TemplateId==Id) {Code=TEXT("EVENT_ALREADY_ADDED");return false;}
+            }
+        if (Running>=64) {Code=TEXT("EVENT_CAPACITY");return false;}
+        // Validate the complete initial write set before changing any world state.
+        for (const auto& V:Definition->GetArrayField(TEXT("initial_operations")))
+        {
+            const auto O=V->AsObject();const FString Op=String(O,TEXT("op"));
+            if (Op==TEXT("set_goal")) continue;
+            const auto* E=Resolve(String(O,TEXT("target_id")));
+            if (!E) {Code=TEXT("EVENT_ENTITY_MISSING");return false;}
+            if (Op!=TEXT("set_state") && Op!=TEXT("set_visibility") && Op!=TEXT("set_portable") && Op!=TEXT("set_transform"))
+            {Code=TEXT("EVENT_OPERATION_UNSUPPORTED");return false;}
+            if (E->Id==HeldId || E->Id==SeatId) {Code=TEXT("EVENT_ENTITY_IN_USE");return false;}
+            for (const auto& Pair:ConcurrentEvents)
+                if (Pair.Value.Status==TEXT("running") && Pair.Value.WrittenEntities.Contains(E->Id))
+                {Code=TEXT("EVENT_WRITE_CONFLICT");return false;}
+            Writes.Add(E->Id);
+        }
+        // This legacy event has extra implicit containment writes; keep it in the
+        // isolated legacy path until those writes have a typed transaction.
+        if (Id==TEXT("mmg_070")) {Code=TEXT("EVENT_IMPLICIT_WRITES_UNSUPPORTED");return false;}
+    }
+    else if (!ResetScene(Code)) return false;
     for (const auto& V:Definition->GetArrayField(TEXT("initial_operations")))
     {
         const auto O=V->AsObject();const FString Op=String(O,TEXT("op"));auto* E=Resolve(String(O,TEXT("target_id")));
@@ -132,9 +165,26 @@ bool AHomeActionsCharacter::StartEvent(const FString& Id,FString& Code)
         Basket->State->SetArrayField(TEXT("contents"),{});Washer->State->SetArrayField(TEXT("contents"),{MakeShared<FJsonValueString>(Clothes->Id)});
     }
     for (auto& Pair:Entities)
-        if (Pair.Value.Kind==TEXT("appliance") && Pair.Value.Spec->HasField(TEXT("axis")))
+        if ((bReset || Writes.Contains(Pair.Key)) && Pair.Value.Kind==TEXT("appliance") && Pair.Value.Spec->HasField(TEXT("axis")))
             ApplyAperture(Pair.Value,Bool(Pair.Value.State,TEXT("active"))?1.f:0.f);
-    EventId=Id;EventStatus=TEXT("running");EventTime=0;TerminalCondition.Empty();
+    if (bReset) {EventId=Id;EventStatus=TEXT("running");EventTime=0;TerminalCondition.Empty();}
+    else
+    {
+        if (ConcurrentEvents.Num()>=64)
+        {
+            FString Oldest;float Started=MAX_flt;
+            for (const auto& Pair:ConcurrentEvents)
+                if (Pair.Value.Status!=TEXT("running") && Pair.Value.Started<Started) {Oldest=Pair.Key;Started=Pair.Value.Started;}
+            if (!Oldest.IsEmpty()) ConcurrentEvents.Remove(Oldest); // outcomes remain in append-only receipts
+        }
+        FHomeConcurrentEvent Context;Context.TemplateId=Id;Context.Definition=Definition;Context.Started=SceneClock;Context.WrittenEntities=MoveTemp(Writes);
+        const FString Instance=FString::Printf(TEXT("%s@%llu"),*Id,++ConcurrentSerial);
+        ConcurrentEvents.Add(Instance,MoveTemp(Context));
+        auto R=MakeShared<FJsonObject>();R->SetStringField(TEXT("schema"),TEXT("vista.concurrent-event-start/v1"));
+        R->SetStringField(TEXT("event_id"),Id);R->SetNumberField(TEXT("clock_s"),SceneClock);
+        R->SetStringField(TEXT("instance_id"),Instance);
+        R->SetBoolField(TEXT("world_reset"),false);AppendReceipt(R);
+    }
     Code=TEXT("EVENT_STARTED");UpdatePresentation(0);PublishState();return true;
 }
 
