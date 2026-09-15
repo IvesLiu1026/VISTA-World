@@ -13,6 +13,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import struct
@@ -283,6 +284,14 @@ try:
   sessions=list((a.out/'bridge').glob('*/session.json'));check('fresh_indoor_bridge',len(sessions)==1)
   data=json.loads((sessions[0].parent/'state.json').read_text(encoding='utf-8-sig'))
   check('indoor_bindings',len(data['entities'])==46)
+ # Imported assets can deserialize successfully yet fail the actual Vulkan shader.
+ # Reject placeholder rendering and missing instance/Nanite usage on this revision.
+ native_log=(a.out/'native.log').read_text(errors='replace')
+ revision=SCENES[1]['map'].split('/Maps/')[0]
+ failures=[line for line in native_log.splitlines() if
+   (revision in line or revision.replace('/Game/','Content/') in line) and
+   ('Failed to compile Material' in line or re.search(r'missing bUsedWith\w+=True',line))]
+ check('current_revision_materials_render_without_fallback',not failures,failures)
  report['completed']=True
 except Exception:
  report['error']=traceback.format_exc();print(report['error'],flush=True)
