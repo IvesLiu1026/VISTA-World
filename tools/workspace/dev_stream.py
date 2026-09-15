@@ -109,6 +109,12 @@ def run_game(root: Path, project: str, host: dict, scene: dict, payload: Path, r
                 '-ini:Engine:[CrashReportClient]:bStartCRCFromEngineHandler=False',
                 '-ini:EditorSettings:[/Script/UnrealEd.CrashReportsPrivacySettings]:bSendUnattendedBugReports=False',
                 '-VistaExplorerProof='+str(runtime/'explorer-proof')]
+    companion_config=payload/'Config/VistaCompanion.json'
+    if companion_config.is_file():
+        if read_json(companion_config).get('schema') != 'vista.companion/v1':
+            raise ValueError('Invalid indoor companion configuration')
+        command=[item for item in command if item.upper()!='-NOSOUND']
+        command.append('-VistaCompanionProof='+str(runtime/'companion-proof'))
     env = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': str(Path.home()), 'LANG': 'C.UTF-8',
            'DISPLAY': host['display'], 'XAUTHORITY': str(inside(root.parent, host['xauthority'])),
            'XDG_RUNTIME_DIR': '/run/user/' + str(os.getuid()), 'SDL_VIDEODRIVER': 'x11',
@@ -204,6 +210,20 @@ def main() -> None:
     elif a.mode == 'run':
         raise SystemExit(run_game(a.root, a.project, host, scene, payload, rows))
     else:
+        if (payload/'Config/VistaCompanion.json').is_file():
+            # Fail before replacing the current game if the companion cannot start.
+            import urllib.request
+            import urllib.error
+            subprocess.run(['systemctl','--user','start','vista-six-room-companion-ai.service'],check=True)
+            deadline=time.monotonic()+60
+            while True:
+                try:
+                    with urllib.request.urlopen('http://127.0.0.1:49010/health',timeout=2) as response:
+                        health=json.load(response)
+                    if health.get('ready') and health.get('dialogue')=='Qwen3-4B-Instruct-2507':break
+                except (OSError,ValueError,urllib.error.URLError):pass
+                if time.monotonic()>deadline:raise RuntimeError('Local companion service did not become ready')
+                time.sleep(.25)
         select(a.root, a.project, a.host, host, rows)
         print(json.dumps({'selected': 'dev-' + a.project}), flush=True)
         if a.mode == 'stream':
