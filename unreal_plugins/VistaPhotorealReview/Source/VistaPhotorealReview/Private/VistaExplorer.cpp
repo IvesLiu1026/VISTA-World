@@ -1,4 +1,5 @@
 #include "VistaExplorer.h"
+#include "VistaCompanion.h"
 #include "HomeActionsJson.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/CameraTypes.h"
@@ -177,6 +178,18 @@ void AVistaCampusVehicle::Tick(float Dt)
     Drive(Speed<CruiseSpeed?1:0,0,Stop,Dt);
 }
 
+AVistaExplorerCharacter::AVistaExplorerCharacter()
+{Companion=CreateDefaultSubobject<UVistaCompanionComponent>(TEXT("IndoorCompanion"));}
+void AVistaExplorerCharacter::CompanionTalk(){if(Companion)Companion->TogglePanel();}
+void AVistaExplorerCharacter::CompanionAsk(const FString& Text){if(Companion)Companion->Ask(Text);}
+void AVistaExplorerCharacter::CompanionFollow(bool Enabled){if(Companion)Companion->Follow(Enabled);}
+void AVistaExplorerCharacter::CompanionStop(){if(Companion)Companion->Stop();}
+void AVistaExplorerCharacter::HomeRoom(int32 Index)
+{
+    const FVector Before=GetActorLocation();Super::HomeRoom(Index);
+    if(FVector::Distance(Before,GetActorLocation())>1 && Companion && Companion->Companion && Companion->Companion->bFollowing)
+        Companion->Companion->bBlocked=!Companion->Companion->PlaceNear(this);
+}
 void AVistaExplorerCharacter::BeginPlay()
 {
     bCampus=GetWorld()->GetWorldSettings()->ActorHasTag(TEXT("VistaCampus"));
@@ -242,6 +255,7 @@ void AVistaExplorerCharacter::BindExploreKeys(UInputComponent* Input)
     Input->BindKey(EKeys::E,IE_Pressed,this,&AVistaExplorerCharacter::EmbodiedInteract);
     Input->BindKey(EKeys::Escape,IE_Pressed,this,&AVistaExplorerCharacter::ExplorerMenu);
     Input->BindKey(EKeys::Q,IE_Pressed,this,&AVistaExplorerCharacter::ExplorerActions);
+    Input->BindKey(EKeys::T,IE_Pressed,this,&AVistaExplorerCharacter::CompanionTalk);
     Input->BindKey(EKeys::Tab,IE_Pressed,this,&AVistaExplorerCharacter::ToggleExplorerView);
     Input->BindKey(EKeys::G,IE_Pressed,this,&AVistaExplorerCharacter::EmbodiedDrop);
     Input->BindKey(EKeys::SpaceBar,IE_Pressed,this,&AVistaExplorerCharacter::ExplorerJump);
@@ -266,8 +280,8 @@ void AVistaExplorerCharacter::SetMenu(int32 Value)
     }
     PublishExplorerState();
 }
-void AVistaExplorerCharacter::ExplorerMenu() {if (!IsCleanObservation()) SetMenu(Menu?0:1);}
-void AVistaExplorerCharacter::ExplorerActions() {if (!IsCleanObservation()) SetMenu(Menu?0:2);}
+void AVistaExplorerCharacter::ExplorerMenu() {if(Companion && Companion->IsOpen()){Companion->ClosePanel();return;}if (!IsCleanObservation()) SetMenu(Menu?0:1);}
+void AVistaExplorerCharacter::ExplorerActions() {if(Companion && Companion->IsOpen()){Companion->ClosePanel();return;}if (!IsCleanObservation()) SetMenu(Menu?0:2);}
 void AVistaExplorerCharacter::ExplorerScene(const FString& Id)
 {
     if (bChangingScene) return;
@@ -285,6 +299,7 @@ void AVistaExplorerCharacter::ExplorerScene(const FString& Id)
 void AVistaExplorerCharacter::ActivateMenuItem(FName Item)
 {
     const FString Key=Item.ToString();
+    if (Key==TEXT("companion")) {CompanionTalk();return;}
     if (Key==TEXT("resume")) {SetMenu(0);return;}
     if (Key.StartsWith(TEXT("scene:"))) {ExplorerScene(Key.Mid(6));return;}
     if (Key==TEXT("view")) {SetMenu(0);ToggleView();return;}
@@ -502,10 +517,11 @@ void AVistaExplorerHUD::DrawHUD()
         if (Enabled) AddHitBox(FVector2D(X*S,Y*S),FVector2D(Width*S,52*S),Id,true);
     };
     Rect(26,24,480,68,Panel);Text(TEXT("VISTA  /  EXPLORE"),44,35,1.3,Accent);Text(P->SceneTitle,44,65,.95,White);
+    if(P->Companion && P->Companion->IsOpen())return;
     if (!P->Menu)
     {
         Rect(26,990,1500,62,Panel);Text(P->GetInteractionHint(),46,1008,1.12,White);
-        Text(TEXT("Q  Actions     Tab  View     Esc  Scenes & controls"),1120,38,1.0,White);
+        Text(P->Companion && P->Companion->IsEnabled()?TEXT("T  Talk     Q  Actions     Tab  View     Esc  Rooms"):TEXT("Q  Actions     Tab  View     Esc  Scenes & controls"),1120,38,1.0,White);
         if (!P->bCampus) Text(P->GetEventHint().Replace(TEXT("Free exploration   |   F2: next VISTA scenario   R: reset"),TEXT("Free exploration  |  Q: activities and room selection")),44,113,.85,Muted);
         Rect(958,538,4,4,FLinearColor(1,1,1,.8));
         return;
@@ -517,6 +533,15 @@ void AVistaExplorerHUD::DrawHUD()
     if (P->bChangingScene) {Text(TEXT("Loading scene..."),232,310,2,Accent);return;}
     if (P->Menu==1)
     {
+        if(P->Companion && P->Companion->IsEnabled())
+        {
+            const TCHAR* Names[]={TEXT("Entry"),TEXT("Living room"),TEXT("Kitchen / dining"),TEXT("Bedroom"),TEXT("Office"),TEXT("Bathroom / laundry")};
+            for(int32 I=0;I<6;++I)Button(FName(FString::Printf(TEXT("room:%d"),I+1)),Names[I],232+(I%2)*735,288+(I/2)*98,690,P->CanLeaveSpace());
+            Button(TEXT("companion"),TEXT("Talk to your companion"),232,610,690);
+            Text(TEXT("WASD  Walk     Mouse  Look     E  Interact     T  Talk"),232,715,1.25,White);
+            Text(TEXT("Q  More actions / activities     Tab  First / third person"),232,759,1.15,Muted);
+            Button(TEXT("resume"),TEXT("Explore together"),232,833,1410);return;
+        }
         for (int32 I=0;I<P->Scenes.Num();++I)
         {
             const auto& Scene=P->Scenes[I];const float X=232+(I%2)*735,Y=288+(I/2)*145;

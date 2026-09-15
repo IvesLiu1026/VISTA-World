@@ -75,7 +75,7 @@ public:
     UFUNCTION(Exec) void HomeAction(const FString& Action,const FString& Target,const FString& Secondary=TEXT(""));
     UFUNCTION(Exec) void HomeEvent(const FString& EventId);
     UFUNCTION(Exec) void HomeState();
-    UFUNCTION(Exec) void HomeRoom(int32 Index);
+    UFUNCTION(Exec) virtual void HomeRoom(int32 Index);
     UFUNCTION(Exec) void HomeFocus(const FString& Target);
     UFUNCTION(Exec) void HomeCancel();
     UFUNCTION(Exec) void HomeObserve(bool Clean);
@@ -87,6 +87,9 @@ public:
     void ExecuteVisibleAction(const FString& Id);
     bool CanLeaveSpace() const;
     TArray<TPair<FString,FString>> VisibleEvents() const;
+    // A separate, visibility-filtered input for the conversational companion.
+    // Never return the engineering state, task evaluator, or hidden event labels.
+    TSharedPtr<FJsonObject> CompanionObservation() const;
 protected:
     virtual bool UsesHomeActions() const override {return true;}
     virtual void SetView(FVector Position,FRotator Rotation) override;
