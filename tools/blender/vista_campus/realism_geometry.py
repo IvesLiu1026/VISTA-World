@@ -116,7 +116,10 @@ def profile(group, material, points, y, thickness):
         bm=bmesh.new()
         vs=[bm.verts.new(v) for v in verts]
         for f in faces:bm.faces.new([vs[i] for i in f])
+        bm.normal_update()
         bmesh.ops.bevel(bm,geom=list(bm.edges),offset=min(.021,thickness*.22),segments=4,affect='EDGES')
+        bmesh.ops.remove_doubles(bm,verts=list(bm.verts),dist=1e-7)
+        bmesh.ops.dissolve_degenerate(bm,edges=list(bm.edges),dist=1e-8)
         bm.verts.ensure_lookup_table()
         for i,v in enumerate(bm.verts):v.index=i
         verts=[tuple(v.co) for v in bm.verts];faces=[tuple(v.index for v in f.verts) for f in bm.faces]
