@@ -1,5 +1,5 @@
 """Authored, local-coordinate campus scenarios; not surveyed road geometry."""
-ROOT = '/Game/VISTA/CampusR13'
+ROOT = '/Game/VISTA/CampusR21'
 SCENES = [
     dict(id='home', title='Villa / Six indoor spaces', detail='Objects, daily tasks and room exploration', map=ROOT+'/Maps/Home'),
     dict(id='campus', title='NYCU / Guangfu campus', detail='Engineering quarter, plaza and campus road', map=ROOT+'/Maps/Campus', spawn=[-400,-1800,108], yaw=-85),
