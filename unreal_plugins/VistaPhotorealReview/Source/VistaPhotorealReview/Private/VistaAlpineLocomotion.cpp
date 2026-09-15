@@ -110,10 +110,19 @@ bool AVistaVillaCharacter::UpdateAlpineMotion(float Dt,FVillaMotionFrame& A,FVil
     const float Speed=GetVelocity().Size2D();const bool Air=GetCharacterMovement()->IsFalling();
     Reset=!bFeetReady || FVector::Distance(PreviousLocation,GetActorLocation())>70.f;
     PreviousLocation=GetActorLocation();
-    if (Reset || (Speed>8 && PreviousLocomotionSpeed<=8)) StepClock=.30f;
+    const bool Starting=Speed>8 && PreviousLocomotionSpeed<=8;
+    if (Reset || Starting) StepClock=.30f;
     PreviousLocomotionSpeed=Speed;
     const FVector V=GetMesh()->GetComponentTransform().InverseTransformVectorNoScale(GetVelocity()).GetSafeNormal2D();
-    const float Direction=FMath::Fmod(FMath::Atan2(V.X,V.Y)*4.f/PI+8.f,8.f);
+    const float TargetDirection=FMath::RadiansToDegrees(FMath::Atan2(V.X,V.Y));
+    // A fast camera reversal can cross several directional clips in one tick.
+    // Advance their blend coordinate continuously around the circle; filtering
+    // each resulting bone alone still allowed a 39-degree pelvis jump.
+    // Select the initial direction before fading in from idle. Interpolating
+    // zero to backward would unnecessarily pass through a sideways pose.
+    if (Reset || Starting) LocomotionDirectionYaw=TargetDirection;
+    else if (Speed>8) LocomotionDirectionYaw=FMath::FixedTurn(LocomotionDirectionYaw,TargetDirection,Dt*180.f);
+    const float Direction=FMath::Fmod(LocomotionDirectionYaw/45.f+8.f,8.f);
     const TCHAR* D[]={TEXT("fwd"),TEXT("fwd_left"),TEXT("left"),TEXT("bwd_left"),TEXT("bwd"),TEXT("bwd_right"),TEXT("right"),TEXT("fwd_right")};
     const int32 First=FMath::FloorToInt(Direction)%8,Second=(First+1)%8;const float Turn=Direction-First;
     RunBlend=FMath::FInterpTo(RunBlend,FMath::Clamp((Speed-150.f)/120.f,0.f,1.f),Dt,8.f);

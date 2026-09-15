@@ -387,6 +387,7 @@ void AVistaVillaCharacter::CaptureProof(const FString& Name)
 void AVistaVillaCharacter::OnPoseFinalized()
 {
     Super::OnPoseFinalized();
+    CaptureCharacterMotionProof();
     CaptureVillaMotionProof(this);
     CaptureAlpineProof(this);
     if (!PendingCapture.IsEmpty())
@@ -472,6 +473,8 @@ void AVistaVillaCharacter::Tick(float Dt)
     if (LastWallFrame>0 && bProof && bDemo) FrameTimes.Add((Now-LastWallFrame)*1000.);
     LastWallFrame=Now;
     LastFrameDt=Dt;TickAlpine(Dt);Super::Tick(Dt);if (!bReady) return;
+    // Advance once per simulation tick, before the animation proxy evaluates.
+    UpdateBodyLook(Dt);
     if (UsesHomeActions()) return;
     UpdateLiquids(Dt);ProofClock+=Dt;++ProofFrames;
     if (bProof && !bDemo && Records.IsEmpty() && ProofClock>5)
