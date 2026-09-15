@@ -11,7 +11,7 @@ P=Path(unreal.Paths.project_dir()).resolve()
 assert P.parent.name=='vista-campus'
 A=unreal.EditorAssetLibrary
 L=unreal.MaterialEditingLibrary
-ROOT=os.environ.get('VISTA_REALISM_ROOT','/Game/VISTA/CampusR24')
+ROOT=os.environ.get('VISTA_REALISM_ROOT','/Game/VISTA/CampusR25')
 BASE='/Game/VISTA/CampusR21'
 source=Path(os.environ['VISTA_REALISM_GEOMETRY'])
 avatar=Path(os.environ['VISTA_REALISM_AVATAR'])
