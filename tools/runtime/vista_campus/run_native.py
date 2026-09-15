@@ -27,7 +27,7 @@ from proof import verify_motion_trace
 
 p=argparse.ArgumentParser()
 for name in ['project','engine','out','ddc']:p.add_argument('--'+name,type=Path,required=True)
-p.add_argument('--suite',choices=['tour','vehicles','crossing','home','surfaces','animations'],default='tour')
+p.add_argument('--suite',choices=['tour','vehicles','crossing','home','surfaces','animations','realism'],default='tour')
 p.add_argument('--timeout',type=int,default=800)
 a=p.parse_args()
 a.project=a.project.resolve(strict=True);a.out=a.out.resolve()
@@ -37,7 +37,7 @@ assert installed['scenes']==SCENES,'Scene menu must select the revision under te
 assert json.loads((a.project.parent/'Config/VistaHomeActions.json').read_text())['scene_map']==SCENES[0]['map']
 assert os.environ.get('DISPLAY') not in (None,':119',':119.0')
 a.out.mkdir(parents=True,exist_ok=False);(a.out/'checks').mkdir()
-scene=next(s for s in SCENES if s['id']==('home' if a.suite=='home' else 'gate' if a.suite in ['vehicles','crossing','animations'] else 'campus'))
+scene=next(s for s in SCENES if s['id']==('home' if a.suite=='home' else 'gate' if a.suite in ['vehicles','crossing','animations','realism'] else 'campus'))
 cmd=[str(a.engine/'Engine/Binaries/Linux/UnrealEditor'),str(a.project),scene['map'],
  '-game','-vulkan','-graphicsadapter=0','-Windowed','-ForceRes','-ResX=1920','-ResY=1080','-NoVSync',
  '-UserDir='+str(a.out/'user'),'-SaveToUserDir','-VistaExplorerProof='+str(a.out/'proof'),
@@ -51,6 +51,13 @@ env=os.environ.copy();env.update(VK_ICD_FILENAMES='/usr/share/vulkan/icd.d/nvidi
 tracked=[a.project,a.project.parent/'Config/VistaExplorer.json',a.project.parent/'Config/VistaHomeActions.json',
  a.project.parent/'Config/DefaultEngine.ini',a.project.parent/'Plugins/VistaPhotorealReview/Binaries/Linux/libUnrealEditor-VistaPhotorealReview.so',Path(__file__),Path(__file__).with_name('layout.py'),Path(__file__).with_name('proof.py')]
 tracked += [a.project.parent/'Content'/(s['map'].removeprefix('/Game/')+'.umap') for s in SCENES]
+tracked += [a.project.parent/relative for relative in ['Config/VistaFineContacts.json',
+ 'Content/VISTA/VillaR1/appearance.json','Content/VISTA/VillaR1/mocap.json']]
+appearance=json.loads((a.project.parent/'Content/VISTA/VillaR1/appearance.json').read_text())
+tracked += [a.project.parent/'Content'/(asset.split('.')[0].removeprefix('/Game/')+'.uasset') for asset in appearance.values()]
+revision_dir=a.project.parent/'Content'/SCENES[1]['map'].split('/Maps/')[0].removeprefix('/Game/')
+tracked += sorted(revision_dir.rglob('*.uasset'))
+tracked=list(dict.fromkeys(tracked))
 report=dict(schema='vista.campus-native/v1',suite=a.suite,command=cmd,display=os.environ['DISPLAY'],
             input_sha256={str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in tracked},
             model_evaluation=False,shared_runtime_changed=False,network_namespace_isolated=False,cases=[],captures=[])
@@ -170,6 +177,41 @@ try:
     fixture(x,y,z,yaw);console(f'EmbodiedCamera {pitch} {yaw}');time.sleep(2)
     snapshot(scene_id+'-'+label)
     check('surface_view_'+scene_id+'_'+label,state()['map']==item['map'])
+ elif a.suite=='realism':
+  for name,x,y,yaw,pitch in [('car-front',1610,-1460,137,-10),('car-rear',900,-1440,42,-10),
+                            ('scooter-front',405,-1420,124,-15)]:
+   fixture(x,y,108,yaw);console(f'EmbodiedCamera {pitch} {yaw}');time.sleep(3);snapshot(name)
+  fixture(500,-1700,108,0);key('Tab');console('EmbodiedCamera -8 180');console('fov 48')
+  time.sleep(3);snapshot('avatar-face-cloth');console('fov 78');key('Tab')
+  report['performance']=[]
+  for item in [SCENES[2],SCENES[3],SCENES[1],SCENES[0]]:
+   if state()['map']!=item['map']:
+    key('Escape');index=SCENES.index(item);click(400+(index%2)*735,312+(index//2)*145)
+    wait_for(lambda st:st['map']==item['map'] and st['body_ready'] and st['menu']==0,120)
+   if item['id']!='home':fixture(*item['spawn'],item['yaw'])
+   time.sleep(8)
+   filename='realism-'+item['id']+'.csv'
+   console('CsvProfile STARTFILE='+filename);console('CsvProfile FRAMES=450')
+   # A short actual walking segment followed by a stable view; no screenshots
+   # or recorder during profiling. This is a shared GPU observation at 30 fps cap.
+   trace=key('w',hold=1.5,sample=True);trace+=key('s',hold=1.5,sample=True)
+   end=time.monotonic()+50
+   while True:
+    csvs=list(a.out.rglob(filename))
+    # The profiler creates an empty file when capture starts. Wait for its
+    # footer rather than mistaking file creation for completed measurement.
+    if len(csvs)==1 and csvs[0].stat().st_size>1000:
+     content=csvs[0].read_text()
+     if '[HasHeaderRowAtEnd]' in content:break
+    assert time.monotonic()<end,'CSV profiler did not finish';time.sleep(.5)
+   csvs=list(a.out.rglob(filename));assert len(csvs)==1
+   time.sleep(1)
+   report['performance'].append({'scene':item['id'],'csv':str(csvs[0]),
+     'sha256':hashlib.sha256(csvs[0].read_bytes()).hexdigest(),'cap_fps':30,
+     'scope':'450 native frames, 3 s walking then stable view; shared GPU 0, live Six Rooms may also render',
+     'movement_trace':trace});save()
+   check('realism_profile_'+item['id'],csvs[0].stat().st_size>1000)
+   snapshot('realism-'+item['id']+'-first');key('Tab');console('EmbodiedCamera -8 180');snapshot('realism-'+item['id']+'-third');key('Tab')
  elif a.suite=='animations':
   report['videos']=[]
   for kind,x,y in [('car_player',1250,-1380),('scooter_player',200,-1370)]:
@@ -226,7 +268,18 @@ try:
    check(kind+'_camera_follows_steering',abs(angle)<1,current)
    key('q');wait_for(lambda s:s['menu']==2);wait_for(lambda s:abs(vehicle(s,kind)['speed_cm_s'])<2)
    check(kind+'_menu_brakes',abs(vehicle(state(),kind)['speed_cm_s'])<2)
-   key('Escape');key('e');wait_for(lambda s:not s['riding'])
+   key('Escape');key('e')
+   pending=state()
+   if pending['riding'] and pending['ride_phase']=='riding':
+    # Timed driving can stop beside the existing pavement lamp. An occupied
+    # exit is correctly rejected. Verify that feedback, then move away with
+    # real reverse input and brake before a single second exit attempt.
+    check(kind+'_blocked_exit_feedback',pending['hint']=='The exit is blocked',pending)
+    trace=key('s',hold=1.0,sample=True);trace_motion(trace,kind)
+    key('space',hold=1.2);wait_for(lambda s:abs(vehicle(s,kind)['speed_cm_s'])<2)
+    check(kind+'_reposition_before_exit',vehicle(state(),kind)['travel_cm']>vehicle(pending,kind)['travel_cm']+80,trace)
+    key('e')
+   wait_for(lambda s:not s['riding'])
    check(kind+'_safe_dismount',not state()['riding']);snapshot(kind+'-dismounted')
   # Reload through the visible menu to obtain a fresh obstacle fixture.
   key('Escape');click(400,457)
