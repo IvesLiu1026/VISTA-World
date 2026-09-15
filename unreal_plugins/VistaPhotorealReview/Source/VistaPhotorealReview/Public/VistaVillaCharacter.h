@@ -2,6 +2,7 @@
 #include "CoreMinimal.h"
 #include "EmbodiedReview.h"
 #include "VistaLiquidLedger.h"
+#include "VistaBodyLook.h"
 #include "VistaVillaCharacter.generated.h"
 class UNiagaraComponent;
 class ACameraActor;
@@ -67,6 +68,11 @@ protected:
     virtual bool UsesGroundFootIK() const override;
     virtual float UnoccupiedMovementSpeed() const override;
 private:
+    VistaMotion::BodyLook BodyLook;
+    float LocomotionDirectionYaw=0;
+    void UpdateBodyLook(float Dt);
+    void CaptureCharacterMotionProof();
+    bool bCharacterMotionMetadata=false;
     UPROPERTY() TObjectPtr<AStaticMeshActor> Jug;
     UPROPERTY() TObjectPtr<AStaticMeshActor> Mug;
     UPROPERTY() TObjectPtr<UNiagaraComponent> PourFluid;
