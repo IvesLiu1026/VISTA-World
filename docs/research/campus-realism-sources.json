@@ -1,6 +1,6 @@
 {
   "schema": "vista.campus-realism-source-receipt/v1",
-  "revision": "CampusR24",
+  "revision": "CampusR25",
   "base": "CampusR21",
   "external_downloads_this_round": false,
   "inherited_asset_records": [
@@ -10,7 +10,7 @@
   ],
   "geometry": {
     "generator": "tools/blender/vista_campus/realism_geometry.py",
-    "artifact": "runs/campus-realism-geometry-c",
+    "artifact": "runs/campus-realism-geometry-d",
     "closed_solid_orientation_checks": 26984,
     "building_counts": {
       "campus": 5,
@@ -19,11 +19,11 @@
     },
     "assets": {
       "car": {
-        "sha256": "d73913141b649753dcfafc63cb724702aa9daa3f0d684b84b8c541c357fd140b",
+        "sha256": "e32106de9a1009625713fe5fc17123c4ca9eaaa43ddd437cbdb0c8d2f5195b6e",
         "groups": {
           "car_body": {
-            "vertices": 6494,
-            "polygons": 5867,
+            "vertices": 6062,
+            "polygons": 5435,
             "materials": [
               "WhiteCar",
               "Steel",
@@ -44,8 +44,8 @@
             ]
           },
           "car_door": {
-            "vertices": 470,
-            "polygons": 415,
+            "vertices": 374,
+            "polygons": 319,
             "materials": [
               "WhiteCar",
               "CarGlass",
@@ -89,11 +89,11 @@
         }
       },
       "scooter": {
-        "sha256": "f0a467f2e4d0b4d8ac8165752f3f3ca2bcfe7bce36daff005183e1a8e2731405",
+        "sha256": "90d00295d56e5c27deb7adc9f03a9363d6750a0fb9c0b6dfe745c854e198ea57",
         "groups": {
           "scooter_body": {
-            "vertices": 7640,
-            "polygons": 7324,
+            "vertices": 7448,
+            "polygons": 7132,
             "materials": [
               "Teal",
               "Seat",
@@ -339,13 +339,21 @@
     ]
   },
   "saved_readback": {
-    "artifact": "runs/campus-realism-readback-b/result.json",
-    "sha256": "264ed0d289fedabb22c1ca98c6235f9fd6a78f905c3094d9a42e17ef793a7d9b"
+    "artifact": "runs/campus-realism-readback-c/result.json",
+    "sha256": "35b1620ef3e64f09cf67867ff31feea1a30198163d328f3c3be6ad728cfd88a6"
   },
   "scope": [
     "New manufactured geometry authored locally",
     "Inherited photo textures retain their original CC0 provenance",
     "Approximate reconstruction and character likeness",
     "Procedural cloth and motion, not simulation or motion capture"
-  ]
+  ],
+  "topology_readback": {
+    "artifact": "runs/campus-realism-geometry-topology-d.json",
+    "sha256": "7b7c7549b80e0abb4b623ff2c1643a420f50e08c5a83adb8b5192b5d3e860c5d",
+    "status": "passed",
+    "meshes": 16,
+    "nonmanifold_edges": 0,
+    "degenerate_faces": 0
+  }
 }
