@@ -59,7 +59,7 @@ void UVistaCompanionComponent::Start()
         +SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(50,0,50,116)
         [SNew(SBox).MaxDesiredWidth(1060)
          [SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).Padding(FMargin(24,14)).BorderBackgroundColor(FLinearColor(.015,.025,.035,.94))
-          .Visibility_Lambda([this]{return !bOpen && Companion && (Companion->bSpeaking || bBusy)?EVisibility::HitTestInvisible:EVisibility::Collapsed;})
+          .Visibility_Lambda([this]{return !bOpen && Companion && (Companion->bSpeaking || bBusy || GetWorld()->GetTimeSeconds()<NoticeUntil)?EVisibility::HitTestInvisible:EVisibility::Collapsed;})
           [SNew(STextBlock).Font(CompanionFont(22)).ColorAndOpacity(FLinearColor(.94,.97,1)).AutoWrapText(true)
            .Text_Lambda([this]{return FText::FromString(bBusy?TEXT("助手正在思考與準備語音……"):Reply);})]]];
         GEngine->GameViewport->AddViewportWidgetContent(Captions.ToSharedRef(),30);

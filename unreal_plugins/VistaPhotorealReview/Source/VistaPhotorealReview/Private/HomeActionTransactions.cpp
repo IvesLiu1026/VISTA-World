@@ -79,8 +79,19 @@ FTransform AHomeActionsCharacter::CarryTarget() const
     const auto* E=Resolve(HeldId.IsEmpty()?TargetId:HeldId);
     const bool Two=E && Bool(E->Spec,TEXT("two_hands"));
     const float H=E?Number(E->Spec,TEXT("grip_height"),6.2):6.2;
-    return FTransform(GetActorQuat()*HoldRelativeRotation,
+    FTransform Carry(GetActorQuat()*HoldRelativeRotation,
         GetActorLocation()+GetActorQuat().RotateVector(FVector(Two?38:32,Two?0:18,26-H)));
+    if (E && E->ShortId==TEXT("phone") && PhoneBlend>0)
+    {
+        // Keep the same physical grip/IK authority. Lift the held handset using
+        // a bounded blend; do not teleport an unheld prop into the hand.
+        const FVector Head=GetMesh()->GetSocketLocation(TEXT("head"));
+        const FVector Ear=Head+GetActorQuat().RotateVector(PhoneEarOffset);
+        const FQuat Upright=GetActorQuat()*PhoneRotation;
+        const FTransform Call(Upright,Ear);
+        Carry.Blend(Carry,Call,PhoneBlend*PhoneBlend*(3-2*PhoneBlend));
+    }
+    return Carry;
 }
 
 bool AHomeActionsCharacter::FindPlacement(FVector& Location,FQuat& Rotation) const
@@ -91,8 +102,17 @@ bool AHomeActionsCharacter::FindPlacement(FVector& Location,FQuat& Rotation) con
     FVector Eye;FRotator Look;PC->GetPlayerViewPoint(Eye,Look);
     FCollisionQueryParams P(SCENE_QUERY_STAT(HomePlacement),true,this);P.AddIgnoredActor(E->Actor.Get());
     FHitResult Hit;
-    if (!GetWorld()->LineTraceSingleByChannel(Hit,Eye,Eye+Look.Vector()*330.f,ECC_Visibility,P) ||
-        Hit.ImpactNormal.Z<.94f || FVector::Dist2D(Hit.ImpactPoint,GetActorLocation())>65.f) return false;
+    auto Reject=[&](const FString& Why)
+    {
+        if (bStreamingEnabled)
+            UE_LOG(LogTemp,Display,TEXT("STREAMING_PLACEMENT_REJECT item=%s reason=%s eye=%s point=%s normal=%s distance=%.3f surface=%s"),
+                *E->ShortId,*Why,*Eye.ToString(),*Hit.ImpactPoint.ToString(),*Hit.ImpactNormal.ToString(),
+                FVector::Dist2D(Hit.ImpactPoint,GetActorLocation()),*GetNameSafe(Hit.GetActor()));
+        return false;
+    };
+    if (!GetWorld()->LineTraceSingleByChannel(Hit,Eye,Eye+Look.Vector()*330.f,ECC_Visibility,P)) return Reject(TEXT("no_surface"));
+    if (Hit.ImpactNormal.Z<.94f) return Reject(TEXT("surface_not_level"));
+    if (FVector::Dist2D(Hit.ImpactPoint,GetActorLocation())>65.f) return Reject(TEXT("surface_out_of_reach"));
     const FBox B=E->Mesh->GetStaticMesh()->GetBoundingBox();
     const FVector Scale=E->Actor->GetActorScale3D();
     const FVector Center=B.GetCenter()*Scale;
@@ -109,11 +129,14 @@ bool AHomeActionsCharacter::FindPlacement(FVector& Location,FQuat& Rotation) con
         const FVector Point=Hit.ImpactPoint+Rotation.RotateVector(Offset);
         FHitResult Support;
         if (!GetWorld()->LineTraceSingleByChannel(Support,Point+FVector(0,0,2),Point-FVector(0,0,3),ECC_Visibility,P) ||
-            Support.ImpactNormal.Z<.94f || FMath::Abs(Support.ImpactPoint.Z-Hit.ImpactPoint.Z)>1.f) return false;
+            Support.ImpactNormal.Z<.94f || FMath::Abs(Support.ImpactPoint.Z-Hit.ImpactPoint.Z)>1.f)
+            return Reject(FString::Printf(TEXT("footprint_%d_unsupported at=%s"),I,*Point.ToString()));
     }
     const FVector TestCenter=Location+Rotation.RotateVector(Center)+FVector(0,0,.15f);
     const FVector TestHalf(FMath::Max(.1f,Half.X-.15f),FMath::Max(.1f,Half.Y-.15f),FMath::Max(.08f,Half.Z-.15f));
-    return !GetWorld()->OverlapBlockingTestByChannel(TestCenter,Rotation,ECC_Visibility,FCollisionShape::MakeBox(TestHalf),P);
+    if (GetWorld()->OverlapBlockingTestByChannel(TestCenter,Rotation,ECC_Visibility,FCollisionShape::MakeBox(TestHalf),P))
+        return Reject(TEXT("object_volume_blocked"));
+    return true;
 }
 
 void AHomeActionsCharacter::SelectPickup(FHomeEntity& E)
@@ -248,6 +271,8 @@ bool AHomeActionsCharacter::BeginAction(const FString& Command,const FString& Re
     if (Ledger.Num()>=4096) {Code=TEXT("SESSION_LEDGER_FULL");return false;}
     FHomeEntity* E=Resolve(Target);FHomeEntity* S=Resolve(Secondary);
     FString A=Requested;
+    if (bStreamingEnabled && PhoneBlend>.02f && A!=TEXT("walk") && A!=TEXT("jog") && A!=TEXT("turn_in_place") && A!=TEXT("carry") && A!=TEXT("idle") && A!=TEXT("pause") && A!=TEXT("look_at"))
+    {Code=TEXT("LOWER_PHONE_BEFORE_ACTION");return false;}
     // The source generic insert has explicit item/container roles on this scene.
     if (A==TEXT("insert")) A=TEXT("storage.insert");
     if (A==TEXT("use") && E)
@@ -428,6 +453,8 @@ void AHomeActionsCharacter::FinishAction(bool Success,const FString& Code)
         if (Semantic==TEXT("articulation.open")) Semantic=TEXT("open");
         if (Semantic==TEXT("sit_down")) Semantic=TEXT("sit");
         Interactions.Add(TargetId+TEXT("#")+Semantic);
+        for (auto& Pair:ConcurrentEvents)
+            if (Pair.Value.Status==TEXT("running")) Pair.Value.Interactions.Add(TargetId+TEXT("#")+Semantic);
     }
     Transaction->SetNumberField(TEXT("generation_after"),Generation);AppendReceipt(Transaction);
     LastCode=Code;FeedbackMessage(Code);ActiveId.Empty();bSceneActionBusy=false;bPhysicalAction=false;bControlHeld=false;

@@ -73,6 +73,7 @@ public:
     bool IsEnabled() const {return Companion!=nullptr;}
     TSharedPtr<FJsonObject> State() const;
     UPROPERTY() TObjectPtr<AVistaCompanion> Companion;
+    double NoticeUntil=0;
     FString Reply=TEXT("你好，我會陪你探索這六個房間。"),Status=TEXT("準備好了"),LastQuestion;
 private:
     TSharedPtr<SWidget> Panel;
