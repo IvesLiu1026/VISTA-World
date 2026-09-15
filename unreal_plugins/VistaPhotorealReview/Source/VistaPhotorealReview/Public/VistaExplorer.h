@@ -6,6 +6,7 @@
 
 class UBoxComponent;
 class AVistaCampusVehicle;
+class UVistaCompanionComponent;
 
 struct FVistaSceneChoice
 {
@@ -57,6 +58,7 @@ class VISTAPHOTOREALREVIEW_API AVistaExplorerCharacter : public AHomeActionsChar
 {
     GENERATED_BODY()
 public:
+    AVistaExplorerCharacter();
     virtual void BeginPlay() override;
     virtual void Tick(float Dt) override;
     virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
@@ -65,10 +67,16 @@ public:
     virtual void EmbodiedReset() override;
     virtual void CalcCamera(float Dt,FMinimalViewInfo& Out) override;
     virtual FString GetInteractionHint() const override;
+    virtual void HomeRoom(int32 Index) override;
     UFUNCTION(Exec) void ExplorerMenu();
     UFUNCTION(Exec) void ExplorerActions();
     UFUNCTION(Exec) void ExplorerScene(const FString& Id);
     UFUNCTION(Exec) void ExplorerState();
+    UFUNCTION(Exec) void CompanionTalk();
+    UFUNCTION(Exec) void CompanionAsk(const FString& Text);
+    UFUNCTION(Exec) void CompanionFollow(bool Enabled);
+    UFUNCTION(Exec) void CompanionStop();
+    UPROPERTY() TObjectPtr<UVistaCompanionComponent> Companion;
     void ActivateMenuItem(FName Item);
     int32 Menu=0; // 0 play, 1 scenes/help, 2 context actions
     bool bCampus=false;
@@ -91,6 +99,7 @@ protected:
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) override;
     virtual void OnPoseFinalized() override;
 private:
+    friend class UVistaCompanionComponent;
     void TickRideTransition(float Dt);
     FTransform VehicleHandGoal(bool Left) const;
     FVector RideStart, RideApproach, RideExit, StartPelvis, StartFeet[2];
