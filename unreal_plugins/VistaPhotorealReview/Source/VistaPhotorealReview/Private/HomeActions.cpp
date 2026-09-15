@@ -88,6 +88,7 @@ void AHomeActionsCharacter::BeginPlay()
         UE_LOG(LogTemp,Display,TEXT("VISTA_PRIVATE_REVIEW_CRC_DISABLED"));
     }
     Super::BeginPlay();
+    bStreamingEnabled=FPaths::FileExists(FPaths::ProjectConfigDir()/TEXT("VistaStreaming.json"));
     // Outdoor worlds share the reference body, but do not bind the indoor contract.
     if (GetWorld()->GetWorldSettings()->ActorHasTag(TEXT("VistaCampus"))) return;
     FString Text;
@@ -380,6 +381,7 @@ void AHomeActionsCharacter::Tick(float Dt)
 {
     Super::Tick(Dt);if (!bSceneReady) return;
     SceneClock+=Dt;BridgeClock+=Dt;
+    if (bStreamingEnabled) {UpdateDailyMotion(Dt);UpdateConcurrentEvents(Dt);}
     const bool ContactReach=!ActiveId.IsEmpty() && !TargetId.IsEmpty() &&
         ActionId!=TEXT("step_up") && ActionId!=TEXT("step_down") && ActionId!=TEXT("equip") && ActionId!=TEXT("unequip") && ActionId!=TEXT("inspect") && ActionId!=TEXT("look_at");
     SceneReachHipAdvance=FMath::FInterpTo(SceneReachHipAdvance,ContactReach?9.f:0.f,Dt,6.f);
