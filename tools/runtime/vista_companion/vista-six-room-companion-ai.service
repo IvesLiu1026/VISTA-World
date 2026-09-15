@@ -1,0 +1,19 @@
+[Unit]
+Description=VISTA six-room companion local dialogue and VoiceStudio speech
+After=network.target
+
+[Service]
+Type=simple
+UMask=0077
+WorkingDirectory=%h/vista-world-5090/workspace/services/six-room-companion
+ExecStart=%h/vista-world-5090/workspace/bin/uv run --offline --no-project --python %h/vista-world-5090/workspace/services/six-room-companion/venv/bin/python python %h/vista-world-5090/workspace/worktrees/six-room-companion/tools/runtime/vista_companion/service.py --service %h/vista-world-5090/workspace/services/six-room-companion --port 49010
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=HF_HUB_DISABLE_IMPLICIT_TOKEN=1
+Environment=HF_HUB_DISABLE_TELEMETRY=1
+MemoryMax=20G
+CPUQuota=800%
+TimeoutStopSec=15s
+Restart=on-failure
+RestartSec=3
+StandardOutput=append:%h/vista-world-5090/workspace/services/six-room-companion/service.log
+StandardError=append:%h/vista-world-5090/workspace/services/six-room-companion/service.log
