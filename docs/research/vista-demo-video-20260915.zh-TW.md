@@ -39,4 +39,4 @@
 
 原 `rooms-a` 的拉椅子片段因站位超過可達範圍失敗，調整空手起點後僅重錄該片段。原 `events-a` 的鑰匙／手機事件功能通過，但朝地面觀看時衣服穿模，因此保留原始收據，另存可追溯的 6 段選用清單，將兩個事件重錄為「拿取」與「正常前視角的攜帶路線」。兩段之間只改相機，不傳送人物或手持物件；場景碰撞和成功條件仍由原生回覆確認。穿模本身仍是待修的角色缺陷，不能以鏡頭選擇宣稱已修好。
 
-六房間／校園錄影在獨立 Xvfb 完成。錄製期間使用者的共用選擇從原 R13 程序變為另一 R13 程序，再到 Alpine Villa R3；本工作未送入共用鍵鼠、切換遊戲或重啟 Sunshine。最後伺服器確認的 Sunshine PID 為 364102，Alpine Villa 遊戲 PID 為 476478；執行下一次操作前仍需重新讀取真實狀態，不能只依過期的 `workspace/state/dev-selection.json`。
+六房間／校園錄影在獨立 Xvfb 完成。錄製期間共用選擇從原 R13 程序變為另一 R13 程序，再到 Alpine Villa R3，最後觀察到已回到 Six Rooms R13；本工作未送入共用鍵鼠、切換遊戲或重啟 Sunshine。Sunshine 始終為 PID 364102；最新遊戲程序記錄在 `runs/campus-realism-delivery-r25/live-after-demo.json`。執行下一次操作前仍需重新讀取真實狀態，不能只依可能過期的 `workspace/state/dev-selection.json`。
