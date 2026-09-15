@@ -427,6 +427,45 @@ FString AHomeActionsCharacter::GetEventHint() const
             Goal=String(V->AsObject()->GetArrayField(TEXT("public_goals"))[0]->AsObject(),TEXT("description"));
     return FString::Printf(TEXT("%s  [%s]  %s"),*EventId,*EventStatus,*Goal);
 }
+TSharedPtr<FJsonObject> AHomeActionsCharacter::CompanionObservation() const
+{
+    auto Out=MakeShared<FJsonObject>();
+    const FString Room=RoomAt(GetActorLocation()).Replace(TEXT("home.r1/room."),TEXT(""));
+    const TMap<FString,FString> Labels={{TEXT("entry_hall"),TEXT("玄關")},{TEXT("living_room"),TEXT("客廳")},
+        {TEXT("kitchen_dining"),TEXT("廚房與餐廳")},{TEXT("bedroom"),TEXT("臥室")},
+        {TEXT("office"),TEXT("書房")},{TEXT("bathroom_laundry"),TEXT("浴室與洗衣區")}};
+    Out->SetStringField(TEXT("room"),Labels.Contains(Room)?Labels[Room]:Room);
+    Out->SetStringField(TEXT("focused"),TEXT(""));Out->SetStringField(TEXT("public_goal"),TEXT(""));
+    FVector Eye;FRotator View;GetActorEyesViewPoint(Eye,View);
+    if(const auto* PC=Cast<APlayerController>(Controller))PC->GetPlayerViewPoint(Eye,View);
+    TArray<TPair<float,const FHomeEntity*>> Visible;
+    for(const auto& Pair:Entities)
+    {
+        const auto& E=Pair.Value;
+        if(!E.Actor.IsValid() || !E.Mesh.IsValid() || E.Actor->IsHidden() || !E.Mesh->IsVisible() || E.Display.EndsWith(TEXT("_marker")))continue;
+        const FVector Center=E.Mesh->Bounds.Origin,Delta=Center-Eye;
+        if(Delta.Size()>650 || FVector::DotProduct(View.Vector(),Delta.GetSafeNormal())<.45f)continue;
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(CompanionObservation),false,this);FHitResult Hit;
+        const bool Blocked=GetWorld()->LineTraceSingleByChannel(Hit,Eye,Center,ECC_Visibility,Query);
+        if(Blocked && Hit.GetActor()!=E.Actor.Get() && FVector::Distance(Hit.ImpactPoint,Center)>12)continue;
+        Visible.Add({Delta.Size(),&E});
+    }
+    Visible.Sort([](const auto& A,const auto& B){return A.Key<B.Key;});
+    TArray<TSharedPtr<FJsonValue>> Objects;
+    for(int32 I=0;I<FMath::Min(20,Visible.Num());++I)
+    {
+        const auto* E=Visible[I].Value;Objects.Add(MakeShared<FJsonValueString>(E->Display));
+        if(E->Id==FocusId)Out->SetStringField(TEXT("focused"),E->Display);
+    }
+    Out->SetArrayField(TEXT("objects"),Objects);
+    if(Contract && !EventId.IsEmpty())for(const auto& V:Contract->GetArrayField(TEXT("events")))
+    {
+        const auto E=V->AsObject();const TArray<TSharedPtr<FJsonValue>>* Goals;
+        if(String(E,TEXT("event_id"))==EventId && E->TryGetArrayField(TEXT("public_goals"),Goals) && Goals->Num())
+            Out->SetStringField(TEXT("public_goal"),String((*Goals)[0]->AsObject(),TEXT("description")).Left(300));
+    }
+    return Out;
+}
 void AHomeActionsCharacter::ReviewSnapshot() { Super::ReviewSnapshot();HomeState(); }
 void AHomeActionsCharacter::HomeState()
 { if (bSceneReady) UE_LOG(LogTemp,Display,TEXT("HOME_STATE %s"),*Encode(MakeState())); }

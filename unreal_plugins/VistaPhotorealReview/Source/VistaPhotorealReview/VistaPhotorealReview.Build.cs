@@ -6,7 +6,7 @@ public class VistaPhotorealReview : ModuleRules
     {
         PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
         PublicDependencyModuleNames.AddRange(new[] { "Core", "CoreUObject", "Engine", "InputCore", "Json", "JsonUtilities", "PhysicsCore" });
-        PrivateDependencyModuleNames.AddRange(new[] { "RenderCore", "Niagara", "ProceduralMeshComponent" });
+        PrivateDependencyModuleNames.AddRange(new[] { "RenderCore", "Niagara", "ProceduralMeshComponent", "HTTP", "Slate", "SlateCore" });
         if (Target.bBuildEditor) PrivateDependencyModuleNames.AddRange(new[] { "NiagaraEditor", "UnrealEd" });
     }
 }
