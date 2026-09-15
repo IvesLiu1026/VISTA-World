@@ -1,0 +1,351 @@
+{
+  "schema": "vista.campus-realism-source-receipt/v1",
+  "revision": "CampusR24",
+  "base": "CampusR21",
+  "external_downloads_this_round": false,
+  "inherited_asset_records": [
+    "campus-pbr-sources.json",
+    "campus-demo-sources.json",
+    "../design/vista-reference-avatar/asset-receipt.json"
+  ],
+  "geometry": {
+    "generator": "tools/blender/vista_campus/realism_geometry.py",
+    "artifact": "runs/campus-realism-geometry-c",
+    "closed_solid_orientation_checks": 26984,
+    "building_counts": {
+      "campus": 5,
+      "gate": 10,
+      "daxue": 16
+    },
+    "assets": {
+      "car": {
+        "sha256": "d73913141b649753dcfafc63cb724702aa9daa3f0d684b84b8c541c357fd140b",
+        "groups": {
+          "car_body": {
+            "vertices": 6494,
+            "polygons": 5867,
+            "materials": [
+              "WhiteCar",
+              "Steel",
+              "Rubber",
+              "CarGlass",
+              "Chrome",
+              "Seat",
+              "Lamp",
+              "Amber",
+              "Red",
+              "Paint",
+              "DarkRecess"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          },
+          "car_door": {
+            "vertices": 470,
+            "polygons": 415,
+            "materials": [
+              "WhiteCar",
+              "CarGlass",
+              "Rubber",
+              "Chrome",
+              "Seat"
+            ],
+            "runtime_pivot_m": [
+              0.82,
+              -0.855,
+              0.95
+            ]
+          },
+          "car_steering": {
+            "vertices": 1696,
+            "polygons": 1624,
+            "materials": [
+              "Rubber",
+              "Steel"
+            ],
+            "runtime_pivot_m": [
+              0.35,
+              -0.4,
+              1.04
+            ]
+          },
+          "car_wheel": {
+            "vertices": 5840,
+            "polygons": 4972,
+            "materials": [
+              "Rubber",
+              "Chrome",
+              "Steel"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "scooter": {
+        "sha256": "f0a467f2e4d0b4d8ac8165752f3f3ca2bcfe7bce36daff005183e1a8e2731405",
+        "groups": {
+          "scooter_body": {
+            "vertices": 7640,
+            "polygons": 7324,
+            "materials": [
+              "Teal",
+              "Seat",
+              "Rubber",
+              "Steel",
+              "Chrome",
+              "Red",
+              "Amber",
+              "Paint"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          },
+          "scooter_steering": {
+            "vertices": 8336,
+            "polygons": 8230,
+            "materials": [
+              "Steel",
+              "Teal",
+              "CarGlass",
+              "Lamp",
+              "Rubber",
+              "Chrome"
+            ],
+            "runtime_pivot_m": [
+              0.53,
+              0,
+              1.08
+            ]
+          },
+          "scooter_wheel": {
+            "vertices": 5840,
+            "polygons": 4972,
+            "materials": [
+              "Rubber",
+              "Chrome",
+              "Steel"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "campus": {
+        "sha256": "c0f611654cdde8b2d5b4d9248a0d157953148c762bf66493131dcc25184383a4",
+        "groups": {
+          "architecture": {
+            "vertices": 264992,
+            "polygons": 275880,
+            "materials": [
+              "DarkRecess",
+              "Stone",
+              "Frame",
+              "Blind",
+              "Chrome"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          },
+          "glazing": {
+            "vertices": 11808,
+            "polygons": 12300,
+            "materials": [
+              "Glass"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          },
+          "fittings": {
+            "vertices": 8264,
+            "polygons": 7856,
+            "materials": [
+              "Paint",
+              "Steel",
+              "Frame",
+              "DarkRecess"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "gate": {
+        "sha256": "ddf7f2a24554c93980e3e6fd5eceb11b1eb1fe40196472ee156067066dd5f8a8",
+        "groups": {
+          "architecture": {
+            "vertices": 197536,
+            "polygons": 205460,
+            "materials": [
+              "DarkRecess",
+              "Stone",
+              "Frame",
+              "Blind",
+              "Chrome"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          },
+          "glazing": {
+            "vertices": 8928,
+            "polygons": 9300,
+            "materials": [
+              "Glass"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          },
+          "fittings": {
+            "vertices": 6960,
+            "polygons": 6544,
+            "materials": [
+              "Paint",
+              "Steel",
+              "Frame",
+              "DarkRecess"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "daxue": {
+        "sha256": "c95efe1d10bd3291fe7f6d9b47ec7ec687b06d8447a6a092823ccd54ff9daf73",
+        "groups": {
+          "architecture": {
+            "vertices": 391264,
+            "polygons": 407076,
+            "materials": [
+              "DarkRecess",
+              "Stone",
+              "Frame",
+              "Blind",
+              "Chrome"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          },
+          "glazing": {
+            "vertices": 17664,
+            "polygons": 18400,
+            "materials": [
+              "Glass"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          },
+          "fittings": {
+            "vertices": 253120,
+            "polygons": 211264,
+            "materials": [
+              "Paint",
+              "Steel",
+              "Frame",
+              "DarkRecess"
+            ],
+            "runtime_pivot_m": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      }
+    }
+  },
+  "avatar": {
+    "generator": "tools/blender/vista_reference_avatar/refine_realism.py",
+    "input": "runs/rooms-avatar-build-i",
+    "artifact": "runs/campus-realism-avatar-a",
+    "source_blend_sha256": "3e9430244c8ce853447d636584c0cb8820b0e9239d6204e524156d93bf711c70",
+    "bones": 53,
+    "skin_geometry_weights_sha256": {
+      "Reference_M_Skin": "edf7d3ee2730bf28ebdbf98af421875eaf9feb279a0409ead415e526008be9ed",
+      "Owner_Reference_M_Skin": "822bd2d71515866b1d7e863c3c4789ffa05963297def41e92f080c9f9a89d193"
+    },
+    "exports": [
+      {
+        "file": "world-body.glb",
+        "bytes": 20058128,
+        "sha256": "598cbc34b7ebe5a3c25a1599ab99e35c7e757b2ae499434a0a4ea37545d6cebe"
+      },
+      {
+        "file": "owner-body.glb",
+        "bytes": 11604164,
+        "sha256": "3f5dc157abbcd6cb1e7145e5d81e088bca0c06333022b65997218fb446185e04"
+      }
+    ],
+    "cloth_changes": [
+      {
+        "mesh": "Reference_M_Shirt",
+        "before_vertices": 5374,
+        "after_vertices": 30936,
+        "max_outward_fold_m": 0.0014999999989848383
+      },
+      {
+        "mesh": "Reference_M_Trousers",
+        "before_vertices": 3610,
+        "after_vertices": 20914,
+        "max_outward_fold_m": 0.0031981574033135385
+      },
+      {
+        "mesh": "Owner_Reference_M_Shirt",
+        "before_vertices": 5374,
+        "after_vertices": 30936,
+        "max_outward_fold_m": 0.0014999999989848383
+      },
+      {
+        "mesh": "Owner_Reference_M_Trousers",
+        "before_vertices": 3610,
+        "after_vertices": 20914,
+        "max_outward_fold_m": 0.0031981574033135385
+      }
+    ]
+  },
+  "saved_readback": {
+    "artifact": "runs/campus-realism-readback-b/result.json",
+    "sha256": "264ed0d289fedabb22c1ca98c6235f9fd6a78f905c3094d9a42e17ef793a7d9b"
+  },
+  "scope": [
+    "New manufactured geometry authored locally",
+    "Inherited photo textures retain their original CC0 provenance",
+    "Approximate reconstruction and character likeness",
+    "Procedural cloth and motion, not simulation or motion capture"
+  ]
+}
