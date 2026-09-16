@@ -72,6 +72,7 @@ public:
     UFUNCTION(Exec) void ExplorerActions();
     UFUNCTION(Exec) void ExplorerScene(const FString& Id);
     UFUNCTION(Exec) void ExplorerState();
+    UFUNCTION(Exec) void ExplorerWalkthrough(bool Enabled);
     UFUNCTION(Exec) void CompanionTalk();
     UFUNCTION(Exec) void CompanionAsk(const FString& Text);
     UFUNCTION(Exec) void CompanionFollow(bool Enabled);
@@ -115,10 +116,17 @@ private:
     void ExplorerRun();
     void ExplorerWalk();
     void TickTrafficSignals(float Dt);
-    void PublishExplorerState();
+    void PublishExplorerState(const FMinimalViewInfo* ResolvedView=nullptr);
     bool bRun=false, bInCrossing=false;
     float PublishClock=0, EntrySide=0, CrossY=0;
     FString ProofDir;
+    void TickWalkthrough(float Dt);
+    TArray<TSharedPtr<FJsonObject>> Walkthrough;
+    FString WalkthroughStatus=TEXT("idle");
+    int32 WalkthroughIndex=0;
+    float WalkthroughWait=0,WalkthroughStall=0,WalkthroughClock=0,WalkthroughDistance=0;
+    FVector WalkthroughPrevious;
+    bool bWalkthroughThird=false;
     TArray<TWeakObjectPtr<AStaticMeshActor>> GreenLamps, RedLamps;
 };
 
