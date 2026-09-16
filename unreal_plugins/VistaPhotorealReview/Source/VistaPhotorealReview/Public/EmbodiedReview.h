@@ -79,6 +79,7 @@ public:
     virtual void ReviewSnapshot() override;
     void BuildBodyPose(TArray<FTransform>& LocalPose);
     UFUNCTION(Exec) void EmbodiedState();
+    virtual void CalcCamera(float Dt,FMinimalViewInfo& Out) override;
     UFUNCTION(Exec) void EmbodiedBones();
     UFUNCTION(Exec) void EmbodiedTrace(float Seconds);
     UFUNCTION(Exec) void EmbodiedTestStand(float HeightCm,float CupYaw);
@@ -185,6 +186,7 @@ protected:
     void MeasureContact();
     virtual void OnPoseFinalized();
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) {}
+    virtual float ReachTorsoLeanScale() const { return 1.f; }
     virtual void ModifyBaseBodyPose(TArray<FTransform>& LocalPose) {}
     virtual bool WantsFirstPersonReadyPose() const { return true; }
     virtual bool PreserveUnoccupiedArmPose() const { return false; }

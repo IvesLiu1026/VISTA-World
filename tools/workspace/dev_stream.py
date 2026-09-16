@@ -1,8 +1,8 @@
 """Select an editable workspace scene in an explicitly configured Sunshine slot.
 
 Uses the existing reviewed renderer command builder and guarded input adapter.
-Only editor-game projects are supported. This is human development, not a sealed
-evaluation launcher; edited payload bytes are recorded anew on every selection.
+Only editor-game projects are supported. Development payloads are inventoried on
+selection; a reviewed demo can additionally require an unchanged saved inventory.
 """
 from __future__ import annotations
 import argparse
@@ -47,7 +47,7 @@ def prepare(root: Path, project: str, host: dict) -> tuple[dict, Path, list[dict
     identifier(project)
     project_root = inside(root, 'projects/' + project)
     source = read_json(inside(project_root, 'source.json'))
-    scene = load_scene(root, source['scene'])
+    scene = project_scene(root, project)
     if scene['runtime']['kind'] != 'editor-game':
         raise ValueError('Only editable editor-game projects are supported')
     payload = inside(project_root, 'payload')
@@ -61,7 +61,28 @@ def prepare(root: Path, project: str, host: dict) -> tuple[dict, Path, list[dict
             if rel.split('/')[0] in {'Saved', 'Intermediate', 'DerivedDataCache', '.git'}:
                 continue
             rows.append({'path': rel, 'size': p.stat().st_size, 'sha256': digest(p)})
+    if source.get('demo_manifest'):
+        expected = read_json(inside(project_root, source['demo_manifest']))
+        if expected.get('schema') != 'vista.workspace-demo-payload/v1' or expected.get('files') != rows:
+            raise ValueError('Demo payload differs from its reviewed inventory')
     return scene, payload, rows
+
+
+def project_scene(root: Path, project: str) -> dict:
+    source = read_json(inside(root, 'projects/' + identifier(project) + '/source.json'))
+    scene = load_scene(root, source['scene'])
+    override = source.get('runtime_override')
+    if override is not None:
+        if not isinstance(override, dict) or set(override) != {'map', 'title', 'whole_home', 'home_actions_bridge'}:
+            raise ValueError('Unsupported demo runtime override')
+        if (not isinstance(override['map'], str)
+                or not re.fullmatch(r'/Game/VISTA/CampusR[0-9]+/Maps/(Home|Campus|NorthGate|DaxueRoad)', override['map'])
+                or not isinstance(override['title'], str) or not override['title'].strip()
+                or any(type(override[k]) is not bool for k in ('whole_home', 'home_actions_bridge'))):
+            raise ValueError('Invalid campus demo runtime override')
+        inside(root, 'projects/' + project + '/payload/Content/' + override['map'].removeprefix('/Game/') + '.umap').resolve(strict=True)
+        scene = {**scene, 'runtime': {**scene['runtime'], **override, 'camera_profile': None}}
+    return scene
 
 
 def active(unit: str) -> bool:
@@ -84,6 +105,16 @@ def run_game(root: Path, project: str, host: dict, scene: dict, payload: Path, r
         p.mkdir(parents=True, exist_ok=True)
     write_new(runtime / 'payload.json', {'project': project, 'scene': scene['id'], 'files': rows})
     command = build_command(scene['runtime'], payload, engine, runtime, cache, host['gpu'], host['fps'])
+    command += ['-VistaPrivateReview',
+                '-ini:Engine:[CrashReportClient]:bStartCRCFromEngineHandler=False',
+                '-ini:EditorSettings:[/Script/UnrealEd.CrashReportsPrivacySettings]:bSendUnattendedBugReports=False',
+                '-VistaExplorerProof='+str(runtime/'explorer-proof')]
+    companion_config=payload/'Config/VistaCompanion.json'
+    if companion_config.is_file():
+        if read_json(companion_config).get('schema') != 'vista.companion/v1':
+            raise ValueError('Invalid indoor companion configuration')
+        command=[item for item in command if item.upper()!='-NOSOUND']
+        command.append('-VistaCompanionProof='+str(runtime/'companion-proof'))
     env = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': str(Path.home()), 'LANG': 'C.UTF-8',
            'DISPLAY': host['display'], 'XAUTHORITY': str(inside(root.parent, host['xauthority'])),
            'XDG_RUNTIME_DIR': '/run/user/' + str(os.getuid()), 'SDL_VIDEODRIVER': 'x11',
@@ -120,7 +151,7 @@ def run_game(root: Path, project: str, host: dict, scene: dict, payload: Path, r
 def select(root: Path, project: str, profile_path: Path, host: dict, rows: list[dict]) -> None:
     from launch_bundle import engine_path
     from select_demo import focus_identity
-    scene = load_scene(root, read_json(root / 'projects' / project / 'source.json')['scene'])
+    scene = project_scene(root, project)
     engine_path(scene['engine_version'])  # Fail before stopping anything.
     selection = inside(root.parent, host['selection'])
     with inside(root.parent, host['selection_lock']).open('a') as lock:
@@ -179,6 +210,20 @@ def main() -> None:
     elif a.mode == 'run':
         raise SystemExit(run_game(a.root, a.project, host, scene, payload, rows))
     else:
+        if (payload/'Config/VistaCompanion.json').is_file():
+            # Fail before replacing the current game if the companion cannot start.
+            import urllib.request
+            import urllib.error
+            subprocess.run(['systemctl','--user','start','vista-six-room-companion-ai.service'],check=True)
+            deadline=time.monotonic()+60
+            while True:
+                try:
+                    with urllib.request.urlopen('http://127.0.0.1:49010/health',timeout=2) as response:
+                        health=json.load(response)
+                    if health.get('ready') and health.get('dialogue')=='Qwen3-4B-Instruct-2507':break
+                except (OSError,ValueError,urllib.error.URLError):pass
+                if time.monotonic()>deadline:raise RuntimeError('Local companion service did not become ready')
+                time.sleep(.25)
         select(a.root, a.project, a.host, host, rows)
         print(json.dumps({'selected': 'dev-' + a.project}), flush=True)
         if a.mode == 'stream':

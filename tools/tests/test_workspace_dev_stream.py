@@ -73,6 +73,59 @@ class DevelopmentStreamTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'editor-game'):
             dev.prepare(self.root, 'edit', self.host)
 
+    def make_demo(self):
+        scene = {'schema': ws.SCENE_SCHEMA, 'id': 'villa-r1', 'runtime': {
+            'kind': 'editor-game', 'entry': 'Home.uproject', 'files': [],
+            'map': '/Game/OldVilla', 'camera_profile': 'old-camera.json'}}
+        ws.write_new(self.root / 'scenes/villa-r1/scene.json', scene)
+        self.demo_source = {'scene': 'villa-r1', 'runtime_override': {
+            'map': '/Game/VISTA/CampusR15/Maps/Campus', 'title': 'VISTA Campus Demo',
+            'whole_home': True, 'home_actions_bridge': True}}
+        self.demo_path = self.root / 'projects/demo/source.json'
+        ws.write_new(self.demo_path, self.demo_source)
+        payload = self.root / 'projects/demo/payload'
+        map_file = payload / 'Content/VISTA/CampusR15/Maps/Campus.umap'
+        map_file.parent.mkdir(parents=True)
+        map_file.write_text('reviewed map')
+        (payload / 'Home.uproject').write_text('project')
+        return payload
+
+    def test_demo_uses_reviewed_map_without_changing_original_scene(self):
+        self.make_demo()
+        scene, _, _ = dev.prepare(self.root, 'demo', self.host)
+        self.assertEqual(scene['runtime']['map'], '/Game/VISTA/CampusR15/Maps/Campus')
+        self.assertIsNone(scene['runtime']['camera_profile'])
+        self.assertEqual(ws.load_scene(self.root, 'villa-r1')['runtime']['map'], '/Game/OldVilla')
+        (self.root / 'projects/demo/payload/Content/VISTA/CampusR15/Maps/Campus.umap').unlink()
+        with self.assertRaises(FileNotFoundError):
+            dev.prepare(self.root, 'demo', self.host)
+
+    def test_invalid_demo_override_fails_before_lifecycle_changes(self):
+        self.make_demo()
+        for value in [None, '../outside', '/Game/OldVilla']:
+            with self.subTest(value=value), patch('subprocess.run') as calls:
+                self.demo_source['runtime_override']['map'] = value
+                self.demo_path.write_text(json.dumps(self.demo_source))
+                with self.assertRaises(ValueError):
+                    dev.prepare(self.root, 'demo', self.host)
+                calls.assert_not_called()
+
+    def test_demo_rejects_changed_payload_but_allows_transient_saved_files(self):
+        payload = self.make_demo()
+        _, _, rows = dev.prepare(self.root, 'demo', self.host)
+        ws.write_new(self.demo_path.parent / 'reviewed.json', {
+            'schema': 'vista.workspace-demo-payload/v1', 'files': rows})
+        self.demo_source['demo_manifest'] = 'reviewed.json'
+        self.demo_path.write_text(json.dumps(self.demo_source))
+        (payload / 'Saved').mkdir()
+        (payload / 'Saved/log.txt').write_text('runtime log')
+        self.assertEqual(dev.prepare(self.root, 'demo', self.host)[2], rows)
+        (payload / 'Home.uproject').write_text('unreviewed change')
+        with patch('subprocess.run') as calls:
+            with self.assertRaisesRegex(ValueError, 'reviewed inventory'):
+                dev.prepare(self.root, 'demo', self.host)
+            calls.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

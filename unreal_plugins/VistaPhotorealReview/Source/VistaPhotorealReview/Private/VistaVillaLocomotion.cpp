@@ -72,6 +72,7 @@ void AVistaVillaCharacter::LoadMotionLibrary()
 
 void AVistaVillaCharacter::UpdateBodyFacing(float Dt)
 {
+    if (!bVillaEmbodiment) {Super::UpdateBodyFacing(Dt);return;}
     if (!Controller) return;
     if (bThirdPerson || Phase!=EEmbodiedPhase::Idle || bSceneActionBusy)
     {Super::UpdateBodyFacing(Dt);return;}
@@ -90,24 +91,49 @@ void AVistaVillaCharacter::ModifyBaseBodyPose(TArray<FTransform>& Local)
     if (MotionBlend.Num()==Local.Num()) Local=MotionBlend;
 }
 
+void AVistaVillaCharacter::UpdateBodyLook(float Dt)
+{
+    if (!Controller) return;
+    float TorsoYaw=0;
+    if (MotionBlend.Num()==Parents.Num())
+    {
+        const int32 Spine=BoneIndex.FindChecked(TEXT("spine_03"));TArray<FTransform> Global;
+        for (int32 I=0;I<=Spine;++I) Global.Add(Parents[I]>=0?MotionBlend[I]*Global[Parents[I]]:MotionBlend[I]);
+        const FQuat Facing=Global[Spine].GetRotation()*ReferenceGlobal[Spine].GetRotation().Inverse();
+        const FVector Forward=Facing.RotateVector(FVector(0,1,0));
+        TorsoYaw=FMath::RadiansToDegrees(FMath::Atan2(-Forward.X,Forward.Y));
+    }
+    // Side clips already rotate the torso. Bound the look relative to that
+    // actual torso, rather than adding a second yaw onto a recorded head turn.
+    BodyLook.Update(FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Controller->GetControlRotation().Yaw)-TorsoYaw,
+        Controller->GetControlRotation().Pitch,Dt,bVillaEmbodiment && !bThirdPerson);
+}
+
 void AVistaVillaCharacter::RefineSceneBodyPose(TArray<FTransform>& Local)
 {
-    if (!Controller || bThirdPerson || Local.Num()!=Parents.Num()) return;
+    if (!bVillaEmbodiment || !Controller || bThirdPerson || Local.Num()!=Parents.Num()) return;
     // Rotate the same neck/head that defines the eye position, so looking to
     // the side moves the eyes around the neck instead of around the pelvis.
     // Active contact keeps its established eye/contact calibration.
     const float Free=(1-FMath::Max(ReachAlpha,LeftReachAlpha))*(1-FallAlpha);
-    const float Yaw=FMath::Clamp(FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,
-        Controller->GetControlRotation().Yaw),-85.f,85.f)*Free;
-    const float Pitch=FMath::Clamp(FRotator::NormalizeAxis(Controller->GetControlRotation().Pitch),-50.f,40.f)*Free;
+    const float Yaw=BodyLook.Yaw*Free;
+    const float Pitch=BodyLook.Pitch*Free;
+    for (const TCHAR* Name:{TEXT("neck_01"),TEXT("head")})
+    {
+        const int32 I=BoneIndex.FindChecked(Name);
+        Local[I].SetRotation(FQuat::Slerp(Local[I].GetRotation(),Poses->Relaxed[I].GetRotation(),Free).GetNormalized());
+    }
     TArray<FTransform> Global;
     for (int32 I=0;I<Local.Num();++I) Global.Add(Parents[I]>=0?Local[I]*Global[Parents[I]]:Local[I]);
+    const int32 Spine=BoneIndex.FindChecked(TEXT("spine_03"));
+    const FQuat Torso=Global[Spine].GetRotation()*ReferenceGlobal[Spine].GetRotation().Inverse();
+    const FQuat Look=Torso*(FQuat(FVector::UpVector,FMath::DegreesToRadians(Yaw))*
+        FQuat(FVector::ForwardVector,FMath::DegreesToRadians(Pitch)))*Torso.Inverse();
     for (int32 Part=0;Part<2;++Part)
     {
         const int32 Root=BoneIndex.FindChecked(Part?TEXT("head"):TEXT("neck_01"));
         const float Weight=Part?.65f:.35f;
-        const FQuat Delta=FQuat(FVector::UpVector,FMath::DegreesToRadians(Yaw*Weight))*
-            FQuat(FVector::ForwardVector,FMath::DegreesToRadians(Pitch*Weight));
+        const FQuat Delta=FQuat::Slerp(FQuat::Identity,Look,Weight).GetNormalized();
         const FVector Pivot=Global[Root].GetLocation();
         for (int32 I=Root;I<Global.Num();++I)
         {
@@ -121,7 +147,7 @@ void AVistaVillaCharacter::RefineSceneBodyPose(TArray<FTransform>& Local)
 
 void AVistaVillaCharacter::AdjustFirstPersonEyeTarget(FVector& EyeTarget) const
 {
-    if (!Controller) return;
+    if (!bVillaEmbodiment || !Controller) return;
     const float Side=FMath::Abs(FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Controller->GetControlRotation().Yaw));
     const float Pitch=FRotator::NormalizeAxis(Controller->GetControlRotation().Pitch);
     const float Lean=FMath::Clamp((Side-35.f)/35.f,0.f,1.f)*FMath::Clamp((-Pitch-30.f)/25.f,0.f,1.f)*
@@ -133,6 +159,7 @@ void AVistaVillaCharacter::AdjustFirstPersonEyeTarget(FVector& EyeTarget) const
 
 void AVistaVillaCharacter::UpdateFeet(float Dt)
 {
+    if (bSceneFeetOverride || SeatedAlpha>.01f) {Super::UpdateFeet(Dt);return;}
     if (Motions.Num()<2 || MotionIdle.Num()!=Parents.Num()) {Super::UpdateFeet(Dt);return;}
     const FVector Velocity=GetVelocity();
     const float Speed=Velocity.Size2D();
@@ -200,25 +227,32 @@ void AVistaVillaCharacter::UpdateFeet(float Dt)
         FVector Desired=Mesh.TransformPosition(Local);
         if (Alpine)
         {
-            // Calibrate the retargeted foot path around the moving capsule.
-            // Without this advance, a walking foot lands almost under the hip,
-            // then remains planted behind the leg's reachable range at toe-off.
-            // Move the whole swing/landing path, not an already planted anchor.
-            Desired+=Velocity.GetSafeNormal2D()*CycleDistance*.18f*(1.f-RunBlend)*MotionWeight;
+            Desired+=Velocity.GetSafeNormal2D()*FMath::Min(8.f,CycleDistance*.18f)*(1.f-RunBlend)*MotionWeight;
         }
         const float Contact=FMath::Lerp(A.Contact[Side],B.Contact[Side],Fraction);
-        ContactWeight[Side]=FMath::Lerp(1.f,Contact,MotionWeight);
+        const float TargetContact=FMath::Lerp(1.f,Contact,MotionWeight);
+        // Contacts must have the same temporal filter as MotionBlend. Using
+        // the next sample's contact with the delayed pose planted a swinging
+        // foot, destroyed arm/leg opposition and yanked the knee at release.
+        ContactWeight[Side]=Alpine && !Reset?FMath::Lerp(ContactWeight[Side],TargetContact,
+            1-FMath::Exp(-Dt*18.f)):TargetContact;
         const double Ground=Floor(Desired);
         const double Lift=FMath::Max(0.,Local.Z-6.22);
         Desired.Z=Ground+Lift*(1.f-ContactWeight[Side]);
-        const bool Planted=ContactWeight[Side]>.55f;
+        const float Lock=FMath::SmoothStep(.3f,.85f,ContactWeight[Side]);
+        const bool Planted=Lock>0.f;
         if (Reset || (Planted && !FootLocked[Side])) FootAnchor[Side]=FVector(Desired.X,Desired.Y,Ground);
         // A stationary turn has no recorded translational stride. Release a
         // stale anchor smoothly instead of wrenching the knee backwards.
         if (Speed<8.f && FVector::Dist2D(FootAnchor[Side],Desired)>5.f)
             FootAnchor[Side]=FMath::VInterpTo(FootAnchor[Side],FVector(Desired.X,Desired.Y,Ground),Dt,7.f);
+        // Terrain IK is a correction to the measured trajectory. Never hold
+        // an anchor far behind the capsule until a leg becomes unreachable.
+        // A bounded horizontal correction also releases a foot during turns.
+        FVector Error=FootAnchor[Side]-FVector(Desired.X,Desired.Y,Ground);Error.Z=0;
+        FootAnchor[Side]=FVector(Desired.X,Desired.Y,Ground)+Error.GetClampedToMaxSize(6.f);
         FootLocked[Side]=Planted;
-        if (Planted) Desired=FMath::Lerp(Desired,FootAnchor[Side],ContactWeight[Side]);
+        Desired=FMath::Lerp(Desired,FootAnchor[Side],Lock);
         Feet[Side].Current=Feet[Side].Goal=Desired;
         Feet[Side].Planted=FootAnchor[Side];Feet[Side].Progress=Planted?1.f:StepClock;
         Feet[Side].Yaw=GetActorRotation().Yaw;Feet[Side].Roll=0.f;

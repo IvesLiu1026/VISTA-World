@@ -12,8 +12,34 @@
 
 using namespace HomeJson;
 
+FVector AHomeActionsCharacter::ScenePoint(const FString& Room,const FVector& Legacy) const
+{
+    const TArray<TSharedPtr<FJsonValue>>* Rows;
+    if (Contract && Contract->TryGetArrayField(TEXT("rooms"),Rows))
+        for (const auto& V:*Rows)
+            if (String(V->AsObject(),TEXT("short_id"))==Room)
+                return Legacy+Vector(V->AsObject(),TEXT("legacy_offset_cm"));
+    return Legacy;
+}
+
 FString AHomeActionsCharacter::RoomAt(const FVector& P) const
 {
+    const TArray<TSharedPtr<FJsonValue>>* Rows;
+    if (Contract && Contract->TryGetArrayField(TEXT("rooms"),Rows))
+    {
+        for (const auto& V:*Rows)
+        {
+            const auto R=V->AsObject();
+            const auto& Boxes=R->GetArrayField(TEXT("bounds"));
+            for (const auto& B:Boxes)
+            {
+                const auto Box=B->AsObject();const FVector Min=Vector(Box,TEXT("min")),Max=Vector(Box,TEXT("max"));
+                if (P.X>=Min.X && P.X<Max.X && P.Y>=Min.Y && P.Y<Max.Y && P.Z>=Min.Z && P.Z<Max.Z)
+                    return String(R,TEXT("id"));
+            }
+        }
+        return TEXT("outside");
+    }
     FString Room;
     if (P.X>=-150 && P.X<=150 && P.Y>=-400 && P.Y<=400) Room=TEXT("entry_hall");
     else if (P.X>=-650 && P.X<-150 && P.Y>=0 && P.Y<=400) Room=TEXT("living_room");
@@ -24,11 +50,11 @@ FString AHomeActionsCharacter::RoomAt(const FVector& P) const
     return Room.IsEmpty()?TEXT("outside"):TEXT("home.r1/room.")+Room;
 }
 
-bool AHomeActionsCharacter::EvaluateCondition(const TSharedPtr<FJsonObject>& C) const
+bool AHomeActionsCharacter::EvaluateCondition(const TSharedPtr<FJsonObject>& C,const FHomeConcurrentEvent* Context) const
 {
     const FString Type=String(C,TEXT("type"));const auto* E=Resolve(String(C,TEXT("target_id")));
-    if (Type==TEXT("elapsed")) return EventTime>=Number(C,TEXT("seconds"));
-    if (Type==TEXT("interaction")) return E && Interactions.Contains(E->Id+TEXT("#")+String(C,TEXT("affordance")));
+    if (Type==TEXT("elapsed")) return (Context?Context->Elapsed:EventTime)>=Number(C,TEXT("seconds"));
+    if (Type==TEXT("interaction")) return E && (Context?Context->Interactions:Interactions).Contains(E->Id+TEXT("#")+String(C,TEXT("affordance")));
     if (Type==TEXT("player_room")) return RoomAt(GetActorLocation())==String(C,TEXT("room_id"));
     if (Type==TEXT("entity_room")) return E && E->Actor.IsValid() && RoomAt(E->Actor->GetActorLocation())==String(C,TEXT("room_id"));
     if (Type==TEXT("entity_state") && E)
@@ -68,23 +94,56 @@ bool AHomeActionsCharacter::ResetScene(FString& Code)
         {auto A=Container->State->GetArrayField(TEXT("contents"));A.Add(MakeShared<FJsonValueString>(Pair.Key));Container->State->SetArrayField(TEXT("contents"),A);}
     HeldId.Empty();SeatId.Empty();TargetId.Empty();SecondaryId.Empty();Interactions.Empty();
     EventId.Empty();EventStatus=TEXT("inactive");TerminalCondition.Empty();EventTime=0;
+    ConcurrentEvents.Empty();bPhoneCall=false;PhoneBlend=0;
     Phase=EEmbodiedPhase::Idle;PhaseTime=0;ReachAlpha=FingerAlpha=LeftReachAlpha=LeftFingerAlpha=0;
     CrouchAlpha=SeatedAlpha=FallAlpha=0;bFeetReady=false;bSceneActionBusy=false;
     if (auto* Platform=Resolve(StandingOn)) GetCapsuleComponent()->IgnoreActorWhenMoving(Platform->Actor.Get(),false);
     StandingOn.Empty();bSceneFeetOverride=false;GetCapsuleComponent()->SetCapsuleRadius(27.f);GetCharacterMovement()->MaxStepHeight=22.f;
     PreviousVelocities.Empty();PendingImpacts.Empty();HazardCooldown=2.f;
     SelectPickup(*Resolve(TEXT("coffee_cup")));GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-    bSuppressReceipt=false;++Generation;EmbodiedInspect(0);Code=TEXT("SCENE_RESET");PublishState();return true;
+    bSuppressReceipt=false;++Generation;if (Contract->HasField(TEXT("rooms"))) HomeRoom(1);else EmbodiedInspect(0);Code=TEXT("SCENE_RESET");PublishState();return true;
 }
 
-bool AHomeActionsCharacter::StartEvent(const FString& Id,FString& Code)
+bool AHomeActionsCharacter::StartEvent(const FString& Id,FString& Code,bool bReset)
 {
     if (!bSceneReady) {Code=TEXT("SCENE_NOT_READY");return false;}
     TSharedPtr<FJsonObject> Definition;
     for (const auto& V:Contract->GetArrayField(TEXT("events")))
         if (String(V->AsObject(),TEXT("event_id"))==Id) Definition=V->AsObject();
     if (!Definition) {Code=TEXT("EVENT_NOT_FOUND");return false;}
-    if (!ResetScene(Code)) return false;
+    TSet<FString> Writes;
+    if (!bReset)
+    {
+        if (!bStreamingEnabled) {Code=TEXT("STREAMING_DISABLED");return false;}
+        if (!ActiveId.IsEmpty() || EventStatus==TEXT("running")) {Code=TEXT("EVENT_ADD_BUSY");return false;}
+        int32 Running=0;
+        for (const auto& Pair:ConcurrentEvents)
+            if (Pair.Value.Status==TEXT("running"))
+            {
+                ++Running;
+                if (Pair.Value.TemplateId==Id) {Code=TEXT("EVENT_ALREADY_ADDED");return false;}
+            }
+        if (Running>=64) {Code=TEXT("EVENT_CAPACITY");return false;}
+        // Validate the complete initial write set before changing any world state.
+        for (const auto& V:Definition->GetArrayField(TEXT("initial_operations")))
+        {
+            const auto O=V->AsObject();const FString Op=String(O,TEXT("op"));
+            if (Op==TEXT("set_goal")) continue;
+            const auto* E=Resolve(String(O,TEXT("target_id")));
+            if (!E) {Code=TEXT("EVENT_ENTITY_MISSING");return false;}
+            if (Op!=TEXT("set_state") && Op!=TEXT("set_visibility") && Op!=TEXT("set_portable") && Op!=TEXT("set_transform"))
+            {Code=TEXT("EVENT_OPERATION_UNSUPPORTED");return false;}
+            if (E->Id==HeldId || E->Id==SeatId) {Code=TEXT("EVENT_ENTITY_IN_USE");return false;}
+            for (const auto& Pair:ConcurrentEvents)
+                if (Pair.Value.Status==TEXT("running") && Pair.Value.WrittenEntities.Contains(E->Id))
+                {Code=TEXT("EVENT_WRITE_CONFLICT");return false;}
+            Writes.Add(E->Id);
+        }
+        // This legacy event has extra implicit containment writes; keep it in the
+        // isolated legacy path until those writes have a typed transaction.
+        if (Id==TEXT("mmg_070")) {Code=TEXT("EVENT_IMPLICIT_WRITES_UNSUPPORTED");return false;}
+    }
+    else if (!ResetScene(Code)) return false;
     for (const auto& V:Definition->GetArrayField(TEXT("initial_operations")))
     {
         const auto O=V->AsObject();const FString Op=String(O,TEXT("op"));auto* E=Resolve(String(O,TEXT("target_id")));
@@ -106,9 +165,26 @@ bool AHomeActionsCharacter::StartEvent(const FString& Id,FString& Code)
         Basket->State->SetArrayField(TEXT("contents"),{});Washer->State->SetArrayField(TEXT("contents"),{MakeShared<FJsonValueString>(Clothes->Id)});
     }
     for (auto& Pair:Entities)
-        if (Pair.Value.Kind==TEXT("appliance") && Pair.Value.Spec->HasField(TEXT("axis")))
+        if ((bReset || Writes.Contains(Pair.Key)) && Pair.Value.Kind==TEXT("appliance") && Pair.Value.Spec->HasField(TEXT("axis")))
             ApplyAperture(Pair.Value,Bool(Pair.Value.State,TEXT("active"))?1.f:0.f);
-    EventId=Id;EventStatus=TEXT("running");EventTime=0;TerminalCondition.Empty();
+    if (bReset) {EventId=Id;EventStatus=TEXT("running");EventTime=0;TerminalCondition.Empty();}
+    else
+    {
+        if (ConcurrentEvents.Num()>=64)
+        {
+            FString Oldest;float Started=MAX_flt;
+            for (const auto& Pair:ConcurrentEvents)
+                if (Pair.Value.Status!=TEXT("running") && Pair.Value.Started<Started) {Oldest=Pair.Key;Started=Pair.Value.Started;}
+            if (!Oldest.IsEmpty()) ConcurrentEvents.Remove(Oldest); // outcomes remain in append-only receipts
+        }
+        FHomeConcurrentEvent Context;Context.TemplateId=Id;Context.Definition=Definition;Context.Started=SceneClock;Context.WrittenEntities=MoveTemp(Writes);
+        const FString Instance=FString::Printf(TEXT("%s@%llu"),*Id,++ConcurrentSerial);
+        ConcurrentEvents.Add(Instance,MoveTemp(Context));
+        auto R=MakeShared<FJsonObject>();R->SetStringField(TEXT("schema"),TEXT("vista.concurrent-event-start/v1"));
+        R->SetStringField(TEXT("event_id"),Id);R->SetNumberField(TEXT("clock_s"),SceneClock);
+        R->SetStringField(TEXT("instance_id"),Instance);
+        R->SetBoolField(TEXT("world_reset"),false);AppendReceipt(R);
+    }
     Code=TEXT("EVENT_STARTED");UpdatePresentation(0);PublishState();return true;
 }
 
@@ -163,9 +239,9 @@ void AHomeActionsCharacter::UpdatePresentation(float Dt)
         if (Level>=1.f) Overflow->State->SetBoolField(TEXT("visible"),true);
     }
     const float Height=15+Level*38;
-    Shape(TEXT("bath_water"),TEXT("Cube"),TEXT("M_Water"),FVector(-99,-694,Height),FVector(51,143,.6),Level>0);
-    Shape(TEXT("bath_stream"),TEXT("Cylinder"),TEXT("M_Water"),FVector(-92,-630,(68+Height)*.5f),FVector(.9,.9,FMath::Max(1.f,68-Height)),Bool(Tap->State,TEXT("active")));
-    Shape(TEXT("overflow"),TEXT("Cylinder"),TEXT("M_Water"),FVector(-30,-647,1),FVector(78,118,.18),Bool(Overflow->State,TEXT("visible")));
+    Shape(TEXT("bath_water"),TEXT("Cube"),TEXT("M_Water"),ScenePoint(TEXT("bathroom_laundry"),FVector(-99,-694,Height)),FVector(51,143,.6),Level>0);
+    Shape(TEXT("bath_stream"),TEXT("Cylinder"),TEXT("M_Water"),ScenePoint(TEXT("bathroom_laundry"),FVector(-92,-630,(68+Height)*.5f)),FVector(.9,.9,FMath::Max(1.f,68-Height)),Bool(Tap->State,TEXT("active")));
+    Shape(TEXT("overflow"),TEXT("Cylinder"),TEXT("M_Water"),ScenePoint(TEXT("bathroom_laundry"),FVector(-30,-647,1)),FVector(78,118,.18),Bool(Overflow->State,TEXT("visible")));
     const auto* Slipper=Resolve(TEXT("slipper"));
     SpillPosition=Vector(Spill->State,TEXT("position_cm"),Slipper->Actor->GetActorLocation()+FVector(-8,0,.4));
     Shape(TEXT("coffee_spill"),TEXT("Cylinder"),TEXT("M_Coffee"),SpillPosition,FVector(58,44,.15),Bool(Spill->State,TEXT("visible")));
@@ -174,9 +250,9 @@ void AHomeActionsCharacter::UpdatePresentation(float Dt)
     {
         const float A=I*2*PI/12;
         Shape(FString::Printf(TEXT("flame_%d"),I),TEXT("Cone"),TEXT("M_Heat"),
-            FVector(380.5f+5.7f*FMath::Cos(A),42.5f+5.7f*FMath::Sin(A),97.1f),FVector(1.1,1.1,2.1+.25*FMath::Sin(SceneClock*13+I)),Bool(Stove->State,TEXT("active")));
+            ScenePoint(TEXT("kitchen_dining"),FVector(380.5f+5.7f*FMath::Cos(A),42.5f+5.7f*FMath::Sin(A),97.1f)),FVector(1.1,1.1,2.1+.25*FMath::Sin(SceneClock*13+I)),Bool(Stove->State,TEXT("active")));
     }
-    Shape(TEXT("washer_led"),TEXT("Sphere"),TEXT("M_Status"),FVector(71.3,-718.6,78.7),FVector(1,1,1),Bool(Washer->State,TEXT("active")));
+    Shape(TEXT("washer_led"),TEXT("Sphere"),TEXT("M_Status"),ScenePoint(TEXT("bathroom_laundry"),FVector(71.3,-718.6,78.7)),FVector(1,1,1),Bool(Washer->State,TEXT("active")));
     if (Bool(Washer->State,TEXT("active")))
     {
         auto* Clothes=Resolve(TEXT("clothes"));const auto* Door=Resolve(TEXT("washer_door"));
@@ -207,7 +283,7 @@ void AHomeActionsCharacter::UpdatePresentation(float Dt)
         if (Name==TEXT("floor_lamp") && FloorLight) FloorLight->SetVisibility(On);
     }
     const bool BasinOn=Bool(Resolve(TEXT("basin_faucet"))->State,TEXT("active"));
-    Shape(TEXT("basin_stream"),TEXT("Cylinder"),TEXT("M_Water"),FVector(120,-515,82),FVector(.65,.65,19),BasinOn);
+    Shape(TEXT("basin_stream"),TEXT("Cylinder"),TEXT("M_Water"),ScenePoint(TEXT("bathroom_laundry"),FVector(120,-515,82)),FVector(.65,.65,19),BasinOn);
     auto* Toilet=Resolve(TEXT("toilet"));float Flush=Number(Toilet->State,TEXT("cycle_elapsed_s"));
     if (Bool(Toilet->State,TEXT("active")))
     {
@@ -216,7 +292,7 @@ void AHomeActionsCharacter::UpdatePresentation(float Dt)
         {Toilet->State->SetBoolField(TEXT("active"),false);Toilet->State->SetStringField(TEXT("status"),TEXT("idle"));}
     }
     const float FlushWave=Bool(Toilet->State,TEXT("active"))?FMath::Sin(Flush*6.f)*1.4f:0.f;
-    Shape(TEXT("toilet_water"),TEXT("Cylinder"),TEXT("M_Water"),FVector(-93,-519,26+FlushWave),FVector(16,12,.25),true);
+    Shape(TEXT("toilet_water"),TEXT("Cylinder"),TEXT("M_Water"),ScenePoint(TEXT("bathroom_laundry"),FVector(-93,-519,26+FlushWave)),FVector(16,12,.25),true);
 }
 
 void AHomeActionsCharacter::SpillLiquid(FHomeEntity& E,const FString& Cause)
@@ -253,11 +329,12 @@ void AHomeActionsCharacter::UpdatePhysicalConsequences(float Dt)
     }
     if (!ActiveId.IsEmpty() || !SeatId.IsEmpty() || FallAlpha>.05f || HazardCooldown>0.f || GetVelocity().Size2D()<65.f) return;
     const auto* Slipper=Resolve(TEXT("slipper"));
-    const bool Trip=Slipper->Actor->GetActorLocation().Z<10.f && Slipper->Id!=HeldId &&
+    const bool Trip=FMath::Abs(Slipper->Actor->GetActorLocation().Z-ScenePoint(TEXT("living_room"),FVector::ZeroVector).Z)<10.f &&
+        FMath::Abs(GetActorLocation().Z-Slipper->Actor->GetActorLocation().Z)<120.f && Slipper->Id!=HeldId &&
         FVector::Dist2D(GetActorLocation(),Slipper->Actor->GetActorLocation())<28.f;
     const auto* Overflow=Resolve(TEXT("overflow_marker"));const auto* Spill=Resolve(TEXT("spill_marker"));
-    const bool Wet=(Bool(Overflow->State,TEXT("visible")) && FVector::Dist2D(GetActorLocation(),FVector(-30,-647,0))<38.f) ||
-        (Bool(Spill->State,TEXT("visible")) && FVector::Dist2D(GetActorLocation(),Vector(Spill->State,TEXT("position_cm")))<24.f);
+    const bool Wet=(Bool(Overflow->State,TEXT("visible")) && FVector::Dist2D(GetActorLocation(),ScenePoint(TEXT("bathroom_laundry"),FVector(-30,-647,0)))<38.f && FMath::Abs(GetActorLocation().Z-ScenePoint(TEXT("bathroom_laundry"),FVector(-30,-647,86)).Z)<90.f) ||
+        (Bool(Spill->State,TEXT("visible")) && FVector::Dist2D(GetActorLocation(),Vector(Spill->State,TEXT("position_cm")))<24.f && FMath::Abs(GetActorLocation().Z-Vector(Spill->State,TEXT("position_cm")).Z)<120.f);
     if (Trip || Wet)
     {
         HazardCooldown=6.f;FString Code;

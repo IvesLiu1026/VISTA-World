@@ -1,0 +1,81 @@
+{
+  "schema": "vista.campus-demo-sources/v1",
+  "license": "CC0-1.0",
+  "source_pages": [
+    "https://polyhaven.com/a/tree_small_02",
+    "https://polyhaven.com/a/leafy_grass"
+  ],
+  "grass_span_cm": 200,
+  "files": {
+    "tree_small_02/tree_small_02.blend": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/blend/2k/tree_small_02/tree_small_02_2k.blend",
+      "bytes": 63805237,
+      "sha256": "3c28e4ebded582d6539afeac7e5ccce6cb950830a94f1fe38135a45264145de5"
+    },
+    "tree_small_02/textures/tree_small_02_branch_diff_2k.png": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/tree_small_02/tree_small_02_branch_diff_2k.png",
+      "bytes": 2714537,
+      "sha256": "553d0cdbc12b63be3bd85756713f95bec5cdf8cc57dae74d3f19d8df13ac126c"
+    },
+    "tree_small_02/textures/tree_small_02_branch_nor_gl_2k.png": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/tree_small_02/tree_small_02_branch_nor_gl_2k.png",
+      "bytes": 15596069,
+      "sha256": "a8aa5f945a5977d82111f1f397a525acb8103d108d86bf09087be4d7d1f976d6"
+    },
+    "tree_small_02/textures/tree_small_02_branch_rough_2k.png": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/tree_small_02/tree_small_02_branch_rough_2k.png",
+      "bytes": 835917,
+      "sha256": "2acfc7ebd7269e65917d0535c463bcf4adf44627b3c34f528e2b1623cb2a5b9c"
+    },
+    "tree_small_02/textures/tree_small_02_diff_2k.jpg": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/tree_small_02/tree_small_02_diff_2k.jpg",
+      "bytes": 3170612,
+      "sha256": "4ab3210b6ec6bb1181145500bca71d1c1f81ead6baaa8600f5979c2cec50c6a4"
+    },
+    "tree_small_02/textures/tree_small_02_leaves_alpha_2k.png": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/tree_small_02/tree_small_02_leaves_alpha_2k.png",
+      "bytes": 636661,
+      "sha256": "566484c7047ce67af5a4435c1e4da2b773578d73f83ae45dfad0fd442df7b9d5"
+    },
+    "tree_small_02/textures/tree_small_02_leaves_diff_2k.png": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/tree_small_02/tree_small_02_leaves_diff_2k.png",
+      "bytes": 7729923,
+      "sha256": "da46f05805bbc3b608051b66ee9e2b3705108de3c897ea998ab98e0360dc2b72"
+    },
+    "tree_small_02/textures/tree_small_02_leaves_nor_gl_2k.png": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/tree_small_02/tree_small_02_leaves_nor_gl_2k.png",
+      "bytes": 18978122,
+      "sha256": "01c79158aa9287cc5db2d1c660a578de9d0a1a522877f9ca40c5be6b36bdc7bf"
+    },
+    "tree_small_02/textures/tree_small_02_leaves_rough_2k.png": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/2k/tree_small_02/tree_small_02_leaves_rough_2k.png",
+      "bytes": 2953248,
+      "sha256": "5e7fee2eb56afa1265178bb2bf9267dba12c95149d9e2068adfc1ebf2d44d082"
+    },
+    "tree_small_02/textures/tree_small_02_nor_gl_2k.exr": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/tree_small_02/tree_small_02_nor_gl_2k.exr",
+      "bytes": 9058409,
+      "sha256": "2cba0db5ecc512414822d21f508a7d9df05716e28cec3e185c694ff6e36fd6ce"
+    },
+    "tree_small_02/textures/tree_small_02_rough_2k.exr": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/exr/2k/tree_small_02/tree_small_02_rough_2k.exr",
+      "bytes": 3573742,
+      "sha256": "486cda88e05f1fa0d63a49122b016287d61683921cf60fa465dd0bd53114b092"
+    },
+    "leafy_grass/diff.jpg": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_diff_2k.jpg",
+      "bytes": 4766204,
+      "sha256": "8e1c6d21365d4b89bc5a35ab664da98a78dbc3ab9ba6100474881c8619a5b113"
+    },
+    "leafy_grass/normal.jpg": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_nor_dx_2k.jpg",
+      "bytes": 6049495,
+      "sha256": "6ad4b29842cb68dd4ccadeaa14f76cc52e7717eded3bac41e537a166be07356b"
+    },
+    "leafy_grass/rough.jpg": {
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_rough_2k.jpg",
+      "bytes": 2274652,
+      "sha256": "34e1733bf4064b6950a575ff57e78c8b7ff71b63749eb48a49221bd65de6fb4f"
+    }
+  }
+}

@@ -1,5 +1,6 @@
 #include "VistaVillaCharacter.h"
 #include "VistaAlpineProof.h"
+#include "GameFramework/WorldSettings.h"
 #include "VistaVillaMotionProof.h"
 #include "VistaVillaPourProof.h"
 #include "HomeFluidAuthoring.h"
@@ -62,6 +63,8 @@ void AVistaVillaHUD::DrawHUD()
 void AVistaVillaCharacter::BeginPlay()
 {
     Super::BeginPlay();
+    if (UsesHomeActions() && !GetWorld()->GetWorldSettings()->ActorHasTag(TEXT("VistaSixSpaces")) &&
+        !GetWorld()->GetWorldSettings()->ActorHasTag(TEXT("VistaCampus"))) return;
     for (TActorIterator<AStaticMeshActor> It(GetWorld());It;++It)
     {
         if (It->ActorHasTag(TEXT("VillaJug"))) Jug=*It;
@@ -73,7 +76,7 @@ void AVistaVillaCharacter::BeginPlay()
     const FString OwnerPath=Appearance?String(Appearance,TEXT("owner")):TEXT("/Game/VISTA/VillaR1/Character/Owner/SK_VillaOwner.SK_VillaOwner");
     auto* WorldBody=LoadObject<USkeletalMesh>(nullptr,*WorldPath);
     auto* FirstBody=LoadObject<USkeletalMesh>(nullptr,*OwnerPath);
-    if (!Jug || !Mug || !WorldBody || !FirstBody || !bReady)
+    if ((!UsesHomeActions() && (!Jug || !Mug)) || !WorldBody || !FirstBody || !bReady)
     {UE_LOG(LogTemp,Error,TEXT("VILLA_REQUIRED_ASSET_MISSING"));return;}
     const auto& Ref=WorldBody->GetRefSkeleton();
     if (Ref.GetNum()!=Parents.Num()) {bReady=false;return;}
@@ -83,6 +86,13 @@ void AVistaVillaCharacter::BeginPlay()
     GetMesh()->SetAnimInstanceClass(nullptr);
     GetMesh()->SetAnimInstanceClass(UEmbodiedBodyAnimInstance::StaticClass());
     GetMesh()->InitAnim(true);OwnerBody->SetLeaderPoseComponent(GetMesh(),true,false);
+    LoadMotionLibrary();
+    LoadAlpineMotion();
+    if (Motions.Num()<2 || MotionIdle.Num()!=Parents.Num())
+    {bReady=false;UE_LOG(LogTemp,Error,TEXT("VILLA_MOTION_ASSET_INVALID"));return;}
+    bVillaEmbodiment=true;
+    if (UsesHomeActions())
+    {UE_LOG(LogTemp,Display,TEXT("VILLA_HOME_EMBODIMENT_READY bones=%d"),Ref.GetNum());return;}
     JugInitial=Jug->GetActorTransform();MugInitial=Mug->GetActorTransform();
     for (TActorIterator<ACameraActor> It(GetWorld());It;++It) TourCameras.Add(*It);
     for (auto* Item:{Jug.Get(),Mug.Get()})
@@ -92,10 +102,6 @@ void AVistaVillaCharacter::BeginPlay()
         Mesh->SetMassOverrideInKg(NAME_None,Item==Jug?.65f:.32f,true);Mesh->SetSimulatePhysics(true);
         Mesh->SetLinearDamping(.4);Mesh->SetAngularDamping(.8);
     }
-    LoadMotionLibrary();
-    LoadAlpineMotion();
-    if (Motions.Num()<2 || MotionIdle.Num()!=Parents.Num())
-    {bReady=false;UE_LOG(LogTemp,Error,TEXT("VILLA_MOTION_ASSET_INVALID"));return;}
     bAllowReachDetour=true;
     auto* System=LoadObject<UNiagaraSystem>(nullptr,TEXT("/Game/VISTA/VillaR1/Fluids/NS_ControlledHose.NS_ControlledHose"));
     for (int32 I=0;I<2;++I)
@@ -153,6 +159,7 @@ void AVistaVillaCharacter::BeginPlay()
 void AVistaVillaCharacter::SetupPlayerInputComponent(UInputComponent* Input)
 {
     Super::SetupPlayerInputComponent(Input);
+    if (UsesHomeActions()) return;
     // The inherited apartment tour uses coordinates from its own map. This
     // villa owns its navigation and must not expose those unrelated shortcuts.
     Input->KeyBindings.RemoveAll([](const FInputKeyBinding& B)
@@ -200,6 +207,7 @@ void AVistaVillaCharacter::EmbodiedInteract()
 }
 void AVistaVillaCharacter::VillaPour()
 {
+    if (UsesHomeActions()) return;
     if (bPouring) {VillaStopPour();return;}
     if (Phase!=EEmbodiedPhase::Held || Cup!=Jug) {FeedbackMessage(TEXT("Pick up the glass carafe, then P to pour"));return;}
     if (FVector::Dist2D(Mug->GetActorLocation(),GetActorLocation())>70) {FeedbackMessage(TEXT("Move close to the mug"));return;}
@@ -244,6 +252,7 @@ void AVistaVillaCharacter::EndPlay(const EEndPlayReason::Type Reason)
 }
 void AVistaVillaCharacter::VillaTap()
 {
+    if (UsesHomeActions()) return;
     if (!bDemo && FVector::Dist2D(GetActorLocation(),FVector(1080,-895,0))>115)
     {FeedbackMessage(TEXT("Move beside the sink to operate its tap"));return;}
     bTap=!bTap;FeedbackMessage(bTap?TEXT("Tap on"):TEXT("Tap off"));
@@ -341,6 +350,7 @@ FString AVistaVillaCharacter::GetInteractionHint() const
 }
 void AVistaVillaCharacter::VillaDemo()
 {
+    if (UsesHomeActions()) return;
     if (!bReady || bDemo) return;
     EmbodiedReset();
     GetCharacterMovement()->StopMovementImmediately();
@@ -449,6 +459,7 @@ void AVistaVillaCharacter::CaptureProof(const FString& Name)
 void AVistaVillaCharacter::OnPoseFinalized()
 {
     Super::OnPoseFinalized();
+    CaptureCharacterMotionProof();
     CaptureVillaMotionProof(this);
     CaptureAlpineProof(this);
     CaptureVillaPourProof(this);
@@ -535,6 +546,9 @@ void AVistaVillaCharacter::Tick(float Dt)
     if (LastWallFrame>0 && bProof && bDemo) FrameTimes.Add((Now-LastWallFrame)*1000.);
     LastWallFrame=Now;
     LastFrameDt=Dt;TickAlpine(Dt);Super::Tick(Dt);if (!bReady) return;
+    // Advance once per simulation tick, before the animation proxy evaluates.
+    UpdateBodyLook(Dt);
+    if (UsesHomeActions()) return;
     UpdateLiquids(Dt);ProofClock+=Dt;++ProofFrames;
     if (bProof && !bDemo && Records.IsEmpty() && ProofClock>5)
     {

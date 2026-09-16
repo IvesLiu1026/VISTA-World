@@ -1,8 +1,36 @@
 #include "HomeActions.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Components/StaticMeshComponent.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "StaticMeshResources.h"
+
+FVector UHomeActionsAuthoring::StaticSupportPoint(AStaticMeshActor* Actor,FVector Point)
+{
+    FVector Out(Point.X,Point.Y,-MAX_flt);
+#if WITH_EDITOR
+    if (!Actor || Actor->IsHidden()) return Out;
+    auto* C=Actor->GetStaticMeshComponent();UStaticMesh* Mesh=C?C->GetStaticMesh():nullptr;
+    const auto* Data=Mesh?Mesh->GetRenderData():nullptr;
+    if (!Data || Data->LODResources.IsEmpty()) return Out;
+    const auto& LOD=Data->LODResources[0];const auto& P=LOD.VertexBuffers.PositionVertexBuffer;
+    const auto Indices=LOD.IndexBuffer.GetArrayView();const FTransform T=C->GetComponentTransform();
+    for (int32 I=0;I+2<Indices.Num();I+=3)
+    {
+        const FVector A=T.TransformPosition(FVector(P.VertexPosition(Indices[I])));
+        const FVector B=T.TransformPosition(FVector(P.VertexPosition(Indices[I+1])));
+        const FVector D=T.TransformPosition(FVector(P.VertexPosition(Indices[I+2])));
+        const FVector U=B-A,V=D-A,Q=Point-A;const double Det=U.X*V.Y-U.Y*V.X;
+        if (FMath::Abs(Det)<1.e-8 || FMath::Abs(FVector::CrossProduct(U,V).GetSafeNormal().Z)<.93) continue;
+        const double S=(Q.X*V.Y-Q.Y*V.X)/Det,R=(U.X*Q.Y-U.Y*Q.X)/Det;
+        if (S<-.0001 || R<-.0001 || S+R>1.0001) continue;
+        const double Z=A.Z+S*U.Z+R*V.Z;
+        if (Z>=Point.Z-35 && Z<=Point.Z+18 && Z>Out.Z) Out.Z=Z;
+    }
+#endif
+    return Out;
+}
 
 bool UHomeActionsAuthoring::ConfigurePickup(UStaticMesh* Mesh,const FString& Kind)
 {

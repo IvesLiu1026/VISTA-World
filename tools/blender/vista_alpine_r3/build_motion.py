@@ -45,7 +45,9 @@ def main():
         ref={n:mat(clip['reference_global_cm'][source['bone_names'].index(n)]) for n in names}
         scale=leg(target)/leg(ref);cal={n:target[n].to_quaternion() for n in names}
         for side in ['l','r']:
-            for start,end in [('clavicle','upperarm'),('upperarm','lowerarm'),('lowerarm','hand'),('thigh','calf'),('calf','foot'),('foot','ball')]:
+            # Source shoulder offsets encode different proportions; do not
+            # turn them into a permanent elevated clavicle on the target rig.
+            for start,end in [('upperarm','lowerarm'),('lowerarm','hand'),('thigh','calf'),('calf','foot'),('foot','ball')]:
                 x=start+'_'+side;y=end+'_'+side
                 td=(target[y].translation-target[x].translation).normalized();sd=(ref[y].translation-ref[x].translation).normalized()
                 cal[x]=td.rotation_difference(sd)@cal[x]
