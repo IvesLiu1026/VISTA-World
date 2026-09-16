@@ -79,6 +79,7 @@ public:
     virtual void ReviewSnapshot() override;
     void BuildBodyPose(TArray<FTransform>& LocalPose);
     UFUNCTION(Exec) void EmbodiedState();
+    virtual void CalcCamera(float Dt,FMinimalViewInfo& Out) override;
     UFUNCTION(Exec) void EmbodiedBones();
     UFUNCTION(Exec) void EmbodiedTrace(float Seconds);
     UFUNCTION(Exec) void EmbodiedTestStand(float HeightCm,float CupYaw);
