@@ -125,7 +125,9 @@ void AHomeActionsCharacter::UpdateDailyMotion(float Dt)
 
 void AHomeActionsCharacter::HomeHumanSay(const FString& Code)
 {
-    if (!bStreamingEnabled || (Code!=TEXT("human_call") && Code!=TEXT("human_request"))) return;
+    const TSet<FString> Allowed={TEXT("human_call"),TEXT("human_request"),TEXT("walk_entry"),TEXT("walk_living"),
+        TEXT("walk_kitchen"),TEXT("walk_stairs"),TEXT("walk_bedroom"),TEXT("walk_office"),TEXT("walk_bathroom")};
+    if (!bStreamingEnabled || !Allowed.Contains(Code)) return;
     FString Text;if (!FFileHelper::LoadFileToString(Text,*(FPaths::ProjectContentDir()/TEXT("VISTA/Streaming/Speech")/(Code+TEXT(".json"))))) return;
     const auto D=Decode(Text);TArray<uint8> PCM;
     if (!D || !FBase64::Decode(String(D,TEXT("pcm_b64")),PCM)) return;
@@ -142,7 +144,7 @@ void AHomeActionsCharacter::HomeHumanSay(const FString& Code)
     for (const auto& V:D->GetArrayField(TEXT("mouth"))) if (V->AsArray().Num()==3) HumanMouth.Add(V->AsArray()[0]->AsNumber());
     HumanVoice->SetSound(HumanWave);HumanVoice->Play();
     if (auto* C=FindComponentByClass<UVistaCompanionComponent>())
-    {C->Reply=TEXT("人物：")+String(D,TEXT("text"));C->NoticeUntil=GetWorld()->GetTimeSeconds()+HumanWave->Duration;}
+    {C->Reply=(String(D,TEXT("language"))==TEXT("en")?TEXT("Human: "):TEXT("人物："))+String(D,TEXT("text"));C->NoticeUntil=GetWorld()->GetTimeSeconds()+HumanWave->Duration;}
     auto R=MakeShared<FJsonObject>();R->SetStringField(TEXT("schema"),TEXT("vista.authored-human-utterance/v1"));
     R->SetStringField(TEXT("text"),String(D,TEXT("text")));R->SetStringField(TEXT("source"),TEXT("authored_transcript_not_ASR"));
     R->SetNumberField(TEXT("clock_s"),SceneClock);R->SetNumberField(TEXT("duration_s"),HumanWave->Duration);AppendReceipt(R);

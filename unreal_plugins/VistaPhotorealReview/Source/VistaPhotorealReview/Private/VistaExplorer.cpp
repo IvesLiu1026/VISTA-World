@@ -3,6 +3,8 @@
 #include "HomeActionsJson.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/CameraTypes.h"
+#include "Camera/PlayerCameraManager.h"
+#include "VistaCameraClearance.h"
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
@@ -407,8 +409,8 @@ void AVistaExplorerCharacter::Tick(float Dt)
             Best=Distance;Nearby=*It;
         }
     }
+    TickWalkthrough(Dt);
     TickTrafficSignals(Dt);PublishClock+=Dt;
-    if (PublishClock>.1f && !Riding.IsValid()) {PublishClock=0;PublishExplorerState();}
 }
 void AVistaExplorerCharacter::UpdateBodyFacing(float Dt)
 {if (!Riding.IsValid()) Super::UpdateBodyFacing(Dt);}
@@ -431,6 +433,9 @@ void AVistaExplorerCharacter::CalcCamera(float Dt,FMinimalViewInfo& Out)
         return;
     }
     Super::CalcCamera(Dt,Out);
+    // Use the resolved view in this frame. Actor Tick precedes camera update;
+    // comparing last frame's camera to newly moved pawns reports false contact.
+    if (PublishClock>.1f) {PublishClock=0;PublishExplorerState(&Out);}
 }
 FString AVistaExplorerCharacter::GetInteractionHint() const
 {
@@ -440,7 +445,7 @@ FString AVistaExplorerCharacter::GetInteractionHint() const
     if (bCampus) return bHasCandidate?TEXT("E  Pick up cup"):TEXT("WASD + mouse to explore  |  Look toward a parked vehicle to use it");
     return Super::GetInteractionHint().Replace(TEXT("wheel: action   F: inspect"),TEXT("Q: more actions"));
 }
-void AVistaExplorerCharacter::PublishExplorerState()
+void AVistaExplorerCharacter::PublishExplorerState(const FMinimalViewInfo* ResolvedView)
 {
     if (ProofDir.IsEmpty()) return;
     auto O=MakeShared<FJsonObject>();O->SetStringField(TEXT("schema"),TEXT("vista.explorer-state/v1"));
@@ -448,7 +453,37 @@ void AVistaExplorerCharacter::PublishExplorerState()
     O->SetNumberField(TEXT("clock_s"),GetWorld()->GetTimeSeconds());O->SetNumberField(TEXT("menu"),Menu);
     O->SetNumberField(TEXT("camera_yaw"),Controller?Controller->GetControlRotation().Yaw:0);
     O->SetBoolField(TEXT("campus"),bCampus);O->SetBoolField(TEXT("third_person"),bThirdPerson);
+    auto Tour=MakeShared<FJsonObject>();Tour->SetStringField(TEXT("status"),WalkthroughStatus);
+    Tour->SetNumberField(TEXT("index"),WalkthroughIndex);Tour->SetNumberField(TEXT("points"),Walkthrough.Num());
+    Tour->SetNumberField(TEXT("elapsed_s"),WalkthroughClock);Tour->SetNumberField(TEXT("travel_cm"),WalkthroughDistance);
+    O->SetObjectField(TEXT("walkthrough"),Tour);
+    if (const auto* PC=Cast<APlayerController>(Controller)) if (PC->PlayerCameraManager)
+    {
+        const auto& View=ResolvedView?*ResolvedView:PC->PlayerCameraManager->GetCameraCacheView();
+        O->SetArrayField(TEXT("camera_cm"),Values(View.Location));
+        O->SetNumberField(TEXT("camera_near_cm"),View.GetFinalPerspectiveNearClipPlane());
+        float Aspect=View.AspectRatio;
+        if (!View.bConstrainAspectRatio) {int32 W=0,H=0;PC->GetViewportSize(W,H);if(W>0 && H>0)Aspect=float(W)/H;}
+        const float Radius=VistaCamera::Clearance(View.GetFinalPerspectiveNearClipPlane(),View.FOV,Aspect);
+        FCollisionQueryParams Q(SCENE_QUERY_STAT(ExplorerCameraProof),true,this);
+        if (Cup && (Phase!=EEmbodiedPhase::Idle || bSceneActionBusy)) Q.AddIgnoredActor(Cup);
+        O->SetBoolField(TEXT("camera_overlap"),GetWorld()->OverlapBlockingTestByChannel(View.Location,FQuat::Identity,
+            ECC_Camera,FCollisionShape::MakeSphere(Radius-.25f),Q));
+    }
     O->SetArrayField(TEXT("player_cm"),Values(GetActorLocation()));O->SetStringField(TEXT("nearby"),Nearby.IsValid()?Nearby->VehicleId:TEXT(""));
+    if (const auto* C=FindComponentByClass<UVistaCompanionComponent>()) if (const auto* A=C->Companion.Get())
+    {
+        auto D=MakeShared<FJsonObject>();const FVector Offset=A->GetActorLocation()-GetActorLocation();
+        const auto* Mine=GetCapsuleComponent();const auto* Theirs=A->GetCapsuleComponent();
+        const float Radii=Mine->GetScaledCapsuleRadius()+Theirs->GetScaledCapsuleRadius();
+        const float SegmentGap=FMath::Max(0.f,float(FMath::Abs(Offset.Z))-
+            Mine->GetScaledCapsuleHalfHeight()-Theirs->GetScaledCapsuleHalfHeight()+Radii);
+        D->SetArrayField(TEXT("position_cm"),Values(A->GetActorLocation()));
+        D->SetNumberField(TEXT("distance_3d_cm"),Offset.Size());
+        D->SetNumberField(TEXT("capsule_gap_cm"),FMath::Sqrt(Offset.SizeSquared2D()+SegmentGap*SegmentGap)-Radii);
+        D->SetBoolField(TEXT("blocked"),A->bBlocked);D->SetBoolField(TEXT("following"),A->bFollowing);
+        O->SetObjectField(TEXT("companion"),D);
+    }
     O->SetStringField(TEXT("riding"),Riding.IsValid()?Riding->VehicleId:TEXT(""));
     O->SetStringField(TEXT("ride_phase"),RidePhase);O->SetNumberField(TEXT("ride_progress"),RideProgress);
     O->SetNumberField(TEXT("foot_plant"),FootPlant);
