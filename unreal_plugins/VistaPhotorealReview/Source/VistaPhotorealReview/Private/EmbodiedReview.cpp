@@ -59,9 +59,9 @@ AEmbodiedReviewCharacter::AEmbodiedReviewCharacter()
     OwnerBody->PrimaryComponentTick.TickGroup=TG_PostPhysics;
     FollowBoom=CreateDefaultSubobject<USpringArmComponent>(TEXT("FollowBoom"));
     FollowBoom->SetupAttachment(GetCapsuleComponent());
-    FollowBoom->SetRelativeLocation(FVector(0,0,15));
-    FollowBoom->TargetArmLength=220.f;
-    FollowBoom->SocketOffset=FVector(0,24,10);
+    FollowBoom->SetRelativeLocation(FVector(0,0,35));
+    FollowBoom->TargetArmLength=260.f;
+    FollowBoom->SocketOffset=FVector(0,45,10);
     FollowBoom->ProbeSize=13.f;
     FollowBoom->bDoCollisionTest=true;
     FollowBoom->bUsePawnControlRotation=true;
@@ -575,11 +575,8 @@ void AEmbodiedReviewCharacter::Tick(float Dt)
     if (!bThirdPerson) AdjustFirstPersonEyeTarget(EyeTarget);
     const FVector SmoothedEye=FMath::VInterpTo(ReviewCamera->GetRelativeLocation(),EyeTarget,Dt,6.f);
     FVector EyePosition=GetActorTransform().TransformPosition(SmoothedEye);
-    const FVector EyeBase=GetActorTransform().TransformPosition(FVector(12.545f,0,60.645f));
-    FCollisionQueryParams EyeParams(SCENE_QUERY_STAT(EmbodiedEye),true,this);EyeParams.AddIgnoredActor(Cup);
-    FHitResult EyeHit;
-    if (GetWorld()->SweepSingleByChannel(EyeHit,EyeBase,EyePosition,FQuat::Identity,ECC_Visibility,
-        FCollisionShape::MakeSphere(2.f),EyeParams) && !EyeHit.bStartPenetrating) EyePosition=EyeHit.Location;
+    // CalcCamera resolves the final view and its complete near plane from an
+    // anchor inside the locomotion capsule, after the animation/boom update.
     ReviewCamera->SetRelativeLocation(GetActorTransform().InverseTransformPosition(EyePosition));
     if (const APlayerController* PC=Cast<APlayerController>(Controller))
     {
