@@ -241,6 +241,7 @@ FTransform AHomeActionsCharacter::FinePinchWrist(const FHomeEntity& Entity) cons
 
 void AHomeActionsCharacter::RefineSceneBodyPose(TArray<FTransform>& Local)
 {
+    Super::RefineSceneBodyPose(Local);
     // BuildBodyPose invokes this on the animation proxy's game-thread PreUpdate.
     // The worker receives only the resulting local transforms.
     const auto* Entity=FineContactEntity();if (!Entity) return;

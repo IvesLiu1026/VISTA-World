@@ -15,6 +15,7 @@
 #include "HAL/FileManager.h"
 #include "InputCoreTypes.h"
 #include "Misc/CommandLine.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 #include "Misc/Paths.h"
@@ -78,7 +79,18 @@ const FHomeEntity* AHomeActionsCharacter::Resolve(const FString& Name) const
 
 void AHomeActionsCharacter::BeginPlay()
 {
+    if (FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")))
+    {
+        bool StartCrashReporter=true;
+        if (GConfig) GConfig->GetBool(TEXT("CrashReportClient"),TEXT("bStartCRCFromEngineHandler"),StartCrashReporter,GEngineIni);
+        if (StartCrashReporter)
+        {UE_LOG(LogTemp,Error,TEXT("VISTA_PRIVATE_REVIEW_CRC_NOT_DISABLED"));FGenericPlatformMisc::RequestExit(false);return;}
+        UE_LOG(LogTemp,Display,TEXT("VISTA_PRIVATE_REVIEW_CRC_DISABLED"));
+    }
     Super::BeginPlay();
+    bStreamingEnabled=FPaths::FileExists(FPaths::ProjectConfigDir()/TEXT("VistaStreaming.json"));
+    // Outdoor worlds share the reference body, but do not bind the indoor contract.
+    if (GetWorld()->GetWorldSettings()->ActorHasTag(TEXT("VistaCampus"))) return;
     FString Text;
     if (!FFileHelper::LoadFileToString(Text,*(FPaths::ProjectConfigDir()/TEXT("VistaHomeActions.json")))) return;
     Contract=Decode(Text);
@@ -86,6 +98,7 @@ void AHomeActionsCharacter::BeginPlay()
     Revision=String(Contract,TEXT("revision"));SessionId=FGuid::NewGuid().ToString(EGuidFormats::Digits);
     if (!FParse::Value(FCommandLine::Get(),TEXT("VistaHomeBridge="),BridgeDir))
         BridgeDir=FPaths::ProjectSavedDir()/TEXT("HomeActions")/SessionId;
+    else if (!UsesReviewBookmarks()) BridgeDir/=SessionId;
     IFileManager::Get().MakeDirectory(*BridgeDir,true);
     if (IFileManager::Get().FileExists(*(BridgeDir/TEXT("session.json"))))
     { UE_LOG(LogTemp,Error,TEXT("HOME_BRIDGE_ALREADY_USED"));return; }
@@ -167,6 +180,8 @@ void AHomeActionsCharacter::BeginPlay()
     bSceneReady=true;
     UE_LOG(LogTemp,Display,TEXT("HOME_ACTIONS_READY entities=%d bridge=%s revision=%s"),Entities.Num(),*BridgeDir,*Revision);
     PublishState();
+    if (Contract->HasField(TEXT("rooms")))
+    {FTimerHandle Start;GetWorldTimerManager().SetTimer(Start,[this](){HomeRoom(1);},1.4f,false);}
 }
 
 void AHomeActionsCharacter::SetupPlayerInputComponent(UInputComponent* Input)
@@ -182,6 +197,16 @@ void AHomeActionsCharacter::SetupPlayerInputComponent(UInputComponent* Input)
     Input->BindKey(EKeys::F2,IE_Pressed,this,&AHomeActionsCharacter::NextEvent);
     Input->BindKey(EKeys::LeftShift,IE_Pressed,this,&AHomeActionsCharacter::JogOn);
     Input->BindKey(EKeys::LeftShift,IE_Released,this,&AHomeActionsCharacter::JogOff);
+    Input->KeyBindings.RemoveAll([](const FInputKeyBinding& K)
+    {return K.Chord.Key==EKeys::One || K.Chord.Key==EKeys::Two || K.Chord.Key==EKeys::Three || K.Chord.Key==EKeys::Four || K.Chord.Key==EKeys::Five || K.Chord.Key==EKeys::Six;});
+    Input->BindKey(EKeys::One,IE_Pressed,this,&AHomeActionsCharacter::RoomOne);
+    Input->BindKey(EKeys::Two,IE_Pressed,this,&AHomeActionsCharacter::RoomTwo);
+    Input->BindKey(EKeys::Three,IE_Pressed,this,&AHomeActionsCharacter::RoomThree);
+    Input->BindKey(EKeys::Four,IE_Pressed,this,&AHomeActionsCharacter::RoomFour);
+    Input->BindKey(EKeys::Five,IE_Pressed,this,&AHomeActionsCharacter::RoomFive);
+    Input->BindKey(EKeys::Six,IE_Pressed,this,&AHomeActionsCharacter::RoomSix);
+    Input->BindKey(EKeys::SpaceBar,IE_Pressed,this,&AVistaVillaCharacter::StartAlpineJump);
+    Input->BindKey(EKeys::SpaceBar,IE_Released,this,&ACharacter::StopJumping);
 }
 
 FVector AHomeActionsCharacter::ControlPoint(const FHomeEntity& E) const
@@ -253,6 +278,28 @@ void AHomeActionsCharacter::UpdateFocus()
 }
 
 void AHomeActionsCharacter::NextAction() { const auto A=AvailableActions();if (A.Num()) SelectedAction=(SelectedAction+1)%A.Num(); }
+FString AHomeActionsCharacter::VisibleActionName(const FString& Id) const { return ActionLabel(Id); }
+void AHomeActionsCharacter::ExecuteVisibleAction(const FString& Id)
+{
+    const auto Options=AvailableActions();const int32 Index=Options.IndexOfByKey(Id);
+    if (Index==INDEX_NONE) {FeedbackMessage(TEXT("That action is no longer available"));return;}
+    SelectedAction=Index;EmbodiedInteract();
+}
+bool AHomeActionsCharacter::CanLeaveSpace() const
+{
+    return ActiveId.IsEmpty() && HeldId.IsEmpty() && SeatId.IsEmpty() && StandingOn.IsEmpty() &&
+        EventStatus!=TEXT("active") && EventStatus!=TEXT("applying") && Phase==EEmbodiedPhase::Idle;
+}
+TArray<TPair<FString,FString>> AHomeActionsCharacter::VisibleEvents() const
+{
+    TArray<TPair<FString,FString>> Out;if (!Contract) return Out;
+    for (const auto& V:Contract->GetArrayField(TEXT("events")))
+    {
+        const auto Event=V->AsObject();const auto& Goals=Event->GetArrayField(TEXT("public_goals"));
+        if (Goals.Num()) Out.Emplace(String(Event,TEXT("event_id")),String(Goals[0]->AsObject(),TEXT("description")));
+    }
+    return Out;
+}
 void AHomeActionsCharacter::PreviousAction() { const auto A=AvailableActions();if (A.Num()) SelectedAction=(SelectedAction+A.Num()-1)%A.Num(); }
 void AHomeActionsCharacter::InspectFocus() { HomeAction(TEXT("inspect"),FocusId,TEXT("")); }
 void AHomeActionsCharacter::ToggleCrouch() { HomeAction(TEXT("crouch"),TEXT(""),TEXT("")); }
@@ -269,6 +316,19 @@ void AHomeActionsCharacter::SetView(FVector Position,FRotator Rotation)
     {FeedbackMessage(TEXT("Finish the current interaction before changing rooms"));return;}
     Super::SetView(Position,Rotation);
 }
+void AHomeActionsCharacter::HomeRoom(int32 Index)
+{
+    const TArray<TSharedPtr<FJsonValue>>* Rooms;
+    if (Contract && Contract->TryGetArrayField(TEXT("rooms"),Rooms))
+    {
+        if (!Rooms->IsValidIndex(Index-1)) return;
+        const auto R=(*Rooms)[Index-1]->AsObject();
+        SetView(Vector(R,TEXT("view_cm")),FRotator(-12,Number(R,TEXT("view_yaw")),0));return;
+    }
+    switch(Index) {case 1:ViewOne();break;case 2:ViewTwo();break;case 3:ViewThree();break;
+        case 4:ViewFour();break;case 5:ViewFive();break;case 6:ViewSix();break;}
+}
+
 void AHomeActionsCharacter::HomeFocus(const FString& Target)
 {
     if (FHomeEntity* E=Resolve(Target))
@@ -283,6 +343,7 @@ void AHomeActionsCharacter::HomeFocus(const FString& Target)
 void AHomeActionsCharacter::EmbodiedInteract()
 {
     if (!bSceneReady || !ActiveId.IsEmpty()) return;
+    if (SeatId.IsEmpty() && StandingOn.IsEmpty() && TryEnvironmentInteraction()) return;
     if (FallAlpha>.5f) {HomeAction(TEXT("recover"),TEXT(""),TEXT(""));return;}
     if (!SeatId.IsEmpty()) {HomeAction(TEXT("stand_up"),SeatId,TEXT(""));return;}
     const auto Actions=AvailableActions();
@@ -320,6 +381,7 @@ void AHomeActionsCharacter::Tick(float Dt)
 {
     Super::Tick(Dt);if (!bSceneReady) return;
     SceneClock+=Dt;BridgeClock+=Dt;
+    if (bStreamingEnabled) {UpdateDailyMotion(Dt);UpdateConcurrentEvents(Dt);}
     const bool ContactReach=!ActiveId.IsEmpty() && !TargetId.IsEmpty() &&
         ActionId!=TEXT("step_up") && ActionId!=TEXT("step_down") && ActionId!=TEXT("equip") && ActionId!=TEXT("unequip") && ActionId!=TEXT("inspect") && ActionId!=TEXT("look_at");
     SceneReachHipAdvance=FMath::FInterpTo(SceneReachHipAdvance,ContactReach?9.f:0.f,Dt,6.f);
@@ -366,6 +428,45 @@ FString AHomeActionsCharacter::GetEventHint() const
         if (String(V->AsObject(),TEXT("event_id"))==EventId)
             Goal=String(V->AsObject()->GetArrayField(TEXT("public_goals"))[0]->AsObject(),TEXT("description"));
     return FString::Printf(TEXT("%s  [%s]  %s"),*EventId,*EventStatus,*Goal);
+}
+TSharedPtr<FJsonObject> AHomeActionsCharacter::CompanionObservation() const
+{
+    auto Out=MakeShared<FJsonObject>();
+    const FString Room=RoomAt(GetActorLocation()).Replace(TEXT("home.r1/room."),TEXT(""));
+    const TMap<FString,FString> Labels={{TEXT("entry_hall"),TEXT("玄關")},{TEXT("living_room"),TEXT("客廳")},
+        {TEXT("kitchen_dining"),TEXT("廚房與餐廳")},{TEXT("bedroom"),TEXT("臥室")},
+        {TEXT("office"),TEXT("書房")},{TEXT("bathroom_laundry"),TEXT("浴室與洗衣區")}};
+    Out->SetStringField(TEXT("room"),Labels.Contains(Room)?Labels[Room]:Room);
+    Out->SetStringField(TEXT("focused"),TEXT(""));Out->SetStringField(TEXT("public_goal"),TEXT(""));
+    FVector Eye;FRotator View;GetActorEyesViewPoint(Eye,View);
+    if(const auto* PC=Cast<APlayerController>(Controller))PC->GetPlayerViewPoint(Eye,View);
+    TArray<TPair<float,const FHomeEntity*>> Visible;
+    for(const auto& Pair:Entities)
+    {
+        const auto& E=Pair.Value;
+        if(!E.Actor.IsValid() || !E.Mesh.IsValid() || E.Actor->IsHidden() || !E.Mesh->IsVisible() || E.Display.EndsWith(TEXT("_marker")))continue;
+        const FVector Center=E.Mesh->Bounds.Origin,Delta=Center-Eye;
+        if(Delta.Size()>650 || FVector::DotProduct(View.Vector(),Delta.GetSafeNormal())<.45f)continue;
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(CompanionObservation),false,this);FHitResult Hit;
+        const bool Blocked=GetWorld()->LineTraceSingleByChannel(Hit,Eye,Center,ECC_Visibility,Query);
+        if(Blocked && Hit.GetActor()!=E.Actor.Get() && FVector::Distance(Hit.ImpactPoint,Center)>12)continue;
+        Visible.Add({Delta.Size(),&E});
+    }
+    Visible.Sort([](const auto& A,const auto& B){return A.Key<B.Key;});
+    TArray<TSharedPtr<FJsonValue>> Objects;
+    for(int32 I=0;I<FMath::Min(20,Visible.Num());++I)
+    {
+        const auto* E=Visible[I].Value;Objects.Add(MakeShared<FJsonValueString>(E->Display));
+        if(E->Id==FocusId)Out->SetStringField(TEXT("focused"),E->Display);
+    }
+    Out->SetArrayField(TEXT("objects"),Objects);
+    if(Contract && !EventId.IsEmpty())for(const auto& V:Contract->GetArrayField(TEXT("events")))
+    {
+        const auto E=V->AsObject();const TArray<TSharedPtr<FJsonValue>>* Goals;
+        if(String(E,TEXT("event_id"))==EventId && E->TryGetArrayField(TEXT("public_goals"),Goals) && Goals->Num())
+            Out->SetStringField(TEXT("public_goal"),String((*Goals)[0]->AsObject(),TEXT("description")).Left(300));
+    }
+    return Out;
 }
 void AHomeActionsCharacter::ReviewSnapshot() { Super::ReviewSnapshot();HomeState(); }
 void AHomeActionsCharacter::HomeState()

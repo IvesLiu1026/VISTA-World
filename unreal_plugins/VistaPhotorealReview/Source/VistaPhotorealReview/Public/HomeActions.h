@@ -1,11 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "EmbodiedReview.h"
+#include "VistaVillaCharacter.h"
 #include "Dom/JsonObject.h"
 #include "HomeActions.generated.h"
 
 class ULightComponent;
+class UAudioComponent;
+class USoundWaveProcedural;
 
 struct FHomeEntity
 {
@@ -34,6 +36,15 @@ struct FHomeBefore
     FName AttachSocket;
 };
 
+// Author/evaluator state. Never serialize this into a policy observation.
+struct FHomeConcurrentEvent
+{
+    TSharedPtr<FJsonObject> Definition;
+    FString TemplateId,Status=TEXT("running"),Terminal;
+    float Started=0,Elapsed=0;
+    TSet<FString> Interactions,WrittenEntities;
+};
+
 struct FHomeContactTriangle
 {
     FVector A, B, C, Normal;
@@ -59,7 +70,7 @@ struct FHomeFineSurface
 };
 
 UCLASS()
-class VISTAPHOTOREALREVIEW_API AHomeActionsCharacter : public AEmbodiedReviewCharacter
+class VISTAPHOTOREALREVIEW_API AHomeActionsCharacter : public AVistaVillaCharacter
 {
     GENERATED_BODY()
 public:
@@ -74,14 +85,29 @@ public:
     virtual void ReviewSnapshot() override;
     UFUNCTION(Exec) void HomeAction(const FString& Action,const FString& Target,const FString& Secondary=TEXT(""));
     UFUNCTION(Exec) void HomeEvent(const FString& EventId);
+    UFUNCTION(Exec) void HomeEventAdd(const FString& EventId);
+    UFUNCTION(Exec) void HomePhone(bool Enabled);
+    UFUNCTION(Exec) void HomeNotice(const FString& Code);
+    UFUNCTION(Exec) void HomeHumanSay(const FString& Code);
     UFUNCTION(Exec) void HomeState();
+    UFUNCTION(Exec) virtual void HomeRoom(int32 Index);
     UFUNCTION(Exec) void HomeFocus(const FString& Target);
     UFUNCTION(Exec) void HomeCancel();
     UFUNCTION(Exec) void HomeObserve(bool Clean);
     bool HasSceneReady() const { return bSceneReady; }
     FString GetEventHint() const;
     bool IsCleanObservation() const { return bCleanObservation; }
+    TArray<FString> VisibleActionIds() const { return AvailableActions(); }
+    FString VisibleActionName(const FString& Id) const;
+    void ExecuteVisibleAction(const FString& Id);
+    bool CanLeaveSpace() const;
+    TArray<TPair<FString,FString>> VisibleEvents() const;
+    // A separate, visibility-filtered input for the conversational companion.
+    // Never return the engineering state, task evaluator, or hidden event labels.
+    TSharedPtr<FJsonObject> CompanionObservation() const;
+    TSharedPtr<FJsonObject> StreamingObservation() const;
 protected:
+    virtual bool UsesHomeActions() const override {return true;}
     virtual void SetView(FVector Position,FRotator Rotation) override;
     virtual void SetPhase(EEmbodiedPhase NewPhase) override;
     virtual void UpdateInteraction(float Dt) override;
@@ -102,6 +128,21 @@ private:
     TMap<FString,FHomeEntity> Entities;
     TMap<FString,FHomeBefore> Before;
     TMap<FString,TSharedPtr<FJsonObject>> Ledger;
+    TMap<FString,FHomeConcurrentEvent> ConcurrentEvents;
+    uint64 ConcurrentSerial=0;
+    TMap<FName,TArray<FName>> HumanFaceMorphs;
+    bool bPhoneCall=false,bStreamingEnabled=false;
+    float PhoneBlend=0,DailyClock=0;
+    FQuat PhoneRotation=FRotator(0,0,-90).Quaternion();
+    FVector PhoneEarOffset=FVector(6,10,0);
+    UPROPERTY() TObjectPtr<UAudioComponent> HumanVoice;
+    UPROPERTY() TObjectPtr<USoundWaveProcedural> HumanWave;
+    TArray<float> HumanMouth;
+    float HumanMouthOpen=0;
+    int32 HumanAudioBytes=0,HumanAudioRate=24000;
+    void UpdateDailyMotion(float Dt);
+    void UpdateConcurrentEvents(float Dt);
+    TArray<TSharedPtr<FJsonValue>> ConcurrentEventState() const;
     UPROPERTY() TMap<FString,TObjectPtr<AStaticMeshActor>> Effects;
     UPROPERTY() TMap<FString,TObjectPtr<UEmbodiedPoseLibrary>> HandProfiles;
     UPROPERTY() TObjectPtr<UEmbodiedPoseLibrary> DefaultPoses;
@@ -178,10 +219,17 @@ private:
     void UpdatePhysicalConsequences(float Dt);
     void SpillLiquid(FHomeEntity& Entity,const FString& Cause);
     void UpdateEvent(float Dt);
-    bool StartEvent(const FString& Id,FString& Code);
+    bool StartEvent(const FString& Id,FString& Code,bool bReset=true);
     bool ResetScene(FString& Code);
-    bool EvaluateCondition(const TSharedPtr<FJsonObject>& Condition) const;
+    bool EvaluateCondition(const TSharedPtr<FJsonObject>& Condition,const FHomeConcurrentEvent* Context=nullptr) const;
     FString RoomAt(const FVector& Location) const;
+    FVector ScenePoint(const FString& Room,const FVector& Legacy) const;
+    void RoomOne() {HomeRoom(1);}
+    void RoomTwo() {HomeRoom(2);}
+    void RoomThree() {HomeRoom(3);}
+    void RoomFour() {HomeRoom(4);}
+    void RoomFive() {HomeRoom(5);}
+    void RoomSix() {HomeRoom(6);}
     void PollBridge();
     void PublishState();
     void AppendReceipt(const TSharedPtr<FJsonObject>& Record);
@@ -211,5 +259,6 @@ class VISTAPHOTOREALREVIEW_API UHomeActionsAuthoring : public UBlueprintFunction
     GENERATED_BODY()
 public:
     UFUNCTION(BlueprintCallable,Category="HomeActions") static bool ConfigurePickup(UStaticMesh* Mesh,const FString& Kind);
+    UFUNCTION(BlueprintCallable,Category="HomeActions") static FVector StaticSupportPoint(AStaticMeshActor* Actor,FVector Point);
     UFUNCTION(BlueprintCallable,Category="HomeActions") static bool MirrorHandPoses(USkeletalMesh* Mesh,UEmbodiedPoseLibrary* Library);
 };

@@ -119,6 +119,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         const float PassiveLookLean=bThirdPerson?.32f:.04f;
         Lean+=FMath::Clamp((-Pitch-55.f)/34.f,0.f,1.f)*PassiveLookLean*(1.f-ReachAlpha);
     }
+    Lean*=ReachTorsoLeanScale();
     const int32 Pelvis=Index(TEXT("pelvis"));
     TArray<FTransform> Global;Global.SetNum(Local.Num());
     for (int32 I=0;I<Local.Num();++I) Global[I]=Parents[I]>=0 ? Local[I]*Global[Parents[I]] : Local[I];
@@ -189,7 +190,23 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
                 FRotator(0,Yaw,0).Quaternion().RotateVector(FVector::RightVector));
             const FQuat EndRotation=PreserveMotionFootRotation() && !bSceneFeetOverride?
                 Global[E].GetRotation():FQuat(RollAxis,FMath::DegreesToRadians(bSceneFeetOverride?0.f:Feet[Side].Roll))*YawDelta*ReferenceGlobal[E].GetRotation();
-            SolveLimb(Global,Parents,U,L,E,Target,Global[U].GetLocation()+FVector(0,55,-15),EndRotation);
+            FVector Pole=Global[U].GetLocation()+FVector(0,55,-15);
+            if (PreserveMotionFootRotation() && !bSceneFeetOverride)
+            {
+                // Preserve the recorded knee's bend plane. A fixed +Y pole
+                // twisted side-step thighs toward a different body heading.
+                const FVector Hip=Global[U].GetLocation();
+                const FVector Leg=(Global[E].GetLocation()-Hip).GetSafeNormal();
+                const FVector Knee=Global[L].GetLocation()-Hip;
+                FVector KneeBend=Knee-Leg*FVector::DotProduct(Knee,Leg);
+                if (KneeBend.SizeSquared()<4.f)
+                {
+                    const FQuat Facing=Global[Pelvis].GetRotation()*ReferenceGlobal[Pelvis].GetRotation().Inverse();
+                    KneeBend=Facing.RotateVector(FVector(0,1,0));
+                }
+                Pole=Hip+KneeBend.GetSafeNormal()*55.f;
+            }
+            SolveLimb(Global,Parents,U,L,E,Target,Pole,EndRotation);
         }
     }
     for (int32 Side=0;Side<2;++Side)

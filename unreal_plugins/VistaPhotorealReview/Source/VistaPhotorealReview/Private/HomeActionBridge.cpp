@@ -24,6 +24,13 @@ TSharedRef<FJsonObject> AHomeActionsCharacter::MakeState() const
     O->SetStringField(TEXT("focus_id"),FocusId);O->SetStringField(TEXT("last_code"),LastCode);
     O->SetStringField(TEXT("event_id"),EventId);O->SetStringField(TEXT("event_status"),EventStatus);
     O->SetStringField(TEXT("terminal_condition"),TerminalCondition);O->SetNumberField(TEXT("event_time_s"),EventTime);
+    if (bStreamingEnabled)
+    {
+        O->SetArrayField(TEXT("concurrent_events"),ConcurrentEventState());
+        O->SetBoolField(TEXT("human_phone_call"),bPhoneCall);O->SetNumberField(TEXT("phone_blend"),PhoneBlend);
+        O->SetNumberField(TEXT("human_mouth_open"),HumanMouthOpen);
+        O->SetStringField(TEXT("controlled_role"),TEXT("human_needing_assistance"));
+    }
     O->SetArrayField(TEXT("player_cm"),Values(GetActorLocation()));O->SetArrayField(TEXT("velocity_cm_s"),Values(GetVelocity()));
     O->SetStringField(TEXT("player_room"),RoomAt(GetActorLocation()));
     O->SetStringField(TEXT("contact_measurement"),TEXT("post_animation_wrist"));
@@ -58,6 +65,7 @@ void AHomeActionsCharacter::PublishState()
 {
     if (!bSceneReady) return;
     AtomicSave(BridgeDir/TEXT("state.json"),Encode(MakeState()));
+    if (bStreamingEnabled) AtomicSave(BridgeDir/TEXT("observation.json"),Encode(StreamingObservation()));
 }
 
 void AHomeActionsCharacter::AppendReceipt(const TSharedPtr<FJsonObject>& Record)
