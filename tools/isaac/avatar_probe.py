@@ -12,6 +12,7 @@ import traceback
 p = argparse.ArgumentParser()
 p.add_argument('--asset',type=Path,required=True)
 p.add_argument('--output',type=Path,required=True)
+p.add_argument('--compare-with',type=Path,help='Optional original asset, left of the candidate')
 a = p.parse_args()
 a.output.mkdir(parents=True,exist_ok=False)
 (a.output/'frames').mkdir()
@@ -52,9 +53,15 @@ try:
     assert len(joints) == 53
     animation = animations[0]
     samples = animation.GetRotationsAttr().GetTimeSamples()
-    cam = Camera(prim_path='/World/Camera',position=np.array([2.8,-4.8,2.0]),
+    camera_position = [2.8,-4.8,2.0]
+    if a.compare_with:
+        UsdGeom.Xformable(stage.GetPrimAtPath('/World/Human')).AddTranslateOp().Set(Gf.Vec3d(.66,0,0))
+        add_reference_to_stage(usd_path=str(a.compare_with.resolve()),prim_path='/World/Original')
+        UsdGeom.Xformable(stage.GetPrimAtPath('/World/Original')).AddTranslateOp().Set(Gf.Vec3d(-.66,0,0))
+        camera_position = [0,-5.2,2.0]
+    cam = Camera(prim_path='/World/Camera',position=np.array(camera_position),
                  resolution=(960,540),frequency=30)
-    q = Gf.Matrix4d().SetLookAt(Gf.Vec3d(2.8,-4.8,2.0),Gf.Vec3d(0,0,.9),
+    q = Gf.Matrix4d().SetLookAt(Gf.Vec3d(*camera_position),Gf.Vec3d(0,0,.9),
                                 Gf.Vec3d(0,0,1)).GetInverse().ExtractRotationQuat()
     cam.set_world_pose(orientation=np.array([q.GetReal(),*q.GetImaginary()]),camera_axes='usd')
     cam.set_focal_length(2.8)
@@ -87,7 +94,8 @@ try:
         image_hashes.append(hashlib.sha256(rgb.tobytes()).hexdigest())
         matrices = query.ComputeJointSkelTransforms(Usd.TimeCode(world.current_time*30))
         selected = {j.split('/')[-1]:list(m.ExtractTranslation()) for j,m in zip(joints,matrices)
-                    if j.split('/')[-1] in ['root','pelvis','hand_l','hand_r','foot_l','foot_r']}
+                    if j.split('/')[-1] in ['root','pelvis','hand_l','hand_r','foot_l','foot_r',
+                       'spine_03','neck_01','clavicle_l','clavicle_r','upperarm_l','upperarm_r','lowerarm_l','lowerarm_r']}
         trace.append({'step':step,'world_time_s':world.current_time,'sensor_time_s':float(frame['rendering_time']),
                       'rgb':f'frames/{name}','joint_positions_m':selected})
         if len(trace) in [1,35,60,90,117]:
@@ -112,6 +120,13 @@ try:
         'limitations':['Existing baked mocap replay, not autonomous human motion or physics control',
                        'No imported UE IK, behavior, interactive grasp or speech',
                        'Rendering compatibility does not establish naturalness or collision correctness']}
+    if a.compare_with:
+        gaps = [row['joint_positions_m']['neck_01'][2]-row['joint_positions_m']['upperarm_'+s][2]
+                for row in trace for s in ['l','r']]
+        receipt['comparison_source'] = str(a.compare_with.resolve())
+        receipt['comparison_sha256'] = hashlib.sha256(a.compare_with.read_bytes()).hexdigest()
+        receipt['minimum_neck_shoulder_vertical_gap_m'] = min(gaps)
+        receipt['checks']['shoulders_clear_neck_during_walk'] = min(gaps)>.065
     (a.output/'trace.json').write_text(json.dumps(trace,indent=2)+'\n')
     (a.output/'results.json').write_text(json.dumps(receipt,indent=2)+'\n')
     stage.GetRootLayer().Export(str(a.output/'scene.usda'))
