@@ -47,8 +47,8 @@ private:
     TArray<int32> Parents;
     TArray<FVector> Trail;
     TArray<FVector> Mouth;
-    FVector Previous,LastLeader;
-    float Cycle=143,Phase=0,MoveBlend=0,BlinkClock=0,StuckTime=0;
+    FVector Previous,LastLeader,YieldGoal;
+    float Cycle=143,Phase=0,MoveBlend=0,BlinkClock=0,StuckTime=0,YieldTime=0;
     int32 AudioBytes=0,Rate=24000,Head=INDEX_NONE,Spine=INDEX_NONE;
     TMap<FName,TArray<FName>> FaceMorphs;
     void Face(FName Name,float Value);
