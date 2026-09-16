@@ -1,0 +1,28 @@
+{
+  "schema": "vista.walkthrough/v1",
+  "description": "Same continuous physical route for separate fixed first-person and third-person recordings. Authored human demonstration; no learned planning.",
+  "points": [
+    {"position_cm": [1130,-200,86], "pause_s": 7, "look_yaw": 90, "say": "walk_entry"},
+    {"position_cm": [1120,-290,86]}, {"position_cm": [900,-290,86]},
+    {"position_cm": [805,-265,86]}, {"position_cm": [680,-265,86]},
+    {"position_cm": [440,-290,86], "pause_s": 7, "look_yaw": -135, "say": "walk_living"},
+    {"position_cm": [680,-265,86]}, {"position_cm": [805,-265,86]},
+    {"position_cm": [950,-500,86]}, {"position_cm": [1002,-685,86]},
+    {"position_cm": [1002,-790,86]}, {"position_cm": [1105,-790,86]},
+    {"position_cm": [1260,-830,86]},
+    {"position_cm": [1260,-970,86], "pause_s": 7, "look_yaw": -125, "say": "walk_kitchen"},
+    {"position_cm": [1260,-830,86]}, {"position_cm": [1105,-790,86]},
+    {"position_cm": [1002,-790,86]}, {"position_cm": [1002,-700,86]},
+    {"position_cm": [1230,-700,86]}, {"position_cm": [1230,-50,86]},
+    {"position_cm": [1410,-50,86], "pause_s": 5, "look_yaw": -90, "say": "walk_stairs"},
+    {"position_cm": [1410,-710,406]}, {"position_cm": [1260,-730,406]},
+    {"position_cm": [470,-740,406]}, {"position_cm": [470,-900,406]},
+    {"position_cm": [435,-945,406], "pause_s": 7, "look_yaw": 0, "say": "walk_bedroom"},
+    {"position_cm": [470,-900,406]}, {"position_cm": [470,-740,406]},
+    {"position_cm": [1002,-735,406]}, {"position_cm": [1002,-940,406]},
+    {"position_cm": [875,-940,406], "pause_s": 7, "look_yaw": -45, "say": "walk_office"},
+    {"position_cm": [1002,-940,406]}, {"position_cm": [1002,-735,406]},
+    {"position_cm": [1250,-735,406]}, {"position_cm": [1250,-850,406]},
+    {"position_cm": [1248,-990,406], "pause_s": 7, "look_yaw": -140, "say": "walk_bathroom"}
+  ]
+}
