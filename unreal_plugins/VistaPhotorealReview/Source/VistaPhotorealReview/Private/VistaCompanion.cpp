@@ -38,7 +38,7 @@ AVistaCompanion::AVistaCompanion()
 {
     PrimaryActorTick.bCanEverTick=true;AutoPossessPlayer=EAutoReceiveInput::Disabled;
     GetCapsuleComponent()->InitCapsuleSize(27,82);
-    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn,ECR_Ignore);
+    GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn,ECR_Block);
     auto* M=GetCharacterMovement();M->bRunPhysicsWithNoController=true;M->MaxWalkSpeed=145;
     M->MaxAcceleration=430;M->BrakingDecelerationWalking=650;M->bOrientRotationToMovement=false;
     GetMesh()->SetRelativeLocation(FVector(0,0,-82));GetMesh()->SetRelativeRotation(FRotator(0,-90,0));
@@ -111,7 +111,7 @@ bool AVistaCompanion::PlaceNear(const AActor* Player)
         if(GetWorld()->OverlapBlockingTestByChannel(P,FQuat::Identity,ECC_Pawn,FCollisionShape::MakeCapsule(28,82),Q))continue;
         FHitResult Wall;if(GetWorld()->LineTraceSingleByChannel(Wall,Player->GetActorLocation()+FVector(0,0,50),P+FVector(0,0,50),ECC_Visibility,Q))continue;
         SetActorLocation(P,false,nullptr,ETeleportType::TeleportPhysics);SetActorRotation(FRotator(0,(Player->GetActorLocation()-P).Rotation().Yaw,0));
-        GetCharacterMovement()->StopMovementImmediately();Previous=P;LastLeader=Player->GetActorLocation();Trail.Empty();bBlocked=false;return true;
+        GetCharacterMovement()->StopMovementImmediately();Previous=P;LastLeader=Player->GetActorLocation();Trail.Empty();YieldTime=0;bBlocked=false;return true;
     }
     return false;
 }
@@ -125,12 +125,52 @@ void AVistaCompanion::Tick(float Dt)
         const FVector P=Leader->GetActorLocation();
         // Explicit room/bookmark travel resets the companion too. Ordinary following is swept walking.
         if(bFollowing && !LastLeader.IsNearlyZero() && FVector::Distance(P,LastLeader)>450)PlaceNear(Leader.Get());
-        if(bFollowing && (Trail.IsEmpty() || FVector::Dist2D(P,Trail.Last())>28))Trail.Add(P);
+        if(bFollowing && (Trail.IsEmpty() || FVector::Distance(P,Trail.Last())>28))Trail.Add(P);
         LastLeader=P;
-        while(Trail.Num()>1 && FVector::Dist2D(Here,Trail[0])<40)Trail.RemoveAt(0);
+        while(Trail.Num()>1 && FVector::Distance(Here,Trail[0])<20)Trail.RemoveAt(0);
         if(Trail.Num()>600){Trail.RemoveAt(0,Trail.Num()-600);bBlocked=true;}
-        float Distance=FVector::Dist2D(Here,P);
-        if(bFollowing && Trail.Num() && Distance>155)
+        const float Distance=FVector::Distance(Here,P);
+        FCollisionQueryParams Path(SCENE_QUERY_STAT(CompanionDirectPath),false,this);Path.AddIgnoredActor(Leader.Get());
+        FHitResult Obstacle;
+        const bool Direct=FMath::Abs(Here.Z-P.Z)<35 && !GetWorld()->SweepSingleByChannel(Obstacle,Here,P,
+            FQuat::Identity,ECC_Pawn,FCollisionShape::MakeCapsule(27,82),Path);
+        // A human reversing through a doorway must not be trapped by their
+        // follower. Walk to a supported, swept-clear side position and wait
+        // briefly for them to pass. Acceleration retains intent at contact.
+        const FVector Along=Leader->GetCharacterMovement()->GetCurrentAcceleration().GetSafeNormal2D();
+        const FVector Relative=Here-P;
+        const float Ahead=FVector::DotProduct(Along,Relative);
+        if (bFollowing && YieldTime<=0 && Distance<145 && FMath::Abs(Relative.Z)<35 && Ahead>0 &&
+            (Relative-Along*Ahead).Size2D()<85 && !Along.IsNearlyZero())
+        {
+            const FVector Side=FVector::CrossProduct(Along,FVector::UpVector);
+            for (const FVector Offset:{Side*90,-Side*90,Along*75,Side*65,-Side*65,Along*110})
+            {
+                FVector Candidate=Here+Offset;FHitResult Floor,Block;
+                if (!GetWorld()->LineTraceSingleByChannel(Floor,Candidate+FVector(0,0,70),Candidate-FVector(0,0,130),ECC_Visibility,Path) ||
+                    Floor.ImpactNormal.Z<.8f || FMath::Abs(Floor.ImpactPoint.Z-(Here.Z-84))>25) continue;
+                Candidate.Z=Floor.ImpactPoint.Z+84;
+                if (GetWorld()->SweepSingleByChannel(Block,Here,Candidate,FQuat::Identity,ECC_Pawn,FCollisionShape::MakeCapsule(27,82),Path) ||
+                    GetWorld()->OverlapBlockingTestByChannel(Candidate,FQuat::Identity,ECC_Pawn,FCollisionShape::MakeCapsule(28,82),Path)) continue;
+                YieldGoal=Candidate;YieldTime=2.8f;Trail.Empty();break;
+            }
+        }
+        // Keep doorway/stair breadcrumbs when the human is close across a
+        // wall or on another floor. Planar distance used to erase that route.
+        if (bFollowing && YieldTime>0)
+        {
+            YieldTime-=Dt;const FVector Delta=YieldGoal-Here;const FVector Direction=Delta.GetSafeNormal2D();
+            const float Desired=Direction.Rotation().Yaw;
+            const float Turn=FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Desired);
+            if (Delta.Size2D()>12)
+            {
+                SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Desired,150*Dt),0));
+                if (FMath::Abs(Turn)<55) AddMovementInput(Direction,.85f,true);
+            }
+            else GetCharacterMovement()->StopMovementImmediately();
+            StuckTime=0;bBlocked=false;
+        }
+        else if(bFollowing && Trail.Num() && (Distance>155 || !Direct))
         {
             FVector Goal=Trail[0];Goal.Z=Here.Z;FVector Direction=(Goal-Here).GetSafeNormal();
             float Desired=Direction.Rotation().Yaw;float Delta=FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Desired);
@@ -141,7 +181,7 @@ void AVistaCompanion::Tick(float Dt)
         else
         {
             GetCharacterMovement()->StopMovementImmediately();StuckTime=0;bBlocked=false;
-            if(Distance<230)Trail.Empty();
+            if(Direct && Distance<230)Trail.Empty();
             const float Look=(P-Here).Rotation().Yaw;
             const float Offset=FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Look);
             if(FMath::Abs(Offset)>35)SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Look,80*Dt),0));
