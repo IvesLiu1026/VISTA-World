@@ -102,9 +102,11 @@ class VoiceStudio:
         n=struct.unpack('!I',read(4))[0]
         if n>64*1024*1024:raise RuntimeError('VoiceStudio frame too large')
         return json.loads(read(n))
-    def synthesize(self,text,cancel):
+    def synthesize(self,text,cancel,*,language='zh',instruction=None,reference=None):
         self.start()
-        msg={'op':'synthesize','text':text,'language':'zh','instruct':'用自然、溫和、清楚的中文說話。'}
+        msg={'op':'synthesize','text':text,'language':language,'instruct':instruction or '用自然、溫和、清楚的中文說話。'}
+        if reference is not None:
+            msg['ref_audio']=str(Path(reference).resolve(strict=True))
         data=json.dumps(msg,ensure_ascii=False).encode()
         self.child.stdin.write(struct.pack('!I',len(data))+data);self.child.stdin.flush()
         deadline=time.monotonic()+180
