@@ -10,7 +10,8 @@ import time
 p=argparse.ArgumentParser()
 for name in ['project','engine','out','ddc']:p.add_argument('--'+name,type=Path,required=True)
 p.add_argument('--display',default=':129');p.add_argument('--seconds',type=int,default=1800)
-a=p.parse_args();a.project=a.project.resolve(strict=True);a.out=a.out.resolve()
+p.add_argument('--motion-proof',action='store_true',help='Private finalized character bone trace')
+a=p.parse_args();a.project=a.project.resolve(strict=True);a.out=a.out.resolve();a.ddc=a.ddc.resolve()
 assert a.project.parent.parent.name.startswith('six-room-companion-dev-')
 assert a.display not in [':119',':119.0',':0',':2',':99',':100']
 assert not Path('/tmp/.X11-unix/X'+a.display[1:]).exists()
@@ -38,6 +39,9 @@ try:
          '-ini:EditorSettings:[/Script/UnrealEd.CrashReportsPrivacySettings]:bSendUnattendedBugReports=False',
          '-ddc=InstalledNoZenLocalFallback','-ini:Engine:[SystemSettings]:r.Shadow.Virtual.Cache=0',
          '-UDPMESSAGING_TRANSPORT_ENABLE=0','-ExecCmds=t.MaxFPS 30']
+    if a.motion_proof:
+        (a.out/'motion').mkdir()
+        cmd.append('-VistaCharacterMotionProof='+str(a.out/'motion'))
     env=dict(os.environ,DISPLAY=a.display,PULSE_SINK=sink,VK_ICD_FILENAMES='/usr/share/vulkan/icd.d/nvidia_icd.json',
              NODEVICE_SELECT='1',SDL_VIDEODRIVER='x11',UE_LocalDataCachePath=str(a.ddc),UE_SharedDataCachePath='None')
     ue=subprocess.Popen(cmd,env=env,stdout=(a.out/'native.log').open('w'),stderr=subprocess.STDOUT)
