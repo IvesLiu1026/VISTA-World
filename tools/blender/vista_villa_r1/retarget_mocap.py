@@ -71,7 +71,9 @@ def main():
         # limb directions before applying motion, or arms fold behind the hips.
         calibrated={bone.name:bone.matrix_local.to_quaternion() for bone in bones}
         for side in ['l','r']:
-            for parent,child in [('clavicle','upperarm'),('upperarm','lowerarm'),('lowerarm','hand'),('thigh','calf'),('calf','foot'),('foot','ball')]:
+            # Shoulder offsets are subject proportions, not T/A-pose limb
+            # directions. Preserve the target clavicle's neutral basis.
+            for parent,child in [('upperarm','lowerarm'),('lowerarm','hand'),('thigh','calf'),('calf','foot'),('foot','ball')]:
                 name=parent+'_'+side;child_name=child+'_'+side
                 target=(arm.data.bones[child_name].matrix_local.translation-arm.data.bones[name].matrix_local.translation).normalized()
                 source=((c@ref[idx[mapping[child_name]]]).translation-(c@ref[idx[mapping[name]]]).translation).normalized()

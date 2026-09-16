@@ -46,7 +46,11 @@ def main():
     refq = {n: (c @ ref[j]).to_quaternion() for n, j in idx.items()}
     calibrated = {b.name: b.matrix_local.to_quaternion() for b in bones}
     for side in ['l', 'r']:
-        for parent, child in [('clavicle', 'upperarm'), ('upperarm', 'lowerarm'),
+        # BVH Shoulder -> Arm offsets describe the source shoulder girdle, not
+        # a T/A-pose arm rotation. Aiming our clavicle along that offset adds a
+        # permanent 6-7 cm shrug. Keep its target neutral basis; transfer only
+        # measured motion relative to the source reference. Calibrate limbs.
+        for parent, child in [('upperarm', 'lowerarm'),
                               ('lowerarm', 'hand'), ('thigh', 'calf'), ('calf', 'foot'), ('foot', 'ball')]:
             name, end = parent + '_' + side, child + '_' + side
             target = bones_dir(arm, name, end)
