@@ -1,4 +1,4 @@
-"""Conform three generated clips to exactly 60 seconds, without transition edits."""
+"""Conform sequential generated clips to exactly 60s, without transition edits."""
 import argparse
 import json
 import subprocess
@@ -6,13 +6,13 @@ from pathlib import Path
 
 p=argparse.ArgumentParser()
 p.add_argument('--run',type=Path,required=True)
-p.add_argument('--durations',nargs=3,type=int,default=(18,20,22))
+p.add_argument('--durations',nargs='+',type=int,default=(18,20,22))
 p.add_argument('--native-only',action='store_true',help='Do not add authored event cues')
 a=p.parse_args()
 run=a.run.resolve()
 durations=tuple(a.durations)
 if min(durations)<=0 or sum(durations)!=60:
-    raise SystemExit('Three positive segment durations must sum to 60 seconds')
+    raise SystemExit('Positive segment durations must sum to 60 seconds')
 inputs=[]
 filters=[]
 probes=[]
@@ -27,7 +27,8 @@ for i,duration in enumerate(durations):
     inputs+=['-i',str(source)]
     filters += [f'[{i}:v]fps=24,trim=end_frame={duration*24},setpts=PTS-STARTPTS[v{i}]',
                 f'[{i}:a]atrim=end={duration},asetpts=PTS-STARTPTS,aresample=48000[a{i}]']
-filters.append(''.join(f'[v{i}][a{i}]' for i in range(3))+'concat=n=3:v=1:a=1[v][a]')
+filters.append(''.join(f'[v{i}][a{i}]' for i in range(len(durations)))+
+               f'concat=n={len(durations)}:v=1:a=1[v][a]')
 native=run/'ego_minute_native_60s.mp4'
 subprocess.run(['ffmpeg','-v','error',*inputs,'-filter_complex',';'.join(filters),
     '-map','[v]','-map','[a]','-c:v','libx264','-threads','6','-crf','18',
