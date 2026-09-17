@@ -105,3 +105,29 @@ track. `assemble.py --run RUN` conforms the selected 18/20/22-second clips to
 1440 frames at 24 fps and produces native-audio and Foley-mixed 60-second files.
 It makes straight joins, removes encoder tail padding, and does not use fades,
 frame interpolation, speed changes or other edits to hide continuity defects.
+
+## Photographic and dialogue revision
+
+`realistic.py` is a separate 20 + 20 + 20-second experiment responding to the
+modeled appearance of the clay-conditioned result. It starts from a generated
+photographic empty-room image and uses `frame_images` with `first_frame` only.
+Subsequent segments start from frame 479 of the previous 20-second, 24-fps
+segment. No clay video or previously rejected character image is used. This
+changes the control tradeoff: a first-frame image constrains the opening, but
+does not provide the original authored trajectory or a persistent 3D world.
+
+The script provides three timed Taiwan Mandarin conversations, overlapping
+phone/child/door demands, and urgent first-person actions. Speech and sound are
+requested natively from Seedance; the prompt is not a transcript of the result.
+Use `audit_audio.py --dialogue` for a blind automated transcription and delivery
+check, recording uncertainty and the model's finish reason. It is not human
+listening or accepted ground truth.
+
+Run `realistic.py prepare` with `--reference-base` and the task's `first_N.png`,
+then explicitly `submit`, `poll`, and `download` on the authorized key host.
+Existing request/job files are refused rather than overwritten. The reference
+origin can expose just `--names first_1.png first_2.png first_3.png` on a separate
+task port. Assemble with `assemble.py --durations 20 20 20 --native-only` to
+retain model-generated dialogue without adding the old planned Foley track.
+Review realism, spoken content, both boundaries and return views separately;
+improved visual realism alone does not establish world-state consistency.
