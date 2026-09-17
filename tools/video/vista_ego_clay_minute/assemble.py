@@ -6,9 +6,13 @@ from pathlib import Path
 
 p=argparse.ArgumentParser()
 p.add_argument('--run',type=Path,required=True)
+p.add_argument('--durations',nargs=3,type=int,default=(18,20,22))
+p.add_argument('--native-only',action='store_true',help='Do not add authored event cues')
 a=p.parse_args()
 run=a.run.resolve()
-durations=(18,20,22)
+durations=tuple(a.durations)
+if min(durations)<=0 or sum(durations)!=60:
+    raise SystemExit('Three positive segment durations must sum to 60 seconds')
 inputs=[]
 filters=[]
 probes=[]
@@ -28,19 +32,23 @@ native=run/'ego_minute_native_60s.mp4'
 subprocess.run(['ffmpeg','-v','error',*inputs,'-filter_complex',';'.join(filters),
     '-map','[v]','-map','[a]','-c:v','libx264','-threads','6','-crf','18',
     '-pix_fmt','yuv420p','-c:a','aac','-b:a','192k','-t','60','-movflags','+faststart',str(native)],check=True)
-cued=run/'ego_minute_event_cues_60s.mp4'
-subprocess.run(['ffmpeg','-v','error','-i',str(native),'-i',str(run/'planned_phone_doorbell.wav'),
-    '-filter_complex','[0:a]volume=0.8[native];[native][1:a]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[a]',
-    '-map','0:v','-map','[a]','-c:v','copy','-c:a','aac','-b:a','192k','-t','60','-movflags','+faststart',str(cued)],check=True)
+editions=[native]
+if not a.native_only:
+    cued=run/'ego_minute_event_cues_60s.mp4'
+    subprocess.run(['ffmpeg','-v','error','-i',str(native),'-i',str(run/'planned_phone_doorbell.wav'),
+        '-filter_complex','[0:a]volume=0.8[native];[native][1:a]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[a]',
+        '-map','0:v','-map','[a]','-c:v','copy','-c:a','aac','-b:a','192k','-t','60','-movflags','+faststart',str(cued)],check=True)
+    editions.append(cued)
 outputs={}
-for path in (native,cued):
+for path in editions:
     j=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_entries','format=duration:stream=codec_type,width,height,r_frame_rate,nb_frames','-of','json',str(path)]))
     v=next(s for s in j['streams'] if s['codec_type']=='video')
     assert int(v['nb_frames'])==1440
     assert abs(float(j['format']['duration'])-60)<.05
     outputs[path.name]=j
 (run/'assembly_validation.json').write_text(json.dumps({'outputs':outputs,
-    'edits':'Trim codec tail frames/audio padding to 18+20+22; straight concatenation; no crossfades, optical interpolation, speed changes or hidden-cut repairs.',
-    'audio':'native output preserved; separate event-cue version adds authored phone and doorbell Foley',
+    'durations':durations,
+    'edits':'Trim codec tail frames/audio padding to the recorded durations; straight concatenation; no crossfades, optical interpolation, speed changes or hidden-cut repairs.',
+    'audio':'native output preserved' + ('' if a.native_only else '; separate event-cue version adds authored phone and doorbell Foley'),
     'semantic_acceptance':'NOT implied by duration validation; see visual review'},indent=2))
 print(json.dumps(outputs))
