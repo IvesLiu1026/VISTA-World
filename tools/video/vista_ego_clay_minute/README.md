@@ -131,3 +131,24 @@ task port. Assemble with `assemble.py --durations 20 20 20 --native-only` to
 retain model-generated dialogue without adding the old planned Foley track.
 Review realism, spoken content, both boundaries and return views separately;
 improved visual realism alone does not establish world-state consistency.
+
+The photographic revision improved sampled human/material realism and the two
+first-frame joins. It retained native Mandarin dialogue, but adult delivery was
+often calmer than requested, and the child's lattice ball became solid. These
+are separate appearance, performance and world-state outcomes.
+
+`audio_revision.py` supports explicit timestamped STT and expressive TTS trials.
+The optional dialogue edition uses a documented Gemini TTS preset (Charon), not
+a real person's cloned voice. An initial Fish trial referenced only the pilot's
+fictional generated adult; it was not selected after the speech review. Gemini
+TTS on this route requires raw 24 kHz mono PCM, despite the generic endpoint's
+MP3 option. Receipts record each attempt, including rejected formats.
+
+`mix_dialogue.py` reads an explicitly reviewed `dub_plan.json` and eight
+`charon_father_N.pcm` files to replace the off-camera father's lines. It preserves
+video packets, verifies 60 seconds / 1440 frames, and keeps the native edition.
+It ducks original sound during replacement lines, including overlapping room
+and child sounds: this is disclosed editing, not perfect source separation or
+proof of native model performance. Automatic transcripts can hallucinate words
+in nonspeech and return poor timestamps; use cross-supported phrases and retain
+uncertainty instead of publishing them as gold labels or unreviewed subtitles.
