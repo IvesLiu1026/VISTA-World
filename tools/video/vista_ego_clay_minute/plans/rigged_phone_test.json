@@ -1,0 +1,15 @@
+{
+  "duration": 8,
+  "seed": 20260918,
+  "prompt": "Exactly 8 seconds of photographic LIVE ACTION from a real Taiwanese adult father's eye-mounted camera. ONE continuous first-person take, no cuts. VIDEO 1 is an UNTEXTURED WHITE GEOMETRY AND MOTION GUIDE. Retain its camera movement, room layout, furniture and phone placements. White arms are anatomical motion reference only: replace them with completely real human skin and natural adult hands, five anatomically coherent fingers, subtle arm hair. No plastic, dolls, game graphics or clay. IMAGE 1 supplies the material/lighting style of this SAME apartment, not its camera framing. Do not cut to that image or invent a second kitchen. Real beige tiled floor, low oak coffee table, blue sofa, cream walls, closed oak entry door.\nFollow the video timing EXACTLY. Bend toward the ONE ringing black smartphone on the coffee table, right hand physically grasps the SAME phone and raises it in front of the viewer. Palm supports the back, thumb and fingers visibly grip opposite phone edges, screen faces the camera. Phone remains rigid and supported throughout, never floats or sticks to the back of the hand or forearm. Preserve contact as the wrist turns. The camera sees the right forearm entering from the lower right. Phone is absent from the table when held. After brief speakerphone conversation, lower and release it onto its original tabletop location, withdraw the hand, then start turning toward the door. Never duplicate the phone.\nNative urgent Taiwanese Mandarin speech, quick and interrupted. Caller through phone speaker asks 「我到樓下了，你好了沒？」 Father speaks fast and breathlessly 「還沒！小孩在哭，爐子還開著！」 Offscreen child fusses, milk softly simmers, and doorbell rings near the end. Keep all room geometry stationary and camera perspective coherent. No music, subtitles, montage, third-person father, slow motion or cutaways. The purpose is realistic hands, correct phone grasp/release, and photographic rendering with the white guide's same continuous action.",
+  "references": [
+    {
+      "type": "video",
+      "name": "rigged_phone_guide.mp4"
+    },
+    {
+      "type": "image",
+      "name": "kitchen_photo.png"
+    }
+  ]
+}
