@@ -10,12 +10,17 @@ from pathlib import Path
 p=argparse.ArgumentParser()
 p.add_argument('--run',type=Path,required=True)
 p.add_argument('--port',type=int,default=48997)
+p.add_argument('--names',nargs='+',help='Explicit basenames to expose instead of pilot defaults')
 a=p.parse_args()
 root=a.run.resolve()
 old_origin=root/'media-origin.json'
 token=json.loads(old_origin.read_text())['path_prefix'] if old_origin.exists() else secrets.token_hex(24)
 if not re.fullmatch(r'[a-f0-9]{48}',token):raise ValueError('Invalid task path')
 names={f'clay_{n}.mp4' for n in (1,2,3)} | {f'previous_{n}.mp4' for n in (2,3)} | {f'anchor_{n}.png' for n in (2,3)} | {'character_continuity.mp4','environment_kitchen.png','environment_living.png'}
+if a.names:
+    if any(Path(name).name != name or name in ('.','..') for name in a.names):
+        raise ValueError('Allowlist entries must be plain filenames')
+    names=set(a.names)
 (root/'media-origin.json').write_text(json.dumps({'port':a.port,'path_prefix':token,'allowlist':sorted(names)}))
 
 

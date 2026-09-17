@@ -10,6 +10,7 @@ p=argparse.ArgumentParser()
 p.add_argument('--audio',type=Path,required=True)
 p.add_argument('--keys',type=Path,required=True)
 p.add_argument('--output',type=Path,required=True)
+p.add_argument('--dialogue',action='store_true',help='Transcribe actual speech and assess delivery')
 a=p.parse_args()
 if a.output.exists():
     raise SystemExit('Audit exists; refusing duplicate paid request')
@@ -23,7 +24,17 @@ and fewer than 450 words. Do not list every individual footstep or bubble.
 Distinguish environmental noise, vocalizations, electronic tones and musical
 score. This is a generated-video quality check; do not assume that any expected
 sound is present. Be concise.'''
-body={'model':'google/gemini-2.5-flash','max_tokens':1200,'reasoning':{'enabled':False},
+if a.dialogue:
+    prompt='''Listen only to the supplied audio; no screenplay is supplied.
+Return a JSON object containing speech [{start,end,speaker,text,confidence}],
+speaker_descriptions, language, delivery_and_urgency, environmental_sounds,
+and uncertainties. Transcribe intelligible Chinese speech in Traditional Chinese.
+Use approximate seconds relative to this audio. Do not invent missing words;
+mark unclear sections. Identify whether distinct adult, child, telephone-filtered
+or muffled offscreen voices are actually audible. Describe urgency based on
+actual vocal delivery, not the meaning of a script. Group repeated nonspeech
+sounds; do not list every footstep. No commentary outside the JSON.'''
+body={'model':'google/gemini-2.5-flash','max_tokens':4000 if a.dialogue else 1200,'reasoning':{'enabled':False},
     'messages':[{'role':'user','content':[{'type':'text','text':prompt},
     {'type':'input_audio','input_audio':{'data':base64.b64encode(a.audio.read_bytes()).decode(),'format':'wav'}}]}]}
 req=urllib.request.Request('https://openrouter.ai/api/v1/chat/completions',
