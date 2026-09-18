@@ -102,6 +102,25 @@ jobs:
             case "$mime" in
               text/*|application/javascript|application/json|application/xml|application/yaml|inode/x-empty)
                 ;;
+              image/svg+xml)
+                # file(1) classifies SVG source as an image; require real UTF-8 XML.
+                python3 - "$path" <<'PY'
+          import pathlib
+          import sys
+          import xml.etree.ElementTree as ET
+
+          source = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+          root = ET.fromstring(source)
+          if root.tag != "{http://www.w3.org/2000/svg}svg":
+              raise SystemExit("Expected an SVG XML root")
+          if any(node.tag in {
+              "{http://www.w3.org/2000/svg}image",
+              "{http://www.w3.org/2000/svg}script",
+              "{http://www.w3.org/2000/svg}foreignObject",
+          } for node in root.iter()):
+              raise SystemExit("SVG source must not embed images, scripts or foreign payloads")
+          PY
+                ;;
               *)
                 binary_mime+="$path ($mime)"$'\n'
                 ;;
