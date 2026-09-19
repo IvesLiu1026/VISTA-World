@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VISTA · Streaming Assistant Demo</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header><a class="brand" href="/">VISTA<span> / EGO STREAMING</span></a><span class="edition">RESEARCH DEMO · 20 SEP 2026</span></header>
+<main>
+<div class="intro"><div><div class="eyebrow"><span class="dot"></span> REAL MODEL RESPONSES · RECORDED ENVIRONMENT</div>
+<h1>Knowing when to help<span>.</span></h1><p>同時發生的日常，什麼時候該打斷？</p></div>
+<div class="model-status"><span class="model-tag">Qwen3.5 · 9B <b>已實測</b></span><span class="jev-tag">Jev · 尚未開通</span></div></div>
+<section class="stage" aria-label="六房間環境與模型判斷">
+<div class="player"><video id="video" preload="metadata" playsinline poster="poster.png"><source src="demo.mp4" type="video/mp4"></video>
+<div class="video-top"><span>VISTA SIX-ROOM ENVIRONMENT</span><span id="room">Kitchen & dining</span></div>
+<div class="video-bottom"><span class="caption-label">MODEL DECISION REPLAY</span><div id="caption">Ready to replay the recorded episode.</div><small>Recorded human actions · model decisions replayed separately</small></div>
+<button id="center-play" class="center-play" aria-label="播放 Demo">▶</button></div>
+<aside class="decisions"><div class="aside-top"><span>當下的決策</span><span id="decision-clock">00:00</span></div>
+<div class="decision-card model-card"><div class="card-head"><span>QWEN3.5 · 9B</span><span class="real-badge">API 實測</span></div>
+<h2 id="model-action">準備播放</h2><p id="model-reason">播放影片，查看每個觀察時點的真實回答。</p><div class="card-foot"><span id="model-latency">—</span><span id="model-confidence">—</span></div></div>
+<div class="decision-card rule-card"><div class="card-head"><span>現有規則助手</span><span>相同觀察</span></div><h3 id="rule-action">—</h3><p id="rule-reason"></p></div>
+<div class="evidence"><span class="eyebrow">OBSERVED NOW</span><div id="cues">等待觀察</div></div>
+<button class="text-button" id="inspect">查看這次判斷 ↗</button></aside></section>
+<div class="controls"><button id="play" class="primary">▶ 播放 Demo</button><span id="clock">00:00 / 02:55</span>
+<input id="seek" type="range" min="0" max="175" step="0.1" value="0" aria-label="影片時間">
+<select id="speed" aria-label="播放速度"><option value="1">1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
+<button id="mute" class="quiet" aria-label="關閉英文旁白">英文旁白</button><button id="fullscreen" class="quiet">全螢幕</button></div>
+<nav id="chapters" class="chapters" aria-label="展示重點"></nav>
+<section class="metrics" aria-label="實測摘要"><div><span>真實 API 回覆</span><strong id="requests">—</strong></div><div><span>回覆延遲 · 中位數</span><strong id="latency">—</strong></div><div><span>控制步驟 · 小模型 / 規則</span><strong id="checks">—</strong></div><div><span>決策模型費用</span><strong id="cost">—</strong></div></section>
+<details class="review"><summary>檢查對照案例與實驗範圍 <span>＋</span></summary><div class="review-content">
+<p>這是既有環境的觀察回放。Qwen 收到文字線索，沒有直接看影片；它的決策沒有控制這段已錄好的動作。Jev 尚未呼叫。控制案例是開發檢查，並非論文準確率。</p>
+<div class="table-scroll"><table><thead><tr><th>案例</th><th>時間</th><th>Qwen</th><th>規則</th><th>檢查</th></tr></thead><tbody id="checks-body"></tbody></table></div>
+<p id="limits"></p><a href="demo.mp4" download="VISTA-Decision-Demo.mp4">下載 Demo 影片 ↗</a> · <a href="results.json" download>下載實測紀錄 ↗</a>
+</div></details>
+</main><footer><span>VISTA × EgoArgus</span><span>OBSERVE → REMEMBER → DECIDE</span></footer>
+<dialog id="detail"><button id="close-detail" aria-label="關閉">✕</button><h2>決策與觀察</h2><pre id="detail-content"></pre></dialog>
+<script src="app.js" defer></script></body></html>
