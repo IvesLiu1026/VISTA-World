@@ -13,10 +13,16 @@ import time
 import urllib.error
 import urllib.request
 
-from .protocol import Memory, normalize_jev, openrouter_request, jev_request, validate_answer
+from .protocol import (Memory, normalize_jev, openrouter_request, jev_request,
+                       openrouter_jev_request, validate_answer)
 
 ENDPOINTS = {'openrouter': 'https://openrouter.ai/api/v1/chat/completions',
+             'openrouter-jev': 'https://openrouter.ai/api/alpha/decisions',
              'jev': 'https://api.typesafe.ai/v1/systemone'}
+MODELS = {'openrouter': 'qwen/qwen3.5-9b', 'openrouter-jev': 'typesafe/jev-1.13',
+          'jev': 'jev-1.13.0'}
+REQUESTS = {'openrouter': openrouter_request, 'openrouter-jev': openrouter_jev_request,
+            'jev': jev_request}
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -38,7 +44,7 @@ def run(args):
     if len(rows) > 60 or not 0 < args.limit <= 60 or not 0 < args.budget <= .1:
         raise ValueError('Pilot limit: 60 requests and USD 0.10 maximum')
     args.out.mkdir(parents=True, exist_ok=True)
-    model = 'qwen/qwen3.5-9b' if args.provider == 'openrouter' else 'jev-1.13.0'
+    model = MODELS[args.provider]
     identity = {'input_sha256': hashlib.sha256(inputs).hexdigest(), 'provider': args.provider,
                 'model': model, 'max_requests': len(rows), 'budget_usd': args.budget,
                 'retries': 0, 'input_kind': 'public metadata / authored controls; no images',
@@ -47,10 +53,11 @@ def run(args):
     if plan.exists() and json.loads(plan.read_text()) != identity:
         raise ValueError('Existing run identity differs; use a new directory')
     if not plan.exists(): dump(plan, identity)
-    key = os.environ.get('OPENROUTER_API_KEY' if args.provider == 'openrouter' else 'TYPESAFE_API_KEY', '')
+    uses_openrouter = args.provider in ('openrouter', 'openrouter-jev')
+    key = os.environ.get('OPENROUTER_API_KEY' if uses_openrouter else 'TYPESAFE_API_KEY', '')
     if args.key_file:
         content = args.key_file.read_text().strip()
-        if args.provider == 'openrouter':
+        if uses_openrouter:
             keys = re.findall(r'sk-or-v1-[A-Za-z0-9_-]+', content)
             key = keys[0] if keys else ''
         else:
@@ -71,7 +78,7 @@ def run(args):
         if row['episode'] != episode:
             episode, memory = row['episode'], Memory()
         state = memory.ingest(row['observation'])
-        body = openrouter_request(state) if args.provider == 'openrouter' else jev_request(state)
+        body = REQUESTS[args.provider](state)
         payload = json.dumps(body, ensure_ascii=False).encode()
         # At most one token per UTF-8 byte is a conservative estimate for this input.
         ceiling = len(payload) * (.0000001 if args.provider == 'openrouter' else .000000042)
@@ -116,6 +123,7 @@ def run(args):
             record['response_redacted'] = safe_text != raw_text
             raw = json.loads(raw_text)
             record['returned_model'] = raw.get('model')
+            record['generation_id'] = raw.get('id')
             record['upstream_provider'] = raw.get('provider')
             record['usage'] = raw.get('usage', {})
             record['cost_usd'] = record['usage'].get('cost')
@@ -126,6 +134,9 @@ def run(args):
                 content = raw['choices'][0]['message']['content']
                 record['answer'] = validate_answer(json.loads(content))
             else:
+                if args.provider == 'openrouter-jev' and not (
+                        raw.get('model') == model or str(raw.get('model', '')).startswith(model+'-')):
+                    raise ValueError('Returned Jev identity does not match the pinned model')
                 record['answer'] = normalize_jev(raw)
             memory.accept(record['answer']['action'])
             completed += 1

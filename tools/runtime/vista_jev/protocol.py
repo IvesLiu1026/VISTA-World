@@ -147,10 +147,16 @@ def openrouter_request(state, model='qwen/qwen3.5-9b'):
                 'name': 'household_decision', 'strict': True, 'schema': ANSWER_SCHEMA}}}
 
 
-def jev_request(state):
-    return {'model': 'jev-1.13.0', 'state': state, 'questions': {
+def jev_request(state, model='jev-1.13.0'):
+    return {'model': model, 'state': state, 'questions': {
         'next_action': {'type': 'choice', 'instructions': INSTRUCTIONS.split('Return action,')[0],
                         'criteria': TEXT}}}
+
+
+def openrouter_jev_request(state):
+    body = jev_request(state, model='typesafe/jev-1.13')
+    body['provider'] = {'allow_fallbacks': False}
+    return body
 
 
 def validate_answer(answer):
@@ -166,7 +172,9 @@ def normalize_jev(raw):
     p = q['probabilities']
     if (q['type'] != 'choice' or q['choice'] not in ACTIONS or set(p) != set(ACTIONS)
             or not all(number(v, 0, 1) for v in p.values())
-            or abs(sum(p.values())-1) > .02 or not number(q['confidence'], 0, 1)):
+            # OpenRouter rounds each probability to two decimals.
+            or abs(sum(p.values())-1) > len(ACTIONS)*.005 + 1e-9
+            or p[q['choice']] < max(p.values()) or not number(q['confidence'], 0, 1)):
         raise ValueError('Invalid Jev choice distribution')
     return {'action': q['choice'], 'confidence': q['confidence'],
             'reason': 'Jev typed choice; no generated explanation.',

@@ -20,10 +20,22 @@ def percentile(values, q):
     return round(ordered[lo]+(ordered[hi]-ordered[lo])*(pos-lo), 2)
 
 
-def build(run, trace_path):
+def build(run, trace_path, provider='qwen', comparison_run=None):
+    is_jev = provider == 'jev'
+    model_name = 'Jev 1.13' if is_jev else 'Qwen3.5-9B'
+    model_id = 'typesafe/jev-1.13' if is_jev else 'qwen/qwen3.5-9b'
     rows = [json.loads(line) for line in (run/'inputs.jsonl').read_text().splitlines()]
     labels = {r['id']: r for r in json.loads((run/'control-labels.json').read_text())}
     trace = json.loads(trace_path.read_text())
+    comparison = None; compared_rows = {}
+    if comparison_run:
+        for name in ('inputs.jsonl', 'control-labels.json'):
+            if (run/name).read_bytes() != (comparison_run/name).read_bytes():
+                raise ValueError('Comparison requires identical frozen inputs and labels')
+        comparison = json.loads((comparison_run/'web/results.json').read_text())
+        compared_rows = {r['id']: r for r in comparison['rows']}
+        if set(compared_rows) != {r['id'] for r in rows}:
+            raise ValueError('Comparison has missing or extra decisions')
     results = []; episode = None; policy = None
     for row in rows:
         obs = validate_observation(row['observation'])
@@ -34,7 +46,7 @@ def build(run, trace_path):
         t0 = time.perf_counter(); decision = policy.step(rule_input)
         rule_ms = (time.perf_counter()-t0)*1000
         action = 'notice_'+decision['notice'] if decision['action'] == 'notice' else 'wait'
-        receipt = run/'qwen'/(row['id']+'.receipt.json')
+        receipt = run/provider/(row['id']+'.receipt.json')
         model = json.loads(receipt.read_text()) if receipt.exists() else {'answer': None, 'error': 'not_run'}
         video_s = None
         if row['episode'] == 'native':
@@ -53,6 +65,13 @@ def build(run, trace_path):
             permitted = item['check']['allowed_actions']
             item['check']['rule_pass'] = action in permitted
             item['check']['model_pass'] = bool(model.get('answer') and model['answer']['action'] in permitted)
+        if comparison:
+            prior = compared_rows[row['id']]
+            if prior['observation'] != obs or prior['rule']['action'] != action:
+                raise ValueError('Comparison observation or unchanged rule decision differs')
+            item['comparison'] = prior['model']
+            if item['check']:
+                item['check']['comparison_pass'] = prior['check']['model_pass']
         results.append(item)
     valid = [r for r in results if r['model']['answer']]
     controls = [r for r in results if r['check']]
@@ -81,9 +100,12 @@ def build(run, trace_path):
                                                      if first_off and r['video_s'] >= first_off['video_s']),
                'native_after_off_stove_notice': any(is_action(r, 'notice_stove') for r in native
                                                   if first_off and r['video_s'] >= first_off['video_s'])}
-    bundle = {'title': 'VISTA · Streaming decisions', 'model': 'Qwen3.5-9B',
-              'model_id': 'qwen/qwen3.5-9b', 'jev': {'status': 'not_connected', 'measured_requests': 0,
-              'reason': 'No TypeSafe account; not listed in the OpenRouter catalog checked 2026-09-20.'},
+    bundle = {'title': 'VISTA · Streaming decisions', 'model': model_name,
+              'model_id': model_id, 'jev': {'status': 'measured' if is_jev else 'not_measured_in_this_run',
+              'measured_requests': len(list((run/provider).glob('*.receipt.json'))) if is_jev else 0},
+              'confidence_kind': 'distribution concentration; calibration not measured here' if is_jev else 'self-report; not calibrated',
+              'comparison': {'model': comparison['model'], 'model_id': comparison['model_id'],
+                             'metrics': comparison['metrics'], 'source_run': comparison_run.name} if comparison else None,
               'mode': 'Recorded observations / real API decision replay', 'metrics': metrics,
               'actions': TEXT, 'highlights': highlights, 'rows': results,
               'limitations': ['Metadata only; no image or audio perception.',
@@ -92,7 +114,8 @@ def build(run, trace_path):
                   'API latency was measured from the TST host and includes network overhead.',
                   'The historical native video includes engineering HUD/console; it was not sent to the model.',
                   'Video alignment uses recorded wall timestamps and has not been certified frame-exact.',
-                  'Confidence is the language model’s self-report, not calibrated Jev probabilities.']}
+                  'Models ran sequentially at different times on the same caller host, with their own notice histories.',
+                  'Jev returns choice probabilities and distribution-derived confidence. Qwen confidence is self-reported. Neither was calibrated on this pilot.']}
     web = run/'web'; web.mkdir(exist_ok=True)
     (web/'results.json').write_text(json.dumps(bundle, ensure_ascii=False, indent=2)+'\n')
     for name in ('index.html', 'app.js', 'style.css'):
@@ -100,7 +123,7 @@ def build(run, trace_path):
     failures = [r for r in controls if not r['check']['model_pass']]
     report = [
         '# VISTA decision pilot — 2026-09-20', '',
-        '**Actual model: qwen/qwen3.5-9b on OpenRouter. Jev: zero requests, unavailable.**', '',
+        f'**Actual model: {model_id} on OpenRouter.**', '',
         f"- Valid API decisions: {metrics['valid']}/{metrics['expected']}.",
         f"- Native recorded checkpoints: {len(native)}; no live control or counterfactual outcome claim.",
         f"- Authored control checks: model {metrics['model_control_pass']}/{len(controls)}; rules {metrics['rule_control_pass']}/{len(controls)}.",
@@ -113,9 +136,17 @@ def build(run, trace_path):
     ]
     report += [f"- {r['id']} / {r['check']['check']}: {r['model']['answer'] or r['model']['error']}; allowed {r['check']['allowed_actions']}" for r in failures] or ['None in this development sample.']
     report += ['', '## Interpretation', '', *['- '+v for v in bundle['limitations']], '',
-               'Do not infer that Jev would match these results. Rule agreement is not accuracy. '
+               'Rule agreement is not accuracy. '
                'Small control success does not establish robustness, autonomous physical assistance, '
                'or an advantage over the rule baseline.', '']
+    if comparison:
+        m = comparison['metrics']
+        report += ['## Frozen earlier comparison', '',
+                   f"{comparison['model_id']}: {m['valid']}/{m['expected']} valid; "
+                   f"{m['model_control_pass']}/{m['control_steps']} authored control checks; "
+                   f"p50 {m['p50_ms']} ms / p95 {m['p95_ms']} ms; USD {m['reported_cost_usd']}.",
+                   'All earlier failures are retained. Observations, labels and rule actions match exactly; '
+                   'each model retains its own decisions. Request formats differ between chat and typed choice.', '']
     (run/'REPORT.md').write_text('\n'.join(report))
     (run/'metrics.json').write_text(json.dumps(metrics, indent=2)+'\n')
     print(json.dumps(metrics))
@@ -124,4 +155,6 @@ def build(run, trace_path):
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--run', type=Path, required=True); p.add_argument('--trace', type=Path, required=True)
-    a = p.parse_args(); build(a.run, a.trace)
+    p.add_argument('--provider', choices=('qwen', 'jev'), default='qwen')
+    p.add_argument('--comparison-run', type=Path)
+    a = p.parse_args(); build(a.run, a.trace, a.provider, a.comparison_run)

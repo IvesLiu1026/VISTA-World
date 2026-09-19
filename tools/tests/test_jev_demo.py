@@ -54,6 +54,13 @@ class ObservationBoundaryTests(unittest.TestCase):
         raw['answers']['next_action']['probabilities']['wait'] = 1
         with self.assertRaises(ValueError): normalize_jev(raw)
 
+    def test_jev_accepts_rounded_probabilities_but_rejects_inconsistent_choice(self):
+        raw = {'answers': {'next_action': {'type': 'choice', 'choice': 'wait',
+               'probabilities': dict(zip(ACTIONS, [.34, .33, .33, .01, .01])), 'confidence': .1}}}
+        self.assertEqual(normalize_jev(raw)['action'], 'wait')
+        raw['answers']['next_action']['choice'] = 'notice_water'
+        with self.assertRaises(ValueError): normalize_jev(raw)
+
     def test_controls_are_separate_and_original_decisions_never_transferred(self):
         with tempfile.TemporaryDirectory() as d:
             source = Path(d)/'source.json'
@@ -70,6 +77,36 @@ class ObservationBoundaryTests(unittest.TestCase):
 
 
 class RunnerReceiptTests(unittest.TestCase):
+    def test_openrouter_jev_uses_decisions_api_and_retains_real_identity_and_distribution(self):
+        import io
+        raw = {'id': 'test-generation', 'model': 'typesafe/jev-1.13-20260917',
+               'provider': 'TypeSafe', 'usage': {'input_tokens': 100, 'output_tokens': 0, 'cost': .0000042},
+               'answers': {'next_action': {'type': 'choice', 'choice': 'wait', 'confidence': .95,
+                           'probabilities': {a: float(a == 'wait') for a in ACTIONS}}}}
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); inputs = root/'inputs.jsonl'
+            inputs.write_text(json.dumps({'id': 'r-0', 'episode': 'e', 'observation': fixture(0)})+'\n')
+            args = SimpleNamespace(inputs=inputs, out=root/'results', provider='openrouter-jev',
+                                   key_file=None, limit=1, budget=.1)
+            response = io.BytesIO(json.dumps(raw).encode()); response.status = 200
+            with patch.dict('os.environ', {'OPENROUTER_API_KEY': 'test-only-placeholder'}):
+                with patch('urllib.request.OpenerDirector.open', return_value=response) as send:
+                    run(args)
+                    request = send.call_args.args[0]
+                    self.assertEqual(request.full_url, 'https://openrouter.ai/api/alpha/decisions')
+                    body = json.loads(request.data)
+                    self.assertEqual(body['model'], 'typesafe/jev-1.13')
+                    self.assertNotIn('messages', body)
+                    self.assertEqual(body['questions']['next_action']['type'], 'choice')
+                    self.assertNotIn('allowed_actions', json.dumps(body))
+                    receipt = json.loads((args.out/'r-0.receipt.json').read_text())
+                    self.assertEqual(receipt['returned_model'], raw['model'])
+                    self.assertEqual(receipt['answer']['probabilities']['wait'], 1)
+                    self.assertEqual(receipt['cost_usd'], .0000042)
+                with patch('urllib.request.OpenerDirector.open') as send:
+                    run(args)
+                    send.assert_not_called()
+
     def test_unreceipted_submission_is_not_automatically_retried(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d); out = root/'results'; out.mkdir()
@@ -91,6 +128,43 @@ class RunnerReceiptTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, 'Missing'): run(args)
             self.assertEqual(json.loads((args.out/'status.json').read_text())['status'], 'missing_credentials')
             self.assertEqual(list(args.out.glob('*.receipt.json')), [])
+
+    def test_unexpected_provider_model_is_preserved_as_a_failed_call(self):
+        import io
+        raw = {'model': 'different-model', 'usage': {'cost': .001}, 'answers': {}}
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); inputs = root/'input.jsonl'
+            inputs.write_text(json.dumps({'id': 'r-0', 'episode': 'e', 'observation': fixture(0)})+'\n')
+            args = SimpleNamespace(inputs=inputs, out=root/'results', provider='openrouter-jev',
+                                   key_file=None, limit=1, budget=.1)
+            response = io.BytesIO(json.dumps(raw).encode()); response.status = 200
+            with patch.dict('os.environ', {'OPENROUTER_API_KEY': 'test-only-placeholder'}):
+                with patch('urllib.request.OpenerDirector.open', return_value=response) as send:
+                    run(args)
+                    self.assertEqual(send.call_count, 1)
+            receipt = json.loads((args.out/'r-0.receipt.json').read_text())
+            self.assertIsNone(receipt['answer'])
+            self.assertEqual(receipt['cost_usd'], .001)
+            self.assertEqual(receipt['returned_model'], 'different-model')
+            self.assertEqual(json.loads((args.out/'r-0.response.json').read_text()), raw)
+
+
+class ComparisonIntegrityTests(unittest.TestCase):
+    def test_changed_control_labels_cannot_be_reported_as_a_matched_comparison(self):
+        from runtime.vista_jev.report import build
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); new = root/'new'; prior = root/'prior'
+            new.mkdir(); prior.mkdir()
+            row = {'id': 'r-0', 'episode': 'control', 'relative_s': 0, 'observation': fixture(0)}
+            labels = [{'id': 'r-0', 'allowed_actions': ['wait']}]
+            for run_dir in (new, prior):
+                (run_dir/'inputs.jsonl').write_text(json.dumps(row)+'\n')
+                (run_dir/'control-labels.json').write_text(json.dumps(labels))
+            (prior/'control-labels.json').write_text('[]')
+            trace = root/'trace.json'; trace.write_text('[]')
+            with self.assertRaisesRegex(ValueError, 'identical frozen inputs and labels'):
+                build(new, trace, 'jev', prior)
+            self.assertFalse((new/'web').exists())
 
 
 class PrivateReviewServerTests(unittest.TestCase):
