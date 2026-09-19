@@ -25,21 +25,26 @@ def render(run, native):
     lines = ['[Script Info]', 'ScriptType: v4.00+', 'PlayResX: 1280', 'PlayResY: 720',
              '[V4+ Styles]', 'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
              'Style: Header,DejaVu Sans,21,&H00D6E7CD,&H00FFFFFF,&H00111712,&H00111712,0,0,0,0,100,100,1,0,1,0,0,7,24,24,16,1',
-             'Style: Model,DejaVu Sans,22,&H008CE8C4,&H00FFFFFF,&H00111712,&H00111712,0,0,0,0,100,100,0,0,1,0,0,1,24,24,49,1',
+             'Style: Model,DejaVu Sans,22,&H008CE8C4,&H00FFFFFF,&H00111712,&H00111712,0,0,0,0,100,100,0,0,1,0,0,1,24,24,79,1',
+             'Style: Comparison,DejaVu Sans,16,&H00D0D5D3,&H00FFFFFF,&H00111712,&H00111712,0,0,0,0,100,100,0,0,1,0,0,1,24,24,49,1',
              'Style: Rule,DejaVu Sans,16,&H00D0D5D3,&H00FFFFFF,&H00111712,&H00111712,0,0,0,0,100,100,0,0,1,0,0,1,24,24,20,1',
              'Style: Narration,DejaVu Sans,21,&H00FFFFFF,&H00FFFFFF,&H00101212,&H80101212,0,0,0,0,100,100,0,0,3,1,0,8,100,100,77,1',
              '[Events]', 'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text']
     def subtitle(start, end, style, text):
         if any(c in text for c in '{}\\\n'): raise ValueError('Unexpected ASS control character')
         lines.append(f'Dialogue: 0,{ass_time(start)},{ass_time(end)},{style},,0,0,0,,{text}')
-    subtitle(0, duration, 'Header', 'VISTA  |  QWEN3.5-9B DECISION REPLAY  |  JEV NOT CONNECTED')
+    subtitle(0, duration, 'Header', 'VISTA  |  '+data['model'].upper()+'  |  REAL API DECISIONS / RECORDED ENVIRONMENT')
     native_rows = [r for r in data['rows'] if r['episode'] == 'native']
     subtitle(0, native_rows[0]['video_s'], 'Model', 'Recorded environment. Waiting for the first observation.')
     subtitle(0, native_rows[0]['video_s'], 'Rule', 'English synthetic narration. Model decisions do not control this recorded video.')
     for i, row in enumerate(native_rows):
         end = native_rows[i+1]['video_s'] if i+1 < len(native_rows) else duration
         answer = row['model']['answer']
-        subtitle(row['video_s'], end, 'Model', 'QWEN: '+(TEXT[answer['action']] if answer else 'No valid response. Upstream request failed.'))
+        subtitle(row['video_s'], end, 'Model', data['model'].upper()+': '+(TEXT[answer['action']] if answer else 'No valid response. Upstream request failed.'))
+        if row.get('comparison'):
+            other = row['comparison']['answer']
+            subtitle(row['video_s'], end, 'Comparison', data['comparison']['model'].upper()+': '+(
+                TEXT[other['action']] if other else 'No valid response. Upstream request failed.'))
         subtitle(row['video_s'], end, 'Rule', 'RULE: '+TEXT[row['rule']['action']])
     narration = json.loads((run/'narration/narration.json').read_text())
     mixed = array('h', [0])*round(duration*24000)

@@ -1,4 +1,4 @@
-"""Five bounded English narration clips, explicitly separate from model decisions."""
+"""Bounded, explicitly authored English narration, separate from model decisions."""
 import argparse
 import json
 from pathlib import Path
@@ -9,22 +9,22 @@ import wave
 
 from .runner import NoRedirect, redact
 
-LINES = [
-    (0.8, 'This is a replay of our six room environment. We tested Qwen three point five, nine B, on recorded observations. Jev has not been connected.'),
-    (34, 'The stove was observed on before the person said they were leaving. The rule assistant remembers this task. The model misses it.'),
-    (91, 'During the phone call, minor reminders should wait. We compare the model decisions with the existing rules.'),
-    (128, 'Water is now near the rim. The model misses the first warning cue, then repeats alerts after observing the running tap.'),
-    (164, 'The tap is off. The rule assistant resumes the stove reminder. The model does not.'),
-]
-
-
-def narrate(out, key_file):
+def narrate(out, key_file, script):
+    lines = json.loads(script.read_text())
+    if (not isinstance(lines, list) or not 1 <= len(lines) <= 5
+            or any(set(v) != {'at_s', 'text'} or not isinstance(v['text'], str)
+                   or not 1 <= len(v['text']) <= 320 or not isinstance(v['at_s'], (int, float))
+                   or not 0 <= v['at_s'] < 180 for v in lines)
+            or sum(len(v['text'].split()) for v in lines) > 140):
+        raise ValueError('Narration requires at most five short authored clips / 140 words')
     out.mkdir(parents=True, exist_ok=False)
+    (out/'script.json').write_bytes(script.read_bytes())
     key = re.findall(r'sk-or-v1-[A-Za-z0-9_-]+', key_file.read_text())[0]
     opener = urllib.request.build_opener(NoRedirect())
     meta = []
     spent = 0.0
-    for i, (start, text) in enumerate(LINES):
+    for i, line in enumerate(lines):
+        start, text = line['at_s'], line['text']
         if spent > .06: raise RuntimeError('Narration cost guard reached')
         body = {'model': 'google/gemini-3.1-flash-tts-preview', 'voice': 'Charon',
                 'response_format': 'pcm', 'input': text}
@@ -66,4 +66,5 @@ def narrate(out, key_file):
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--out', type=Path, required=True); p.add_argument('--key-file', type=Path, required=True)
-    a = p.parse_args(); narrate(a.out, a.key_file)
+    p.add_argument('--script', type=Path, required=True, help='Reviewed JSON list of at_s/text entries')
+    a = p.parse_args(); narrate(a.out, a.key_file, a.script)

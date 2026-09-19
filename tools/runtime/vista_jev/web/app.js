@@ -11,9 +11,16 @@ function showRow(row){
   $('decision-clock').textContent=stamp(row.video_s??row.relative_s);
   $('room').textContent=row.room;
   $('model-action').textContent=answer?titles[answer.action]:'沒有有效回覆';
-  $('model-reason').textContent=answer?answer.reason:(row.model.error||'尚未執行');
+  $('model-reason').textContent=answer?(answer.probabilities?'選項機率分布':answer.reason):(row.model.error||'尚未執行');
   $('model-latency').textContent=row.model.latency_ms!=null?`API ${(row.model.latency_ms/1000).toFixed(2)} s`:'未量測';
-  $('model-confidence').textContent=answer?`模型自評 ${Math.round(answer.confidence*100)}%`:'';
+  $('model-confidence').textContent=answer?`${answer.probabilities?'分布確定度':'模型自評'} ${Math.round(answer.confidence*100)}%`:'';
+  $('probabilities').replaceChildren();
+  if(answer?.probabilities)for(const [action,value] of Object.entries(answer.probabilities).sort((a,b)=>b[1]-a[1])){
+    const line=document.createElement('div'),label=document.createElement('span'),bar=document.createElement('meter'),number=document.createElement('span');
+    label.textContent=titles[action];bar.min=0;bar.max=1;bar.value=value;bar.setAttribute('aria-label',titles[action]);number.textContent=`${Math.round(value*100)}%`;
+    line.append(label,bar,number);$('probabilities').append(line);
+  }
+  if(row.comparison){const c=row.comparison;$('comparison-action').textContent=c.answer?titles[c.answer.action]:'沒有有效回覆';$('comparison-latency').textContent=c.latency_ms!=null?`${(c.latency_ms/1000).toFixed(2)} s`:'—';}
   $('rule-action').textContent=titles[row.rule.action];
   $('rule-reason').textContent=row.rule.reason.replaceAll('_',' ');
   $('caption').textContent=answer?data.actions[answer.action]:'No valid model response at this observation.';
@@ -28,7 +35,7 @@ function update(){
   $('seek').value=video.currentTime;
   const row=rows.filter(r=>r.video_s<=video.currentTime).at(-1);
   if(row&&row!==current)showRow(row);
-  if(!row&&current){current=null;$('decision-clock').textContent='00:00';$('room').textContent=rows[0]?.room||'';$('caption').textContent='The person starts a normal household routine.';$('model-action').textContent='等待第一筆觀察';$('model-reason').textContent='尚未到達第一個判斷時點。';$('rule-action').textContent='—';$('rule-reason').textContent='';$('model-latency').textContent='—';$('model-confidence').textContent='—';$('cues').replaceChildren();}
+  if(!row&&current){current=null;$('decision-clock').textContent='00:00';$('room').textContent=rows[0]?.room||'';$('caption').textContent='The person starts a normal household routine.';$('model-action').textContent='等待第一筆觀察';$('model-reason').textContent='尚未到達第一個判斷時點。';$('rule-action').textContent='—';$('rule-reason').textContent='';$('model-latency').textContent='—';$('model-confidence').textContent='—';$('comparison-action').textContent='—';$('comparison-latency').textContent='—';$('probabilities').replaceChildren();$('cues').replaceChildren();}
 }
 async function toggle(){try{if(video.paused)await video.play();else video.pause();}catch(error){$('caption').textContent='Press play again to start the video.';}}
 $('play').addEventListener('click',toggle);$('center-play').addEventListener('click',toggle);
@@ -45,15 +52,24 @@ $('close-detail').addEventListener('click',()=>$('detail').close());
 $('detail').addEventListener('click',event=>{if(event.target===$('detail'))$('detail').close();});
 fetch('results.json').then(r=>{if(!r.ok)throw Error(r.status);return r.json();}).then(result=>{
   data=result;rows=data.rows.filter(r=>r.episode==='native');const m=data.metrics;
+  $('model-name').textContent=data.model;$('card-model-name').textContent=data.model.toUpperCase();
+  $('requests-label').textContent=`${data.model} · 有效回覆`;$('cost-label').textContent=`${data.model} · 決策費用`;
+  $('comparison-card').hidden=!data.comparison;
+  $('comparison-name').textContent=data.comparison?`${data.comparison.model} · 規則對照`:'現有規則對照';
+  $('comparison-card-name').textContent=data.comparison?.model||'';
   $('requests').textContent=`${m.valid} / ${m.expected}`;
-  $('latency').textContent=m.p50_ms==null?'未量測':`${(m.p50_ms/1000).toFixed(2)} s`;
-  $('checks').textContent=`${m.model_control_pass} / ${m.control_steps} · ${m.rule_control_pass} / ${m.control_steps}`;
+  const cm=data.comparison?.metrics;
+  $('latency-label').textContent=`${data.model}${cm?' / Qwen':''} · 延遲中位數`;
+  $('checks-label').textContent=`開發檢查 · ${data.model}${cm?' / Qwen':''} / 規則`;
+  $('latency').textContent=(m.p50_ms==null?'未量測':`${(m.p50_ms/1000).toFixed(2)} s`)+(cm?` / ${(cm.p50_ms/1000).toFixed(2)} s`:'');
+  $('checks').textContent=`${m.model_control_pass}${cm?' / '+cm.model_control_pass:''} / ${m.rule_control_pass}（共 ${m.control_steps}）`;
   $('cost').textContent=`$${m.reported_cost_usd.toFixed(4)}`;
+  $('table-model').textContent=data.model;$('table-comparison').textContent=data.comparison?.model||'—';$('table-checks').textContent=cm?'Jev / Qwen':'檢查';
   const labels=['出門前的待辦','通話中的等待','水位迫近邊緣','關水後的待辦'];
   data.highlights.forEach((h,i)=>{const b=document.createElement('button');b.className='chapter';const t=document.createElement('span');t.textContent=stamp(h.time);b.append(t,document.createTextNode(labels[i]));b.addEventListener('click',()=>{video.currentTime=h.time+.05;update();});$('chapters').append(b);});
   data.rows.filter(r=>r.check).forEach(row=>{const tr=document.createElement('tr');
-    const values=[row.check.check.replaceAll('_',' '),`${row.relative_s}s`,row.model.answer?titles[row.model.answer.action]:'沒有回覆',titles[row.rule.action],row.check.model_pass?'通過':'未通過'];
-    values.forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;if(i===4)td.className=row.check.model_pass?'pass':'fail';tr.append(td);});
+    const values=[row.check.check.replaceAll('_',' '),`${row.relative_s}s`,row.model.answer?titles[row.model.answer.action]:'沒有回覆',row.comparison?.answer?titles[row.comparison.answer.action]:'—',titles[row.rule.action],(row.check.model_pass?'通過':'未通過')+(cm?' / '+(row.check.comparison_pass?'通過':'未通過'):'')];
+    values.forEach((v,i)=>{const td=document.createElement('td');td.textContent=v;if(i===5)td.className=row.check.model_pass?'pass':'fail';tr.append(td);});
     tr.tabIndex=0;tr.setAttribute('aria-label',`檢視 ${row.check.check} ${row.relative_s} 秒的紀錄`);
     const inspect=()=>{$('detail-content').textContent=JSON.stringify(row,null,2);$('detail').showModal();};
     tr.addEventListener('click',inspect);tr.addEventListener('keydown',e=>{if(e.key==='Enter')inspect();});$('checks-body').append(tr);
