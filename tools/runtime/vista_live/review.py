@@ -31,10 +31,11 @@ DOWN = [(1260,-900),(1260,-730),(1410,-710),(1410,-50),(1230,-50),(1230,-700),
         (1002,-700),(1002,-790),(1105,-790),(1105,-830),(1260,-830),(1260,-1000),(1200,-1000),(1147,-1071)]
 LIVING = [(1200,-1000),(1260,-1000),(1260,-830),(1105,-830),(1105,-790),(1002,-790),(1002,-700),
           (950,-500),(805,-265),(680,-265),(440,-290),(440,-410),(284,-415)]
+BASE_URL = 'http://127.0.0.1:49111'
 
 
 def post(route, value=None):
-    req = urllib.request.Request('http://127.0.0.1:49111' + route,
+    req = urllib.request.Request(BASE_URL + route,
         data=json.dumps(value or {}).encode(), headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(req, timeout=15) as response:
         return json.load(response)
@@ -52,7 +53,7 @@ class Review:
         return read(self.folder/'state.json')
 
     def service(self):
-        with urllib.request.urlopen('http://127.0.0.1:49111/state', timeout=3) as response:
+        with urllib.request.urlopen(BASE_URL + '/state', timeout=3) as response:
             return json.load(response)
 
     def sample(self):
@@ -111,7 +112,7 @@ class Review:
             raise RuntimeError('Human action failed: '+json.dumps(result))
 
     def say(self, code):
-        post('/dialogue',{'code':code});self.wait(6)
+        post('/dialogue',{'code':code,'audience':'phone' if code in ('human_call','human_pause') else 'assistant'});self.wait(6)
 
     def setup(self):
         post('/toggle',{'enabled':False})
@@ -175,7 +176,9 @@ class Review:
 if __name__=='__main__':
     p=argparse.ArgumentParser()
     for name in ('workspace','run','out'):p.add_argument('--'+name,type=Path,required=True)
-    p.add_argument('--view',choices=['first','third'],required=True);a=p.parse_args()
+    p.add_argument('--view',choices=['first','third'],required=True)
+    p.add_argument('--port',type=int,default=49111);a=p.parse_args()
+    BASE_URL='http://127.0.0.1:'+str(a.port)
     review=Review(a.workspace,a.run,a.out,a.view)
     try:review.episode()
     finally:review.close()

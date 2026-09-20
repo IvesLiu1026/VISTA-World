@@ -1,5 +1,8 @@
 # Live six-room assistance
 
+For anticipatory walking, open-topic Q&A, turn memory and conversation interrupted
+by concurrent events, see [CONVERSATION.md](CONVERSATION.md).
+
 This is an interactive extension of the concurrent home demo. A person can move
 freely in Unreal while an independent service observes, asks actual TypeSafe Jev
 for an intervention decision, plays English speech inside the engine, and keeps
