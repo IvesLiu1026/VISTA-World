@@ -26,7 +26,9 @@ bool AVistaCompanion::BeginAssist(const FString& Target,AActor* Entity,FVector C
     AssistId=FGuid::NewGuid().ToString(EGuidFormats::Digits);
     FCollisionQueryParams Q(SCENE_QUERY_STAT(CompanionApproach),false,this);
     const FVector Here=GetActorLocation();const FVector Toward=(Control-Here).GetSafeNormal2D();
-    for (float Radius:{38.f,45.f,53.f,62.f,68.f,74.f,80.f}) for (float Angle:{0.f,25.f,-25.f,50.f,-50.f,80.f,-80.f})
+    // Low tap controls need a closer stance; every candidate still has to
+    // clear the unchanged body capsule, approach sweep and supported floor.
+    for (float Radius:{30.f,34.f,38.f,45.f,53.f,62.f,68.f,74.f,80.f}) for (float Angle:{0.f,25.f,-25.f,50.f,-50.f,80.f,-80.f})
     {
         FVector P=Control-Toward.RotateAngleAxis(Angle,FVector::UpVector)*Radius;P.Z=Here.Z;
         FHitResult Floor,Wall;
