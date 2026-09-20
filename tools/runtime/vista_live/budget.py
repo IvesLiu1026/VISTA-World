@@ -10,9 +10,20 @@ class Budget:
     LIMITS = {'decision': 1000, 'plan': 60, 'tts': 30}
     RESERVES = {'decision': .0015, 'plan': .02, 'tts': .04}
 
-    def __init__(self, path, cap=2.0):
-        self.path, self.cap = str(path), cap
+    def __init__(self, path, cap=None, limits=None):
+        self.path = str(path)
         with self.connect() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS allowance (id INTEGER PRIMARY KEY CHECK(id=1), cap REAL, limits TEXT)')
+            agreed = db.execute('SELECT cap,limits FROM allowance WHERE id=1').fetchone()
+            self.cap = cap if cap is not None else agreed[0] if agreed else 2.0
+            self.LIMITS = dict(limits if limits is not None else json.loads(agreed[1]) if agreed else self.LIMITS)
+            if (set(self.LIMITS) != {'decision', 'plan', 'tts'} or
+                    any(type(n) is not int or n < 1 for n in self.LIMITS.values()) or
+                    not math.isfinite(self.cap) or self.cap <= 0):
+                raise ValueError('Invalid explicit budget')
+            if agreed and (agreed[0] != self.cap or json.loads(agreed[1]) != self.LIMITS):
+                raise ValueError('Existing task allowance cannot change on restart')
+            db.execute('INSERT OR IGNORE INTO allowance VALUES (1,?,?)', (self.cap, json.dumps(self.LIMITS, sort_keys=True)))
             db.execute('CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, kind TEXT, hash TEXT, reserve REAL, status TEXT, result TEXT, at REAL)')
             if 'reported_cost' not in {row[1] for row in db.execute('PRAGMA table_info(requests)')}:
                 db.execute('ALTER TABLE requests ADD COLUMN reported_cost REAL')

@@ -148,6 +148,14 @@ void AHomeActionsCharacter::PollLiveCommands()
                 }
             }
         }
+        else if (Op==TEXT("caption") && C && C->Companion)
+        {
+            const FString Line=String(D,TEXT("text"));
+            if (!Line.IsEmpty() && Line.Len()<=320)
+            {C->Reply=TEXT("Assistant: ")+Line;C->NoticeUntil=GetWorld()->GetTimeSeconds()+25;Code=TEXT("CAPTION_SET");}
+        }
+        else if (Op==TEXT("stop_speech") && C && C->Companion)
+        {C->Companion->StopSpeech();if (HumanVoice) HumanVoice->Stop();C->NoticeUntil=0;Code=TEXT("SPEECH_STOPPED");}
         else if (Op==TEXT("stop") && C && C->Companion)
         {C->Companion->StopSpeech();C->Companion->CancelAssist();if (HumanVoice) HumanVoice->Stop();C->NoticeUntil=0;Code=TEXT("LIVE_STOPPED");}
         else if (Op==TEXT("follow") && C) {C->Follow(Bool(D,TEXT("enabled")));Code=TEXT("FOLLOW_SET");}

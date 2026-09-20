@@ -7,8 +7,9 @@
 <textarea id="prompt" aria-label="情境描述">工作日的家。我準備出門找鑰匙，爐火還開著；30 秒後浴缸開始放水，同時接到電話。從廚房開始。</textarea>
 <button id="build">產生情境</button><button id="apply" class="secondary" disabled>套用到遊戲</button><p id="proposal"></p>
 </section><section><div class="row"><strong>陪同助手</strong><span id="active"></span></div><p id="speech">等待觀察</p><div id="steps" class="steps"></div>
-<input id="message" aria-label="對助手說" placeholder="例如：I'm heading out. Help me find my keys.">
-<button id="send">對助手說</button><button id="stop" class="secondary">停止／取消</button><button id="toggle" class="secondary">暫停提醒</button>
+<input id="message" aria-label="對助手說" placeholder="聊任何話題，或追問剛才的內容…">
+<button id="send">對助手說</button><button id="stop" class="secondary">停止／取消</button><button id="toggle" class="secondary">暫停助手</button>
+<div><button id="chat" class="secondary">一起聊聊</button><button id="quiet" class="secondary">暫停聊天</button><small id="chatState"></small></div>
 <div><button id="stove" class="secondary">請助手關爐火</button><button id="tap" class="secondary">請助手關浴缸水</button></div>
 </section><small>WASD 移動 · 滑鼠環視 · E 操作 · T 助手 · Tab 切換視角</small>
 <details><summary>研究紀錄</summary><p>Jev：介入決策與佈置選擇。Qwen：語言解析與步驟規劃。觀察來自可見的引擎資料；目前沒有 RGB 視覺辨識或麥克風辨識。場景使用現有六房和資產組合。</p><pre id="debug"></pre></details></main>
@@ -19,10 +20,12 @@ function bind(id,fn){$(id).onclick=async()=>{try{$('error').textContent='';$(id)
 bind('build',()=>post('/author',{prompt:$('prompt').value}));bind('apply',()=>post('/apply',{id:state.authoring.id}));
 bind('send',async()=>{await post('/say',{text:$('message').value});$('message').value=''});$('message').onkeydown=e=>{if(e.key==='Enter')$('send').click()};
 bind('stop',()=>post('/stop'));bind('toggle',()=>post('/toggle',{enabled:state.error?true:!state.enabled}));
+bind('chat',()=>post('/say',{text:"Let's chat while we walk. Ask me about anything I might enjoy, and follow up on my answers."}));
+bind('quiet',()=>post('/chat/pause'));
 bind('stove',()=>post('/say',{text:'Please turn off the stove for me.',target:'stove'}));
 bind('tap',()=>post('/say',{text:'Please turn off the bath tap for me.',target:'faucet'}));
-async function poll(){try{const r=await fetch('/state');state=await r.json();$('status').textContent=state.status;$('active').textContent=({notice_water:'先處理浴缸',notice_stove:'先確認爐火',notice_keys:'尋找鑰匙'})[state.active]||'';$('toggle').textContent=state.error?'重新連線':state.enabled?'暫停提醒':'啟用提醒';$('error').textContent=state.error||state.warning||'';
+async function poll(){try{const r=await fetch('/state');state=await r.json();$('status').textContent=state.status;$('active').textContent=({notice_water:'先處理浴缸',notice_stove:'先確認爐火',notice_keys:'尋找鑰匙'})[state.active]||'';$('toggle').textContent=state.error?'重新連線':state.enabled?'暫停助手':'啟用助手';$('error').textContent=state.error||state.warning||'';
 const a=state.authoring||{};$('authorStatus').textContent=({building:'生成中…',ready:'可套用',applied:'遊戲中',rejected:'無法套用'})[a.status]||'';$('apply').disabled=a.status!=='ready';$('proposal').textContent=a.error||a.spec?.explanation||'';
-$('speech').textContent=state.speech?.text||'等待觀察';$('steps').textContent=(state.active?(state.plan?.answer?.steps||[]):[]).map((s,i)=>`${i+1}. ${s.description}`).join('\n');$('debug').textContent=JSON.stringify(state,null,2)
+$('speech').textContent=(state.conversation?.status==='thinking'&&state.conversation.preview)||state.speech?.text||'等待觀察';$('steps').textContent=(state.active?(state.plan?.answer?.steps||[]):[]).map((s,i)=>`${i+1}. ${s.description}`).join('\n');$('debug').textContent=JSON.stringify(state,null,2);$('chatState').textContent=({pending:'準備回應',thinking:'正在想你的問題',speaking:'對話中',listening:'等你接著說',suspended:'先處理眼前的事',quiet:'已暫停',unavailable:'回應暫時無法完成'})[state.conversation?.status]||'';
 }catch(e){$('status').textContent='尚未連線'}setTimeout(poll,1000)}poll();
 </script></html>
