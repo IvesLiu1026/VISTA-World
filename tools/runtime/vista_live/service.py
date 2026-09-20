@@ -373,6 +373,7 @@ class Live:
                 raise ValueError('Unknown proposal; generate first')
             spec = validate_scene(proposal['spec'])
             self.enabled = False
+        self.cancel()  # Stop all native voices and invalidate old work before reset.
         result = self.native('scene', {'layout': spec['layout'], 'room': ROOMS.index(spec['start_room']) + 1})
         if result['code'] != 'SCENE_APPLIED':
             raise RuntimeError('Scene assembly rejected: ' + result['code'])

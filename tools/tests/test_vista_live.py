@@ -70,6 +70,13 @@ class LivePolicyTests(unittest.TestCase):
         p = Policy(); p.ingest(observation(10))
         with self.assertRaises(ValueError): p.ingest(observation(2))
 
+    def test_decorative_visibility_does_not_trigger_risk_reclassification(self):
+        p = Policy(); p.ingest(observation())
+        changed = observation(2); changed['objects'] = ['Sofa', 'Coffee table']
+        self.assertFalse(p.ingest(changed))
+        self.assertEqual(p.state()['current_observation']['objects'], changed['objects'])
+        self.assertTrue(p.ingest(observation(3, ['visible_water_near_rim'])))
+
     def test_typed_request_keeps_provenance(self):
         p = Policy(); p.ingest(observation()); p.utter('Help please', 'typed_user_input')
         self.assertEqual(p.state()['human_utterances'][0]['source'], 'typed_user_input')

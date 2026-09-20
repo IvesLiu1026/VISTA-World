@@ -129,7 +129,11 @@ class Policy:
         if self.current is None:
             return ''
         # Clock does not cause per-frame API calls. Unresolved needs get a 30s recheck.
-        state = {k: self.current[k] for k in ('room', 'objects', 'cues', 'human_activity')}
+        # All three supported intervention targets have explicit visible cues.
+        # Decorative-object flicker while walking need not invalidate a risk
+        # decision or generate another paid request. Explicit dialogue still
+        # receives the complete current visible-object list.
+        state = {k: self.current[k] for k in ('room', 'cues', 'human_activity')}
         state.update(utterances=self.utterances, goals=sorted(self.goals), pending=self.pending,
                      reminder_window=int(self.clock // 30) if self.pending else 0)
         return hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
