@@ -210,7 +210,7 @@ bool AHomeActionsCharacter::ApplyMicroScene(const TSharedPtr<FJsonObject>& Recip
                     Candidate.Min.Y<Support.Min.Y+1 || Candidate.Max.Y>Support.Max.Y-1) continue;
                 bool Free=true;
                 for (int32 I=0;I<Loose.Num();++I)
-                    if (Candidate.ExpandBy(I==0?8.f:.7f).Intersect(Loose[I])) {Free=false;break;}
+                    if (Candidate.ExpandBy(I==0?(Id==TEXT("keys")?8.f:18.f):.7f).Intersect(Loose[I])) {Free=false;break;}
                 if (!Free) continue;
                 float ActualZ=SurfaceZ-3;
                 for (const FVector2D Corner:{FVector2D(0,0),FVector2D(-1,-1),FVector2D(-1,1),FVector2D(1,-1),FVector2D(1,1)})
@@ -223,6 +223,19 @@ bool AHomeActionsCharacter::ApplyMicroScene(const TSharedPtr<FJsonObject>& Recip
                     ActualZ=FMath::Max(ActualZ,Hit.ImpactPoint.Z);
                 }
                 if (!Free) continue;
+                if (Id==TEXT("phone"))
+                {
+                    // The wrist needs space above and beside the handset, not
+                    // only support under its corners. Reject fixed books and
+                    // monitor stands in this approach volume.
+                    for (float X:{-14.f,0.f,14.f}) for (float Y:{-14.f,0.f,14.f})
+                    {
+                        FHitResult Hit;FCollisionQueryParams Q(SCENE_QUERY_STAT(ForgeHandClearance),true);
+                        if (Table->GetStaticMeshComponent()->LineTraceComponent(Hit,
+                            Center+FVector(X,Y,25),Center+FVector(X,Y,3),Q)) Free=false;
+                    }
+                    if (!Free) continue;
+                }
                 const FBox Current=Mesh->Bounds.GetBox();
                 A->AddActorWorldOffset(FVector(Center.X,Center.Y,ActualZ+.15)-FVector(Current.GetCenter().X,Current.GetCenter().Y,Current.Min.Z));
                 Mesh->UpdateBounds();Loose.Add(Mesh->Bounds.GetBox());
