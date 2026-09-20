@@ -99,7 +99,7 @@ bool AHomeActionsCharacter::FindPlacement(FVector& Location,FQuat& Rotation) con
     const auto* E=Resolve(HeldId);
     if (!E || E->ShortId==TEXT("coffee_cup")) return Super::FindPlacement(Location,Rotation);
     const auto* PC=Cast<APlayerController>(Controller);if (!PC || !E->Mesh.IsValid()) return false;
-    FVector Eye;FRotator Look;PC->GetPlayerViewPoint(Eye,Look);
+    FVector Eye;FRotator Look;ActionView(Eye,Look);
     FCollisionQueryParams P(SCENE_QUERY_STAT(HomePlacement),true,this);P.AddIgnoredActor(E->Actor.Get());
     FHitResult Hit;
     auto Reject=[&](const FString& Why)
@@ -170,7 +170,7 @@ bool AHomeActionsCharacter::CheckReach(const FHomeEntity& E,const FVector& Point
     {Code=TEXT("OUT_OF_REACH");return false;}
     FVector Eye;FRotator Look;
     const auto* PC=Cast<APlayerController>(Controller);if (!PC) {Code=TEXT("NO_VIEW");return false;}
-    PC->GetPlayerViewPoint(Eye,Look);
+    ActionView(Eye,Look);
     if (RequireView && FVector::DotProduct((Point-Eye).GetSafeNormal(),Look.Vector())<.90f)
     {Code=TEXT("LOOK_AT_TARGET");return false;}
     FCollisionQueryParams P(SCENE_QUERY_STAT(HomeActionReach),true,this);FHitResult Hit;
@@ -340,7 +340,7 @@ bool AHomeActionsCharacter::BeginAction(const FString& Command,const FString& Re
     if ((A==TEXT("inspect") || A==TEXT("look_at")) && E)
     {
         FVector Eye;FRotator Look;const auto* PC=Cast<APlayerController>(Controller);
-        if (!PC) {Code=TEXT("NO_VIEW");return false;}PC->GetPlayerViewPoint(Eye,Look);
+        if (!PC) {Code=TEXT("NO_VIEW");return false;}ActionView(Eye,Look);
         const FVector Point=ControlPoint(*E);const FVector Delta=Point-Eye;
         if (Delta.Size()>330.f) {Code=TEXT("OUT_OF_VIEW_RANGE");return false;}
         if (A==TEXT("inspect") && FVector::DotProduct(Delta.GetSafeNormal(),Look.Vector())<.9f) {Code=TEXT("LOOK_AT_TARGET");return false;}

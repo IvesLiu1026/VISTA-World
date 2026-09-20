@@ -104,7 +104,7 @@ public:
     TArray<TPair<FString,FString>> VisibleEvents() const;
     // A separate, visibility-filtered input for the conversational companion.
     // Never return the engineering state, task evaluator, or hidden event labels.
-    TSharedPtr<FJsonObject> CompanionObservation() const;
+    TSharedPtr<FJsonObject> CompanionObservation(bool WearerView=false) const;
     TSharedPtr<FJsonObject> StreamingObservation() const;
 protected:
     virtual bool UsesHomeActions() const override {return true;}
@@ -141,6 +141,16 @@ private:
     float HumanMouthOpen=0;
     int32 HumanAudioBytes=0,HumanAudioRate=24000;
     void UpdateDailyMotion(float Dt);
+    void PollPrivateReview();
+    void TickPrivateReview(float Dt);
+    void PrivateDialogue(const FString& Role,const FString& Code);
+    void ActionView(FVector& Eye,FRotator& View) const;
+    bool bPrivateHumanLipSync=true;
+    bool bPrivateMoving=false,bPrivateLooking=false;
+    FVector PrivateTarget=FVector::ZeroVector,PrivatePrevious=FVector::ZeroVector;
+    FRotator PrivateLook=FRotator::ZeroRotator;
+    float PrivateStall=0,PrivateMoveClock=0;
+    FString PrivateMotion=TEXT("idle");
     void UpdateConcurrentEvents(float Dt);
     TArray<TSharedPtr<FJsonValue>> ConcurrentEventState() const;
     UPROPERTY() TMap<FString,TObjectPtr<AStaticMeshActor>> Effects;
