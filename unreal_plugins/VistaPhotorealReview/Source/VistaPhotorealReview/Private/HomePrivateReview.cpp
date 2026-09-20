@@ -85,14 +85,27 @@ void AHomeActionsCharacter::PollPrivateReview()
         const auto D=Decode(Text);if (!D || String(D,TEXT("schema"))!=TEXT("vista.private-review/v1") ||
             String(D,TEXT("session_id"))!=SessionId) continue;
         const FString Op=String(D,TEXT("op"));FString Code=TEXT("REVIEW_REJECTED");
-        if (Op==TEXT("look") || Op==TEXT("walk"))
+        if (Op==TEXT("look") || Op==TEXT("walk") || Op==TEXT("path"))
         {
             const double Yaw=Number(D,TEXT("yaw")),Pitch=Number(D,TEXT("pitch"),-8);
-            const FVector Target=Vector(D,TEXT("target_cm"));
-            if (FMath::IsFinite(Yaw) && FMath::IsFinite(Pitch) && FMath::Abs(Yaw)<=360 && FMath::Abs(Pitch)<=85 &&
-                !Target.ContainsNaN() && Target.Size()<100000 && ActiveId.IsEmpty())
+            FVector Target=Vector(D,TEXT("target_cm"));TArray<FVector> Points;bool ValidPath=true;
+            if (Op==TEXT("path"))
             {
-                PrivateLook=FRotator(Pitch,Yaw,0);bPrivateLooking=true;bPrivateMoving=Op==TEXT("walk");
+                const TArray<TSharedPtr<FJsonValue>>* Rows;
+                ValidPath=D->TryGetArrayField(TEXT("points_cm"),Rows) && Rows->Num()>0 && Rows->Num()<=96;
+                if (ValidPath) for (const auto& V:*Rows)
+                {
+                    const auto* A=V->Type==EJson::Array?&V->AsArray():nullptr;
+                    if (!A || A->Num()!=3 || (*A)[0]->Type!=EJson::Number || (*A)[1]->Type!=EJson::Number || (*A)[2]->Type!=EJson::Number) {ValidPath=false;break;}
+                    const FVector P((*A)[0]->AsNumber(),(*A)[1]->AsNumber(),(*A)[2]->AsNumber());
+                    if (P.ContainsNaN() || P.Size()>100000) {ValidPath=false;break;} Points.Add(P);
+                }
+                if (ValidPath) {Target=Points[0];Points.RemoveAt(0);}
+            }
+            if (FMath::IsFinite(Yaw) && FMath::IsFinite(Pitch) && FMath::Abs(Yaw)<=360 && FMath::Abs(Pitch)<=85 &&
+                !Target.ContainsNaN() && Target.Size()<100000 && ActiveId.IsEmpty() && ValidPath)
+            {
+                PrivatePath=Points;PrivateLook=FRotator(Pitch,Yaw,0);bPrivateLooking=true;bPrivateMoving=Op!=TEXT("look");
                 PrivateTarget=Target;PrivatePrevious=GetActorLocation();PrivateStall=PrivateMoveClock=0;
                 PrivateMotion=bPrivateMoving?TEXT("walking"):TEXT("looking");Code=TEXT("REVIEW_ACCEPTED");
             }
@@ -100,7 +113,7 @@ void AHomeActionsCharacter::PollPrivateReview()
         else if (Op==TEXT("event_add")) {StartEvent(String(D,TEXT("event_id")),Code,false);LastCode=Code;}
         else if (Op==TEXT("phone")) {HomePhone(Bool(D,TEXT("enabled")));Code=LastCode;}
         else if (Op==TEXT("dialogue")) {PrivateDialogue(String(D,TEXT("role")),String(D,TEXT("code")));Code=TEXT("DIALOGUE_REQUESTED");}
-        else if (Op==TEXT("stop")) {bPrivateMoving=bPrivateLooking=false;PrivateMotion=TEXT("stopped");GetCharacterMovement()->StopMovementImmediately();Code=TEXT("REVIEW_STOPPED");}
+        else if (Op==TEXT("stop")) {PrivatePath.Empty();bPrivateMoving=bPrivateLooking=false;PrivateMotion=TEXT("stopped");GetCharacterMovement()->StopMovementImmediately();Code=TEXT("REVIEW_STOPPED");}
         // No resets, room teleports, arbitrary console commands or camera switching.
         auto R=MakeShared<FJsonObject>();R->SetStringField(TEXT("schema"),TEXT("vista.private-review-reply/v1"));
         R->SetStringField(TEXT("op"),Op);R->SetStringField(TEXT("code"),Code);R->SetNumberField(TEXT("clock_s"),SceneClock);
@@ -115,6 +128,8 @@ void AHomeActionsCharacter::TickPrivateReview(float Dt)
     if (!FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")) || !Controller) return;
     if (!bPrivateLooking && !bPrivateMoving) return;
     FRotator Look=Controller->GetControlRotation();FVector Delta=PrivateTarget-GetActorLocation();Delta.Z=0;
+    if (bPrivateMoving && PrivatePath.Num() && Delta.Size()<12)
+    {PrivateTarget=PrivatePath[0];PrivatePath.RemoveAt(0);Delta=PrivateTarget-GetActorLocation();Delta.Z=0;PrivateMoveClock=0;}
     const float Desired=bPrivateMoving?Delta.Rotation().Yaw:PrivateLook.Yaw;
     Look.Yaw=FMath::FixedTurn(Look.Yaw,Desired,65*Dt);
     Look.Pitch=FMath::FInterpTo(Look.Pitch,PrivateLook.Pitch,Dt,4);Controller->SetControlRotation(Look);
@@ -123,12 +138,13 @@ void AHomeActionsCharacter::TickPrivateReview(float Dt)
         PrivateMoveClock+=Dt;
         const float Moved=FVector::Dist2D(PrivatePrevious,GetActorLocation());PrivatePrevious=GetActorLocation();
         const float Error=FMath::Abs(FMath::FindDeltaAngleDegrees(Look.Yaw,Desired));
-        const float Input=FMath::Clamp((60-Error)/35.f,0.f,1.f)*FMath::Clamp(Delta.Size()/38.f,.25f,1.f);
+        const float Input=FMath::Clamp((75-Error)/40.f,0.f,1.f)*(PrivatePath.Num()?1.f:FMath::Clamp(Delta.Size()/38.f,.25f,1.f));
         if (ActiveId.IsEmpty()) AddMovementInput(Delta.GetSafeNormal(),Input,true);
         PrivateStall=Input>.15f && Moved<.01f?PrivateStall+Dt:0;
-        if (Delta.Size()<12 || PrivateStall>5 || PrivateMoveClock>45)
+        const bool Arrived=PrivatePath.IsEmpty() && Delta.Size()<3;
+        if (Arrived || PrivateStall>5 || PrivateMoveClock>45)
         {
-            PrivateMotion=Delta.Size()<12?TEXT("arrived"):TEXT("blocked");
+            PrivateMotion=Arrived?TEXT("arrived"):TEXT("blocked");
             bPrivateMoving=bPrivateLooking=false;GetCharacterMovement()->StopMovementImmediately();
         }
     }

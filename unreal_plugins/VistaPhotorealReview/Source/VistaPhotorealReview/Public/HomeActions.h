@@ -106,6 +106,7 @@ public:
     // Never return the engineering state, task evaluator, or hidden event labels.
     TSharedPtr<FJsonObject> CompanionObservation(bool WearerView=false) const;
     TSharedPtr<FJsonObject> StreamingObservation() const;
+    bool CommitCompanionOff(const FString& Target,AActor* Helper,const FVector& Finger,FString& Code);
 protected:
     virtual bool UsesHomeActions() const override {return true;}
     virtual void SetView(FVector Position,FRotator Rotation) override;
@@ -142,12 +143,16 @@ private:
     int32 HumanAudioBytes=0,HumanAudioRate=24000;
     void UpdateDailyMotion(float Dt);
     void PollPrivateReview();
+    void PollLiveCommands();
+    bool ApplyLiveScene(const FString& Layout,int32 Room,FString& Code);
+    UPROPERTY() TArray<TObjectPtr<AActor>> LiveDressing;
     void TickPrivateReview(float Dt);
     void PrivateDialogue(const FString& Role,const FString& Code);
     void ActionView(FVector& Eye,FRotator& View) const;
     bool bPrivateHumanLipSync=true;
     bool bPrivateMoving=false,bPrivateLooking=false;
     FVector PrivateTarget=FVector::ZeroVector,PrivatePrevious=FVector::ZeroVector;
+    TArray<FVector> PrivatePath;
     FRotator PrivateLook=FRotator::ZeroRotator;
     float PrivateStall=0,PrivateMoveClock=0;
     FString PrivateMotion=TEXT("idle");
@@ -179,7 +184,7 @@ private:
     FString StandingOn;
     FString FocusId, LastCode, EventId, EventStatus=TEXT("inactive"), TerminalCondition;
     FString CommandSignature;
-    int32 Generation=0, SelectedAction=0, EventIndex=-1;
+    int32 Generation=0, SceneEpoch=0, SelectedAction=0, EventIndex=-1;
     float ActionTime=0.f, EventTime=0.f, BridgeClock=0.f, SceneClock=0.f;
     float ActionStartAperture=0.f, ActionEndAperture=0.f;
     float RightContactError=0.f, LeftContactError=0.f;

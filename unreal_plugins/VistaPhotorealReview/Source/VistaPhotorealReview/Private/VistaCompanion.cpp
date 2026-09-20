@@ -13,6 +13,7 @@
 #include "Misc/Base64.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Misc/CommandLine.h"
 #include "Sound/SoundWaveProcedural.h"
 
 using namespace HomeJson;
@@ -120,7 +121,9 @@ void AVistaCompanion::Tick(float Dt)
     Super::Tick(Dt);if(!bReady)return;
     const FVector Here=GetActorLocation();const float Moved=FVector::Dist2D(Here,Previous);Previous=Here;
     if(Moved<100){Travel+=Moved;Phase=FMath::Fmod(Phase+Moved/Cycle,1.f);}
-    if(Leader.IsValid())
+    const bool Assisting=AssistStatus==TEXT("approaching") || AssistStatus==TEXT("reaching");
+    if(Assisting) TickAssist(Dt);
+    if(Leader.IsValid() && !Assisting)
     {
         const FVector P=Leader->GetActorLocation();
         // Explicit room/bookmark travel resets the companion too. Ordinary following is swept walking.
@@ -180,7 +183,9 @@ void AVistaCompanion::Tick(float Dt)
             FVector Goal=Trail[0];Goal.Z=Here.Z;FVector Direction=(Goal-Here).GetSafeNormal();
             float Desired=Direction.Rotation().Yaw;float Delta=FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Desired);
             SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Desired,150*Dt),0));
-            if(FMath::Abs(Delta)<55)AddMovementInput(Direction,1,true);
+            const bool Live=FParse::Param(FCommandLine::Get(),TEXT("VistaLiveAssistant"));
+            GetCharacterMovement()->MaxWalkSpeed=Live?FMath::Clamp(Leader->GetVelocity().Size2D()+25.f,150.f,240.f):145.f;
+            if(FMath::Abs(Delta)<75)AddMovementInput(Direction,FMath::Clamp((80-FMath::Abs(Delta))/35.f,.1f,1.f),true);
             StuckTime=Moved<.03f?StuckTime+Dt:0;bBlocked=StuckTime>2;
         }
         else
@@ -196,6 +201,7 @@ void AVistaCompanion::Tick(float Dt)
     const float Frame=Phase*(Walk.Num()-1);const int32 A=FMath::FloorToInt(Frame),B=FMath::Min(A+1,Walk.Num()-1);
     CurrentPose=Idle;
     for(int32 I=0;I<CurrentPose.Num();++I){FTransform W;W.Blend(Walk[A][I],Walk[B][I],Frame-A);CurrentPose[I].Blend(Idle[I],W,MoveBlend);}
+    PoseAssist(Dt);
     if(Leader.IsValid() && Head>=0)
     {
         TArray<FTransform> G;for(int32 I=0;I<CurrentPose.Num();++I)G.Add(Parents[I]>=0?CurrentPose[I]*G[Parents[I]]:CurrentPose[I]);

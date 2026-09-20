@@ -190,6 +190,8 @@ TSharedPtr<FJsonObject> AHomeActionsCharacter::StreamingObservation() const
         Cue(Bool(E->State,TEXT("active"))?TEXT("visible_stove_on_control"):TEXT("visible_stove_off"));
     if (const auto* E=Resolve(TEXT("faucet"));E && Visible(E->Actor.Get()) && !Bool(E->State,TEXT("active"))) Cue(TEXT("visible_bath_tap_off"));
     if (const auto* E=Resolve(TEXT("keys"));E && Visible(E->Actor.Get())) Cue(TEXT("visible_keys"));
+    if (FParse::Param(FCommandLine::Get(),TEXT("VistaLiveAssistant")))
+        if (const auto* E=Resolve(HeldId);E && E->ShortId==TEXT("keys")) Cue(TEXT("proprioceptive_keys_in_hand"));
     // Wearer's own hand activity is proprioception, explicitly separate from vision.
     D->SetStringField(TEXT("human_activity"),bPhoneCall && PhoneBlend>.8f?TEXT("phone_at_ear"):TEXT("unspecified"));
     D->SetArrayField(TEXT("cues"),Cues);return D;

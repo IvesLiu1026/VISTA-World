@@ -101,7 +101,7 @@ bool AHomeActionsCharacter::ResetScene(FString& Code)
     StandingOn.Empty();bSceneFeetOverride=false;GetCapsuleComponent()->SetCapsuleRadius(27.f);GetCharacterMovement()->MaxStepHeight=22.f;
     PreviousVelocities.Empty();PendingImpacts.Empty();HazardCooldown=2.f;
     SelectPickup(*Resolve(TEXT("coffee_cup")));GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-    bSuppressReceipt=false;++Generation;if (Contract->HasField(TEXT("rooms"))) HomeRoom(1);else EmbodiedInspect(0);Code=TEXT("SCENE_RESET");PublishState();return true;
+    bSuppressReceipt=false;++Generation;++SceneEpoch;if (Contract->HasField(TEXT("rooms"))) HomeRoom(1);else EmbodiedInspect(0);Code=TEXT("SCENE_RESET");PublishState();return true;
 }
 
 bool AHomeActionsCharacter::StartEvent(const FString& Id,FString& Code,bool bReset)

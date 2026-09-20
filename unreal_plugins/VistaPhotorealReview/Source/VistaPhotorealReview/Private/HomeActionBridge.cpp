@@ -1,5 +1,6 @@
 #include "HomeActions.h"
 #include "HomeActionsJson.h"
+#include "VistaCompanion.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/StaticMeshActor.h"
@@ -15,9 +16,16 @@ TSharedRef<FJsonObject> AHomeActionsCharacter::MakeState() const
     auto O=MakeShared<FJsonObject>();O->SetStringField(TEXT("schema"),TEXT("vista.home-runtime-state/v1"));
     O->SetStringField(TEXT("audience"),TEXT("privileged_runtime_review_only"));O->SetStringField(TEXT("session_id"),SessionId);
     O->SetStringField(TEXT("revision"),Revision);O->SetNumberField(TEXT("generation"),Generation);
+    O->SetNumberField(TEXT("scene_epoch"),SceneEpoch);
     O->SetNumberField(TEXT("clock_s"),SceneClock);O->SetNumberField(TEXT("frame_time_s"),GetWorld()->GetDeltaSeconds());
     O->SetBoolField(TEXT("ready"),bSceneReady);O->SetBoolField(TEXT("third_person"),bThirdPerson);
     O->SetBoolField(TEXT("clean_observation"),bCleanObservation);
+    if (const auto* C=FindComponentByClass<UVistaCompanionComponent>();C && C->Companion)
+    {
+        auto Own=MakeShared<FJsonObject>();Own->SetStringField(TEXT("id"),C->Companion->AssistId);
+        Own->SetStringField(TEXT("status"),C->Companion->AssistStatus);Own->SetStringField(TEXT("target"),C->Companion->AssistTarget);
+        Own->SetNumberField(TEXT("finger_error_cm"),C->Companion->ContactError);O->SetObjectField(TEXT("companion_execution"),Own);
+    }
     O->SetStringField(TEXT("review_motion"),PrivateMotion);
     FVector ActionEye;FRotator ActionLook;ActionView(ActionEye,ActionLook);
     O->SetArrayField(TEXT("action_eye_cm"),Values(ActionEye));

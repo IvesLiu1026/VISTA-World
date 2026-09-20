@@ -34,6 +34,10 @@ public:
     void Speak(const TSharedPtr<FJsonObject>& Reply);
     void StopSpeech();
     bool PlaceNear(const AActor* Player);
+    bool BeginAssist(const FString& Target,AActor* Entity,FVector Control);
+    void CancelAssist();
+    FString AssistStatus=TEXT("idle"),AssistTarget,AssistId;
+    float ContactError=0;
     TWeakObjectPtr<ACharacter> Leader;
     bool bFollowing=true,bReady=false,bSpeaking=false,bBlocked=false;
     float AudioClock=0,MouthOpen=0,Travel=0;
@@ -53,6 +57,12 @@ private:
     TMap<FName,TArray<FName>> FaceMorphs;
     void Face(FName Name,float Value);
     void LoadMotion();
+    void TickAssist(float Dt);
+    void PoseAssist(float Dt);
+    TWeakObjectPtr<AActor> AssistEntity;
+    FVector AssistControl,AssistGoal,AssistPrevious;
+    float AssistClock=0,AssistReach=0,AssistContact=0,AssistStall=0;
+    bool bResumeFollow=true;
 };
 
 UCLASS(ClassGroup=VISTA)
@@ -69,6 +79,7 @@ public:
     void Ask(const FString& Text);
     void Stop();
     void Follow(bool Enabled);
+    void LiveRequest(const FString& Route,const FString& Text=TEXT(""),const FString& Target=TEXT(""));
     bool IsOpen() const {return bOpen;}
     bool IsEnabled() const {return Companion!=nullptr;}
     TSharedPtr<FJsonObject> State() const;
@@ -82,7 +93,7 @@ private:
     TSharedPtr<IHttpRequest,ESPMode::ThreadSafe> Pending;
     TSharedPtr<FJsonObject> PanelObservation;
     FString Session,Endpoint=TEXT("http://127.0.0.1:49010"),ProofDir,LastRoom;
-    bool bOpen=false,bBusy=false;
+    bool bOpen=false,bBusy=false,bLive=false;
     int32 Serial=0;
     float PublishClock=0;
     double ObservationTime=0;
