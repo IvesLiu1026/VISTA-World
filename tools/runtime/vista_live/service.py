@@ -183,6 +183,8 @@ class Live:
                         self.world_ready = True
                         if identity != self.identity:
                             self.epoch += 1; self.identity = identity; self.policy = Policy()
+                            if self.author_job.get('status') == 'applied':
+                                self.author_job = {}
                             self.conversation = Conversation()
                             self.schedule.clear(); self.pending_speech.clear(); self.last_plan = None; self.planned.clear(); self.plans.clear()
                             self.last_decision = self.last_speech = None; self.speech_until = 0

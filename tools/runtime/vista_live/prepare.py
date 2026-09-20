@@ -15,8 +15,15 @@ def prepare(donor, target, receipt):
     shutil.copytree(donor, target, ignore=shutil.ignore_patterns('Saved', 'Intermediate', 'DerivedDataCache'))
     shutil.copytree(source / 'Source', target / 'Plugins/VistaPhotorealReview/Source', dirs_exist_ok=True)
     config = target / 'Config'
-    if len(json.loads((config / 'VistaHomeActions.json').read_text())['entities']) != 62:
+    contract = json.loads((config / 'VistaHomeActions.json').read_text())
+    if len(contract['entities']) != 62:
         raise ValueError('Expected accepted six-room donor')
+    # The original office inspection point overlaps the rolling chair. Use the
+    # open north-west aisle for both manual entry and themed episodes.
+    office = next(room for room in contract['rooms'] if room['short_id'] == 'office')
+    office['view_cm'] = [a + b for a, b in zip((420, -140, 86), office['legacy_offset_cm'])]
+    office['view_yaw'] = -25
+    (config / 'VistaHomeActions.json').write_text(json.dumps(contract, indent=2))
     (config / 'VistaLive.json').write_text(json.dumps({'schema': 'vista.live/v1',
         'observation': 'engine_visible_metadata_not_vlm', 'role': 'human_needing_assistance',
         'speech_language': 'en', 'assistant_voice': 'Charon', 'runtime_service': 'http://127.0.0.1:49111'}))

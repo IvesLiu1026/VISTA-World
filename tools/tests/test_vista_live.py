@@ -127,6 +127,25 @@ class LiveConcurrencyTests(unittest.TestCase):
             'sample_rate': 24000, 'pcm_b64': 'AAAA', 'duration_s': 1, 'mouth': []}
         return live
 
+    def test_external_scene_reset_clears_applied_proposal_but_same_scene_keeps_it(self):
+        import time
+        from unittest.mock import patch
+        for identity, retained in ((('session', 1), True), (('session', 2), False)):
+            with self.subTest(identity=identity), tempfile.TemporaryDirectory() as d:
+                live = self.live(Path(d)); live.enabled = False
+                live.author_job = {'id': 'old-room', 'status': 'applied'}
+                live.budget_at = time.monotonic()
+                def snapshot():
+                    live.running = False
+                    return {}, identity, observation(2)
+                live.bridge.snapshot = snapshot
+                live.bridge.feedback = lambda: None
+                with patch('runtime.vista_live.service.time.sleep'):
+                    live.tick()
+                self.assertEqual(bool(live.author_job), retained)
+                self.assertEqual(live.identity, identity)
+                self.assertTrue(live.world_ready)
+
     def test_delayed_decision_cannot_survive_new_off_evidence(self):
         with tempfile.TemporaryDirectory() as d:
             live = self.live(Path(d)); revision = live.policy.revision

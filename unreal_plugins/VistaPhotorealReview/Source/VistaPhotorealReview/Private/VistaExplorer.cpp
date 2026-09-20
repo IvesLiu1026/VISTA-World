@@ -189,6 +189,7 @@ void AVistaExplorerCharacter::CompanionStop(){if(Companion)Companion->Stop();}
 void AVistaExplorerCharacter::HomeRoom(int32 Index)
 {
     const FVector Before=GetActorLocation();Super::HomeRoom(Index);
+    if (Index>=1 && Index<=6) SetMenu(0);
     if(FVector::Distance(Before,GetActorLocation())>1 && Companion && Companion->Companion && Companion->Companion->bFollowing)
         Companion->Companion->bBlocked=!Companion->Companion->PlaceNear(this);
 }
