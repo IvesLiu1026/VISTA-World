@@ -1,5 +1,6 @@
 """Privileged engine adapter. Its snapshots must never be sent to the policy."""
 import json
+import re
 from pathlib import Path
 import time
 import uuid
@@ -25,15 +26,18 @@ def atomic(path, value):
 
 
 class Bridge:
-    def __init__(self, workspace, root=None):
+    def __init__(self, workspace, root=None, project='six-room-companion-dev-live-a'):
         self.workspace, self.fixed = Path(workspace), Path(root) if root else None
+        if not re.fullmatch(r'six-room-companion-dev-(live|natural)-[a-z0-9]+', project):
+            raise ValueError('Unsupported live project')
+        self.project = project
 
     def locate(self):
         if self.fixed:
             root = self.fixed
         else:
             selection = read(self.workspace / 'state/dev-selection.json')
-            if selection.get('project') != 'six-room-companion-dev-live-a':
+            if selection.get('project') != self.project:
                 raise RuntimeError('Live assistance project is not selected')
             root = self.workspace / 'runs' / selection['runtime'] / 'home-bridge'
         paths = list(root.glob('*/observation.json'))

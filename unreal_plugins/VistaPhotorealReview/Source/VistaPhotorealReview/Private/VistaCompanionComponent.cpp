@@ -41,7 +41,13 @@ void UVistaCompanionComponent::BeginPlay()
     if(!FPaths::FileExists(FPaths::ProjectConfigDir()/TEXT("VistaCompanion.json")))return;
     Session=FGuid::NewGuid().ToString(EGuidFormats::Digits);
     bLive=FParse::Param(FCommandLine::Get(),TEXT("VistaLiveAssistant"));
-    if (bLive) {Endpoint=TEXT("http://127.0.0.1:49111");Reply=TEXT("I'm here if you need a hand.");Status=TEXT("Live · Jev");}
+    if (bLive)
+    {
+        int32 Port=49111;FParse::Value(FCommandLine::Get(),TEXT("VistaLivePort="),Port);
+        if (Port<1024 || Port>65535) Port=49111;
+        Endpoint=FString::Printf(TEXT("http://127.0.0.1:%d"),Port);
+        Reply=TEXT("I'm here if you need a hand.");Status=TEXT("Live · Jev");
+    }
     FParse::Value(FCommandLine::Get(),TEXT("VistaCompanionProof="),ProofDir);
     if(!ProofDir.IsEmpty())IFileManager::Get().MakeDirectory(*ProofDir,true);
     FTimerHandle Timer;GetWorld()->GetTimerManager().SetTimer(Timer,FTimerDelegate::CreateUObject(this,&UVistaCompanionComponent::Start),2.6f,false);

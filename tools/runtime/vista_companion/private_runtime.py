@@ -12,11 +12,13 @@ for name in ['project','engine','out','ddc']:p.add_argument('--'+name,type=Path,
 p.add_argument('--display',default=':129');p.add_argument('--seconds',type=int,default=1800)
 p.add_argument('--gpu',type=int,choices=[0,1],default=0)
 p.add_argument('--fps',type=int,choices=[30,60],default=30)
+p.add_argument('--live-port',type=int,default=49111)
 p.add_argument('--ego-sensor',action='store_true',help='Keep wearer observation independent of review view')
 p.add_argument('--motion-proof',action='store_true',help='Private finalized character bone trace')
 a=p.parse_args();a.project=a.project.resolve(strict=True);a.out=a.out.resolve();a.ddc=a.ddc.resolve()
 assert a.project.parent.parent.name.startswith('six-room-companion-dev-')
 assert a.display not in [':119',':119.0',':0',':2',':99',':100']
+assert 1024 <= a.live_port <= 65535
 assert not Path('/tmp/.X11-unix/X'+a.display[1:]).exists()
 a.out.mkdir(parents=True,exist_ok=False)
 procs=[];module=None
@@ -43,7 +45,7 @@ try:
          '-ddc=InstalledNoZenLocalFallback','-ini:Engine:[SystemSettings]:r.Shadow.Virtual.Cache=0',
          '-UDPMESSAGING_TRANSPORT_ENABLE=0','-ExecCmds=t.MaxFPS '+str(a.fps)]
     if (a.project.parent/'Config/VistaLive.json').exists():
-        cmd+=['-VistaLiveAssistant','-VistaEgoSensor',
+        cmd+=['-VistaLiveAssistant','-VistaEgoSensor','-VistaLivePort='+str(a.live_port),
               '-ini:Engine:[SystemSettings]:r.Shadow.Virtual.AllowScreenOverflowMessages=0']
     if a.motion_proof:
         (a.out/'motion').mkdir()
@@ -55,7 +57,17 @@ try:
     procs.append(ue);record.update(pid=ue.pid,command=cmd,status='running');save()
     print(json.dumps(record),flush=True)
     end=time.monotonic()+a.seconds
-    while ue.poll() is None and time.monotonic()<end:time.sleep(1)
+    while ue.poll() is None and time.monotonic()<end:
+        # SDL/PipeWire stream-restore can override PULSE_SINK. Route ONLY this
+        # owned process; never change the default sink or another game's audio.
+        inputs=json.loads(subprocess.check_output(['pactl','-f','json','list','sink-inputs'],text=True))
+        sinks=json.loads(subprocess.check_output(['pactl','-f','json','list','sinks'],text=True))
+        target=next(s['index'] for s in sinks if s['name']==sink)
+        for stream in inputs:
+            if stream.get('properties',{}).get('application.process.id')==str(ue.pid) and stream['sink']!=target:
+                subprocess.run(['pactl','move-sink-input',str(stream['index']),sink],check=True)
+                record['audio_routing']={'pid':ue.pid,'stream':stream['index'],'sink':sink};save()
+        time.sleep(2)
     record['exit_code']=ue.poll()
 except KeyboardInterrupt:record['interrupted']=True
 finally:
