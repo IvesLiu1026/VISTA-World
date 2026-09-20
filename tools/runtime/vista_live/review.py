@@ -151,7 +151,9 @@ class Review:
         self.route([(1200,-1000)]+LIVING[1:]);self.look_at('keys')
         self.until(lambda:self.service()['active']=='notice_keys',15,'live key reminder')
         self.wait(5);self.act('crouch','',False);self.act('pick_up','keys');self.act('crouch','',False)
-        self.say('human_found');self.wait(3)
+        self.say('human_found')
+        self.route([(440,-410),(440,-290),(680,-265),(805,-265),(950,-290),(1130,-290)])
+        self.wait(3)
         s=self.service()
         self.checks=[{'name':'fixed_view','passed':all(f['native']['third_person']==(self.view=='third') for f in self.frames)},
             {'name':'no_teleports','passed':all(math.dist(a['native']['player_cm'],b['native']['player_cm'])<65 for a,b in zip(self.frames,self.frames[1:]))},
