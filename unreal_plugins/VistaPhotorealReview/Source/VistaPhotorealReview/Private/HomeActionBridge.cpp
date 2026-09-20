@@ -17,6 +17,7 @@ TSharedRef<FJsonObject> AHomeActionsCharacter::MakeState() const
     O->SetStringField(TEXT("audience"),TEXT("privileged_runtime_review_only"));O->SetStringField(TEXT("session_id"),SessionId);
     O->SetStringField(TEXT("revision"),Revision);O->SetNumberField(TEXT("generation"),Generation);
     O->SetNumberField(TEXT("scene_epoch"),SceneEpoch);
+    if (ForgeReceipt.IsValid()) O->SetObjectField(TEXT("micro_room"),ForgeReceipt);
     O->SetNumberField(TEXT("clock_s"),SceneClock);O->SetNumberField(TEXT("frame_time_s"),GetWorld()->GetDeltaSeconds());
     O->SetBoolField(TEXT("ready"),bSceneReady);O->SetBoolField(TEXT("third_person"),bThirdPerson);
     O->SetBoolField(TEXT("clean_observation"),bCleanObservation);

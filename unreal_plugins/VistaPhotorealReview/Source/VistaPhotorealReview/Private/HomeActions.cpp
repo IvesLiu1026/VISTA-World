@@ -321,6 +321,7 @@ void AHomeActionsCharacter::SetView(FVector Position,FRotator Rotation)
 }
 void AHomeActionsCharacter::HomeRoom(int32 Index)
 {
+    if (ForgeReceipt.IsValid()) {FString Code;if (!ResetScene(Code)) return;}
     const TArray<TSharedPtr<FJsonValue>>* Rooms;
     if (Contract && Contract->TryGetArrayField(TEXT("rooms"),Rooms))
     {
@@ -450,6 +451,7 @@ TSharedPtr<FJsonObject> AHomeActionsCharacter::CompanionObservation(bool WearerV
         {TEXT("kitchen_dining"),TEXT("廚房與餐廳")},{TEXT("bedroom"),TEXT("臥室")},
         {TEXT("office"),TEXT("書房")},{TEXT("bathroom_laundry"),TEXT("浴室與洗衣區")}};
     Out->SetStringField(TEXT("room"),Labels.Contains(Room)?Labels[Room]:Room);
+    if (ForgeReceipt.IsValid()) Out->SetStringField(TEXT("room"),TEXT("Small ")+String(ForgeReceipt,TEXT("family")));
     Out->SetStringField(TEXT("focused"),TEXT(""));Out->SetStringField(TEXT("public_goal"),TEXT(""));
     FVector Eye;FRotator View;GetActorEyesViewPoint(Eye,View);
     if(const auto* PC=Cast<APlayerController>(Controller))PC->GetPlayerViewPoint(Eye,View);

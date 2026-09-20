@@ -180,6 +180,7 @@ protected:
     virtual void CancelReach(const FString& Reason);
     bool IsCupReachable(FString& Reason) const;
     virtual FVector PickupAimPoint() const;
+    virtual void InteractionView(FVector& Eye, FRotator& Rotation) const;
     virtual bool FindPlacement(FVector& Location, FQuat& Rotation) const;
     virtual FTransform DesiredGrip() const;
     virtual FTransform CarryTarget() const;

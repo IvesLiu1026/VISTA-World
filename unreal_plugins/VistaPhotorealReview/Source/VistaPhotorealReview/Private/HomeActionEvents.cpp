@@ -74,6 +74,7 @@ bool AHomeActionsCharacter::ResetScene(FString& Code)
     if (!ActiveId.IsEmpty()) FinishAction(false,TEXT("RESET_CANCELLED_ACTION"));
     bSuppressReceipt=true;GripHandle->ReleaseComponent();
     if (Cup) GetCapsuleComponent()->IgnoreActorWhenMoving(Cup,false);
+    ClearMicroScene();
     for (auto& Pair:Entities)
     {
         auto& E=Pair.Value;E.State=Copy(E.Spec->GetObjectField(TEXT("initial_state")));

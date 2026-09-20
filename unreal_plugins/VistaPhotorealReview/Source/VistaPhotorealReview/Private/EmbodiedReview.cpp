@@ -201,11 +201,17 @@ FTransform AEmbodiedReviewCharacter::DesiredGrip() const
 
 FVector AEmbodiedReviewCharacter::PickupAimPoint() const { return CupMesh?CupMesh->Bounds.Origin:FVector::ZeroVector; }
 
+void AEmbodiedReviewCharacter::InteractionView(FVector& Eye,FRotator& Rotation) const
+{
+    GetActorEyesViewPoint(Eye,Rotation);
+    if (const auto* PC=Cast<APlayerController>(Controller)) PC->GetPlayerViewPoint(Eye,Rotation);
+}
+
 bool AEmbodiedReviewCharacter::IsCupReachable(FString& Reason) const
 {
     if (!CupMesh || !bReady) {Reason=TEXT("Cup unavailable");return false;}
     FVector Eye;FRotator LookRotation;
-    if (const APlayerController* PC=Cast<APlayerController>(Controller)) PC->GetPlayerViewPoint(Eye,LookRotation);
+    if (Cast<APlayerController>(Controller)) InteractionView(Eye,LookRotation);
     else {Reason=TEXT("View unavailable");return false;}
     const FVector Center=CupMesh->Bounds.Origin;
     const float ReachLimit=Center.Z-GetMesh()->GetComponentLocation().Z<35.f?46.f:86.f;
@@ -278,7 +284,7 @@ bool AEmbodiedReviewCharacter::FindPlacement(FVector& Location,FQuat& Rotation) 
 {
     FVector Eye;FRotator LookRotation;
     const APlayerController* PC=Cast<APlayerController>(Controller);if (!PC) return false;
-    PC->GetPlayerViewPoint(Eye,LookRotation);
+    InteractionView(Eye,LookRotation);
     FCollisionQueryParams Params(SCENE_QUERY_STAT(EmbodiedPlacement),true,this);Params.AddIgnoredActor(Cup);
     FHitResult Hit;
     if (!GetWorld()->LineTraceSingleByChannel(Hit,Eye,Eye+LookRotation.Vector()*330.f,ECC_Visibility,Params)) return false;

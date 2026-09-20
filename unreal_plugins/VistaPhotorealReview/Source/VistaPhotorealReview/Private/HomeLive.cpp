@@ -172,10 +172,16 @@ void AHomeActionsCharacter::PollLiveCommands()
             if (Id==TEXT("mmg_001") || Id==TEXT("mmg_021") || Id==TEXT("mmg_044")) StartEvent(Id,Code,false);
         }
         else if (Op==TEXT("scene")) ApplyLiveScene(String(D,TEXT("layout")),Number(D,TEXT("room")),Code);
+        else if (Op==TEXT("micro_scene"))
+        {
+            const TSharedPtr<FJsonObject>* Recipe;
+            if (D->TryGetObjectField(TEXT("recipe"),Recipe)) ApplyMicroScene(*Recipe,Code);
+        }
         auto R=MakeShared<FJsonObject>();R->SetStringField(TEXT("schema"),TEXT("vista.live-reply/v1"));
         R->SetStringField(TEXT("op"),Op);R->SetStringField(TEXT("code"),Code);R->SetStringField(TEXT("session_id"),SessionId);
         R->SetNumberField(TEXT("generation"),Generation);R->SetNumberField(TEXT("clock_s"),SceneClock);
         if (Op==TEXT("scene")) {R->SetStringField(TEXT("placement_diagnostic"),LiveLayoutDiagnostic);R->SetNumberField(TEXT("new_props"),LiveDressing.Num());}
+        if (Op==TEXT("micro_scene") && ForgeReceipt.IsValid()) R->SetObjectField(TEXT("assembly"),ForgeReceipt);
         AppendReceipt(R);PublishState();const FString ReplyDir=BridgeDir/TEXT("live_responses");IFileManager::Get().MakeDirectory(*ReplyDir,true);
         AtomicSave(ReplyDir/File,Encode(R));
     }

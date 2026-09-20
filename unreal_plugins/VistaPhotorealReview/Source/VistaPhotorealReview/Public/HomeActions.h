@@ -118,6 +118,7 @@ protected:
     virtual FTransform CarryTarget() const override;
     virtual bool FindPlacement(FVector& Location,FQuat& Rotation) const override;
     virtual FVector PickupAimPoint() const override;
+    virtual void InteractionView(FVector& Eye, FRotator& Rotation) const override { ActionView(Eye, Rotation); }
     virtual void RefreshScenePoseGoals() override;
     virtual void AdjustScenePoseGoals() override;
     virtual FTransform AdjustedSceneHandGoal(FTransform Goal,bool bLeft=false) const override;
@@ -145,6 +146,12 @@ private:
     void PollPrivateReview();
     void PollLiveCommands();
     bool ApplyLiveScene(const FString& Layout,int32 Room,FString& Code);
+    bool ApplyMicroScene(const TSharedPtr<FJsonObject>& Recipe,FString& Code);
+    void ClearMicroScene();
+    TMap<FString,FHomeEntity> ForgeOriginals;
+    TSharedPtr<FJsonObject> ForgeReceipt;
+    UPROPERTY() TArray<TObjectPtr<AActor>> ForgeActors;
+    int32 ForgeSerial=0;
     UPROPERTY() TArray<TObjectPtr<AActor>> LiveDressing;
     void TickPrivateReview(float Dt);
     void PrivateDialogue(const FString& Role,const FString& Code);
