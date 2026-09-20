@@ -108,7 +108,8 @@ class Review:
         atomic(self.folder/'requests'/(ident+'.json'),request)
         self.until(lambda:(self.folder/'responses'/(ident+'.json')).exists(),15,'human '+action)
         result=read(self.folder/'responses'/(ident+'.json'));self.commands.append({'request':request,'reply':result})
-        if result['code'] not in ('ACTION_COMPLETE','PICKUP_COMPLETE','PLACEMENT_COMPLETE','POSTURE_COMPLETE','BODY_MOTION_COMPLETE'):
+        accepted = ('OBSERVED',) if action in ('inspect','look_at') else ('ACTION_COMPLETE','PICKUP_COMPLETE','PLACEMENT_COMPLETE','POSTURE_COMPLETE','BODY_MOTION_COMPLETE')
+        if result['code'] not in accepted:
             raise RuntimeError('Human action failed: '+json.dumps(result))
 
     def say(self, code):
