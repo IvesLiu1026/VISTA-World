@@ -22,6 +22,7 @@ from runtime.vista_live.bridge import atomic
 from runtime.vista_live.contracts import ROOMS
 from runtime.vista_live.forge import theme
 from runtime.vista_live.conversation_review import ConversationReview
+from runtime.vista_live.motion_audit import walking_continuity
 
 ENTRY_TO_KITCHEN=[(1130,-290),(950,-290),(950,-500),(1002,-700),(1002,-790),
                   (1105,-790),(1105,-830),(1260,-830),(1260,-1000),(1200,-1000),(1147,-1071)]
@@ -118,9 +119,11 @@ class ThemeReview(ConversationReview):
         state=self.state();assistant=self.service()
         expected=t['recall'];answer=self.exchanges[-1]['assistant'].lower()
         recall=expected in answer or (expected=='ten' and '10' in answer)
+        continuity=walking_continuity(self.frames)
+        atomic(self.out/'continuity.json',continuity)
         self.checks=[
             {'name':'fixed_view','passed':all(f['native']['third_person']==(self.view=='third') for f in self.frames)},
-            {'name':'continuous_player','passed':all(math.dist(a['native']['player_cm'],b['native']['player_cm'])<65 for a,b in zip(self.frames,self.frames[1:]))},
+            {'name':'continuous_player','passed':continuity['passed']},
             {'name':'theme_opening_and_followup_answered','passed':len(self.exchanges)==2},
             {'name':'remembers_actual_topic_detail','passed':recall},
             {'name':'authored_events_succeeded','passed':len(state['concurrent_events'])==len(events) and all(e['status']=='succeeded' for e in state['concurrent_events'])},

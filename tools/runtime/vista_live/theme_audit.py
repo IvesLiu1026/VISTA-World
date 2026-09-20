@@ -9,6 +9,7 @@ import subprocess
 
 from runtime.vista_live.bridge import atomic
 from runtime.vista_live.forge import THEMES
+from runtime.vista_live.motion_audit import walking_continuity
 
 
 def audit(suites, out, decode=False, verified=()):
@@ -40,6 +41,9 @@ def audit(suites, out, decode=False, verified=()):
                     '-i', str(video), '-f', 'null', '-'], check=True)
                 decoded[digest] = str(out)
             trace = json.loads((folder / 'trace.json').read_text())
+            continuity = walking_continuity(trace)
+            if not continuity['passed']:
+                raise ValueError('Sampled motion failed: ' + json.dumps(continuity['issues']))
             dialogue = json.loads((folder / 'dialogue-trace.json').read_text())
             times = sorted(f['native']['frame_time_s'] * 1000 for f in trace)
             played = {}; issues = set()
@@ -53,6 +57,7 @@ def audit(suites, out, decode=False, verified=()):
                 'sha256': digest, 'duration_s': float(probe['format']['duration']),
                 'frame_rate': visual['avg_frame_rate'], 'full_decode': digest in decoded,
                 'decode_evidence': decoded.get(digest),
+                'walking_continuity': continuity,
                 'sampled_frame_ms': {'p50': statistics.median(times),
                     'p95': times[math.ceil(.95 * len(times)) - 1], 'samples': len(times)},
                 'exchanges': json.loads((folder / 'exchanges.json').read_text()),
