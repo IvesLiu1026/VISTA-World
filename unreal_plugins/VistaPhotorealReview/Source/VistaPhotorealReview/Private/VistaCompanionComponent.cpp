@@ -97,7 +97,10 @@ void UVistaCompanionComponent::TogglePanel()
     Rows->AddSlot().AutoHeight().Padding(0,0,0,16)
         [SNew(STextBlock).Font(CompanionFont(20)).AutoWrapText(true).Text_Lambda([this]{return FText::FromString(Reply);})];
     Rows->AddSlot().AutoHeight().Padding(0,0,0,12)
-        [SAssignNew(Entry,SEditableTextBox).Font(CompanionFont(18)).HintText(FText::FromString(TEXT("想問什麼？輸入後按 Enter")))
+        [SAssignNew(Entry,SEditableTextBox).Font(CompanionFont(18)).ClearKeyboardFocusOnCommit(false)
+         .HintText(FText::FromString(TEXT("想問什麼？輸入後按 Enter")))
+         .OnKeyDownHandler_Lambda([this](const FGeometry&,const FKeyEvent& Event)
+         {if(Event.GetKey()==EKeys::Escape){ClosePanel();return FReply::Handled();}return FReply::Unhandled();})
          .OnTextCommitted_Lambda([this](const FText& Text,ETextCommit::Type Type){if(Type==ETextCommit::OnEnter){Ask(Text.ToString());if(Entry)Entry->SetText(FText::GetEmpty());}})];
     const auto Button=[&](const FString& Text,TFunction<void()> Action)
     {

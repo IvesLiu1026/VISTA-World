@@ -42,7 +42,9 @@ try:
          '-ini:EditorSettings:[/Script/UnrealEd.CrashReportsPrivacySettings]:bSendUnattendedBugReports=False',
          '-ddc=InstalledNoZenLocalFallback','-ini:Engine:[SystemSettings]:r.Shadow.Virtual.Cache=0',
          '-UDPMESSAGING_TRANSPORT_ENABLE=0','-ExecCmds=t.MaxFPS '+str(a.fps)]
-    if (a.project.parent/'Config/VistaLive.json').exists():cmd+=['-VistaLiveAssistant','-VistaEgoSensor']
+    if (a.project.parent/'Config/VistaLive.json').exists():
+        cmd+=['-VistaLiveAssistant','-VistaEgoSensor',
+              '-ini:Engine:[SystemSettings]:r.Shadow.Virtual.AllowScreenOverflowMessages=0']
     if a.motion_proof:
         (a.out/'motion').mkdir()
         cmd.append('-VistaCharacterMotionProof='+str(a.out/'motion'))

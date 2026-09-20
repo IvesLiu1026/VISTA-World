@@ -116,7 +116,8 @@ class Review:
     def setup(self):
         post('/toggle',{'enabled':False})
         self.bridge.command('scene',{'layout':'everyday','room':3})
-        for command in ('EmbodiedPosition 1140 -1080 86 -90', 'EmbodiedView '+('1' if self.view=='third' else '0'), 'HomeObserve 1'):
+        for command in ('r.Shadow.Virtual.AllowScreenOverflowMessages 0',
+                        'EmbodiedPosition 1140 -1080 86 -90', 'EmbodiedView '+('1' if self.view=='third' else '0'), 'HomeObserve 1'):
             self.probe.console(command)
         self.raw('stop');self.look_at('stove');self.wait(1)
         self.frames=[];self.start=time.monotonic()

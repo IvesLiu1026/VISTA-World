@@ -125,6 +125,8 @@ native evidence are separate checks.
 makes all assistant decisions; the recording harness cannot inject an assistant
 warning. Capture uses continuous native first or third person, X11 plus Pulse audio,
 and retains event/contact/view/teleport checks. Failed trials remain separate.
+The live presentation hides the VSM overflow screen banner only; rendering settings,
+diagnostic logs and sampled frame times remain available for performance review.
 The `/demo` page serves only the two explicitly published MP4/JPEG pairs under
 the local service root's `media` directory. No evidence directory listing is exposed.
 

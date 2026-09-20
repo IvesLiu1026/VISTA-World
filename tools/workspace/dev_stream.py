@@ -114,7 +114,8 @@ def run_game(root: Path, project: str, host: dict, scene: dict, payload: Path, r
     if live_config.is_file():
         if read_json(live_config).get('schema') != 'vista.live/v1':
             raise ValueError('Invalid live assistant configuration')
-        command += ['-VistaLiveAssistant', '-VistaEgoSensor']
+        command += ['-VistaLiveAssistant', '-VistaEgoSensor',
+                    '-ini:Engine:[SystemSettings]:r.Shadow.Virtual.AllowScreenOverflowMessages=0']
     if companion_config.is_file():
         if read_json(companion_config).get('schema') != 'vista.companion/v1':
             raise ValueError('Invalid indoor companion configuration')
