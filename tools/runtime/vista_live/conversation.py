@@ -71,7 +71,8 @@ class Conversation:
             self.turns[-1]['source'] = 'native_caption_and_playback_completed'
         else:
             self.turns.append({'role': 'assistant', 'text': line, 'source': 'native_playback_completed', 'at_s': at,
-                               'mode': self.pending['mode']})
+                               'mode': self.pending['mode'], 'ticket': ticket,
+                               'purpose': self.reply_purpose()})
         self.turns = self.turns[-16:]
         self.last_delivery = now
         self.pending = self.inflight = None
@@ -86,9 +87,13 @@ class Conversation:
             return False
         self.preview = line
         self.turns.append({'role': 'assistant', 'text': line, 'source': 'native_caption_presented',
-                           'at_s': at, 'ticket': ticket, 'mode': self.pending['mode']})
+                           'at_s': at, 'ticket': ticket, 'mode': self.pending['mode'],
+                           'purpose': self.reply_purpose()})
         self.turns = self.turns[-16:]
         return True
+
+    def reply_purpose(self):
+        return 'task' if self.pending.get('task_request') and self.pending['mode'] != 'resume' else 'casual'
 
     def failed(self, ticket):
         if self.inflight == ticket:

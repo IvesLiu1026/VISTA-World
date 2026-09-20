@@ -86,6 +86,20 @@ class TurnTests(unittest.TestCase):
         self.assertEqual(ctx['question'], '')
         self.assertEqual(ctx['mode'], 'resume')
 
+    def test_both_captioned_and_audio_only_task_replies_keep_their_purpose(self):
+        for caption in (False, True):
+            with self.subTest(caption=caption):
+                c = Conversation(); ticket, _ = ready(c, 'Help me find my keys.')
+                c.pending['task_request'] = True
+                if caption: c.presented(ticket, 'I cannot see them here.', 2)
+                self.assertTrue(c.delivered(ticket, 'I cannot see them here.', 3, 3))
+                self.assertEqual(c.turns[-1]['purpose'], 'task')
+                self.assertEqual(c.turns[-1]['ticket'], ticket)
+                ready(c, 'I still need my keys.', 4); c.pending['task_request'] = True
+                c.interrupt(); c.release(5); ticket, _ = c.begin(7)
+                self.assertTrue(c.delivered(ticket, 'Back to our music discussion.', 8, 8))
+                self.assertEqual(c.turns[-1]['purpose'], 'casual')
+
     def test_separate_speech_schema_cannot_smuggle_engine_actions(self):
         self.assertEqual(validate_dialogue({'speech': 'You mentioned green tea.'})['speech'], 'You mentioned green tea.')
         for data in ({'speech': 'Hello', 'turn_off': 'stove'}, {'speech': 'word '*46}, {'speech': '你好'}):
@@ -181,6 +195,7 @@ class ConversationServiceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             live = self.live(Path(d)); ticket, ctx = ready(live.conversation, 'Why do stars twinkle?')
             ctx['turns'].insert(0, {'role': 'human', 'text': 'Find my keys.', 'purpose': 'task'})
+            ctx['turns'].insert(1, {'role': 'assistant', 'text': 'I cannot see the keys.', 'purpose': 'task'})
             seen = []
             def api(kind, value):
                 seen.append(value)
@@ -190,6 +205,21 @@ class ConversationServiceTests(unittest.TestCase):
             self.assertNotIn('observed_state', seen[0])
             self.assertNotIn('pending_tasks', seen[0])
             self.assertEqual(len(seen[0]['conversation']), 1)
+            self.assertEqual(seen[0]['current_observation'], live.policy.current)
+
+    def test_practical_request_does_not_receive_unrelated_casual_history(self):
+        with tempfile.TemporaryDirectory() as d:
+            live = self.live(Path(d)); ticket, ctx = ready(live.conversation, 'Help me find my keys.')
+            ctx['task_request'] = True
+            ctx['turns'].insert(0, {'role': 'human', 'text': 'I enjoy Python and music.', 'purpose': 'casual'})
+            seen = []
+            def api(kind, value):
+                seen.append(value); live.conversation.pause()
+                return {'answer': {'speech': 'I cannot see your keys here.'}}
+            live.api = api; live.chat_answer(1, ticket, ctx)
+            self.assertEqual(seen[0]['mode'], 'task')
+            self.assertEqual(seen[0]['human_request'], 'Help me find my keys.')
+            self.assertEqual(seen[0]['conversation'], [])
             self.assertEqual(seen[0]['current_observation'], live.policy.current)
 
 

@@ -355,8 +355,9 @@ class Live:
             with self.lock:
                 if epoch != self.epoch or not self.conversation.valid(ticket):
                     return
-                value = {'mode': context['mode'], 'human_request': context['question'],
-                         'conversation': [t for t in context['turns'] if t.get('purpose') != 'task'],
+                task_reply = context.get('task_request') and context['mode'] != 'resume'
+                value = {'mode': 'task' if task_reply else context['mode'], 'human_request': context['question'],
+                         'conversation': [] if task_reply else [t for t in context['turns'] if t.get('purpose') != 'task'],
                          'current_observation': self.policy.current}
             result = self.api('chat', value)
             answer = validate_dialogue(result['answer'])
