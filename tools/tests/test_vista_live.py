@@ -194,6 +194,23 @@ class LiveConcurrencyTests(unittest.TestCase):
             self.assertIsNone(live.last_decision)
             self.assertIn('Provider unavailable', live.error)
 
+    def test_rejected_stale_voice_does_not_disable_live_decisions(self):
+        with tempfile.TemporaryDirectory() as d:
+            live = self.live(Path(d)); live.planned.add('notice_water')
+            calls = []
+            def api(kind, value):
+                calls.append(kind)
+                return {'answer': {'action': 'notice_water'}}
+            live.api = api
+            live.bridge.command = lambda *args: {'code': 'STALE_LIVE_REJECTED'}
+            live.decide(1, live.policy.revision, live.policy.state())
+            self.assertEqual(calls, ['decision'])
+            self.assertEqual(live.error, '')
+            self.assertTrue(live.dirty)
+            self.assertFalse(live.policy.notices)
+            self.assertIsNone(live.policy.guard('notice_water'))
+            self.assertEqual(live.native_receipt['code'], 'STALE_LIVE_REJECTED')
+
     def test_unauthorized_generated_plan_is_not_published_or_executed(self):
         with tempfile.TemporaryDirectory() as d:
             live = self.live(Path(d))

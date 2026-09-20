@@ -18,6 +18,10 @@ from runtime.vista_live.policy import Policy
 from runtime.vista_jev.serve import byte_range
 
 
+class NativeCommandStale(RuntimeError):
+    """The engine explicitly rejected work; this is not a provider outage."""
+
+
 class Live:
     def __init__(self, root, bridge, speech, provider='http://127.0.0.1:49112'):
         self.root, self.bridge, self.provider = root, bridge, provider
@@ -86,7 +90,7 @@ class Live:
     def native(self, op, fields=None, epoch=None):
         with self.lock:
             if epoch is not None and epoch != self.epoch:
-                raise RuntimeError('Stale work discarded')
+                raise NativeCommandStale('Stale work discarded')
             identity = self.identity
         result = self.bridge.command(op, fields, identity)
         self.log('native', {'op': op, 'epoch': epoch, 'reply': result})
@@ -94,6 +98,8 @@ class Live:
             self.native_receipt = result
         expected = {'speech': 'SPEECH_STARTED', 'stop': 'LIVE_STOPPED', 'follow': 'FOLLOW_SET',
                     'assist': 'ASSIST_ACCEPTED', 'event': 'EVENT_STARTED', 'scene': 'SCENE_APPLIED'}
+        if result['code'] == 'STALE_LIVE_REJECTED':
+            raise NativeCommandStale(result['code'])
         if result['code'] != expected.get(op):
             raise RuntimeError(result['code'])
         return result
@@ -111,7 +117,18 @@ class Live:
             if priority < 100 and time.monotonic() < self.speech_until:
                 self.pending_speech.append((clip, epoch, priority, cause))
                 return
-        result = self.native('speech', {'speech': clip, 'cause': cause}, epoch)
+        try:
+            result = self.native('speech', {'speech': clip, 'cause': cause}, epoch)
+        except NativeCommandStale:
+            # An object action may finish between snapshot and native polling.
+            # Drop this voice, preserve the rejection, and evaluate fresh evidence.
+            # Do not retry the paid request or record a notice as delivered.
+            with self.lock:
+                if epoch == self.epoch and cause.startswith('jev:'):
+                    self.policy.selections.pop(cause[4:], None)
+                    self.dirty = True
+            self.log('speech', {'discarded': 'stale_native_command', 'cause': cause, 'epoch': epoch})
+            return
         if result['code'] != 'SPEECH_STARTED':
             raise RuntimeError('No native audio-start receipt')
         duration = clip.get('duration_s', len(clip['pcm_b64']) * .75 / (2 * clip['sample_rate']))
