@@ -57,7 +57,14 @@ void UVistaCompanionComponent::Start()
         Captions=SNew(SVerticalBox)
         +SVerticalBox::Slot().FillHeight(1)
         +SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(50,0,50,116)
-        [SNew(SBox).MaxDesiredWidth(1060)
+        // Give wrapping text an actual width. An auto-sized centered box can
+        // collapse to a single word and cover the middle of the scene.
+        [SNew(SBox).WidthOverride_Lambda([]
+         {
+             FVector2D Size(1920,1080);
+             if (GEngine && GEngine->GameViewport) GEngine->GameViewport->GetViewportSize(Size);
+             return FOptionalSize(FMath::Clamp(float(Size.X)-100.f,280.f,1060.f));
+         })
          [SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).Padding(FMargin(24,14)).BorderBackgroundColor(FLinearColor(.015,.025,.035,.94))
           .Visibility_Lambda([this]{return !bOpen && Companion && (Companion->bSpeaking || bBusy || GetWorld()->GetTimeSeconds()<NoticeUntil)?EVisibility::HitTestInvisible:EVisibility::Collapsed;})
           [SNew(STextBlock).Font(CompanionFont(22)).ColorAndOpacity(FLinearColor(.94,.97,1)).AutoWrapText(true)
