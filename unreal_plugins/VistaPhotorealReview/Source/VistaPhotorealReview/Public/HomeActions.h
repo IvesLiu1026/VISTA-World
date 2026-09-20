@@ -155,6 +155,8 @@ private:
     TArray<FVector> PrivatePath;
     FRotator PrivateLook=FRotator::ZeroRotator;
     float PrivateStall=0,PrivateMoveClock=0;
+    float PrivatePreviewCm=0,PrivateClearance=95;
+    int32 PrivateCornerFrames=0;
     FString PrivateMotion=TEXT("idle");
     void UpdateConcurrentEvents(float Dt);
     TArray<TSharedPtr<FJsonValue>> ConcurrentEventState() const;

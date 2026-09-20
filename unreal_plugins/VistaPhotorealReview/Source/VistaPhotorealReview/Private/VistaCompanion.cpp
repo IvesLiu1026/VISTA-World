@@ -1,4 +1,5 @@
 #include "VistaCompanion.h"
+#include "VistaPathSteering.h"
 #include "EmbodiedReview.h"
 #include "HomeActionsJson.h"
 #include "Animation/AnimInstanceProxy.h"
@@ -180,12 +181,22 @@ void AVistaCompanion::Tick(float Dt)
         }
         else if(bFollowing && Trail.Num() && (Distance>155 || !Direct))
         {
+            // Pull only short, supported, capsule-clear chords through the human's
+            // recorded trail. This previews bends without cutting a wall or stairwell.
+            while (Trail.Num()>1 && FVector::Dist2D(Here,Trail[1])<95 &&
+                   FMath::Abs(Here.Z-Trail[1].Z)<12 &&
+                   VistaPathSteering::ClearFloorChord(this,FVector(Trail[1].X,Trail[1].Y,Here.Z),Leader.Get()))
+                Trail.RemoveAt(0);
             FVector Goal=Trail[0];Goal.Z=Here.Z;FVector Direction=(Goal-Here).GetSafeNormal();
+            if (Trail.Num()>1) Goal=VistaPathSteering::PreviewCorner(this,Trail[0],Trail[1],85,Leader.Get());
+            Direction=VistaPathSteering::AvoidNearObstacle(this,Goal);
             float Desired=Direction.Rotation().Yaw;float Delta=FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Desired);
             SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Desired,150*Dt),0));
             const bool Live=FParse::Param(FCommandLine::Get(),TEXT("VistaLiveAssistant"));
-            GetCharacterMovement()->MaxWalkSpeed=Live?FMath::Clamp(Leader->GetVelocity().Size2D()+25.f,150.f,240.f):145.f;
-            if(FMath::Abs(Delta)<75)AddMovementInput(Direction,FMath::Clamp((80-FMath::Abs(Delta))/35.f,.1f,1.f),true);
+            const float DesiredSpeed=Live?FMath::Clamp(Leader->GetVelocity().Size2D()+25.f+(Distance-230)*.12f,120.f,240.f):145.f;
+            GetCharacterMovement()->MaxWalkSpeed=FMath::FInterpTo(GetCharacterMovement()->MaxWalkSpeed,DesiredSpeed,Dt,3);
+            const float Brake=FMath::Clamp(VistaPathSteering::ForwardClearance(this,Direction,95)/60.f,.22f,1.f);
+            if(FMath::Abs(Delta)<75)AddMovementInput(Direction,FMath::Clamp((80-FMath::Abs(Delta))/35.f,.1f,1.f)*Brake,true);
             StuckTime=Moved<.03f?StuckTime+Dt:0;bBlocked=StuckTime>2;
         }
         else

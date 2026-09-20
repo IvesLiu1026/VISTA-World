@@ -2,6 +2,7 @@
 #include "HomeActions.h"
 #include "HomeActionsJson.h"
 #include "VistaCompanion.h"
+#include "VistaPathSteering.h"
 #include "Camera/CameraComponent.h"
 #include "Components/AudioComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -107,6 +108,7 @@ void AHomeActionsCharacter::PollPrivateReview()
             {
                 PrivatePath=Points;PrivateLook=FRotator(Pitch,Yaw,0);bPrivateLooking=true;bPrivateMoving=Op!=TEXT("look");
                 PrivateTarget=Target;PrivatePrevious=GetActorLocation();PrivateStall=PrivateMoveClock=0;
+                PrivatePreviewCm=0;PrivateCornerFrames=0;
                 PrivateMotion=bPrivateMoving?TEXT("walking"):TEXT("looking");Code=TEXT("REVIEW_ACCEPTED");
             }
         }
@@ -128,19 +130,41 @@ void AHomeActionsCharacter::TickPrivateReview(float Dt)
     if (!FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")) || !Controller) return;
     if (!bPrivateLooking && !bPrivateMoving) return;
     FRotator Look=Controller->GetControlRotation();FVector Delta=PrivateTarget-GetActorLocation();Delta.Z=0;
-    if (bPrivateMoving && PrivatePath.Num() && Delta.Size()<12)
-    {PrivateTarget=PrivatePath[0];PrivatePath.RemoveAt(0);Delta=PrivateTarget-GetActorLocation();Delta.Z=0;PrivateMoveClock=0;}
-    const float Desired=bPrivateMoving?Delta.Rotation().Yaw:PrivateLook.Yaw;
-    Look.Yaw=FMath::FixedTurn(Look.Yaw,Desired,65*Dt);
+    if (bPrivateMoving && PrivatePath.Num())
+    {
+        const FVector Exit=(PrivatePath[0]-PrivateTarget).GetSafeNormal2D();
+        FVector Next=PrivatePath[0];Next.Z=GetActorLocation().Z;
+        const bool ClearNext=VistaPathSteering::ClearFloorChord(this,Next);
+        const float Progress=FVector::DotProduct(-Delta,Exit);
+        const float Lateral=(-Delta-Exit*Progress).Size2D();
+        const bool Passed=Delta.Size()<85 && Progress>2 && (ClearNext || Lateral<4);
+        if (Delta.Size()<3 || (Delta.Size()<12 && ClearNext) || Passed)
+        {PrivateTarget=PrivatePath[0];PrivatePath.RemoveAt(0);Delta=PrivateTarget-GetActorLocation();Delta.Z=0;PrivateMoveClock=0;}
+    }
+    FVector Goal=PrivateTarget;Goal.Z=GetActorLocation().Z;
+    if (bPrivateMoving && PrivatePath.Num()) Goal=VistaPathSteering::PreviewCorner(this,PrivateTarget,PrivatePath[0],
+        FMath::Clamp(GetVelocity().Size2D()*.65f+20,45.f,95.f));
+    PrivatePreviewCm=FVector::Dist2D(Goal,PrivateTarget);
+    if (PrivatePreviewCm>4) ++PrivateCornerFrames;
+    const FVector Direction=(Goal-GetActorLocation()).GetSafeNormal2D();
+    const float Desired=bPrivateMoving?Direction.Rotation().Yaw:PrivateLook.Yaw;
+    // Camera looks into the bend while the capsule is still approaching it.
+    Look.Yaw=FMath::FixedTurn(Look.Yaw,Desired,95*Dt);
     Look.Pitch=FMath::FInterpTo(Look.Pitch,PrivateLook.Pitch,Dt,4);Controller->SetControlRotation(Look);
     if (bPrivateMoving)
     {
         PrivateMoveClock+=Dt;
         const float Moved=FVector::Dist2D(PrivatePrevious,GetActorLocation());PrivatePrevious=GetActorLocation();
         const float Error=FMath::Abs(FMath::FindDeltaAngleDegrees(Look.Yaw,Desired));
-        const float Input=FMath::Clamp((75-Error)/40.f,0.f,1.f)*(PrivatePath.Num()?1.f:FMath::Clamp(Delta.Size()/38.f,.25f,1.f));
-        if (ActiveId.IsEmpty()) AddMovementInput(Delta.GetSafeNormal(),Input,true);
-        PrivateStall=Input>.15f && Moved<.01f?PrivateStall+Dt:0;
+        const float Clearance=VistaPathSteering::ForwardClearance(this,Direction,95);
+        // Decelerate before contact, but let CharacterMovement resolve a close
+        // tangential door-frame pass using its original full collision capsule.
+        const float Brake=FMath::Clamp(Clearance/60.f,.22f,1.f);
+        PrivateClearance=Clearance;
+        const float Input=FMath::Clamp((85-Error)/45.f,0.f,1.f)*Brake*
+            (PrivatePath.Num()?1.f:FMath::Clamp(Delta.Size()/38.f,.18f,1.f));
+        if (ActiveId.IsEmpty()) AddMovementInput(Direction,Input,true);
+        PrivateStall=ActiveId.IsEmpty() && Moved<.01f?PrivateStall+Dt:0;
         const bool Arrived=PrivatePath.IsEmpty() && Delta.Size()<3;
         if (Arrived || PrivateStall>5 || PrivateMoveClock>45)
         {
