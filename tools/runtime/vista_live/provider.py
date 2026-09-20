@@ -2,6 +2,7 @@
 import argparse
 import array
 import base64
+import copy
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -80,7 +81,10 @@ class Provider:
             instructions = PLAN_INSTRUCTIONS
             if first:
                 instructions += f'\nThis request has already selected {first} as the urgent first task. The first step MUST have target "{first}". Do not start by looking for other objects.'
-            body = chat_request(instructions, PLAN_SCHEMA, value)
+            schema = copy.deepcopy(PLAN_SCHEMA)
+            if not value.get('explicit_help_target'):
+                schema['properties']['steps']['items']['properties']['skill']['enum'].remove('turn_off')
+            body = chat_request(instructions, schema, value)
         elif kind == 'tts':
             if set(value) != {'text', 'role'} or value['role'] not in ('human', 'assistant', 'phone'):
                 raise ValueError('Invalid speech role')

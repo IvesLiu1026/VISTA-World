@@ -1,0 +1,28 @@
+<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VISTA Live</title><style>
+*{box-sizing:border-box}body{margin:0;background:#101919;color:#e6eee7;font:17px system-ui;line-height:1.6}main{max-width:900px;margin:40px auto;padding:24px}h1{font-size:34px;margin:0}small{color:#9bafa7}section{background:#1b2928;padding:24px;border:1px solid #334945;border-radius:18px;margin:20px 0}textarea,input{background:#102020;color:#fff;border:1px solid #4b6962;border-radius:10px;padding:14px;width:100%;font:inherit}textarea{height:110px}button{border:0;border-radius:9px;background:#c6eb88;color:#122716;font:inherit;padding:10px 17px;margin:12px 8px 0 0;cursor:pointer}button.secondary{background:#334e46;color:#fff}button:disabled{opacity:.4;cursor:wait}.badge{background:#34554b;border-radius:8px;padding:4px 10px}#error{color:#ffb9ad;white-space:pre-wrap}.row{display:flex;justify-content:space-between;gap:15px;align-items:center}.steps{white-space:pre-wrap}details{font-size:14px;color:#afc5b9}pre{overflow:auto;max-height:350px;white-space:pre-wrap}a{color:#c6eb88}
+</style><main><div class="row"><h1>VISTA Live</h1><span id="status" class="badge">連線中</span></div>
+<small>Moonlight 玩六個房間 · 這裡設定情境與查看助手 · <a href="/demo">Demo 影片</a></small><p id="error" role="alert"></p>
+<section><div class="row"><strong>建立情境</strong><span id="authorStatus"></span></div>
+<textarea id="prompt" aria-label="情境描述">工作日的家。我準備出門找鑰匙，爐火還開著；30 秒後浴缸開始放水，同時接到電話。從廚房開始。</textarea>
+<button id="build">產生情境</button><button id="apply" class="secondary" disabled>套用到遊戲</button><p id="proposal"></p>
+</section><section><div class="row"><strong>陪同助手</strong><span id="active"></span></div><p id="speech">等待觀察</p><div id="steps" class="steps"></div>
+<input id="message" aria-label="對助手說" placeholder="例如：I'm heading out. Help me find my keys.">
+<button id="send">對助手說</button><button id="stop" class="secondary">停止／取消</button><button id="toggle" class="secondary">暫停提醒</button>
+<div><button id="stove" class="secondary">請助手關爐火</button><button id="tap" class="secondary">請助手關浴缸水</button></div>
+</section><small>WASD 移動 · 滑鼠環視 · E 操作 · T 助手 · Tab 切換視角</small>
+<details><summary>研究紀錄</summary><p>Jev：介入決策與佈置選擇。Qwen：語言解析與步驟規劃。觀察來自可見的引擎資料；目前沒有 RGB 視覺辨識或麥克風辨識。場景使用現有六房和資產組合。</p><pre id="debug"></pre></details></main>
+<script>
+const $=id=>document.getElementById(id);let state={};const token='__TOKEN__';
+async function post(path,body={}){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Vista-Token':token},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw Error(d.error);return d}
+function bind(id,fn){$(id).onclick=async()=>{try{$('error').textContent='';$(id).disabled=true;await fn()}catch(e){$('error').textContent=e.message}finally{$(id).disabled=false}}}
+bind('build',()=>post('/author',{prompt:$('prompt').value}));bind('apply',()=>post('/apply',{id:state.authoring.id}));
+bind('send',async()=>{await post('/say',{text:$('message').value});$('message').value=''});$('message').onkeydown=e=>{if(e.key==='Enter')$('send').click()};
+bind('stop',()=>post('/stop'));bind('toggle',()=>post('/toggle',{enabled:state.error?true:!state.enabled}));
+bind('stove',()=>post('/say',{text:'Please turn off the stove for me.',target:'stove'}));
+bind('tap',()=>post('/say',{text:'Please turn off the bath tap for me.',target:'faucet'}));
+async function poll(){try{const r=await fetch('/state');state=await r.json();$('status').textContent=state.status;$('active').textContent=({notice_water:'先處理浴缸',notice_stove:'先確認爐火',notice_keys:'尋找鑰匙'})[state.active]||'';$('toggle').textContent=state.error?'重新連線':state.enabled?'暫停提醒':'啟用提醒';$('error').textContent=state.error||state.warning||'';
+const a=state.authoring||{};$('authorStatus').textContent=({building:'生成中…',ready:'可套用',applied:'遊戲中',rejected:'無法套用'})[a.status]||'';$('apply').disabled=a.status!=='ready';$('proposal').textContent=a.error||a.spec?.explanation||'';
+$('speech').textContent=state.speech?.text||'等待觀察';$('steps').textContent=(state.active?(state.plan?.answer?.steps||[]):[]).map((s,i)=>`${i+1}. ${s.description}`).join('\n');$('debug').textContent=JSON.stringify(state,null,2)
+}catch(e){$('status').textContent='尚未連線'}setTimeout(poll,1000)}poll();
+</script></html>
