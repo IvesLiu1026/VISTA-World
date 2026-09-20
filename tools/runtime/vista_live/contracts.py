@@ -39,6 +39,17 @@ def finite(value, low, high):
     return (type(value) in (int, float) and math.isfinite(value) and low <= value <= high)
 
 
+def normalize_live_choice(raw, options):
+    q = raw['answers']['next_action']; p = q['probabilities']
+    if (q['type'] != 'choice' or q['choice'] not in options or set(p) != set(options)
+            or not all(finite(v, 0, 1) for v in p.values())
+            or abs(sum(p.values())-1) > len(options)*.005 + 1e-9
+            or p[q['choice']] < max(p.values()) or not finite(q['confidence'], 0, 1)):
+        raise ValueError('Invalid Jev choice distribution')
+    return {'action': q['choice'], 'confidence': q['confidence'],
+            'reason': 'Jev choice among actions allowed by observed evidence.', 'probabilities': p}
+
+
 def exact(obj, keys):
     if not isinstance(obj, dict) or set(obj) != set(keys):
         raise ValueError('Unexpected contract fields')

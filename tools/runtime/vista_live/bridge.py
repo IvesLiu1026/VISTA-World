@@ -6,7 +6,15 @@ import uuid
 
 
 def read(path):
-    return json.loads(path.read_text(encoding='utf-8-sig'))
+    # UE's replace operation can briefly remove the destination on this host.
+    # Retry only this local snapshot race, never a provider request.
+    for attempt in range(5):
+        try:
+            return json.loads(path.read_text(encoding='utf-8-sig'))
+        except (FileNotFoundError, json.JSONDecodeError):
+            if attempt == 4:
+                raise
+            time.sleep(.01)
 
 
 def atomic(path, value):

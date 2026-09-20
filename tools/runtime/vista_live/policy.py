@@ -144,6 +144,7 @@ class Policy:
             'last_seen_cues': [{**row, 'age_s': round(self.clock-row['at_s'], 3)} for row in self.cues.values()],
             'human_utterances': self.utterances,
             'interpreted_human_goals': sorted(self.goals),
+            'eligible_actions': ['wait', 'observe'] + [a for a in PRIORITY if self.guard(a) is None],
             'assistant_notices': [{'action': action, 'age_s': round(self.clock-at, 3)} for action, at in self.notices.items()],
             'pending_tasks': self.pending, 'active_task': self.active})
 

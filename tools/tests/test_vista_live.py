@@ -99,6 +99,8 @@ class LivePolicyTests(unittest.TestCase):
         p.accept('notice_water'); p.ingest(observation(2, ['visible_bath_tap_off']))
         p.ingest(observation(3, ['visible_water_near_rim']))
         self.assertEqual(p.guard('notice_water'), 'tap_known_off')
+        self.assertNotIn('notice_water', p.state()['eligible_actions'])
+        self.assertIn('wait', p.state()['eligible_actions'])
 
     def test_keys_in_hand_resolves_goal_without_hidden_labels(self):
         p = Policy(); p.ingest(observation(1, ['visible_keys'])); p.utter('Find my keys', 'typed_user_input')
@@ -232,8 +234,32 @@ class BudgetTests(unittest.TestCase):
             b.reserve('a', 'decision', {}); b.finish('a', {'error': 'timeout'}, False)
             with self.assertRaises(RuntimeError): b.reserve('b', 'decision', {})
 
+    def test_reported_cost_releases_only_unused_reservation_not_request_count(self):
+        with tempfile.TemporaryDirectory() as d:
+            b = Budget(Path(d) / 'budget.sqlite', cap=.002)
+            b.reserve('a', 'decision', {})
+            b.finish('a', {'usage': {'cost': .0001}})
+            b.reserve('b', 'decision', {})
+            self.assertEqual(b.status()['counts']['decision'], 2)
+            self.assertAlmostEqual(b.status()['committed_usd'], .0016)
+            b.finish('b', {'usage': {'cost': 0}}, False)
+            self.assertAlmostEqual(Budget(b.path).status()['committed_usd'], .0016)
+
+    def test_unknown_tts_cost_keeps_full_reservation(self):
+        with tempfile.TemporaryDirectory() as d:
+            b = Budget(Path(d) / 'budget.sqlite', cap=.04)
+            b.reserve('a', 'tts', {}); b.finish('a', {'pcm_b64': 'AAAA'})
+            self.assertAlmostEqual(b.status()['reserved_usd'], .04)
+            with self.assertRaises(RuntimeError): b.reserve('b', 'decision', {})
+
 
 class BridgeIdentityTests(unittest.TestCase):
+    def test_native_replace_gap_is_retried_locally(self):
+        from unittest.mock import patch
+        from runtime.vista_live.bridge import read
+        with patch.object(Path, 'read_text', side_effect=[FileNotFoundError(), '{"ready":true}']):
+            self.assertEqual(read(Path('native-state.json')), {'ready': True})
+
     def test_action_generation_preserves_identity_but_scene_reset_changes_it(self):
         from runtime.vista_live.bridge import Bridge, atomic
         with tempfile.TemporaryDirectory() as d:
@@ -272,6 +298,16 @@ class AuthoringTests(unittest.TestCase):
     def test_generated_speech_is_short_english(self):
         for speech in ('你好', 'word ' * 26):
             with self.assertRaises(ValueError): validate_plan({'speech': speech, 'steps': []})
+
+    def test_jev_subset_contract_still_rejects_nonwinner_or_ineligible_choice(self):
+        from runtime.vista_live.contracts import normalize_live_choice
+        raw = {'answers': {'next_action': {'type': 'choice', 'choice': 'wait',
+            'confidence': .9, 'probabilities': {'wait': .9, 'observe': .1}}}}
+        self.assertEqual(normalize_live_choice(raw, ['wait', 'observe'])['action'], 'wait')
+        raw['answers']['next_action']['choice'] = 'observe'
+        with self.assertRaises(ValueError): normalize_live_choice(raw, ['wait', 'observe'])
+        raw['answers']['next_action']['choice'] = 'notice_water'
+        with self.assertRaises(ValueError): normalize_live_choice(raw, ['wait', 'observe'])
 
 
 if __name__ == '__main__': unittest.main()

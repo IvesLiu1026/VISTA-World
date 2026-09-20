@@ -15,8 +15,8 @@ import urllib.request
 
 from runtime.vista_jev.protocol import normalize_jev, openrouter_jev_request
 from runtime.vista_live.budget import Budget
-from runtime.vista_live.contracts import (LAYOUTS, PLAN_INSTRUCTIONS, PLAN_SCHEMA,
-    SCENE_INSTRUCTIONS, SCENE_SCHEMA, chat_request, text, validate_plan, validate_scene)
+from runtime.vista_live.contracts import (ACTIONS, LAYOUTS, PLAN_INSTRUCTIONS, PLAN_SCHEMA,
+    SCENE_INSTRUCTIONS, SCENE_SCHEMA, chat_request, text, validate_plan, validate_scene, normalize_live_choice)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -49,7 +49,13 @@ class Provider:
         ident, kind, value = request['id'], request['kind'], request['input']
         endpoint = 'chat/completions'
         if kind == 'decision':
+            options = value['eligible_actions']
+            if (not isinstance(options, list) or len(set(options)) != len(options)
+                    or not {'wait', 'observe'} <= set(options) <= set(ACTIONS)):
+                raise ValueError('Invalid observed-action availability')
             body = openrouter_jev_request(value)
+            question = body['questions']['next_action']
+            question['criteria'] = {key: value for key, value in question['criteria'].items() if key in options}
             # Live inputs distinguish typed text from authored speech explicitly.
             body['questions']['next_action']['instructions'] = body['questions']['next_action']['instructions'].replace(
                 'explicitly authored human\nspeech', 'explicitly sourced human\nspeech or typed requests')
@@ -137,7 +143,7 @@ class Provider:
                 if not (actual == body['model'] or re.fullmatch(re.escape(body['model']) + r'(?:\.\d+|-\d{8})', actual)):
                     raise ValueError('Provider model identity mismatch: ' + str(actual))
                 if kind == 'decision':
-                    answer = normalize_jev(raw)
+                    answer = normalize_live_choice(raw, options)
                 elif kind in ('layout', 'intent'):
                     answer = raw['answers'][kind]
                     choices = LAYOUTS if kind == 'layout' else ('stove', 'faucet', 'follow', 'wait', 'none')

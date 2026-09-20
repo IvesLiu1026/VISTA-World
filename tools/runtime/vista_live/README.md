@@ -14,6 +14,10 @@ the second embodied character is the assistant.
    needs. Jev selects wait, observe, stove reminder, urgent bath reminder or key
    reminder. Guards reject unsupported observations and preserve urgency:
    water, stove, keys. Leaving a room does not resolve a need.
+   These public-evidence guards also determine which intervention choices are
+   offered to Jev. Wait/observe remain available; a known-off tap is excluded even
+   while near-rim water is still visible. This is constrained action selection,
+   not an unguarded model accuracy benchmark. Raw subset probabilities are retained.
 3. `provider.py` calls OpenRouter's actual `alpha/decisions` API with
    `typesafe/jev-1.13`; dated returned versions are checked. It also uses Jev for
    typed intent and furnishing-preset selection. No simulated Jev fallback exists.
@@ -91,7 +95,10 @@ available. Stale generation/observation replies cannot act on a newer scene.
 
 The persistent SQLite guard reserves at most 1,000 decision/intent/layout calls,
 60 plan/author calls, 30 new TTS clips and USD 2 of conservative request reserves.
-Reserves are not reported actual spend. Failed/ambiguous calls still count; no
+The guard uses provider-reported charges after successful responses and retains
+full reservations for pending, failed, ambiguous or unpriced (including TTS)
+requests. Reconciliation never resets request counts or erases the original
+reservations. Reserves are not reported actual spend. Failed/ambiguous calls still count; no
 automatic retry, key rotation or provider/model fallback. A provider failure or
 exhausted budget shows an error; local movement remains responsive. Inspect
 receipts before manually reopening a provider circuit.
@@ -100,6 +107,11 @@ Jev latency is decision API time, not microphone-to-speech latency. Cached nativ
 warnings and newly generated dialogue have different latency paths. Native action
 completion is measured separately. Do not claim general planning accuracy from
 the authored demo or confuse visible engine metadata with video understanding.
+
+Choice validation follows the [TypeSafe response contract](https://docs.typesafe.ai/primitives/choice):
+the returned choice must have maximal probability. An observed upstream response
+violated this condition during development; it was retained and rejected, and the
+UI required explicit recovery. Do not relax the validator to hide failed trials.
 
 ## Validation and recordings
 
