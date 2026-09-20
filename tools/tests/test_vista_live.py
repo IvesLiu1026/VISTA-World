@@ -310,6 +310,34 @@ class BridgeIdentityTests(unittest.TestCase):
             self.assertNotEqual(b.snapshot()[1], initial)
 
 
+class ProviderFailureTests(unittest.TestCase):
+    def test_http_failure_preserves_redacted_detail_without_retry_or_refund(self):
+        import io
+        from urllib.error import HTTPError
+        from runtime.vista_live.provider import Provider
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); key = 'sk-or-v1-' + 'test-only-placeholder'
+            key_file = root / 'test-key'; key_file.write_text(key)
+            provider = Provider(root / 'evidence', key_file)
+            calls = []
+            class Reject:
+                def open(self, request, timeout):
+                    calls.append(request.full_url)
+                    raise HTTPError(request.full_url, 400, 'Bad Request', {},
+                                    io.BytesIO(('rejected ' + key).encode()))
+            provider.opener = Reject()
+            request = {'id': 'test-failure', 'kind': 'tts',
+                       'input': {'text': 'Hello.', 'role': 'assistant'}}
+            with self.assertRaises(RuntimeError): provider.call(request)
+            with self.assertRaises(RuntimeError): provider.call(request)
+            failure = json.loads((provider.root / 'test-failure.failure.json').read_text())
+            self.assertEqual(failure['http_status'], 400)
+            self.assertEqual(failure['response_body'], 'rejected [REDACTED]')
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(provider.budget.status()['counts']['tts'], 1)
+            self.assertEqual(provider.budget.status()['reserved_usd'], .04)
+
+
 class AuthoringTests(unittest.TestCase):
     def setUp(self):
         self.spec = {'supported': True, 'explanation': '無爐火，浴缸延後放水', 'layout': 'workday',

@@ -187,6 +187,13 @@ class Provider:
             return result
         except Exception as exc:
             error = {'error': type(exc).__name__, 'detail': str(exc).replace(self.key, '[REDACTED]')[:400]}
+            if isinstance(exc, urllib.error.HTTPError):
+                error['http_status'] = exc.code
+                try:
+                    error['response_body'] = exc.read(4096).decode(errors='replace').replace(self.key, '[REDACTED]')
+                except (OSError, ValueError):
+                    error['response_body'] = 'Response body could not be read'
+            (self.root / (ident + '.failure.json')).write_text(json.dumps(error))
             self.budget.finish(ident, error, False)
             if isinstance(exc, urllib.error.HTTPError) and exc.code in (401, 402, 403, 429, 529):
                 (self.root / 'circuit.json').write_text(json.dumps(error))
