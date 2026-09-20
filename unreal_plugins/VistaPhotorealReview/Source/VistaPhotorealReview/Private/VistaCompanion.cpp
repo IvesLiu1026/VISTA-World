@@ -144,7 +144,12 @@ void AVistaCompanion::Tick(float Dt)
             (Relative-Along*Ahead).Size2D()<85 && !Along.IsNearlyZero())
         {
             const FVector Side=FVector::CrossProduct(Along,FVector::UpVector);
-            for (const FVector Offset:{Side*90,-Side*90,Along*75,Side*65,-Side*65,Along*110})
+            // Beside a coffee table neither side is supported floor. Continue
+            // through the narrow aisle to a clear landing instead of trapping
+            // the leader. Every longer candidate still requires a clear swept
+            // capsule and supported floor; never step onto furniture.
+            for (const FVector Offset:{Side*90,-Side*90,Along*75,Side*65,-Side*65,Along*110,
+                                       Along*170,Along*230,Along*290,Along*110+Side*90,Along*110-Side*90})
             {
                 FVector Candidate=Here+Offset;FHitResult Floor,Block;
                 if (!GetWorld()->LineTraceSingleByChannel(Floor,Candidate+FVector(0,0,70),Candidate-FVector(0,0,130),ECC_Visibility,Path) ||
