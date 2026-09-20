@@ -394,6 +394,8 @@ void AVistaExplorerCharacter::Tick(float Dt)
         else TickRideTransition(Dt);
     }
     Super::Tick(Dt);
+    // A hidden menu must not keep consuming game input during clean observation.
+    if (IsCleanObservation() && Menu) SetMenu(0);
     if (bCampus && !Riding.IsValid()) GetCharacterMovement()->MaxWalkSpeed=bRun?350:180;
     if (!Menu && !Riding.IsValid() && bCampus)
     {
