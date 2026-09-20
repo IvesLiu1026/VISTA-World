@@ -40,9 +40,16 @@ class Bridge:
         folder = self.locate()
         # Action generations change when picking up a phone or opening a door.
         # Only a scene reset may erase long-horizon assistant memory.
-        raw = read(folder / 'state.json')
+        for _ in range(4):
+            raw = read(folder / 'state.json')
+            observation = read(folder / 'observation.json')
+            if raw['clock_s'] == observation['clock_s']:
+                break
+            time.sleep(.015)
+        else:
+            raise RuntimeError('Waiting for a coherent native observation')
         identity = (raw['session_id'], raw['scene_epoch'])
-        return folder, identity, read(folder / 'observation.json')
+        return folder, identity, observation
 
     def command(self, op, fields=None, identity=None):
         folder, current, observation = self.snapshot()

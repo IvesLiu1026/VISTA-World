@@ -232,7 +232,7 @@ class BridgeIdentityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d); folder = root / 'session'
             atomic(folder / 'observation.json', observation())
-            raw = {'session_id': 's', 'scene_epoch': 1, 'generation': 2}
+            raw = {'session_id': 's', 'scene_epoch': 1, 'generation': 2, 'clock_s': 1}
             atomic(folder / 'state.json', raw)
             b = Bridge(root, root); initial = b.snapshot()[1]
             atomic(folder / 'state.json', {**raw, 'generation': 3})

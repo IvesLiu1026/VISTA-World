@@ -110,6 +110,11 @@ def run_game(root: Path, project: str, host: dict, scene: dict, payload: Path, r
                 '-ini:EditorSettings:[/Script/UnrealEd.CrashReportsPrivacySettings]:bSendUnattendedBugReports=False',
                 '-VistaExplorerProof='+str(runtime/'explorer-proof')]
     companion_config=payload/'Config/VistaCompanion.json'
+    live_config=payload/'Config/VistaLive.json'
+    if live_config.is_file():
+        if read_json(live_config).get('schema') != 'vista.live/v1':
+            raise ValueError('Invalid live assistant configuration')
+        command += ['-VistaLiveAssistant', '-VistaEgoSensor']
     if companion_config.is_file():
         if read_json(companion_config).get('schema') != 'vista.companion/v1':
             raise ValueError('Invalid indoor companion configuration')
@@ -210,7 +215,12 @@ def main() -> None:
     elif a.mode == 'run':
         raise SystemExit(run_game(a.root, a.project, host, scene, payload, rows))
     else:
-        if (payload/'Config/VistaCompanion.json').is_file():
+        if (payload/'Config/VistaLive.json').is_file():
+            import urllib.request
+            with urllib.request.urlopen('http://127.0.0.1:49111/health',timeout=3) as response:
+                health=json.load(response)
+            if 'budget' not in health:raise RuntimeError('Live assistant service did not respond')
+        elif (payload/'Config/VistaCompanion.json').is_file():
             # Fail before replacing the current game if the companion cannot start.
             import urllib.request
             import urllib.error

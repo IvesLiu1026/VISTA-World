@@ -11,6 +11,7 @@ p=argparse.ArgumentParser()
 for name in ['project','engine','out','ddc']:p.add_argument('--'+name,type=Path,required=True)
 p.add_argument('--display',default=':129');p.add_argument('--seconds',type=int,default=1800)
 p.add_argument('--gpu',type=int,choices=[0,1],default=0)
+p.add_argument('--fps',type=int,choices=[30,60],default=30)
 p.add_argument('--ego-sensor',action='store_true',help='Keep wearer observation independent of review view')
 p.add_argument('--motion-proof',action='store_true',help='Private finalized character bone trace')
 a=p.parse_args();a.project=a.project.resolve(strict=True);a.out=a.out.resolve();a.ddc=a.ddc.resolve()
@@ -40,7 +41,8 @@ try:
          '-ini:Engine:[CrashReportClient]:bStartCRCFromEngineHandler=False',
          '-ini:EditorSettings:[/Script/UnrealEd.CrashReportsPrivacySettings]:bSendUnattendedBugReports=False',
          '-ddc=InstalledNoZenLocalFallback','-ini:Engine:[SystemSettings]:r.Shadow.Virtual.Cache=0',
-         '-UDPMESSAGING_TRANSPORT_ENABLE=0','-ExecCmds=t.MaxFPS 30']
+         '-UDPMESSAGING_TRANSPORT_ENABLE=0','-ExecCmds=t.MaxFPS '+str(a.fps)]
+    if (a.project.parent/'Config/VistaLive.json').exists():cmd+=['-VistaLiveAssistant','-VistaEgoSensor']
     if a.motion_proof:
         (a.out/'motion').mkdir()
         cmd.append('-VistaCharacterMotionProof='+str(a.out/'motion'))
