@@ -1,4 +1,5 @@
 #include "HomeActions.h"
+#include "Camera/CameraComponent.h"
 #include "HomeActionsJson.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -382,6 +383,7 @@ void AHomeActionsCharacter::Tick(float Dt)
     Super::Tick(Dt);if (!bSceneReady) return;
     SceneClock+=Dt;BridgeClock+=Dt;
     if (bStreamingEnabled) {UpdateDailyMotion(Dt);UpdateConcurrentEvents(Dt);}
+    TickPrivateReview(Dt);
     const bool ContactReach=!ActiveId.IsEmpty() && !TargetId.IsEmpty() &&
         ActionId!=TEXT("step_up") && ActionId!=TEXT("step_down") && ActionId!=TEXT("equip") && ActionId!=TEXT("unequip") && ActionId!=TEXT("inspect") && ActionId!=TEXT("look_at");
     SceneReachHipAdvance=FMath::FInterpTo(SceneReachHipAdvance,ContactReach?9.f:0.f,Dt,6.f);
@@ -393,7 +395,7 @@ void AHomeActionsCharacter::Tick(float Dt)
     if (bSceneActionBusy && (ActionId==TEXT("walk") || ActionId==TEXT("jog") || ActionId==TEXT("sprint")))
         GetCharacterMovement()->MaxWalkSpeed=ActionId==TEXT("sprint")?300.f:(ActionId==TEXT("jog")?210.f:125.f);
     if (!StandingOn.IsEmpty() || (bSceneActionBusy && (ActionId==TEXT("step_up") || ActionId==TEXT("step_down")))) GetCharacterMovement()->MaxWalkSpeed=0.f;
-    if (BridgeClock>=.2f) {BridgeClock=0;PollBridge();PublishState();}
+    if (BridgeClock>=.2f) {BridgeClock=0;PollPrivateReview();PollBridge();PublishState();}
 }
 
 void AHomeActionsCharacter::OnPoseFinalized()
@@ -429,7 +431,7 @@ FString AHomeActionsCharacter::GetEventHint() const
             Goal=String(V->AsObject()->GetArrayField(TEXT("public_goals"))[0]->AsObject(),TEXT("description"));
     return FString::Printf(TEXT("%s  [%s]  %s"),*EventId,*EventStatus,*Goal);
 }
-TSharedPtr<FJsonObject> AHomeActionsCharacter::CompanionObservation() const
+TSharedPtr<FJsonObject> AHomeActionsCharacter::CompanionObservation(bool WearerView) const
 {
     auto Out=MakeShared<FJsonObject>();
     const FString Room=RoomAt(GetActorLocation()).Replace(TEXT("home.r1/room."),TEXT(""));
@@ -440,6 +442,7 @@ TSharedPtr<FJsonObject> AHomeActionsCharacter::CompanionObservation() const
     Out->SetStringField(TEXT("focused"),TEXT(""));Out->SetStringField(TEXT("public_goal"),TEXT(""));
     FVector Eye;FRotator View;GetActorEyesViewPoint(Eye,View);
     if(const auto* PC=Cast<APlayerController>(Controller))PC->GetPlayerViewPoint(Eye,View);
+    if(WearerView) {Eye=ReviewCamera->GetComponentLocation();View=GetControlRotation();}
     TArray<TPair<float,const FHomeEntity*>> Visible;
     for(const auto& Pair:Entities)
     {

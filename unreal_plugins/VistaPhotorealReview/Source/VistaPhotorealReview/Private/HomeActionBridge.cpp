@@ -18,6 +18,9 @@ TSharedRef<FJsonObject> AHomeActionsCharacter::MakeState() const
     O->SetNumberField(TEXT("clock_s"),SceneClock);O->SetNumberField(TEXT("frame_time_s"),GetWorld()->GetDeltaSeconds());
     O->SetBoolField(TEXT("ready"),bSceneReady);O->SetBoolField(TEXT("third_person"),bThirdPerson);
     O->SetBoolField(TEXT("clean_observation"),bCleanObservation);
+    O->SetStringField(TEXT("review_motion"),PrivateMotion);
+    FVector ActionEye;FRotator ActionLook;ActionView(ActionEye,ActionLook);
+    O->SetArrayField(TEXT("action_eye_cm"),Values(ActionEye));
     O->SetStringField(TEXT("active_command"),ActiveId);O->SetStringField(TEXT("action"),ActiveId.IsEmpty()?TEXT(""):ActionId);
     O->SetStringField(TEXT("held_id"),HeldId);O->SetStringField(TEXT("seat_id"),SeatId);
     O->SetStringField(TEXT("standing_on"),StandingOn);

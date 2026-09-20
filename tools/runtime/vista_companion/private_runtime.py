@@ -10,6 +10,8 @@ import time
 p=argparse.ArgumentParser()
 for name in ['project','engine','out','ddc']:p.add_argument('--'+name,type=Path,required=True)
 p.add_argument('--display',default=':129');p.add_argument('--seconds',type=int,default=1800)
+p.add_argument('--gpu',type=int,choices=[0,1],default=0)
+p.add_argument('--ego-sensor',action='store_true',help='Keep wearer observation independent of review view')
 p.add_argument('--motion-proof',action='store_true',help='Private finalized character bone trace')
 a=p.parse_args();a.project=a.project.resolve(strict=True);a.out=a.out.resolve();a.ddc=a.ddc.resolve()
 assert a.project.parent.parent.name.startswith('six-room-companion-dev-')
@@ -31,7 +33,7 @@ try:
     module=subprocess.check_output(['pactl','load-module','module-null-sink','sink_name='+sink,'sink_properties=device.description=VISTA_Companion_Private'],text=True).strip()
     record.update(audio_sink=sink,audio_module=module)
     cmd=[str(a.engine/'Engine/Binaries/Linux/UnrealEditor'),str(a.project),'/Game/VISTA/CampusR25/Maps/Home',
-         '-game','-vulkan','-graphicsadapter=0','-Windowed','-ForceRes','-ResX=1920','-ResY=1080','-NoVSync',
+         '-game','-vulkan','-graphicsadapter='+str(a.gpu),'-Windowed','-ForceRes','-ResX=1920','-ResY=1080','-NoVSync',
          '-UserDir='+str(a.out/'user'),'-SaveToUserDir','-VistaExplorerProof='+str(a.out/'proof'),
          '-VistaCompanionProof='+str(a.out/'companion'),'-VistaHomeBridge='+str(a.out/'bridge'),'-VistaWholeHome',
          '-Unattended','-NoSplash','-NoAnalytics','-notraceserver','-noexceptionhandler','-VistaPrivateReview',
@@ -42,6 +44,7 @@ try:
     if a.motion_proof:
         (a.out/'motion').mkdir()
         cmd.append('-VistaCharacterMotionProof='+str(a.out/'motion'))
+    if a.ego_sensor:cmd.append('-VistaEgoSensor')
     env=dict(os.environ,DISPLAY=a.display,PULSE_SINK=sink,VK_ICD_FILENAMES='/usr/share/vulkan/icd.d/nvidia_icd.json',
              NODEVICE_SELECT='1',SDL_VIDEODRIVER='x11',UE_LocalDataCachePath=str(a.ddc),UE_SharedDataCachePath='None')
     ue=subprocess.Popen(cmd,env=env,stdout=(a.out/'native.log').open('w'),stderr=subprocess.STDOUT)

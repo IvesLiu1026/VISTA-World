@@ -1,4 +1,5 @@
 #include "HomeActions.h"
+#include "Camera/CameraComponent.h"
 #include "HomeActionsJson.h"
 #include "VistaCompanion.h"
 #include "Components/AudioComponent.h"
@@ -11,6 +12,8 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Base64.h"
 #include "Misc/Paths.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Sound/SoundWaveProcedural.h"
 
 using namespace HomeJson;
@@ -111,7 +114,7 @@ void AHomeActionsCharacter::UpdateDailyMotion(float Dt)
     if (const auto* Names=HumanFaceMorphs.Find(TEXT("Blink")))
         for (FName Name:*Names) GetMesh()->SetMorphTarget(Name,Blink);
     float Mouth=0;
-    if (HumanVoice && HumanVoice->IsPlaying() && HumanWave)
+    if (bPrivateHumanLipSync && HumanVoice && HumanVoice->IsPlaying() && HumanWave)
     {
         const float Clock=(HumanAudioBytes-HumanWave->GetAvailableAudioByteCount())/(2.f*HumanAudioRate);
         const int32 Frame=FMath::FloorToInt(Clock*50);
@@ -125,6 +128,7 @@ void AHomeActionsCharacter::UpdateDailyMotion(float Dt)
 
 void AHomeActionsCharacter::HomeHumanSay(const FString& Code)
 {
+    bPrivateHumanLipSync=true;
     const TSet<FString> Allowed={TEXT("human_call"),TEXT("human_request"),TEXT("walk_entry"),TEXT("walk_living"),
         TEXT("walk_kitchen"),TEXT("walk_stairs"),TEXT("walk_bedroom"),TEXT("walk_office"),TEXT("walk_bathroom")};
     if (!bStreamingEnabled || !Allowed.Contains(Code)) return;
@@ -152,14 +156,17 @@ void AHomeActionsCharacter::HomeHumanSay(const FString& Code)
 
 TSharedPtr<FJsonObject> AHomeActionsCharacter::StreamingObservation() const
 {
-    auto D=CompanionObservation();D->RemoveField(TEXT("public_goal"));
+    const bool EgoReview=FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")) &&
+        FParse::Param(FCommandLine::Get(),TEXT("VistaEgoSensor"));
+    auto D=CompanionObservation(EgoReview);D->RemoveField(TEXT("public_goal"));
     D->SetStringField(TEXT("schema"),TEXT("vista.streaming-observation/v1"));
     D->SetStringField(TEXT("source"),TEXT("engine_visible_metadata_not_vlm"));
     D->SetStringField(TEXT("wearer_role"),TEXT("human_needing_assistance"));
-    D->SetStringField(TEXT("view"),bThirdPerson?TEXT("third_person_review"):TEXT("human_ego"));
+    D->SetStringField(TEXT("view"),bThirdPerson && !EgoReview?TEXT("third_person_review"):TEXT("human_ego"));
     D->SetNumberField(TEXT("clock_s"),SceneClock);
     FVector Eye;FRotator View;GetActorEyesViewPoint(Eye,View);
     if (const auto* PC=Cast<APlayerController>(Controller)) PC->GetPlayerViewPoint(Eye,View);
+    if (EgoReview) {Eye=ReviewCamera->GetComponentLocation();View=GetControlRotation();}
     auto Visible=[&](AStaticMeshActor* A)
     {
         if (!A || A->IsHidden() || !A->GetStaticMeshComponent()->IsVisible()) return false;

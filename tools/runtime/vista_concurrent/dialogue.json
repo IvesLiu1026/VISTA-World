@@ -1,0 +1,18 @@
+[
+  {"code":"human_request","role":"human","voice":"Orus","text":"I'm heading out soon. Could you help me find my keys?"},
+  {"code":"assistant_stove","role":"assistant","voice":"Charon","text":"The stove is still on. Please turn it off before you leave."},
+  {"code":"human_ack_stove","role":"human","voice":"Orus","text":"I'll check it before I leave. Let me grab my phone first."},
+  {"code":"phone_hello","role":"phone","voice":"Iapetus","text":"Hey, do you have a minute to talk about tomorrow's meeting?"},
+  {"code":"human_call","role":"human","voice":"Orus","text":"Yes, I'm listening. Tell me about the meeting."},
+  {"code":"phone_detail","role":"phone","voice":"Iapetus","text":"We're starting at ten. Can you bring the printed notes with you?"},
+  {"code":"human_bath","role":"human","voice":"Orus","text":"Sure. I just need to check the bath while we talk."},
+  {"code":"assistant_water","role":"assistant","voice":"Charon","text":"The bath is almost overflowing. Please pause the call and turn off the tap now."},
+  {"code":"human_pause","role":"human","voice":"Orus","text":"Hold on. I need to turn off the water."},
+  {"code":"phone_wait","role":"phone","voice":"Iapetus","text":"Sure. Take your time."},
+  {"code":"human_water_off","role":"human","voice":"Orus","text":"That's off. I'll call you back after I check the kitchen."},
+  {"code":"assistant_resume","role":"assistant","voice":"Charon","text":"The water is off. Next, check the stove. Then we'll find your keys."},
+  {"code":"human_resume","role":"human","voice":"Orus","text":"Right. The stove first, then my keys."},
+  {"code":"assistant_stove_off","role":"assistant","voice":"Charon","text":"The stove is off. Let's get your keys before you leave."},
+  {"code":"assistant_keys","role":"assistant","voice":"Charon","text":"Your keys are on the living-room coffee table."},
+  {"code":"human_found","role":"human","voice":"Orus","text":"Got them. Thanks for keeping track."}
+]
