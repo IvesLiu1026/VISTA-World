@@ -9,7 +9,7 @@ import shutil
 
 def prepare(donor, target, receipt):
     donor = donor.resolve(strict=True); target = target.resolve()
-    if target.exists() or not re.fullmatch(r'six-room-companion-dev-(live|natural)-[a-z0-9]+', target.parent.name):
+    if target.exists() or not re.fullmatch(r'six-room-companion-dev-(live|natural|forge)-[a-z0-9]+', target.parent.name):
         raise ValueError('Require the new owned live project')
     source = Path(__file__).resolve().parents[3] / 'unreal_plugins/VistaPhotorealReview'
     shutil.copytree(donor, target, ignore=shutil.ignore_patterns('Saved', 'Intermediate', 'DerivedDataCache'))

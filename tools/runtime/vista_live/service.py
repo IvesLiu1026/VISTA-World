@@ -5,6 +5,7 @@ import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+import re
 import secrets
 import threading
 import time
@@ -16,6 +17,8 @@ from runtime.vista_live.bridge import Bridge, atomic, read
 from runtime.vista_live.contracts import CLIPS, GOALS, PRIORITY, ROOMS, text, validate_plan, validate_scene, validate_dialogue
 from runtime.vista_live.conversation import Conversation
 from runtime.vista_live.policy import Policy
+from runtime.vista_live.forge import validate_micro
+from runtime.vista_live.forge_service import Forge
 from runtime.vista_jev.serve import byte_range
 
 
@@ -45,6 +48,8 @@ class Live:
         for file in (root / 'proposals').glob('*.json'):
             try:
                 proposal = read(file); validate_scene(proposal['spec'])
+                if 'micro' in proposal:
+                    validate_micro(proposal['micro'])
                 if proposal['id'] == file.stem:
                     self.proposals[file.stem] = proposal
             except (OSError, ValueError, KeyError):
@@ -54,6 +59,7 @@ class Live:
         self.planned = set(); self.plans = {}; self.warning = ''; self.last_feedback = None
         self.token = secrets.token_urlsafe(32)
         self.running = True
+        self.forge = Forge(self)
 
     def log(self, name, value):
         with self.lock:
@@ -101,7 +107,8 @@ class Live:
         expected = {'speech': 'SPEECH_STARTED', 'stop': 'LIVE_STOPPED', 'follow': 'FOLLOW_SET',
                     'stop_speech': 'SPEECH_STOPPED',
                     'caption': 'CAPTION_SET',
-                    'assist': 'ASSIST_ACCEPTED', 'event': 'EVENT_STARTED', 'scene': 'SCENE_APPLIED'}
+                    'assist': 'ASSIST_ACCEPTED', 'event': 'EVENT_STARTED', 'scene': 'SCENE_APPLIED',
+                    'micro_scene': 'MICRO_SCENE_APPLIED'}
         if result['code'] == 'STALE_LIVE_REJECTED':
             raise NativeCommandStale(result['code'])
         if result['code'] != expected.get(op):
@@ -531,10 +538,19 @@ class Live:
             if proposal is None:
                 raise ValueError('Unknown proposal; generate first')
             spec = validate_scene(proposal['spec'])
+            was_enabled = self.enabled
             self.enabled = False
         self.cancel()  # Stop all native voices and invalidate old work before reset.
-        result = self.native('scene', {'layout': spec['layout'], 'room': ROOMS.index(spec['start_room']) + 1})
-        if result['code'] != 'SCENE_APPLIED':
+        try:
+            if 'micro' in proposal:
+                result = self.native('micro_scene', {'recipe': validate_micro(proposal['micro'])})
+            else:
+                result = self.native('scene', {'layout': spec['layout'], 'room': ROOMS.index(spec['start_room']) + 1})
+        except Exception:
+            with self.lock:
+                self.enabled = was_enabled; self.dirty = True
+            raise
+        if result['code'] not in ('SCENE_APPLIED', 'MICRO_SCENE_APPLIED'):
             raise RuntimeError('Scene assembly rejected: ' + result['code'])
         _, identity, observation = self.bridge.snapshot()
         with self.lock:
@@ -548,7 +564,8 @@ class Live:
             if spec['phone_call']:
                 self.schedule.append({'kind': 'phone', 'at_wall': start + spec['phone_delay_s'], 'epoch': epoch})
             self.enabled = True; self.dirty = True
-            self.author_job = {'id': ident, 'status': 'applied', 'spec': spec}
+            self.author_job = {'id': ident, 'status': 'applied', 'spec': spec,
+                               'theme_id': proposal.get('theme_id'), 'micro': proposal.get('micro')}
         if proposal['human_clip']:
             self.speak(proposal['human_clip'], epoch, cause='authored_human_goal')
         self.log('director', {'proposal_id': ident, 'spec': spec, 'native': result})
@@ -563,7 +580,7 @@ class Live:
                     'active': self.policy.active, 'history': self.policy.history[-15:],
                     'decision': self.last_decision, 'plan': self.last_plan, 'speech': self.last_speech,
                     'native': self.native_receipt, 'authoring': self.author_job, 'budget': self.last_budget,
-                    'conversation': self.conversation.state()}
+                    'conversation': self.conversation.state(), 'forge': self.forge.state()}
 
 
 def handler(live, web=False):
@@ -589,8 +606,14 @@ def handler(live, web=False):
                 self.send(200, (Path(__file__).with_name('index.html').read_text().replace('__TOKEN__', live.token)), True)
             elif self.path == '/demo':
                 self.send(200, Path(__file__).with_name('demo.html').read_text(), True)
-            elif self.path in ('/demo/first.mp4', '/demo/third.mp4', '/demo/first.jpg', '/demo/third.jpg'):
-                path = live.root / 'media' / self.path.rsplit('/', 1)[1]
+            elif self.path == '/themes':
+                self.send(200, Path(__file__).with_name('themes.html').read_text().replace('__TOKEN__', live.token), True)
+            elif (self.path in ('/demo/first.mp4', '/demo/third.mp4', '/demo/first.jpg', '/demo/third.jpg') or
+                  re.fullmatch(r'/theme-media/[a-z]+/(first|third|micro)\.(jpg|mp4)', self.path)):
+                path = (live.root / 'media' / self.path.rsplit('/', 1)[1] if self.path.startswith('/demo/') else
+                        live.root / 'theme-media' / self.path.removeprefix('/theme-media/'))
+                if not path.resolve().is_relative_to(live.root.resolve()):
+                    self.send(404, {'error': 'Not found'}); return
                 if not path.is_file() or path.is_symlink():
                     self.send(404, {'error': 'Recording not published yet'}); return
                 size = path.stat().st_size
@@ -631,6 +654,13 @@ def handler(live, web=False):
                 body = json.loads(self.rfile.read(size)) if size else {}
                 if self.path in ('/say', '/respond'):
                     result = live.say(body.get('text'), body.get('target'))
+                elif self.path == '/forge/generate':
+                    result = live.forge.generate(body.get('theme'), body.get('seed'), body.get('mode', 'home'),
+                        body.get('prompt', ''), body.get('count', 1), body.get('compiler', 'jev'))
+                elif self.path == '/forge/stop':
+                    result = live.forge.cancel()
+                elif self.path == '/forge/opening':
+                    result = live.forge.opening(body.get('id'))
                 elif self.path.startswith('/cancel') or self.path == '/stop':
                     result = live.cancel()
                 elif self.path == '/chat/pause':

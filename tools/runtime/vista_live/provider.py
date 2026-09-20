@@ -15,6 +15,8 @@ import urllib.request
 
 from runtime.vista_jev.protocol import normalize_jev, openrouter_jev_request
 from runtime.vista_live.budget import Budget
+from runtime.vista_live.forge import (RECIPE_INSTRUCTIONS, RECIPE_SCHEMA,
+    recipe_questions, normalize_recipe, validate_recipe)
 from runtime.vista_live.contracts import (ACTIONS, LAYOUTS, PLAN_INSTRUCTIONS, PLAN_SCHEMA,
     SCENE_INSTRUCTIONS, SCENE_SCHEMA, DIALOGUE_INSTRUCTIONS, DIALOGUE_SCHEMA,
     chat_request, text, validate_plan, validate_scene, validate_dialogue, normalize_live_choice)
@@ -82,6 +84,16 @@ class Provider:
                         'criteria': {'everyday': 'Everyday home with plants.', 'workday': 'Work/study home with plants and books.',
                                      'evening': 'Evening home with plants, books, and warm lamps.'}}}}
             endpoint = 'alpha/decisions'
+        elif kind in ('forge_jev', 'forge_qwen'):
+            if not isinstance(value, dict) or set(value) != {'request'}:
+                raise ValueError('Recipe input contains unexpected fields')
+            prompt = text(value['request'], 1600)
+            if kind == 'forge_jev':
+                body = {'model': 'typesafe/jev-1.13', 'state': {'request': prompt},
+                        'provider': {'allow_fallbacks': False}, 'questions': recipe_questions()}
+                endpoint = 'alpha/decisions'
+            else:
+                body = chat_request(RECIPE_INSTRUCTIONS, RECIPE_SCHEMA, {'request': prompt})
         elif kind == 'author':
             body = chat_request(SCENE_INSTRUCTIONS, SCENE_SCHEMA, {'request': text(value, 1600)})
         elif kind == 'chat':
@@ -109,7 +121,8 @@ class Provider:
             raise ValueError('Unknown provider operation')
         if len(json.dumps(body).encode()) > 24000:
             raise ValueError('Provider input limit exceeded')
-        bucket = 'decision' if kind in ('layout', 'intent') else 'plan' if kind in ('author', 'chat') else kind
+        bucket = ('decision' if kind in ('layout', 'intent', 'forge_jev') else
+                  'plan' if kind in ('author', 'chat', 'forge_qwen') else kind)
         cached = self.budget.reserve(ident, bucket, request)
         if cached is not None:
             return cached
@@ -146,7 +159,9 @@ class Provider:
                 actual = raw.get('model', '')
                 if not (actual == body['model'] or re.fullmatch(re.escape(body['model']) + r'(?:\.\d+|-\d{8})', actual)):
                     raise ValueError('Provider model identity mismatch: ' + str(actual))
-                if kind == 'decision':
+                if kind == 'forge_jev':
+                    answer = normalize_recipe(raw)
+                elif kind == 'decision':
                     answer = normalize_live_choice(raw, options)
                 elif kind in ('layout', 'intent'):
                     answer = raw['answers'][kind]
@@ -160,7 +175,8 @@ class Provider:
                         answer = {**answer, 'human_goal': goal['choice']}
                 else:
                     content = raw['choices'][0]['message']['content']
-                    validator = validate_scene if kind == 'author' else validate_dialogue if kind == 'chat' else validate_plan
+                    validator = (validate_scene if kind == 'author' else validate_dialogue if kind == 'chat'
+                                 else validate_recipe if kind == 'forge_qwen' else validate_plan)
                     answer = validator(strict_json(content))
                 result = {'answer': answer, 'model': actual, 'provider': raw.get('provider'),
                           'usage': raw.get('usage'), 'latency_ms': latency, 'generation_id': raw.get('id')}
