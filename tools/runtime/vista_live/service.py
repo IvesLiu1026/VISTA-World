@@ -19,6 +19,7 @@ from runtime.vista_live.conversation import Conversation
 from runtime.vista_live.policy import Policy
 from runtime.vista_live.forge import validate_micro
 from runtime.vista_live.forge_service import Forge
+from runtime.vista_live.director import Director
 from runtime.vista_jev.serve import byte_range
 
 
@@ -60,6 +61,7 @@ class Live:
         self.token = secrets.token_urlsafe(32)
         self.running = True
         self.forge = Forge(self)
+        self.director = Director(self)
 
     def log(self, name, value):
         with self.lock:
@@ -166,7 +168,7 @@ class Live:
                 # Human speech becomes evidence after native playback, never from director prompt.
                 self.schedule.append({'at_wall': self.speech_until, 'kind': 'heard',
                                       'text': clip['text'], 'epoch': epoch,
-                                      'reply': cause != 'authored_phone_exchange'})
+                                      'reply': not cause.startswith('authored_phone_exchange')})
             elif cause.startswith('chat:'):
                 self.conversation.status = 'speaking'
                 self.schedule.append({'at_wall': self.speech_until, 'kind': 'spoken',
@@ -583,7 +585,8 @@ class Live:
                     'active': self.policy.active, 'history': self.policy.history[-15:],
                     'decision': self.last_decision, 'plan': self.last_plan, 'speech': self.last_speech,
                     'native': self.native_receipt, 'authoring': self.author_job, 'budget': self.last_budget,
-                    'conversation': self.conversation.state(), 'forge': self.forge.state()}
+                    'conversation': self.conversation.state(), 'forge': self.forge.state(),
+                    'director': self.director.state()}
 
 
 def handler(live, web=False):
@@ -611,6 +614,8 @@ def handler(live, web=False):
                 self.send(200, Path(__file__).with_name('demo.html').read_text(), True)
             elif self.path == '/themes':
                 self.send(200, Path(__file__).with_name('themes.html').read_text().replace('__TOKEN__', live.token), True)
+            elif self.path == '/director':
+                self.send(200, Path(__file__).with_name('director.html').read_text().replace('__TOKEN__', live.token), True)
             elif (self.path in ('/demo/first.mp4', '/demo/third.mp4', '/demo/first.jpg', '/demo/third.jpg') or
                   re.fullmatch(r'/theme-media/[a-z]+/(first|third|micro)\.(jpg|mp4)', self.path)):
                 path = (live.root / 'media' / self.path.rsplit('/', 1)[1] if self.path.startswith('/demo/') else
@@ -655,8 +660,16 @@ def handler(live, web=False):
                 if not 0 <= size <= 10000:
                     raise ValueError('Request too large')
                 body = json.loads(self.rfile.read(size)) if size else {}
+                if live.director.busy() and self.path in ('/apply','/author','/forge/generate','/forge/opening','/toggle'):
+                    raise ValueError('Stop the scenario before changing scenes')
                 if self.path in ('/say', '/respond'):
                     result = live.say(body.get('text'), body.get('target'))
+                elif self.path == '/director/compile':
+                    result = live.director.compile(body.get('prompt'),body.get('seed',0))
+                elif self.path == '/director/play':
+                    result = live.director.play(body.get('id'),body.get('view','first'))
+                elif self.path == '/director/stop':
+                    result = live.director.cancel()
                 elif self.path == '/forge/generate':
                     result = live.forge.generate(body.get('theme'), body.get('seed'), body.get('mode', 'home'),
                         body.get('prompt', ''), body.get('count', 1), body.get('compiler', 'jev'))
@@ -665,6 +678,7 @@ def handler(live, web=False):
                 elif self.path == '/forge/opening':
                     result = live.forge.opening(body.get('id'))
                 elif self.path.startswith('/cancel') or self.path == '/stop':
+                    live.director.cancel()
                     result = live.cancel()
                 elif self.path == '/chat/pause':
                     result = live.pause_chat()
@@ -709,8 +723,10 @@ def main():
     p.add_argument('--web-bind', default='127.0.0.1')
     p.add_argument('--web-port', type=int, default=48999)
     p.add_argument('--provider', default='http://127.0.0.1:49112')
+    p.add_argument('--paused', action='store_true', help='Start without background model decisions')
     args = p.parse_args()
     live = Live(args.root, Bridge(args.workspace, args.bridge, args.project), args.speech, args.provider)
+    live.enabled = not args.paused
     threading.Thread(target=live.tick, daemon=True).start()
     web = ThreadingHTTPServer((args.web_bind, args.web_port), handler(live, True))
     threading.Thread(target=web.serve_forever, daemon=True).start()
