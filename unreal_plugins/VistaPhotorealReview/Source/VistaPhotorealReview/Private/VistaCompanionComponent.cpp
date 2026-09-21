@@ -191,7 +191,11 @@ void UVistaCompanionComponent::Stop()
 }
 void UVistaCompanionComponent::Follow(bool Enabled)
 {
-    if(!Companion)return;Companion->bFollowing=Enabled;Status=Enabled?TEXT("我會跟著你"):TEXT("我在這裡等你");
+    if(!Companion)return;
+    // A new movement request supersedes an in-flight manipulation. Cancel first
+    // so its saved resume-follow flag cannot overwrite the user's new choice.
+    Companion->CancelAssist();Companion->bFollowing=Enabled;
+    Status=Enabled?TEXT("我會跟著你"):TEXT("我在這裡等你");
 }
 TSharedPtr<FJsonObject> UVistaCompanionComponent::State() const
 {
