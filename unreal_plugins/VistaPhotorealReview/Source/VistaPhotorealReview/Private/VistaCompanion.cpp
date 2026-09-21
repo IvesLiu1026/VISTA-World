@@ -104,7 +104,9 @@ bool AVistaCompanion::PlaceNear(const AActor* Player)
     const auto* Pawn=Cast<APawn>(Player);const float ViewYaw=Pawn?Pawn->GetControlRotation().Yaw:Player->GetActorRotation().Yaw;
     const auto* Character=Cast<ACharacter>(Player);
     const float Feet=Player->GetActorLocation().Z-(Character?Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight():86);
-    for(float Radius:{150.f,115.f})for(float Angle:{30.f,-30.f,80.f,-80.f,140.f,-140.f,180.f})
+    // Stay beside/behind the wearer: spawning in front occludes the very object
+    // the assistant is supposed to observe through the shared ego camera.
+    for(float Radius:{150.f,115.f})for(float Angle:{100.f,-100.f,80.f,-80.f,140.f,-140.f,180.f})
     {
         FVector V=FRotator(0,ViewYaw,0).Vector().RotateAngleAxis(Angle,FVector::UpVector)*Radius;
         FVector P=Player->GetActorLocation()+V;FHitResult Ground;
