@@ -97,7 +97,10 @@ bool AHomeActionsCharacter::ApplyLiveScene(const FString& Layout,int32 Room,FStr
         A->GetStaticMeshComponent()->SetCollisionResponseToAllChannels(ECR_Block);LiveDressing.Add(A);
     }
     if (Layout==TEXT("evening")) if (auto* Lamp=Resolve(TEXT("floor_lamp"))) Lamp->State->SetBoolField(TEXT("active"),true);
-    HomeRoom(Room);PublishState();Code=TEXT("SCENE_APPLIED");return true;
+    HomeRoom(Room);
+    if (auto* C=FindComponentByClass<UVistaCompanionComponent>();C && C->Companion)
+        if (!C->Companion->ResetForScene(this)) {Code=TEXT("COMPANION_RESET_BLOCKED");PublishState();return false;}
+    PublishState();Code=TEXT("SCENE_APPLIED");return true;
 }
 
 void AHomeActionsCharacter::PollLiveCommands()

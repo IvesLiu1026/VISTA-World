@@ -98,6 +98,27 @@ void AVistaCompanion::LoadMotion()
     for(const auto& V:D->GetArrayField(TEXT("frames")))Walk.Add(Retarget(V->AsObject()->GetArrayField(TEXT("pose"))));
     CurrentPose=Idle;
 }
+bool AVistaCompanion::ResetForScene(const AActor* Player)
+{
+    // An explicit episode reset establishes initial conditions, including a
+    // previously paused follower. Never call this to recover an in-episode
+    // blocked approach: ordinary locomotion/contact remain swept and guarded.
+    CancelAssist();StopSpeech();
+    AssistId.Empty();AssistTarget.Empty();AssistStatus=TEXT("idle");
+    AssistReach=AssistClock=AssistContact=AssistStall=ContactError=0;
+    AssistReachClock=AssistCheckClock=AssistPlanMs=AssistWaitClock=AssistLeanDegrees=0;
+    AssistPathIndex=AssistReplans=AssistCandidates=AssistFloorRejected=0;
+    AssistBodyRejected=AssistReachRejected=AssistOccludedRejected=AssistExpanded=AssistHumanOccupied=0;
+    bAssistHumanBlocksRoute=false;bResumeFollow=true;bFollowing=true;
+    Trail.Empty();StuckTime=YieldTime=MoveBlend=Phase=Travel=0;
+    AudioClock=MouthOpen=0;Subtitle.Empty();CurrentPose=Idle;
+    GetCharacterMovement()->StopMovementImmediately();
+    GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+    GetCharacterMovement()->MaxWalkSpeed=145;
+    if (PlaceNear(Player)) return true;
+    bFollowing=false;bBlocked=true;return false;
+}
+
 bool AVistaCompanion::PlaceNear(const AActor* Player)
 {
     FCollisionQueryParams Q(SCENE_QUERY_STAT(CompanionSpawn),false,this);Q.AddIgnoredActor(Player);

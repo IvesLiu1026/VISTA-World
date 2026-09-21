@@ -275,6 +275,12 @@ bool AHomeActionsCharacter::ApplyMicroScene(const TSharedPtr<FJsonObject>& Recip
     SetView(Map(Route[0]-FVector(0,0,2)),FRotator(-10,215+Rotation,0));
     GetCharacterMovement()->StopMovementImmediately();
     if (auto* C=FindComponentByClass<UVistaCompanionComponent>();C && C->Companion)
-    {C->Companion->CancelAssist();C->Companion->StopSpeech();C->Companion->PlaceNear(this);}
+    {
+        if (!C->Companion->ResetForScene(this))
+        {
+            ClearMicroScene();HomeRoom(1);C->Companion->ResetForScene(this);
+            Code=TEXT("COMPANION_RESET_BLOCKED");PublishState();return false;
+        }
+    }
     PublishState();Code=TEXT("MICRO_SCENE_APPLIED");return true;
 }

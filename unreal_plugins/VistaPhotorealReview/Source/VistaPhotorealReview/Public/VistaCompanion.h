@@ -34,6 +34,7 @@ public:
     void Speak(const TSharedPtr<FJsonObject>& Reply);
     void StopSpeech();
     bool PlaceNear(const AActor* Player);
+    bool ResetForScene(const AActor* Player);
     bool BeginAssist(const FString& Target,AActor* Entity,FVector Control);
     void CancelAssist();
     FString AssistStatus=TEXT("idle"),AssistTarget,AssistId;
