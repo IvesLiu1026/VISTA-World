@@ -28,9 +28,9 @@ bool AVistaCompanion::BeginAssist(const FString& Target,AActor* Entity,FVector C
     AssistControl=Control;AssistEntity=Entity;AssistTarget=Target;AssistStatus=TEXT("blocked_approach");
     AssistClock=AssistContact=AssistStall=AssistReach=AssistReachClock=AssistCheckClock=AssistWaitClock=ContactError=AssistPlanMs=0;
     AssistCandidates=AssistExpanded=AssistFloorRejected=AssistBodyRejected=AssistReachRejected=AssistOccludedRejected=AssistHumanOccupied=0;
-    AssistReplans=0;AssistPrevious=Here;
+    AssistReplans=0;AssistPrevious=Here;bAssistHumanBlocksRoute=false;
     if (FVector::Dist2D(Here,Control)>350 || FMath::Abs(Here.Z-Control.Z)>90) return false;
-    const bool Clear=PlanAssistApproach();if (!Clear && !AssistHumanOccupied) return false;
+    const bool Clear=PlanAssistApproach();if (!Clear && !AssistHumanOccupied && !bAssistHumanBlocksRoute) return false;
     AssistStatus=Clear?TEXT("approaching"):TEXT("waiting_clearance");bResumeFollow=bFollowing;bFollowing=false;
     GetCharacterMovement()->MaxWalkSpeed=160;return true;
 }
@@ -85,7 +85,8 @@ void AVistaCompanion::TickAssist(float Dt)
                 ++AssistReplans;
                 if (!PlanAssistApproach())
                 {
-                    if (AssistHumanOccupied) {AssistStatus=TEXT("waiting_clearance");AssistWaitClock=0;}
+                    if (AssistHumanOccupied || bAssistHumanBlocksRoute)
+                    {AssistStatus=TEXT("waiting_clearance");AssistWaitClock=0;GetCharacterMovement()->StopMovementImmediately();}
                     else End(TEXT("blocked_obstacle"));
                     return;
                 }

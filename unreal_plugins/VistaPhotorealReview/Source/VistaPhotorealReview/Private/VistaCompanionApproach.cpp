@@ -6,21 +6,41 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 
-bool AVistaCompanion::AssistChord(const FVector& Start,const FVector& End) const
+namespace {
+bool SupportedChord(const ACharacter* Walker,const FVector& Start,const FVector& End,const AActor* DiagnosticIgnore=nullptr)
 {
-    const float Half=GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-    const float Radius=GetCapsuleComponent()->GetScaledCapsuleRadius();
-    FCollisionQueryParams Q(SCENE_QUERY_STAT(AssistLocalChord),false,this);FHitResult Hit;
-    if (GetWorld()->SweepSingleByChannel(Hit,Start,End,FQuat::Identity,ECC_Pawn,
+    const float Half=Walker->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+    const float Radius=Walker->GetCapsuleComponent()->GetScaledCapsuleRadius();
+    FCollisionQueryParams Q(SCENE_QUERY_STAT(AssistLocalChord),false,Walker);FHitResult Hit;
+    if (DiagnosticIgnore) Q.AddIgnoredActor(DiagnosticIgnore);
+    if (Walker->GetWorld()->SweepSingleByChannel(Hit,Start,End,FQuat::Identity,ECC_Pawn,
         FCollisionShape::MakeCapsule(Radius,Half),Q)) return false;
     const int32 Count=FMath::Max(1,FMath::CeilToInt(FVector::Dist2D(Start,End)/18.f));
     for (int32 I=1;I<=Count;++I)
     {
         const FVector P=FMath::Lerp(Start,End,float(I)/Count);
-        if (!GetWorld()->LineTraceSingleByChannel(Hit,P-FVector(0,0,Half-12),P-FVector(0,0,Half+15),ECC_Visibility,Q) ||
+        if (!Walker->GetWorld()->LineTraceSingleByChannel(Hit,P-FVector(0,0,Half-12),P-FVector(0,0,Half+15),ECC_Visibility,Q) ||
             Hit.ImpactNormal.Z<.9f || FMath::Abs(Hit.ImpactPoint.Z-(Start.Z-Half))>12) return false;
     }
     return true;
+}
+}
+
+bool AVistaCompanion::AssistChord(const FVector& Start,const FVector& End) const
+{
+    return SupportedChord(this,Start,End);
+}
+
+bool AVistaCompanion::HumanBlocksAssistChord(const FVector& Start,const FVector& End) const
+{
+    if (!Leader.IsValid()) return false;
+    FCollisionQueryParams Q(SCENE_QUERY_STAT(AssistHumanObstruction),false,this);FHitResult Hit;
+    const float Half=GetCapsuleComponent()->GetScaledCapsuleHalfHeight(),Radius=GetCapsuleComponent()->GetScaledCapsuleRadius();
+    // A human hit plus a supported chord without that human proves a temporary
+    // obstruction. The diagnostic chord is NEVER returned as an executable path.
+    return GetWorld()->SweepSingleByChannel(Hit,Start,End,FQuat::Identity,ECC_Pawn,
+        FCollisionShape::MakeCapsule(Radius,Half),Q) && Hit.GetActor()==Leader.Get() &&
+        SupportedChord(this,Start,End,Leader.Get());
 }
 
 bool AVistaCompanion::PlanAssistApproach()
@@ -28,6 +48,7 @@ bool AVistaCompanion::PlanAssistApproach()
     const double Started=FPlatformTime::Seconds();
     AssistPath.Empty();AssistPathIndex=0;AssistCandidates=AssistExpanded=0;
     AssistFloorRejected=AssistBodyRejected=AssistReachRejected=AssistOccludedRejected=AssistHumanOccupied=0;
+    bAssistHumanBlocksRoute=false;
     auto Finish=[&](bool Ok){AssistPlanMs=(FPlatformTime::Seconds()-Started)*1000;return Ok;};
     const FVector Here=GetActorLocation();
     const float Half=GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
@@ -98,11 +119,12 @@ bool AVistaCompanion::PlanAssistApproach()
         Goals.Add(P);
     }
     AssistCandidates=Goals.Num();if (!Goals.Num()) return Finish(false);
-    float Best=TNumericLimits<float>::Max();FVector Destination;
+    float Best=TNumericLimits<float>::Max();FVector Destination;bool HumanBlocksDirect=false;
     for (const FVector& P:Goals)
     {
         const float Cost=FVector::Dist2D(Here,P);
         if (Cost<Best && AssistChord(Here,P)) {Best=Cost;Destination=P;}
+        else if (!HumanBlocksDirect && HumanBlocksAssistChord(Here,P)) HumanBlocksDirect=true;
     }
     if (Best<TNumericLimits<float>::Max())
     {AssistGoal=Destination;AssistPath.Add(Destination);return Finish(true);}
@@ -150,7 +172,7 @@ bool AVistaCompanion::PlanAssistApproach()
             Next.Cost=Cost;Next.Parent=Current;
         }
     }
-    if (End<0) return Finish(false);
+    if (End<0) {bAssistHumanBlocksRoute=HumanBlocksDirect;return Finish(false);}
     TArray<FVector> Reverse;
     for (int32 I=End;I!=Start && I>=0;I=Nodes[I].Parent) Reverse.Add(Nodes[I].P);
     Algo::Reverse(Reverse);Reverse.Add(Destination);
@@ -173,6 +195,7 @@ TSharedPtr<FJsonObject> AVistaCompanion::AssistDiagnostics() const
     D->SetNumberField(TEXT("replans"),AssistReplans);D->SetNumberField(TEXT("path_index"),AssistPathIndex);
     D->SetNumberField(TEXT("reach_clock_s"),AssistReachClock);
     D->SetNumberField(TEXT("human_occupied_candidates"),AssistHumanOccupied);
+    D->SetBoolField(TEXT("human_blocks_route"),bAssistHumanBlocksRoute);
     D->SetNumberField(TEXT("wait_clock_s"),AssistWaitClock);
     D->SetNumberField(TEXT("lean_degrees"),AssistLeanDegrees);
     const FVector Shoulder=GetMesh()->GetSocketLocation(TEXT("upperarm_r")),

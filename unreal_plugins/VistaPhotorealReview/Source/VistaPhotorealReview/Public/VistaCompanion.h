@@ -62,6 +62,7 @@ private:
     void PoseAssist(float Dt);
     bool PlanAssistApproach();
     bool AssistChord(const FVector& Start,const FVector& End) const;
+    bool HumanBlocksAssistChord(const FVector& Start,const FVector& End) const;
     TWeakObjectPtr<AActor> AssistEntity;
     FVector AssistControl,AssistGoal,AssistPrevious;
     float AssistClock=0,AssistReach=0,AssistContact=0,AssistStall=0;
@@ -69,7 +70,7 @@ private:
     TArray<FVector> AssistPath;
     int32 AssistPathIndex=0,AssistReplans=0,AssistCandidates=0,AssistFloorRejected=0,
         AssistBodyRejected=0,AssistReachRejected=0,AssistOccludedRejected=0,AssistExpanded=0,AssistHumanOccupied=0;
-    bool bResumeFollow=true;
+    bool bResumeFollow=true,bAssistHumanBlocksRoute=false;
 };
 
 UCLASS(ClassGroup=VISTA)
