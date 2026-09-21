@@ -28,6 +28,9 @@ TSharedRef<FJsonObject> AHomeActionsCharacter::MakeState() const
         Own->SetNumberField(TEXT("finger_error_cm"),C->Companion->ContactError);O->SetObjectField(TEXT("companion_execution"),Own);
     }
     O->SetStringField(TEXT("review_motion"),PrivateMotion);
+    auto Director=MakeShared<FJsonObject>();Director->SetStringField(TEXT("owner"),DirectorOwner);
+    Director->SetStringField(TEXT("motion"),PrivateMotion);Director->SetStringField(TEXT("action_id"),DirectorAction);
+    O->SetObjectField(TEXT("director"),Director); // Privileged state only; never StreamingObservation.
     O->SetNumberField(TEXT("review_corner_preview_cm"),PrivatePreviewCm);
     O->SetNumberField(TEXT("review_clearance_cm"),PrivateClearance);
     O->SetArrayField(TEXT("review_target_cm"),Values(PrivateTarget));

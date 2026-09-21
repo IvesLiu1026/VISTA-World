@@ -145,6 +145,11 @@ private:
     void UpdateDailyMotion(float Dt);
     void PollPrivateReview();
     void PollLiveCommands();
+    void DirectorCommand(const TSharedPtr<FJsonObject>& Request,FString& Code);
+    void StopDirector();
+    FString DirectorOwner,DirectorAction;
+    double DirectorUntil=0;
+    bool bDirectorThird=false,bDirectorWasClean=false;
     bool ApplyLiveScene(const FString& Layout,int32 Room,FString& Code);
     bool ApplyMicroScene(const TSharedPtr<FJsonObject>& Recipe,FString& Code);
     void ClearMicroScene();

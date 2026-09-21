@@ -23,7 +23,7 @@ void AHomeActionsCharacter::ActionView(FVector& Eye,FRotator& View) const
 {
     GetActorEyesViewPoint(Eye,View);
     if (const auto* PC=Cast<APlayerController>(Controller)) PC->GetPlayerViewPoint(Eye,View);
-    if (FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")) &&
+    if ((FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")) || !DirectorOwner.IsEmpty()) &&
         FParse::Param(FCommandLine::Get(),TEXT("VistaEgoSensor")))
     {Eye=ReviewCamera->GetComponentLocation();View=GetControlRotation();}
 }
@@ -127,7 +127,12 @@ void AHomeActionsCharacter::PollPrivateReview()
 
 void AHomeActionsCharacter::TickPrivateReview(float Dt)
 {
-    if (!FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")) || !Controller) return;
+    if (!DirectorOwner.IsEmpty())
+    {
+        if (FPlatformTime::Seconds()>DirectorUntil) {StopDirector();PrivateMotion=TEXT("lease_expired");}
+        else if (bThirdPerson!=bDirectorThird) EmbodiedView(bDirectorThird?1:0);
+    }
+    if ((!FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")) && DirectorOwner.IsEmpty()) || !Controller) return;
     if (!bPrivateLooking && !bPrivateMoving) return;
     FRotator Look=Controller->GetControlRotation();FVector Delta=PrivateTarget-GetActorLocation();Delta.Z=0;
     if (bPrivateMoving && PrivatePath.Num())

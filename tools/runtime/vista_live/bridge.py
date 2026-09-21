@@ -28,7 +28,7 @@ def atomic(path, value):
 class Bridge:
     def __init__(self, workspace, root=None, project='six-room-companion-dev-live-a'):
         self.workspace, self.fixed = Path(workspace), Path(root) if root else None
-        if not re.fullmatch(r'six-room-companion-dev-(live|natural|forge)-[a-z0-9]+', project):
+        if not re.fullmatch(r'six-room-companion-dev-(live|natural|forge|director)-[a-z0-9]+', project):
             raise ValueError('Unsupported live project')
         self.project = project
 
@@ -72,6 +72,7 @@ class Bridge:
             raise RuntimeError('Native scene changed while preparing command')
         ident = uuid.uuid4().hex
         request = {'schema': 'vista.live-command/v1', 'session_id': current[0],
+                   'scene_epoch': current[1],
                    'generation': raw['generation'], 'expires_clock_s': observation['clock_s'] + 8,
                    'op': op, **(fields or {})}
         atomic(folder / 'live_requests' / (ident + '.json'), request)

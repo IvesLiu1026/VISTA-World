@@ -71,6 +71,7 @@ bool AHomeActionsCharacter::EvaluateCondition(const TSharedPtr<FJsonObject>& C,c
 bool AHomeActionsCharacter::ResetScene(FString& Code)
 {
     if (!bSceneReady) {Code=TEXT("SCENE_NOT_READY");return false;}
+    StopDirector();
     if (!ActiveId.IsEmpty()) FinishAction(false,TEXT("RESET_CANCELLED_ACTION"));
     bSuppressReceipt=true;GripHandle->ReleaseComponent();
     if (Cup) GetCapsuleComponent()->IgnoreActorWhenMoving(Cup,false);

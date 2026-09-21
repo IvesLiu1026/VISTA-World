@@ -113,7 +113,11 @@ void AHomeActionsCharacter::PollLiveCommands()
         if (!D || String(D,TEXT("schema"))!=TEXT("vista.live-command/v1")) continue;
         FString Code=TEXT("LIVE_REJECTED");const FString Op=String(D,TEXT("op"));
         auto* C=FindComponentByClass<UVistaCompanionComponent>();
-        if (String(D,TEXT("session_id"))!=SessionId || Number(D,TEXT("generation"),-1)!=Generation ||
+        // Actor lease stays valid across its own completed action generations,
+        // but can never survive a scene reset. Object actions still check reach,
+        // current state and transaction preconditions in BeginAction.
+        if (String(D,TEXT("session_id"))!=SessionId ||
+            (Op==TEXT("actor")?Number(D,TEXT("scene_epoch"),-1)!=SceneEpoch:Number(D,TEXT("generation"),-1)!=Generation) ||
             Number(D,TEXT("expires_clock_s"),-1)<SceneClock || Number(D,TEXT("expires_clock_s"))>SceneClock+15)
             Code=TEXT("STALE_LIVE_REJECTED");
         else if (Op==TEXT("speech") && C && C->Companion)
@@ -171,6 +175,7 @@ void AHomeActionsCharacter::PollLiveCommands()
             const FString Id=String(D,TEXT("event_id"));
             if (Id==TEXT("mmg_001") || Id==TEXT("mmg_021") || Id==TEXT("mmg_044")) StartEvent(Id,Code,false);
         }
+        else if (Op==TEXT("actor")) DirectorCommand(D,Code);
         else if (Op==TEXT("scene")) ApplyLiveScene(String(D,TEXT("layout")),Number(D,TEXT("room")),Code);
         else if (Op==TEXT("micro_scene"))
         {
