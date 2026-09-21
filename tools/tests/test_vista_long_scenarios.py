@@ -218,6 +218,38 @@ class ConcurrentActorTests(unittest.TestCase):
 
 
 class PassiveDialogueTests(unittest.TestCase):
+    def test_episode_tail_waits_for_reply_playback_and_completed_turn_without_new_calls(self):
+        factory = research_examples.ResearchRuntimeTests()
+        with tempfile.TemporaryDirectory() as directory:
+            live = factory.live(Path(directory)); self.addCleanup(live.pool.shutdown)
+            live.enabled = True; live.error = ''; live.research_job = 'pending'
+            live.research_requested = False; live.speech_until = 0
+            live.api = Mock(side_effect=AssertionError('Tail must not request a new answer'))
+            d = live.director
+            def phases(predicate, seconds, label):
+                self.assertEqual(seconds, 45)
+                self.assertFalse(predicate({}))  # Network or TTS still pending.
+                live.research_job = None; live.speech_until = 105
+                self.assertFalse(predicate({}))  # Native voice is still playing.
+                live.speech_until = 99
+                live.schedule = [{'kind':'research_heard','epoch':live.epoch}]
+                self.assertFalse(predicate({}))  # Completed utterance not ingested yet.
+                live.schedule.clear()
+                self.assertTrue(predicate({}))
+            d.until = phases
+            with patch('runtime.vista_live.director.time.monotonic',return_value=100):
+                d.finish_dialogue('live')
+            live.api.assert_not_called()
+            d.until = Mock(side_effect=AssertionError('Control must not wait for an assistant'))
+            d.finish_dialogue('off')
+
+    def test_episode_tail_remains_cancellable(self):
+        factory = research_examples.ResearchRuntimeTests()
+        with tempfile.TemporaryDirectory() as directory:
+            live = factory.live(Path(directory)); self.addCleanup(live.pool.shutdown)
+            live.director.check = Mock(side_effect=Stopped('User took control'))
+            with self.assertRaises(Stopped): live.director.finish_dialogue('live')
+
     def test_phone_chain_coalesces_but_direct_request_and_periodic_scan_do_not_wait(self):
         factory = research_examples.ResearchRuntimeTests()
         with tempfile.TemporaryDirectory() as directory:

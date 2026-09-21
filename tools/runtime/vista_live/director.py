@@ -253,6 +253,22 @@ class Director:
                 'motion_at_speech_start':started['director'].get('motion'),
                 'position_at_speech_start':started.get('player_cm')}
 
+    def finish_dialogue(self, assistant):
+        if assistant != 'live': return
+        # Actor listening time can expire while a final reply is synthesizing
+        # or playing. Keep the episode/capture open until that existing work
+        # and its completed-speech callback settle; never issue a new request.
+        def settled(_):
+            with self.live.lock:
+                if not self.live.enabled or self.live.error: return True
+                pending = (getattr(self.live, 'research_job', None) or
+                           getattr(self.live, 'research_requested', False))
+                callbacks = any(s['kind'] in ('heard', 'research_heard')
+                                and s['epoch'] == self.live.epoch for s in self.live.schedule)
+                return not (pending or self.live.pending_speech or callbacks or
+                            time.monotonic() < self.live.speech_until)
+        self.until(settled, 45, 'final dialogue completion')
+
     def _play(self,row,view,owner,assistant='live'):
         done=threading.Event(); monitor=None; previous_enabled=self.live.enabled
         terminal='completed'; failure=None
@@ -296,6 +312,7 @@ class Director:
             if self.events:
                 last=max(e['at_s'] for e in self.events)
                 self.until(lambda s:all(e.get('result') for e in self.events),max(15,last+15),'scheduled events')
+            self.finish_dialogue(assistant)
         except Exception as exc:
             terminal='stopped' if isinstance(exc,Stopped) else 'failed'; failure=str(exc)[:400]
         finally:
