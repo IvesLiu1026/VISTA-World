@@ -78,6 +78,7 @@ def main():
     p.add_argument('--scenario',required=True); p.add_argument('--view',choices=['first','third'],required=True)
     p.add_argument('--port',type=int,default=49117)
     p.add_argument('--assistant',choices=['live','off'],default='live')
+    p.add_argument('--duration-limit',type=int,default=400,choices=range(30,901),metavar='30..900')
     p.add_argument('--require-off',action='append',choices=['faucet','stove'],default=[])
     a=p.parse_args()
     a.out.mkdir(parents=True,exist_ok=False)
@@ -96,7 +97,7 @@ def main():
     frames=[]; recorder=None; previous=None; checks=[]; start=time.monotonic(); job={}
     try:
         post('/director/play',{'id':a.scenario,'view':a.view,'assistant':a.assistant})
-        while time.monotonic()-start<400:
+        while time.monotonic()-start<a.duration_limit:
             state=get();job=state['director']['job']
             if job['status']=='running':
                 if a.selected_project: probe.focus()
@@ -112,7 +113,7 @@ def main():
                 if not recorder:
                     recorder=subprocess.Popen(['ffmpeg','-nostdin','-y','-nostats','-f','x11grab','-video_size','1920x1080',
                         '-framerate','30','-i',probe.meta['display'],'-f','pulse','-i',probe.meta['audio_sink']+'.monitor',
-                        '-t','400','-c:v','libx264','-preset','veryfast','-crf','21','-threads','4','-pix_fmt','yuv420p',
+                        '-t',str(a.duration_limit),'-c:v','libx264','-preset','veryfast','-crf','21','-threads','4','-pix_fmt','yuv420p',
                         '-c:a','aac','-b:a','160k','-movflags','+faststart',str(a.out/'native.mp4')],
                         stdout=(a.out/'capture.log').open('w'),stderr=subprocess.STDOUT)
                 key=job.get('step')

@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 
 from .bridge import atomic, read
-from .research_contract import validate_observation
+from .research_contract import MEMORY_SCHEMA, validate_observation, evidence_turns
 
 
 def rows(path):
@@ -99,6 +99,59 @@ def audit_inputs(requests, archive, identity, window=None):
             'scope': 'Closed-packet and archived-pixel audit; not process-level information isolation.'}
 
 
+def audit_memory(requests, dialogue, sessions, identity, window=None):
+    """Bind every selected past utterance to completed same-scene public dialogue."""
+    by_id = {}; duplicates = set()
+    for turn in dialogue:
+        if turn['id'] in by_id: duplicates.add(turn['id'])
+        by_id[turn['id']] = turn
+    ordered_sessions = sorted(sessions, key=lambda row: row['wall_time'])
+    fields = ('id','role','text','source','clock_s','audience')
+    failures = []; count = 0; recalled = set(); requests_with_recall = 0
+    for request in requests:
+        packet = request.get('input', {})
+        if (request.get('kind') != 'research' or packet.get('schema') != MEMORY_SCHEMA or
+                (packet.get('session_id'), packet.get('scene_epoch')) != identity or
+                window and not window[0] <= request.get('wall_time', float('nan')) <= window[1]):
+            continue
+        count += 1
+        requests_with_recall += bool(packet['recalled_utterances'])
+        for turn in evidence_turns(packet):
+            try:
+                source = by_id[turn['id']]
+                if turn['id'] in duplicates or {k:source[k] for k in fields} != turn:
+                    raise ValueError('Dialogue provenance/text mismatch')
+                if source['wall_time'] > request['wall_time']:
+                    raise ValueError('Dialogue was not completed when the request started')
+                session = next((row for row in reversed(ordered_sessions)
+                                if row['wall_time'] <= source['wall_time']), None)
+                if not session or tuple(session['identity']) != identity:
+                    raise ValueError('Dialogue belongs to another scene')
+            except (KeyError, ValueError) as exc:
+                failures.append({'request_id': request.get('id'), 'turn_id': turn.get('id'), 'error': str(exc)})
+        recalled.update(row['id'] for row in packet['recalled_utterances'])
+    return {'passed': not failures, 'request_count': count,
+            'requests_with_recall': requests_with_recall, 'recalled_ids': sorted(recalled), 'failures': failures,
+            'scope': 'Verbatim, causal same-scene dialogue provenance; not semantic memory quality.'}
+
+
+def audit_walk_speech(trace, job):
+    results = []
+    for row in job.get('steps', []):
+        if row['step']['skill'] != 'walk_say': continue
+        receipt = row['receipt']; start = receipt.get('speech_started_clock_s')
+        end = receipt.get('speech_finished_clock_s')
+        samples = [f for f in trace if isinstance(start, (int, float)) and
+                   isinstance(end, (int, float)) and start <= f['clock_s'] <= end]
+        distance = sum(math.dist(a['player_cm'], b['player_cm']) for a,b in zip(samples,samples[1:]))
+        passed = (receipt.get('status') == 'spoken' and receipt.get('movement',{}).get('motion') == 'arrived'
+                  and len(samples) >= 2 and distance > 10)
+        results.append({'step':row['index'],'passed':passed,'speech_motion_cm':round(distance,2),
+                        'samples':len(samples),'speaker':row['step']['speaker']})
+    return {'passed':all(r['passed'] for r in results),'steps':results,
+            'scope':'Observed motion during authored native speech; not postproduction audio.'}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--episode', type=Path, required=True)
@@ -117,6 +170,10 @@ def main():
                 raise ValueError('Invalid episode time window')
         report['input_audit'] = audit_inputs(rows(args.backend / 'requests.jsonl'),
             args.backend / 'research' / 'frames', identity, window)
+        report['memory_audit'] = audit_memory(rows(args.backend / 'requests.jsonl'),
+            rows(args.backend / 'research-dialogue.jsonl'), rows(args.backend / 'research-sessions.jsonl'), identity, window)
+        report['walk_speech_audit'] = audit_walk_speech(trace, job)
+        report['passed'] &= report['memory_audit']['passed'] and report['walk_speech_audit']['passed']
         prefix = identity[0] + '_' + str(identity[1]) + '_'
         input_ids = {r['input']['frame']['id'] for r in rows(args.backend / 'requests.jsonl')
                      if r.get('kind') == 'research' and r['input']['frame']['id'].startswith(prefix)
