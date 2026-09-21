@@ -98,7 +98,12 @@ def validate_scenario(value):
     exact(value, SCENARIO_SCHEMA['required'])
     if type(value['supported']) is not bool or value['mode'] not in ('home', 'micro'):
         raise ValueError('Invalid supported flag or scene mode')
-    text(value['explanation'], 800); text(value['scene_description'], 400)
+    text(value['explanation'], 800)
+    # A refusal has no executable scene description. The JSON schema permits
+    # an empty string here; supported proposals still require actual room text.
+    if not isinstance(value['scene_description'],str) or len(value['scene_description'])>400:
+        raise ValueError('Invalid scene description')
+    if value['supported']: text(value['scene_description'], 400)
     if value['start_room'] not in ROOMS:
         raise ValueError('Unsupported starting room')
     steps, events = value['steps'], value['events']
