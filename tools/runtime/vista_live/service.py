@@ -123,6 +123,11 @@ class Live:
         with self.speech_lock, self.lock:
             return self._speak(clip, epoch, priority, cause)
 
+    def action_current(self, ident, target):
+        feedback = self.bridge.feedback() or {}
+        return bool(ident and feedback.get('id') == ident and feedback.get('target') == target and
+                    feedback.get('status') in ('approaching', 'reaching', 'waiting_clearance'))
+
     def _speak(self, clip, epoch, priority=0, cause='conversation'):
         with self.lock:
             if epoch != self.epoch or (cause.startswith('jev:') and not self.enabled):
@@ -135,6 +140,11 @@ class Live:
                 if not current or (current.get('id'), current.get('status')) != (ident, status):
                     self.log('speech', {'discarded': 'superseded_native_action', 'cause': cause})
                     return  # Someone moved, cancelled or finished while TTS/queue waited.
+            if cause.startswith('requested_action:'):
+                _, ident, target = cause.split(':', 2)
+                if not self.action_current(ident, target):
+                    self.log('speech', {'discarded': 'superseded_native_action', 'cause': cause})
+                    return
             if cause.startswith('chat:'):
                 ticket = int(cause[5:])
                 if not self.conversation.valid(ticket) or self.chat_blocked():
@@ -300,8 +310,11 @@ class Live:
                 if epoch == self.epoch:
                     self.inflight = False
 
-    def plan(self, epoch, state, decision='conversation', question='', speak=True, explicit_target=None):
+    def plan(self, epoch, state, decision='conversation', question='', speak=True, explicit_target=None,
+             explicit_action_id=None):
         try:
+            if decision == 'explicit_help' and not self.action_current(explicit_action_id, explicit_target):
+                return
             result = self.api('plan', {'observed_state': state, 'decision': decision,
                                       'human_request': question, 'explicit_help_target': explicit_target})
             plan = validate_plan(result['answer'])
@@ -315,6 +328,9 @@ class Live:
                     if not allowed:
                         self.log('guards', {'blocked': 'manipulation_requires_current_evidence_and_explicit_request', 'step': step})
                         raise ValueError('Generated manipulation was not authorized by the human request')
+            if decision == 'explicit_help' and not self.action_current(explicit_action_id, explicit_target):
+                self.log('plans', {'result': result, 'discarded': 'superseded_native_action'})
+                return
             with self.lock:
                 if epoch != self.epoch:
                     return
@@ -332,10 +348,10 @@ class Live:
                     if self.policy.active and decision not in (self.policy.active, 'explicit_help'):
                         return
                 if decision == 'explicit_help':
-                    feedback = self.bridge.feedback()
-                    if feedback.get('target') == explicit_target and feedback.get('status') not in ('approaching', 'reaching', 'waiting_clearance'):
-                        return  # Native completion/failure voice supersedes an old intention.
-                self.speak(clip, epoch, cause='generated_plan')
+                    cause = 'requested_action:' + explicit_action_id + ':' + explicit_target
+                else:
+                    cause = 'generated_plan'
+                self.speak(clip, epoch, cause=cause)
         except Exception as exc:
             self.log('errors', {'stage': 'plan', 'error': str(exc)[:400]})
             with self.lock:
@@ -444,11 +460,13 @@ class Live:
                     self.speak(self.voice(line), epoch, cause='chat:' + str(ticket) if ticket is not None else 'request_needs_observation')
                     return
                 try:
-                    self.native('assist', {'target': target}, epoch)
+                    accepted = self.native('assist', {'target': target}, epoch)
                 except RuntimeError:
                     self.execution_feedback(epoch, {'target': target, 'status': 'blocked_approach'})
                     return
-                self.plan(epoch, state, 'explicit_help', question, True, target)
+                # Bind to this acceptance, not a later snapshot of a replacement.
+                action_id = accepted.get('action_id')
+                self.plan(epoch, state, 'explicit_help', question, True, target, action_id)
                 with self.lock:
                     if ticket is not None:
                         self.conversation.failed(ticket)
