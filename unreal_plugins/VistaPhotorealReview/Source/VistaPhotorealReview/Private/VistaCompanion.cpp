@@ -122,9 +122,9 @@ void AVistaCompanion::Tick(float Dt)
     Super::Tick(Dt);if(!bReady)return;
     const FVector Here=GetActorLocation();const float Moved=FVector::Dist2D(Here,Previous);Previous=Here;
     if(Moved<100){Travel+=Moved;Phase=FMath::Fmod(Phase+Moved/Cycle,1.f);}
-    const bool Assisting=AssistStatus==TEXT("approaching") || AssistStatus==TEXT("reaching");
+    const bool Assisting=AssistStatus==TEXT("approaching") || AssistStatus==TEXT("reaching") || AssistStatus==TEXT("waiting_clearance");
     if(Assisting) TickAssist(Dt);
-    if(Leader.IsValid() && !Assisting)
+    if(Leader.IsValid() && !Assisting && AssistReach<=0)
     {
         const FVector P=Leader->GetActorLocation();
         // Explicit room/bookmark travel resets the companion too. Ordinary following is swept walking.
