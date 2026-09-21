@@ -650,7 +650,7 @@ def handler(live, web=False):
             elif self.path == '/director':
                 self.send(200, Path(__file__).with_name('director.html').read_text().replace('__TOKEN__', live.token), True)
             elif (self.path in ('/demo/first.mp4', '/demo/third.mp4', '/demo/first.jpg', '/demo/third.jpg', '/demo/teacher-pack.zip') or
-                  re.fullmatch(r'/demo/(study|control)-(first|third)\.(jpg|mp4)', self.path) or
+                  re.fullmatch(r'/demo/(study|control|plans|permission)-(first|third)\.(jpg|mp4)', self.path) or
                   re.fullmatch(r'/theme-media/[a-z]+/(first|third|micro)\.(jpg|mp4)', self.path) or
                   re.fullmatch(r'/research/frames/[A-Za-z0-9_-]{1,140}_(ego|exo)\.png', self.path)):
                 if self.path.startswith('/research/frames/'):
@@ -708,7 +708,7 @@ def handler(live, web=False):
                 elif self.path == '/research/observe' and hasattr(live, 'capture'):
                     result = live.observe()
                 elif self.path == '/director/compile':
-                    result = live.director.compile(body.get('prompt'),body.get('seed',0))
+                    result = live.director.compile(body.get('prompt'),body.get('seed',0),body.get('extended',False))
                 elif self.path == '/director/play':
                     result = live.director.play(body.get('id'),body.get('view','first'),body.get('assistant','live'))
                 elif self.path == '/director/stop':
@@ -768,17 +768,21 @@ def main():
     p.add_argument('--provider', default='http://127.0.0.1:49112')
     p.add_argument('--paused', action='store_true', help='Start without background model decisions')
     p.add_argument('--research', action='store_true', help='Use ego RGB and the large model as the primary policy')
+    p.add_argument('--research-memory', action='store_true', help='Use versioned, verbatim episodic recall in research mode')
     p.add_argument('--research-interval', type=float, default=12,
                    help='Seconds between periodic policy scans; new input and own-action feedback remain immediate')
     p.add_argument('--caption-only', action='store_true', help='Explicit development mode without paid assistant TTS')
     p.add_argument('--local-tts', help='Explicit local research TTS endpoint; no automatic cloud fallback')
     args = p.parse_args()
+    if args.research_memory and not args.research:
+        p.error('--research-memory requires --research')
     cls = Live
     if args.research:
         from runtime.vista_live.research import ResearchLive
         cls = ResearchLive
     live = cls(args.root, Bridge(args.workspace, args.bridge, args.project), args.speech, args.provider)
     if args.research:
+        live.research_memory = args.research_memory
         live.research_voice = not args.caption_only
         if not 2 <= args.research_interval <= 120:
             p.error('--research-interval must be between 2 and 120 seconds')
