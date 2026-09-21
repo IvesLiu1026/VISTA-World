@@ -93,7 +93,7 @@ class Director:
             if self.busy(): raise ValueError('Stop the current scenario before starting another')
             if ident not in self.items or view not in ('first','third'): raise ValueError('Unknown scenario or view')
             self.stop_event.clear(); self.error=''; self.owner=uuid.uuid4().hex
-            self.job={'id':ident,'run_id':self.owner,'view':view,'status':'starting','steps':[],'events':[]}
+            self.job={'id':ident,'run_id':self.owner,'view':view,'status':'starting','steps':[],'events':[],'interventions':[]}
             self.live.pool.submit(self._play,copy.deepcopy(self.items[ident]),view,self.owner)
             return copy.deepcopy(self.job)
 
@@ -110,7 +110,27 @@ class Director:
         if (raw['session_id'],raw['scene_epoch'])!=identity: raise Stopped('Scene changed during actor observation')
         if identity!=self.identity: raise Stopped('Scene changed; old scenario stopped')
         if raw.get('director',{}).get('owner')!=self.owner: raise Stopped('Native actor control ended')
+        self.record_intervention(raw)
         return raw
+
+    def record_intervention(self,raw):
+        feedback=raw.get('companion_execution',{})
+        if not feedback.get('id'): return
+        # This is a separate execution result, never inferred from actor steps.
+        # Only the assistant's existing own-action receipt fields are retained.
+        with self.lock:
+            entries=self.job.setdefault('interventions',[])
+            row=next((r for r in entries if r['id']==feedback['id']),None)
+            if feedback.get('target') not in ('stove','faucet'):
+                if not (row and feedback.get('status')=='cancelled' and
+                        row.get('status') in ('approaching','reaching','waiting_clearance')): return
+            if row is None:
+                row={'id':feedback['id'],'target':feedback['target'],'started_clock_s':raw['clock_s'],'transitions':[]}
+                entries.append(row)
+            if row.get('status')!=feedback.get('status'):
+                row['transitions'].append({'status':feedback.get('status'),'clock_s':raw['clock_s']})
+            row.update(status=feedback.get('status'),updated_clock_s=raw['clock_s'],
+                       finger_error_cm=feedback.get('finger_error_cm'))
 
     def command(self,control,**fields):
         self.check()
@@ -265,6 +285,10 @@ class Director:
                     _,identity,_=self.live.bridge.snapshot()
                     if identity==self.identity: self.live.cancel()
                 except (RuntimeError,OSError,ValueError): pass
+            try:
+                folder,identity,_=self.live.bridge.snapshot()
+                if identity==self.identity: self.record_intervention(read(folder/'state.json'))
+            except (RuntimeError,OSError,ValueError): pass
             with self.live.lock: self.live.enabled=previous_enabled
             with self.lock:
                 self.job['status']=terminal
