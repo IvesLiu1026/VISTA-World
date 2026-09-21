@@ -15,6 +15,7 @@ import urllib.request
 
 from runtime.vista_jev.protocol import normalize_jev, openrouter_jev_request
 from runtime.vista_live.budget import Budget
+from runtime.vista_live.director_contract import SCENARIO_SCHEMA, SCENARIO_INSTRUCTIONS, validate_scenario
 from runtime.vista_live.forge import (RECIPE_INSTRUCTIONS, RECIPE_SCHEMA,
     recipe_questions, normalize_recipe, validate_recipe)
 from runtime.vista_live.contracts import (ACTIONS, LAYOUTS, PLAN_INSTRUCTIONS, PLAN_SCHEMA,
@@ -94,6 +95,9 @@ class Provider:
                 endpoint = 'alpha/decisions'
             else:
                 body = chat_request(RECIPE_INSTRUCTIONS, RECIPE_SCHEMA, {'request': prompt})
+        elif kind == 'scenario':
+            body = chat_request(SCENARIO_INSTRUCTIONS, SCENARIO_SCHEMA, {'request': text(value, 1600)})
+            body['max_tokens'] = 3500
         elif kind == 'author':
             body = chat_request(SCENE_INSTRUCTIONS, SCENE_SCHEMA, {'request': text(value, 1600)})
         elif kind == 'chat':
@@ -122,7 +126,7 @@ class Provider:
         if len(json.dumps(body).encode()) > 24000:
             raise ValueError('Provider input limit exceeded')
         bucket = ('decision' if kind in ('layout', 'intent', 'forge_jev') else
-                  'plan' if kind in ('author', 'chat', 'forge_qwen') else kind)
+                  'plan' if kind in ('author', 'chat', 'forge_qwen', 'scenario') else kind)
         cached = self.budget.reserve(ident, bucket, request)
         if cached is not None:
             return cached
@@ -175,7 +179,7 @@ class Provider:
                         answer = {**answer, 'human_goal': goal['choice']}
                 else:
                     content = raw['choices'][0]['message']['content']
-                    validator = (validate_scene if kind == 'author' else validate_dialogue if kind == 'chat'
+                    validator = (validate_scenario if kind == 'scenario' else validate_scene if kind == 'author' else validate_dialogue if kind == 'chat'
                                  else validate_recipe if kind == 'forge_qwen' else validate_plan)
                     answer = validator(strict_json(content))
                 result = {'answer': answer, 'model': actual, 'provider': raw.get('provider'),
