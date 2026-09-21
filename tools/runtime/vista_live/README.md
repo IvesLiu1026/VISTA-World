@@ -1,5 +1,12 @@
 # Live six-room assistance
 
+Natural-language scene + human acting is available at `/director`. See
+[the scenario director report](../../../docs/research/20260921-scenario-director.md)
+for supported skills, evidence, model roles and research limitations.
+`/director/compile`, `/director/play` and `/director/stop` use the same web token
+boundary as the existing controls. `--paused` starts a test service without
+background assistant inference; starting a performance temporarily enables it.
+
 For anticipatory walking, open-topic Q&A, turn memory and conversation interrupted
 by concurrent events, see [CONVERSATION.md](CONVERSATION.md).
 
