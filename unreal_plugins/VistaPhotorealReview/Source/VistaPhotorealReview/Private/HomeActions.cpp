@@ -1,4 +1,5 @@
 #include "HomeActions.h"
+#include "Misc/App.h"
 #include "Camera/CameraComponent.h"
 #include "HomeActionsJson.h"
 #include "Camera/CameraComponent.h"
@@ -81,6 +82,10 @@ const FHomeEntity* AHomeActionsCharacter::Resolve(const FString& Name) const
 
 void AHomeActionsCharacter::BeginPlay()
 {
+    // The operator may use the web director while the game has no window focus.
+    // Speech must remain audible through this instance's dedicated audio sink.
+    if (FParse::Param(FCommandLine::Get(),TEXT("VistaLiveAssistant")))
+        FApp::SetUnfocusedVolumeMultiplier(1.f);
     if (FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")))
     {
         bool StartCrashReporter=true;
@@ -421,6 +426,7 @@ void AHomeActionsCharacter::OnPoseFinalized()
             ContactMaximum=FMath::Max(ContactMaximum,FMath::Max(RightContactError,LeftContactError));
     }
     Super::OnPoseFinalized();
+    if (bSceneReady) CaptureResearchViews();
 }
 
 FString AHomeActionsCharacter::GetInteractionHint() const

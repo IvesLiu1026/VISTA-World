@@ -98,13 +98,36 @@ void AVistaCompanion::LoadMotion()
     for(const auto& V:D->GetArrayField(TEXT("frames")))Walk.Add(Retarget(V->AsObject()->GetArrayField(TEXT("pose"))));
     CurrentPose=Idle;
 }
+bool AVistaCompanion::ResetForScene(const AActor* Player)
+{
+    // An explicit episode reset establishes initial conditions, including a
+    // previously paused follower. Never call this to recover an in-episode
+    // blocked approach: ordinary locomotion/contact remain swept and guarded.
+    CancelAssist();StopSpeech();
+    AssistId.Empty();AssistTarget.Empty();AssistStatus=TEXT("idle");
+    AssistReach=AssistClock=AssistContact=AssistStall=ContactError=0;
+    AssistReachClock=AssistCheckClock=AssistPlanMs=AssistWaitClock=AssistLeanDegrees=0;
+    AssistPathIndex=AssistReplans=AssistCandidates=AssistFloorRejected=0;
+    AssistBodyRejected=AssistReachRejected=AssistOccludedRejected=AssistExpanded=AssistHumanOccupied=0;
+    bAssistHumanBlocksRoute=false;bResumeFollow=true;bFollowing=true;
+    Trail.Empty();StuckTime=YieldTime=MoveBlend=Phase=Travel=0;
+    AudioClock=MouthOpen=0;Subtitle.Empty();CurrentPose=Idle;
+    GetCharacterMovement()->StopMovementImmediately();
+    GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+    GetCharacterMovement()->MaxWalkSpeed=145;
+    if (PlaceNear(Player)) return true;
+    bFollowing=false;bBlocked=true;return false;
+}
+
 bool AVistaCompanion::PlaceNear(const AActor* Player)
 {
     FCollisionQueryParams Q(SCENE_QUERY_STAT(CompanionSpawn),false,this);Q.AddIgnoredActor(Player);
     const auto* Pawn=Cast<APawn>(Player);const float ViewYaw=Pawn?Pawn->GetControlRotation().Yaw:Player->GetActorRotation().Yaw;
     const auto* Character=Cast<ACharacter>(Player);
     const float Feet=Player->GetActorLocation().Z-(Character?Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight():86);
-    for(float Radius:{150.f,115.f})for(float Angle:{30.f,-30.f,80.f,-80.f,140.f,-140.f,180.f})
+    // Stay beside/behind the wearer: spawning in front occludes the very object
+    // the assistant is supposed to observe through the shared ego camera.
+    for(float Radius:{150.f,115.f})for(float Angle:{100.f,-100.f,80.f,-80.f,140.f,-140.f,180.f})
     {
         FVector V=FRotator(0,ViewYaw,0).Vector().RotateAngleAxis(Angle,FVector::UpVector)*Radius;
         FVector P=Player->GetActorLocation()+V;FHitResult Ground;
@@ -122,9 +145,9 @@ void AVistaCompanion::Tick(float Dt)
     Super::Tick(Dt);if(!bReady)return;
     const FVector Here=GetActorLocation();const float Moved=FVector::Dist2D(Here,Previous);Previous=Here;
     if(Moved<100){Travel+=Moved;Phase=FMath::Fmod(Phase+Moved/Cycle,1.f);}
-    const bool Assisting=AssistStatus==TEXT("approaching") || AssistStatus==TEXT("reaching");
+    const bool Assisting=AssistStatus==TEXT("approaching") || AssistStatus==TEXT("reaching") || AssistStatus==TEXT("waiting_clearance");
     if(Assisting) TickAssist(Dt);
-    if(Leader.IsValid() && !Assisting)
+    if(Leader.IsValid() && !Assisting && AssistReach<=0)
     {
         const FVector P=Leader->GetActorLocation();
         // Explicit room/bookmark travel resets the companion too. Ordinary following is swept walking.

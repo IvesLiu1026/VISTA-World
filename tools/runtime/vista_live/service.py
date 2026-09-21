@@ -123,12 +123,28 @@ class Live:
         with self.speech_lock, self.lock:
             return self._speak(clip, epoch, priority, cause)
 
+    def action_current(self, ident, target):
+        feedback = self.bridge.feedback() or {}
+        return bool(ident and feedback.get('id') == ident and feedback.get('target') == target and
+                    feedback.get('status') in ('approaching', 'reaching', 'waiting_clearance'))
+
     def _speak(self, clip, epoch, priority=0, cause='conversation'):
         with self.lock:
             if epoch != self.epoch or (cause.startswith('jev:') and not self.enabled):
                 return
             if cause.startswith('jev:') and self.policy.active != cause[4:]:
                 return  # Resolved/preempted while this voice waited.
+            if cause.startswith('native_action_feedback:'):
+                _, ident, status = cause.split(':', 2)
+                current = self.bridge.feedback()
+                if not current or (current.get('id'), current.get('status')) != (ident, status):
+                    self.log('speech', {'discarded': 'superseded_native_action', 'cause': cause})
+                    return  # Someone moved, cancelled or finished while TTS/queue waited.
+            if cause.startswith('requested_action:'):
+                _, ident, target = cause.split(':', 2)
+                if not self.action_current(ident, target):
+                    self.log('speech', {'discarded': 'superseded_native_action', 'cause': cause})
+                    return
             if cause.startswith('chat:'):
                 ticket = int(cause[5:])
                 if not self.conversation.valid(ticket) or self.chat_blocked():
@@ -239,7 +255,7 @@ class Live:
                 if key and key != self.last_feedback:
                     self.last_feedback = key
                     self.log('execution', feedback)
-                    if feedback['status'] in ('committed', 'blocked_obstacle', 'blocked_timeout', 'unreachable_contact', 'contact_or_state_rejected'):
+                    if feedback['status'] in ('committed', 'waiting_clearance', 'blocked_clearance', 'blocked_obstacle', 'blocked_timeout', 'unreachable_contact', 'contact_or_state_rejected'):
                         self.pool.submit(self.execution_feedback, epoch, feedback)
                 if now - self.budget_at > 15:
                     self.budget_at = now
@@ -294,8 +310,11 @@ class Live:
                 if epoch == self.epoch:
                     self.inflight = False
 
-    def plan(self, epoch, state, decision='conversation', question='', speak=True, explicit_target=None):
+    def plan(self, epoch, state, decision='conversation', question='', speak=True, explicit_target=None,
+             explicit_action_id=None):
         try:
+            if decision == 'explicit_help' and not self.action_current(explicit_action_id, explicit_target):
+                return
             result = self.api('plan', {'observed_state': state, 'decision': decision,
                                       'human_request': question, 'explicit_help_target': explicit_target})
             plan = validate_plan(result['answer'])
@@ -309,6 +328,9 @@ class Live:
                     if not allowed:
                         self.log('guards', {'blocked': 'manipulation_requires_current_evidence_and_explicit_request', 'step': step})
                         raise ValueError('Generated manipulation was not authorized by the human request')
+            if decision == 'explicit_help' and not self.action_current(explicit_action_id, explicit_target):
+                self.log('plans', {'result': result, 'discarded': 'superseded_native_action'})
+                return
             with self.lock:
                 if epoch != self.epoch:
                     return
@@ -326,10 +348,10 @@ class Live:
                     if self.policy.active and decision not in (self.policy.active, 'explicit_help'):
                         return
                 if decision == 'explicit_help':
-                    feedback = self.bridge.feedback()
-                    if feedback.get('target') == explicit_target and feedback.get('status') not in ('approaching', 'reaching'):
-                        return  # Native completion/failure voice supersedes an old intention.
-                self.speak(clip, epoch, cause='generated_plan')
+                    cause = 'requested_action:' + explicit_action_id + ':' + explicit_target
+                else:
+                    cause = 'generated_plan'
+                self.speak(clip, epoch, cause=cause)
         except Exception as exc:
             self.log('errors', {'stage': 'plan', 'error': str(exc)[:400]})
             with self.lock:
@@ -338,9 +360,15 @@ class Live:
     def execution_feedback(self, epoch, feedback):
         try:
             target = 'stove' if feedback['target'] == 'stove' else 'bath tap'
-            line = (f'The {target} is off now.' if feedback['status'] == 'committed' else
-                    f'I cannot safely reach the {target}. Please give me some room or turn it off yourself.')
-            self.speak(self.voice(line), epoch, cause='native_action_feedback')
+            if feedback['status'] == 'committed':
+                line = f'The {target} is off now.'
+            elif feedback['status'] == 'waiting_clearance':
+                line = f'Please take a step to the side so I can reach the {target}.'
+            else:
+                line = f'I cannot safely reach the {target}. Please give me some room or turn it off yourself.'
+            cause = ('native_action_feedback:' + feedback['id'] + ':' + feedback['status']
+                     if feedback.get('id') else 'native_action_feedback')
+            self.speak(self.voice(line), epoch, cause=cause)
         except Exception as exc:
             with self.lock:
                 self.warning = 'Action feedback: ' + str(exc)[:150]
@@ -432,11 +460,13 @@ class Live:
                     self.speak(self.voice(line), epoch, cause='chat:' + str(ticket) if ticket is not None else 'request_needs_observation')
                     return
                 try:
-                    self.native('assist', {'target': target}, epoch)
+                    accepted = self.native('assist', {'target': target}, epoch)
                 except RuntimeError:
                     self.execution_feedback(epoch, {'target': target, 'status': 'blocked_approach'})
                     return
-                self.plan(epoch, state, 'explicit_help', question, True, target)
+                # Bind to this acceptance, not a later snapshot of a replacement.
+                action_id = accepted.get('action_id')
+                self.plan(epoch, state, 'explicit_help', question, True, target, action_id)
                 with self.lock:
                     if ticket is not None:
                         self.conversation.failed(ticket)
@@ -609,17 +639,26 @@ def handler(live, web=False):
             if self.path == '/favicon.ico':
                 self.send_response(204); self.end_headers(); return
             if self.path == '/':
-                self.send(200, (Path(__file__).with_name('index.html').read_text().replace('__TOKEN__', live.token)), True)
+                page = 'research.html' if hasattr(live, 'capture') else 'index.html'
+                self.send(200, (Path(__file__).with_name(page).read_text().replace('__TOKEN__', live.token)), True)
+            elif self.path == '/research' and hasattr(live, 'capture'):
+                self.send(200, Path(__file__).with_name('research.html').read_text().replace('__TOKEN__', live.token), True)
             elif self.path == '/demo':
                 self.send(200, Path(__file__).with_name('demo.html').read_text(), True)
             elif self.path == '/themes':
                 self.send(200, Path(__file__).with_name('themes.html').read_text().replace('__TOKEN__', live.token), True)
             elif self.path == '/director':
                 self.send(200, Path(__file__).with_name('director.html').read_text().replace('__TOKEN__', live.token), True)
-            elif (self.path in ('/demo/first.mp4', '/demo/third.mp4', '/demo/first.jpg', '/demo/third.jpg') or
-                  re.fullmatch(r'/theme-media/[a-z]+/(first|third|micro)\.(jpg|mp4)', self.path)):
-                path = (live.root / 'media' / self.path.rsplit('/', 1)[1] if self.path.startswith('/demo/') else
-                        live.root / 'theme-media' / self.path.removeprefix('/theme-media/'))
+            elif (self.path in ('/demo/first.mp4', '/demo/third.mp4', '/demo/first.jpg', '/demo/third.jpg', '/demo/teacher-pack.zip') or
+                  re.fullmatch(r'/demo/(study|control|plans|permission)-(first|third)\.(jpg|mp4)', self.path) or
+                  re.fullmatch(r'/theme-media/[a-z]+/(first|third|micro)\.(jpg|mp4)', self.path) or
+                  re.fullmatch(r'/research/frames/[A-Za-z0-9_-]{1,140}_(ego|exo)\.png', self.path)):
+                if self.path.startswith('/research/frames/'):
+                    path = live.root / 'research' / 'frames' / self.path.rsplit('/', 1)[1]
+                elif self.path.startswith('/demo/'):
+                    path = live.root / 'media' / self.path.rsplit('/', 1)[1]
+                else:
+                    path = live.root / 'theme-media' / self.path.removeprefix('/theme-media/')
                 if not path.resolve().is_relative_to(live.root.resolve()):
                     self.send(404, {'error': 'Not found'}); return
                 if not path.is_file() or path.is_symlink():
@@ -631,7 +670,9 @@ def handler(live, web=False):
                     self.send_response(416); self.send_header('Content-Range', f'bytes */{size}')
                     self.send_header('Content-Length', '0'); self.end_headers(); return
                 self.send_response(206 if partial else 200)
-                self.send_header('Content-Type', 'video/mp4' if path.suffix == '.mp4' else 'image/jpeg')
+                self.send_header('Content-Type', {'.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.zip': 'application/zip'}[path.suffix])
+                if path.suffix == '.zip':
+                    self.send_header('Content-Disposition', 'attachment; filename="VISTA-teacher-demo.zip"')
                 self.send_header('Content-Length', str(end-start+1)); self.send_header('Accept-Ranges', 'bytes')
                 if partial:
                     self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
@@ -664,10 +705,12 @@ def handler(live, web=False):
                     raise ValueError('Stop the scenario before changing scenes')
                 if self.path in ('/say', '/respond'):
                     result = live.say(body.get('text'), body.get('target'))
+                elif self.path == '/research/observe' and hasattr(live, 'capture'):
+                    result = live.observe()
                 elif self.path == '/director/compile':
-                    result = live.director.compile(body.get('prompt'),body.get('seed',0))
+                    result = live.director.compile(body.get('prompt'),body.get('seed',0),body.get('extended',False))
                 elif self.path == '/director/play':
-                    result = live.director.play(body.get('id'),body.get('view','first'))
+                    result = live.director.play(body.get('id'),body.get('view','first'),body.get('assistant','live'))
                 elif self.path == '/director/stop':
                     result = live.director.cancel()
                 elif self.path == '/forge/generate':
@@ -724,8 +767,29 @@ def main():
     p.add_argument('--web-port', type=int, default=48999)
     p.add_argument('--provider', default='http://127.0.0.1:49112')
     p.add_argument('--paused', action='store_true', help='Start without background model decisions')
+    p.add_argument('--research', action='store_true', help='Use ego RGB and the large model as the primary policy')
+    p.add_argument('--research-memory', action='store_true', help='Use versioned, verbatim episodic recall in research mode')
+    p.add_argument('--research-interval', type=float, default=12,
+                   help='Seconds between periodic policy scans; new input and own-action feedback remain immediate')
+    p.add_argument('--caption-only', action='store_true', help='Explicit development mode without paid assistant TTS')
+    p.add_argument('--local-tts', help='Explicit local research TTS endpoint; no automatic cloud fallback')
     args = p.parse_args()
-    live = Live(args.root, Bridge(args.workspace, args.bridge, args.project), args.speech, args.provider)
+    if args.research_memory and not args.research:
+        p.error('--research-memory requires --research')
+    cls = Live
+    if args.research:
+        from runtime.vista_live.research import ResearchLive
+        cls = ResearchLive
+    live = cls(args.root, Bridge(args.workspace, args.bridge, args.project), args.speech, args.provider)
+    if args.research:
+        live.research_memory = args.research_memory
+        live.research_voice = not args.caption_only
+        if not 2 <= args.research_interval <= 120:
+            p.error('--research-interval must be between 2 and 120 seconds')
+        live.research_interval = args.research_interval
+        if args.local_tts and not re.fullmatch(r'http://127\.0\.0\.1:\d{4,5}', args.local_tts):
+            raise ValueError('Local speech must use a loopback endpoint')
+        live.local_tts = args.local_tts
     live.enabled = not args.paused
     threading.Thread(target=live.tick, daemon=True).start()
     web = ThreadingHTTPServer((args.web_bind, args.web_port), handler(live, True))

@@ -93,9 +93,47 @@ Example phone sequence, exactly these field conventions:
  {"skill":"hangup_phone","target":"none","line":"","seconds":0,"speaker":"human","audience":"assistant"}]
 '''
 
+# Explicit extension: the original unversioned contract retains its limits.
+LONG_SCHEMA = 'vista.scenario/v2'
+LONG_SCENARIO_SCHEMA = copy.deepcopy(SCENARIO_SCHEMA)
+LONG_SCENARIO_SCHEMA['properties']['schema'] = {'type': 'string', 'enum': [LONG_SCHEMA]}
+LONG_SCENARIO_SCHEMA['required'].append('schema')
+LONG_SCENARIO_SCHEMA['properties']['steps']['maxItems'] = 48
+LONG_SCENARIO_SCHEMA['properties']['steps']['items']['properties']['skill']['enum'].append('walk_say')
+LONG_SCENARIO_SCHEMA['properties']['steps']['items']['properties']['target']['enum'].append('bathroom_doorway')
+LONG_SCENARIO_SCHEMA['properties']['events']['items']['properties']['at_s']['maximum'] = 600
+LONG_SCENARIO_INSTRUCTIONS = SCENARIO_INSTRUCTIONS.replace(
+    'At most 6 say steps.', 'At most 16 total say/walk_say steps.').replace(
+    'maximum 16', 'maximum 48').replace('at_s=0..180', 'at_s=0..600')
+LONG_SCENARIO_INSTRUCTIONS += '''
+VERSIONED EXTENSION: include schema="vista.scenario/v2". Total explicit waiting
+(seconds fields) must not exceed 300 seconds. Preserve the requested order and
+negations, with at most 48 steps and 16 spoken lines. Do not add filler to reach
+the maximum. An assistant's future answer or success is never scripted.
+Before returning, check coverage against each explicitly requested human and
+caller utterance. A caller is NOT the assistant: requested call information
+must appear as speaker=phone dialogue after answer_phone. Preserve both an
+original arrangement and its later correction in chronological order. A human
+acknowledgement alone does not convey either fact. Do not omit requested times,
+places, items, corrections or reminder cancellations to shorten the plan.
+walk_say is the supported EXCEPTION to the non-say/target rules above: the
+human walks continuously toward a legal WALK destination while one voice line
+plays. It has target=<walking destination>, line=<short English dialogue>,
+speaker=human or phone, audience=assistant or phone, and seconds=0..30.
+A phone voice/audience still requires an active answered call. Use walk_say
+when the user requests speech during walking, not a camera cut or teleport.
+It waits for BOTH the physical arrival and utterance before the next step.
+Its seconds field is extra listening time after both have finished.
+Do not use walk_say to walk toward stove/faucet/bathtub: use room destinations.
+In a HOME only, bathroom_doorway is an additional reviewed walk/walk_say
+destination in the narrow entrance; a person there may obstruct the companion.
+It does not guarantee blocking, successful yielding, or any assistant outcome.
+'''
+
 
 def validate_scenario(value):
-    exact(value, SCENARIO_SCHEMA['required'])
+    extended = isinstance(value, dict) and value.get('schema') == LONG_SCHEMA
+    exact(value, (LONG_SCENARIO_SCHEMA if extended else SCENARIO_SCHEMA)['required'])
     if type(value['supported']) is not bool or value['mode'] not in ('home', 'micro'):
         raise ValueError('Invalid supported flag or scene mode')
     text(value['explanation'], 800)
@@ -107,24 +145,28 @@ def validate_scenario(value):
     if value['start_room'] not in ROOMS:
         raise ValueError('Unsupported starting room')
     steps, events = value['steps'], value['events']
-    if not isinstance(steps, list) or not 0 <= len(steps) <= 16 or not isinstance(events, list) or len(events) > 3:
+    if not isinstance(steps, list) or not 0 <= len(steps) <= (48 if extended else 16) or not isinstance(events, list) or len(events) > 3:
         raise ValueError('Scenario exceeds supported size')
     if not value['supported'] and (steps or events):
         raise ValueError('Unsupported scenario cannot contain executable steps')
     if value['supported'] and not steps:
         raise ValueError('An executable scenario needs at least one step')
-    at_phone = held = call = False; spoken = 0
+    at_phone = held = call = False; spoken = 0; waiting = 0
     for step in steps:
         exact(step, STEP['required'])
         skill, target = step['skill'], step['target']
-        if skill not in SKILLS or target not in TARGETS:
+        if skill not in SKILLS + (('walk_say',) if extended else ()) or target not in TARGETS + (('bathroom_doorway',) if extended else ()):
             raise ValueError('Unknown actor skill or target')
         if type(step['seconds']) is not int or not 0 <= step['seconds'] <= 30:
             raise ValueError('Invalid wait duration')
+        waiting += step['seconds']
+        if extended and waiting > 300:
+            raise ValueError('Extended scenario waiting exceeds five minutes')
         if step['speaker'] not in ('human', 'phone') or step['audience'] not in ('assistant', 'phone'):
             raise ValueError('Invalid speaker or audience')
-        if skill == 'walk':
-            allowed = ('center', 'window', 'phone') if value['mode'] == 'micro' else ('phone', *ROOMS)
+        if skill in ('walk', 'walk_say'):
+            allowed = (('center', 'window', 'phone') if value['mode'] == 'micro'
+                       else ('phone', *ROOMS) + (('bathroom_doorway',) if extended else ()))
             if target not in allowed:
                 raise ValueError('Walking destination unavailable in this scene')
             at_phone = target == 'phone'
@@ -146,17 +188,17 @@ def validate_scenario(value):
             if not call:
                 raise ValueError('No active phone call to hang up')
             call = False
-        if skill == 'say':
+        if skill in ('say', 'walk_say'):
             line = text(step['line'], 180); spoken += 1
-            if any(ord(c) < 32 or ord(c) > 126 for c in line) or len(line.split()) > 25 or spoken > 6:
-                raise ValueError('At most six short English speech lines')
+            if any(ord(c) < 32 or ord(c) > 126 for c in line) or len(line.split()) > 25 or spoken > (16 if extended else 6):
+                raise ValueError('Scenario exceeds its short English speech limit')
             if (step['speaker'] == 'phone' or step['audience'] == 'phone') and not call:
                 raise ValueError('Phone dialogue requires an active call')
             if step['speaker'] == 'phone' and step['audience'] != 'phone':
                 raise ValueError('Phone speaker must use phone audience')
         elif step['line'] != '' or step['speaker'] != 'human' or step['audience'] != 'assistant':
-            raise ValueError('Only say steps can contain dialogue')
-        if skill not in ('say', 'wait') and step['seconds'] != 0:
+            raise ValueError('Only speech steps can contain dialogue')
+        if skill not in ('say', 'walk_say', 'wait') and step['seconds'] != 0:
             raise ValueError('Only say/wait steps can specify a delay')
         if skill == 'wait' and step['seconds'] == 0:
             raise ValueError('Wait duration must be positive')
@@ -165,7 +207,7 @@ def validate_scenario(value):
         exact(event, ('id', 'at_s'))
         if value['mode'] != 'home' or event['id'] not in EVENTS or event['id'] in seen:
             raise ValueError('Event unavailable or duplicated')
-        if type(event['at_s']) is not int or not 0 <= event['at_s'] <= 180:
+        if type(event['at_s']) is not int or not 0 <= event['at_s'] <= (600 if extended else 180):
             raise ValueError('Invalid event onset')
         seen.add(event['id'])
     return copy.deepcopy(value)
