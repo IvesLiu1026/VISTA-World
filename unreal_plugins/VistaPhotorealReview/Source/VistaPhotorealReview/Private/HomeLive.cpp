@@ -113,12 +113,25 @@ void AHomeActionsCharacter::PollLiveCommands()
         if (!D || String(D,TEXT("schema"))!=TEXT("vista.live-command/v1")) continue;
         FString Code=TEXT("LIVE_REJECTED");const FString Op=String(D,TEXT("op"));
         auto* C=FindComponentByClass<UVistaCompanionComponent>();
+        const FString Cause=String(D,TEXT("cause"));bool ActionSpeechCurrent=true;
+        if (Op==TEXT("speech") && (Cause.StartsWith(TEXT("requested_action:")) || Cause.StartsWith(TEXT("native_action_feedback:"))))
+        {
+            TArray<FString> Parts;Cause.ParseIntoArray(Parts,TEXT(":"),false);
+            auto* Helper=C?C->Companion.Get():nullptr;
+            ActionSpeechCurrent=Helper && Parts.Num()==3 && Parts[1]==Helper->AssistId;
+            if (ActionSpeechCurrent)
+            {
+                const FString Status=Helper->AssistStatus;
+                ActionSpeechCurrent=Parts[0]==TEXT("native_action_feedback")?Parts[2]==Status:
+                    Parts[2]==Helper->AssistTarget && (Status==TEXT("approaching") || Status==TEXT("reaching") || Status==TEXT("waiting_clearance"));
+            }
+        }
         // Actor lease stays valid across its own completed action generations,
         // but can never survive a scene reset. Object actions still check reach,
         // current state and transaction preconditions in BeginAction.
         if (String(D,TEXT("session_id"))!=SessionId ||
             (Op==TEXT("actor")?Number(D,TEXT("scene_epoch"),-1)!=SceneEpoch:Number(D,TEXT("generation"),-1)!=Generation) ||
-            Number(D,TEXT("expires_clock_s"),-1)<SceneClock || Number(D,TEXT("expires_clock_s"))>SceneClock+15)
+            Number(D,TEXT("expires_clock_s"),-1)<SceneClock || Number(D,TEXT("expires_clock_s"))>SceneClock+15 || !ActionSpeechCurrent)
             Code=TEXT("STALE_LIVE_REJECTED");
         else if (Op==TEXT("speech") && C && C->Companion)
         {
@@ -148,7 +161,7 @@ void AHomeActionsCharacter::PollLiveCommands()
                         HumanVoice->SetSound(HumanWave);HumanVoice->Play();
                     }
                     C->Reply=(Role==TEXT("assistant")?TEXT("Assistant: "):(Role==TEXT("human")?TEXT("You: "):TEXT("Phone: ")))+String(S,TEXT("text"));
-                    C->Status=TEXT("Live · Jev");C->NoticeUntil=GetWorld()->GetTimeSeconds()+PCM.Num()/(2.f*Rate);Code=TEXT("SPEECH_STARTED");
+                    C->Status=TEXT("Live assistant");C->NoticeUntil=GetWorld()->GetTimeSeconds()+PCM.Num()/(2.f*Rate);Code=TEXT("SPEECH_STARTED");
                 }
             }
         }
@@ -185,6 +198,7 @@ void AHomeActionsCharacter::PollLiveCommands()
         auto R=MakeShared<FJsonObject>();R->SetStringField(TEXT("schema"),TEXT("vista.live-reply/v1"));
         R->SetStringField(TEXT("op"),Op);R->SetStringField(TEXT("code"),Code);R->SetStringField(TEXT("session_id"),SessionId);
         R->SetNumberField(TEXT("generation"),Generation);R->SetNumberField(TEXT("clock_s"),SceneClock);
+        if (Op==TEXT("assist") && Code==TEXT("ASSIST_ACCEPTED")) R->SetStringField(TEXT("action_id"),C->Companion->AssistId);
         if (Op==TEXT("scene")) {R->SetStringField(TEXT("placement_diagnostic"),LiveLayoutDiagnostic);R->SetNumberField(TEXT("new_props"),LiveDressing.Num());}
         if (Op==TEXT("micro_scene") && ForgeReceipt.IsValid()) R->SetObjectField(TEXT("assembly"),ForgeReceipt);
         AppendReceipt(R);PublishState();const FString ReplyDir=BridgeDir/TEXT("live_responses");IFileManager::Get().MakeDirectory(*ReplyDir,true);

@@ -88,13 +88,14 @@ class Director:
         except Exception as exc:
             with self.lock: self.job.update(status='stopped' if isinstance(exc,Stopped) else 'failed',error=str(exc)[:400])
 
-    def play(self,ident,view='first'):
+    def play(self,ident,view='first',assistant='live'):
         with self.lock:
             if self.busy(): raise ValueError('Stop the current scenario before starting another')
             if ident not in self.items or view not in ('first','third'): raise ValueError('Unknown scenario or view')
+            if assistant not in ('live','off'): raise ValueError('Unknown assistant condition')
             self.stop_event.clear(); self.error=''; self.owner=uuid.uuid4().hex
-            self.job={'id':ident,'run_id':self.owner,'view':view,'status':'starting','steps':[],'events':[]}
-            self.live.pool.submit(self._play,copy.deepcopy(self.items[ident]),view,self.owner)
+            self.job={'id':ident,'run_id':self.owner,'view':view,'assistant':assistant,'requested_wall_time':time.time(),'status':'starting','steps':[],'events':[],'interventions':[]}
+            self.live.pool.submit(self._play,copy.deepcopy(self.items[ident]),view,self.owner,assistant)
             return copy.deepcopy(self.job)
 
     def cancel(self):
@@ -110,7 +111,27 @@ class Director:
         if (raw['session_id'],raw['scene_epoch'])!=identity: raise Stopped('Scene changed during actor observation')
         if identity!=self.identity: raise Stopped('Scene changed; old scenario stopped')
         if raw.get('director',{}).get('owner')!=self.owner: raise Stopped('Native actor control ended')
+        self.record_intervention(raw)
         return raw
+
+    def record_intervention(self,raw):
+        feedback=raw.get('companion_execution',{})
+        if not feedback.get('id'): return
+        # This is a separate execution result, never inferred from actor steps.
+        # Only the assistant's existing own-action receipt fields are retained.
+        with self.lock:
+            entries=self.job.setdefault('interventions',[])
+            row=next((r for r in entries if r['id']==feedback['id']),None)
+            if feedback.get('target') not in ('stove','faucet'):
+                if not (row and feedback.get('status')=='cancelled' and
+                        row.get('status') in ('approaching','reaching','waiting_clearance')): return
+            if row is None:
+                row={'id':feedback['id'],'target':feedback['target'],'started_clock_s':raw['clock_s'],'transitions':[]}
+                entries.append(row)
+            if row.get('status')!=feedback.get('status'):
+                row['transitions'].append({'status':feedback.get('status'),'clock_s':raw['clock_s']})
+            row.update(status=feedback.get('status'),updated_clock_s=raw['clock_s'],
+                       finger_error_cm=feedback.get('finger_error_cm'))
 
     def command(self,control,**fields):
         self.check()
@@ -208,7 +229,7 @@ class Director:
         if skill=='wait': self.wait(step['seconds']); return {'status':'waited'}
         raise ValueError('Unsupported skill')
 
-    def _play(self,row,view,owner):
+    def _play(self,row,view,owner,assistant='live'):
         done=threading.Event(); monitor=None; previous_enabled=self.live.enabled
         terminal='completed'; failure=None
         try:
@@ -232,13 +253,14 @@ class Director:
             if row['micro'] is not None: proposal['micro']=row['micro']
             with self.live.world_lock:
                 self.live.proposals[row['id']]=proposal; self.live.apply(row['id'])
+                with self.live.lock: self.live.enabled=assistant=='live'
                 self.folder,self.identity,_=self.live.bridge.snapshot()
                 result=self.live.bridge.command('actor',{'control':'begin','owner':owner,'view':view},self.identity)
                 if result['code']!='ACTOR_ACCEPTED': raise RuntimeError('Actor could not start: '+result['code'])
             self.started=result['clock_s']; self.events=copy.deepcopy(spec['events']); self.last_heartbeat=0
             monitor=threading.Thread(target=self.monitor,args=(done,),daemon=True); monitor.start()
             with self.lock: self.job.update(status='running',started_clock_s=self.started,scenario=spec)
-            self.log('start',{'run_id':owner,'scenario_id':row['id'],'identity':self.identity,'view':view})
+            self.log('start',{'run_id':owner,'scenario_id':row['id'],'identity':self.identity,'view':view,'assistant':assistant})
             self.wait(1.5)  # Settle the chosen camera before the first acting step.
             for index,step in enumerate(spec['steps']):
                 self.check()
@@ -265,9 +287,15 @@ class Director:
                     _,identity,_=self.live.bridge.snapshot()
                     if identity==self.identity: self.live.cancel()
                 except (RuntimeError,OSError,ValueError): pass
-            with self.live.lock: self.live.enabled=previous_enabled
+            try:
+                folder,identity,_=self.live.bridge.snapshot()
+                if identity==self.identity: self.record_intervention(read(folder/'state.json'))
+            except (RuntimeError,OSError,ValueError): pass
+            with self.live.lock:
+                self.live.enabled=previous_enabled if terminal=='completed' and assistant=='live' else False
             with self.lock:
                 self.job['status']=terminal
+                self.job['finished_wall_time']=time.time()
                 if failure: self.job['error']=failure
             self.log('finish',copy.deepcopy(self.job))
             atomic(self.root/(owner+'.run.json'),self.job)

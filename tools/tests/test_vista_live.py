@@ -240,6 +240,95 @@ class LiveConcurrencyTests(unittest.TestCase):
             self.assertFalse(live.bridge.calls)
             self.assertIn('not authorized', live.warning)
 
+    def test_native_wait_requests_space_without_claiming_completion(self):
+        with tempfile.TemporaryDirectory() as d:
+            live = self.live(Path(d)); heard = []
+            live.voice = lambda line: line
+            live.speak = lambda clip, epoch, **kw: heard.append(clip)
+            for status in ('waiting_clearance', 'blocked_clearance', 'committed'):
+                live.execution_feedback(1, {'target': 'faucet', 'status': status})
+            self.assertIn('take a step to the side', heard[0])
+            self.assertIn('cannot safely reach', heard[1])
+            self.assertNotIn('off now', ' '.join(heard[:2]))
+            self.assertEqual(heard[2], 'The bath tap is off now.')
+
+    def test_queued_space_request_dropped_after_human_moves_or_cancels(self):
+        import time
+        for ident, status in (('one', 'approaching'), ('one', 'committed'),
+                              ('one', 'cancelled'), ('two', 'waiting_clearance')):
+            with self.subTest(ident=ident, status=status), tempfile.TemporaryDirectory() as d:
+                live = self.live(Path(d))
+                live.bridge.feedback = lambda: {'id': 'one', 'status': 'waiting_clearance'}
+                live.speech_until = time.monotonic() + 30
+                live.speak(live.clips['assistant_water'], 1,
+                           cause='native_action_feedback:one:waiting_clearance')
+                self.assertEqual(len(live.pending_speech), 1)
+                live.bridge.feedback = lambda: {'id': ident, 'status': status}
+                live.speech_until = 0
+                live.speak(*live.pending_speech.pop())
+                self.assertFalse(live.bridge.calls)
+
+    def test_cancelled_request_does_not_spend_on_new_plan(self):
+        with tempfile.TemporaryDirectory() as d:
+            live = self.live(Path(d))
+            live.bridge.feedback = lambda: {'id': 'one', 'target': '', 'status': 'cancelled'}
+            calls = []; live.api = lambda *args: calls.append(args)
+            live.plan(1, live.policy.state(), 'explicit_help', 'Turn off the tap.', True, 'faucet', 'one')
+            self.assertFalse(calls)
+            self.assertIsNone(live.last_plan)
+
+    def test_cancel_or_replace_during_plan_discards_intention_and_voice_cost(self):
+        for ident, target, status in (('one','','cancelled'), ('two','faucet','approaching'),
+                                      ('one','faucet','committed')):
+            with self.subTest(status=status, ident=ident), tempfile.TemporaryDirectory() as d:
+                live = self.live(Path(d))
+                live.policy.ingest(observation(2, ['visible_running_bath_tap']))
+                current = {'id': 'one', 'target': 'faucet', 'status': 'approaching'}
+                live.bridge.feedback = lambda: current
+                def api(*args):
+                    current.update(id=ident, target=target, status=status)
+                    return {'answer': {'speech': 'I will turn off the tap.', 'steps': [
+                        {'skill':'turn_off','target':'faucet','description':'Turn off the tap.'}]}}
+                live.api = api
+                voices = []; live.voice = lambda line: voices.append(line)
+                live.plan(1, live.policy.state(), 'explicit_help', 'Turn off the tap.', True, 'faucet', 'one')
+                self.assertIsNone(live.last_plan)
+                self.assertFalse(voices)
+                self.assertFalse(live.bridge.calls)
+
+    def test_intention_validity_rechecked_after_voice_waits(self):
+        import time
+        for ident, target, status in (('one','','cancelled'), ('two','faucet','approaching'),
+                                      ('one','faucet','committed')):
+            with self.subTest(status=status, ident=ident), tempfile.TemporaryDirectory() as d:
+                live = self.live(Path(d))
+                live.bridge.feedback = lambda: {'id':'one','target':'faucet','status':'approaching'}
+                live.speech_until = time.monotonic() + 30
+                live.speak(live.clips['assistant_water'], 1, cause='requested_action:one:faucet')
+                self.assertEqual(len(live.pending_speech), 1)
+                live.bridge.feedback = lambda: {'id':ident,'target':target,'status':status}
+                live.speech_until = 0
+                live.speak(*live.pending_speech.pop())
+                self.assertFalse(live.bridge.calls)
+
+    def test_current_request_intention_still_plays(self):
+        with tempfile.TemporaryDirectory() as d:
+            live = self.live(Path(d))
+            live.bridge.feedback = lambda: {'id':'one','target':'faucet','status':'waiting_clearance'}
+            live.speak(live.clips['assistant_water'], 1, cause='requested_action:one:faucet')
+            self.assertEqual([call[0] for call in live.bridge.calls], ['speech'])
+
+    def test_request_binds_to_accepted_action_not_replacement_snapshot(self):
+        with tempfile.TemporaryDirectory() as d:
+            live = self.live(Path(d))
+            live.policy.ingest(observation(2, ['visible_running_bath_tap']))
+            live.bridge.command = lambda *args: {'code':'ASSIST_ACCEPTED','action_id':'one'}
+            live.bridge.feedback = lambda: {'id':'two','target':'faucet','status':'approaching'}
+            calls = []; live.api = lambda *args: calls.append(args)
+            live.respond(1, live.policy.state(), 'Turn off the tap.', 'faucet')
+            self.assertFalse(calls)
+            self.assertIsNone(live.last_plan)
+
 
 class BudgetTests(unittest.TestCase):
     def test_persistent_idempotency_and_no_ambiguous_retry(self):

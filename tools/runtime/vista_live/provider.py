@@ -15,6 +15,7 @@ import urllib.request
 
 from runtime.vista_jev.protocol import normalize_jev, openrouter_jev_request
 from runtime.vista_live.budget import Budget
+from runtime.vista_live.research_contract import model_request, validate_decision
 from runtime.vista_live.director_contract import SCENARIO_SCHEMA, SCENARIO_INSTRUCTIONS, validate_scenario
 from runtime.vista_live.forge import (RECIPE_INSTRUCTIONS, RECIPE_SCHEMA,
     recipe_questions, normalize_recipe, validate_recipe)
@@ -39,13 +40,32 @@ def strict_json(content):
     return json.loads(content, object_pairs_hook=pairs)
 
 
+def research_json(content):
+    # Some routes wrap an otherwise schema-conforming object in one code fence.
+    # Unwrap only an entire, single JSON block; still reject duplicate keys,
+    # extra prose, partial documents and every unsupported action/field.
+    if not isinstance(content, str):
+        raise ValueError('Expected model JSON text')
+    fenced = re.fullmatch(r'\s*```json\s*\n([^`]+)\n```\s*', content)
+    return strict_json(fenced.group(1) if fenced else content)
+
+
 class Provider:
-    def __init__(self, root, key_file, cap=2.0, limits=None):
+    CHAT_MODELS = ('qwen/qwen3.5-35b-a3b', 'qwen/qwen3.5-397b-a17b', 'openai/gpt-5.4-mini')
+
+    def __init__(self, root, key_file, cap=2.0, limits=None, chat_provider=None,
+                 chat_model='qwen/qwen3.5-35b-a3b'):
         self.root = root
         root.mkdir(parents=True, exist_ok=True)
         self.key = re.findall(r'sk-or-v1-[A-Za-z0-9_-]+', key_file.read_text())[0]
         self.budget = Budget(root / 'budget.sqlite', cap=cap, limits=limits)
         self.opener = urllib.request.build_opener(NoRedirect())
+        if chat_provider is not None and not re.fullmatch(r'[a-z0-9-]+(?:/[a-z0-9-]+)?', chat_provider):
+            raise ValueError('Invalid explicit provider endpoint')
+        self.chat_provider = chat_provider
+        if chat_model not in self.CHAT_MODELS:
+            raise ValueError('Unreviewed chat model')
+        self.chat_model = chat_model
 
     def call(self, request):
         if set(request) != {'id', 'kind', 'input'} or not re.fullmatch(r'[a-zA-Z0-9_-]{1,90}', request['id']):
@@ -111,6 +131,8 @@ class Provider:
             if not value.get('explicit_help_target'):
                 schema['properties']['steps']['items']['properties']['skill']['enum'].remove('turn_off')
             body = chat_request(instructions, schema, value)
+        elif kind == 'research':
+            body = model_request(value)
         elif kind == 'tts':
             if set(value) != {'text', 'role'} or value['role'] not in ('human', 'assistant', 'phone'):
                 raise ValueError('Invalid speech role')
@@ -123,16 +145,25 @@ class Provider:
             endpoint = 'audio/speech'
         else:
             raise ValueError('Unknown provider operation')
-        if len(json.dumps(body).encode()) > 24000:
+        if len(json.dumps(body).encode()) > (2_100_000 if kind == 'research' else 24000):
             raise ValueError('Provider input limit exceeded')
         bucket = ('decision' if kind in ('layout', 'intent', 'forge_jev') else
-                  'plan' if kind in ('author', 'chat', 'forge_qwen', 'scenario') else kind)
+                  'plan' if kind in ('author', 'chat', 'forge_qwen', 'scenario', 'research') else kind)
+        # A blocked local attempt never reaches a provider and must not consume
+        # another reservation. Keep the failed upstream request's receipt intact.
+        if (self.root / 'circuit.json').exists():
+            raise RuntimeError('Provider circuit open; inspect receipt before manual recovery')
+        if self.chat_provider and endpoint == 'chat/completions':
+            body['provider'] = {**body.get('provider', {}), 'only': [self.chat_provider], 'allow_fallbacks': False}
+        if endpoint == 'chat/completions':
+            body['model'] = self.chat_model
+            if self.chat_model == 'openai/gpt-5.4-mini':
+                body.pop('temperature', None)  # Not exposed on this reviewed route.
+                body['reasoning'] = {'effort': 'low'}
+                body['max_tokens'] = max(body['max_tokens'], 1400)
         cached = self.budget.reserve(ident, bucket, request)
         if cached is not None:
             return cached
-        if (self.root / 'circuit.json').exists():
-            self.budget.finish(ident, {'error': 'Provider circuit open'}, False)
-            raise RuntimeError('Provider circuit open; inspect receipt before manual recovery')
         (self.root / (ident + '.request.json')).write_text(json.dumps(body, ensure_ascii=False))
         start = time.monotonic()
         url = 'https://openrouter.ai/api/' + (endpoint if endpoint.startswith('alpha/') else 'v1/' + endpoint)
@@ -177,6 +208,8 @@ class Provider:
                         if goal['type'] != 'choice' or goal['choice'] not in ('none', 'leave', 'find_keys', 'leave_find_keys'):
                             raise ValueError('Invalid goal choice')
                         answer = {**answer, 'human_goal': goal['choice']}
+                elif kind == 'research':
+                    answer = validate_decision(research_json(raw['choices'][0]['message']['content']), value)
                 else:
                     content = raw['choices'][0]['message']['content']
                     validator = (validate_scenario if kind == 'scenario' else validate_scene if kind == 'author' else validate_dialogue if kind == 'chat'
@@ -213,9 +246,13 @@ def main():
     parser.add_argument('--decision-limit', type=int, default=1000)
     parser.add_argument('--plan-limit', type=int, default=60)
     parser.add_argument('--tts-limit', type=int, default=30)
+    parser.add_argument('--chat-provider', help='Explicit OpenRouter endpoint slug; never an automatic fallback')
+    parser.add_argument('--chat-model', choices=Provider.CHAT_MODELS, default=Provider.CHAT_MODELS[0],
+                        help='Explicit reviewed vision/authoring model; never an automatic fallback')
     args = parser.parse_args()
     provider = Provider(args.root, args.key_file, args.cap,
-                        {'decision': args.decision_limit, 'plan': args.plan_limit, 'tts': args.tts_limit})
+                        {'decision': args.decision_limit, 'plan': args.plan_limit, 'tts': args.tts_limit},
+                        args.chat_provider, args.chat_model)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -235,7 +272,7 @@ def main():
         def do_POST(self):
             try:
                 size = int(self.headers.get('Content-Length', '0'))
-                if not 0 < size <= 24000:
+                if not 0 < size <= 2_100_000:
                     raise ValueError('Invalid input size')
                 self.send(200, provider.call(json.loads(self.rfile.read(size))))
             except Exception as exc:
