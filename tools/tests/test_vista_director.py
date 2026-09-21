@@ -103,6 +103,39 @@ class Runner(unittest.TestCase):
         with self.assertRaises(ValueError): self.d.compile('another room')
         self.live.pool.submit.assert_not_called()
 
+    def test_no_intervention_condition_stays_paused_after_actor_completes(self):
+        self.d.job={'steps':[]}
+        self.state['companion_execution']={}
+        atomic(self.live.root/'state.json',self.state)
+        self.live.enabled=True; self.live.proposals={}
+        self.live.bridge.command.return_value={'code':'ACTOR_ACCEPTED','clock_s':5}
+        self.d.monitor=lambda done:None; self.d.wait=lambda seconds:None
+        seen=[]
+        def act(*args):
+            seen.append(self.live.enabled)
+            return {'status':'completed'}
+        self.d.step=act
+        spec=scenario(); spec['steps']=[step('wait',seconds=1)]
+        row={'id':'test','scenario':spec,'layout':'everyday','micro':None}
+        self.d._play(row,'first',self.d.owner,'off')
+        self.assertEqual(seen,[False])
+        self.assertEqual(self.d.job['status'],'completed')
+        self.assertFalse(self.live.enabled)
+
+    def test_stop_during_actor_does_not_reenable_the_assistant(self):
+        self.d.job={'steps':[]}
+        self.state['companion_execution']={}
+        atomic(self.live.root/'state.json',self.state)
+        self.live.enabled=True; self.live.proposals={}
+        self.live.bridge.command.return_value={'code':'ACTOR_ACCEPTED','clock_s':5}
+        self.d.monitor=lambda done:None; self.d.wait=lambda seconds:None
+        def stop(*args): raise Stopped('Stopped by user')
+        self.d.step=stop
+        spec=scenario(); spec['steps']=[step('wait',seconds=1)]
+        self.d._play({'id':'test','scenario':spec,'layout':'everyday','micro':None},'first',self.d.owner)
+        self.assertEqual(self.d.job['status'],'stopped')
+        self.assertFalse(self.live.enabled)
+
     def test_unsupported_compile_does_not_reset_or_request_voice(self):
         spec=scenario(); spec.update(supported=False,steps=[],events=[])
         self.live.api.return_value={'answer':spec}

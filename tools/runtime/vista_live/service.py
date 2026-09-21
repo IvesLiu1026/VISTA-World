@@ -639,17 +639,26 @@ def handler(live, web=False):
             if self.path == '/favicon.ico':
                 self.send_response(204); self.end_headers(); return
             if self.path == '/':
-                self.send(200, (Path(__file__).with_name('index.html').read_text().replace('__TOKEN__', live.token)), True)
+                page = 'research.html' if hasattr(live, 'capture') else 'index.html'
+                self.send(200, (Path(__file__).with_name(page).read_text().replace('__TOKEN__', live.token)), True)
+            elif self.path == '/research' and hasattr(live, 'capture'):
+                self.send(200, Path(__file__).with_name('research.html').read_text().replace('__TOKEN__', live.token), True)
             elif self.path == '/demo':
                 self.send(200, Path(__file__).with_name('demo.html').read_text(), True)
             elif self.path == '/themes':
                 self.send(200, Path(__file__).with_name('themes.html').read_text().replace('__TOKEN__', live.token), True)
             elif self.path == '/director':
                 self.send(200, Path(__file__).with_name('director.html').read_text().replace('__TOKEN__', live.token), True)
-            elif (self.path in ('/demo/first.mp4', '/demo/third.mp4', '/demo/first.jpg', '/demo/third.jpg') or
-                  re.fullmatch(r'/theme-media/[a-z]+/(first|third|micro)\.(jpg|mp4)', self.path)):
-                path = (live.root / 'media' / self.path.rsplit('/', 1)[1] if self.path.startswith('/demo/') else
-                        live.root / 'theme-media' / self.path.removeprefix('/theme-media/'))
+            elif (self.path in ('/demo/first.mp4', '/demo/third.mp4', '/demo/first.jpg', '/demo/third.jpg', '/demo/teacher-pack.zip') or
+                  re.fullmatch(r'/demo/(study|control)-(first|third)\.(jpg|mp4)', self.path) or
+                  re.fullmatch(r'/theme-media/[a-z]+/(first|third|micro)\.(jpg|mp4)', self.path) or
+                  re.fullmatch(r'/research/frames/[A-Za-z0-9_-]{1,140}_(ego|exo)\.png', self.path)):
+                if self.path.startswith('/research/frames/'):
+                    path = live.root / 'research' / 'frames' / self.path.rsplit('/', 1)[1]
+                elif self.path.startswith('/demo/'):
+                    path = live.root / 'media' / self.path.rsplit('/', 1)[1]
+                else:
+                    path = live.root / 'theme-media' / self.path.removeprefix('/theme-media/')
                 if not path.resolve().is_relative_to(live.root.resolve()):
                     self.send(404, {'error': 'Not found'}); return
                 if not path.is_file() or path.is_symlink():
@@ -661,7 +670,9 @@ def handler(live, web=False):
                     self.send_response(416); self.send_header('Content-Range', f'bytes */{size}')
                     self.send_header('Content-Length', '0'); self.end_headers(); return
                 self.send_response(206 if partial else 200)
-                self.send_header('Content-Type', 'video/mp4' if path.suffix == '.mp4' else 'image/jpeg')
+                self.send_header('Content-Type', {'.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.zip': 'application/zip'}[path.suffix])
+                if path.suffix == '.zip':
+                    self.send_header('Content-Disposition', 'attachment; filename="VISTA-teacher-demo.zip"')
                 self.send_header('Content-Length', str(end-start+1)); self.send_header('Accept-Ranges', 'bytes')
                 if partial:
                     self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
@@ -694,10 +705,12 @@ def handler(live, web=False):
                     raise ValueError('Stop the scenario before changing scenes')
                 if self.path in ('/say', '/respond'):
                     result = live.say(body.get('text'), body.get('target'))
+                elif self.path == '/research/observe' and hasattr(live, 'capture'):
+                    result = live.observe()
                 elif self.path == '/director/compile':
                     result = live.director.compile(body.get('prompt'),body.get('seed',0))
                 elif self.path == '/director/play':
-                    result = live.director.play(body.get('id'),body.get('view','first'))
+                    result = live.director.play(body.get('id'),body.get('view','first'),body.get('assistant','live'))
                 elif self.path == '/director/stop':
                     result = live.director.cancel()
                 elif self.path == '/forge/generate':
@@ -754,8 +767,25 @@ def main():
     p.add_argument('--web-port', type=int, default=48999)
     p.add_argument('--provider', default='http://127.0.0.1:49112')
     p.add_argument('--paused', action='store_true', help='Start without background model decisions')
+    p.add_argument('--research', action='store_true', help='Use ego RGB and the large model as the primary policy')
+    p.add_argument('--research-interval', type=float, default=12,
+                   help='Seconds between periodic policy scans; new input and own-action feedback remain immediate')
+    p.add_argument('--caption-only', action='store_true', help='Explicit development mode without paid assistant TTS')
+    p.add_argument('--local-tts', help='Explicit local research TTS endpoint; no automatic cloud fallback')
     args = p.parse_args()
-    live = Live(args.root, Bridge(args.workspace, args.bridge, args.project), args.speech, args.provider)
+    cls = Live
+    if args.research:
+        from runtime.vista_live.research import ResearchLive
+        cls = ResearchLive
+    live = cls(args.root, Bridge(args.workspace, args.bridge, args.project), args.speech, args.provider)
+    if args.research:
+        live.research_voice = not args.caption_only
+        if not 2 <= args.research_interval <= 120:
+            p.error('--research-interval must be between 2 and 120 seconds')
+        live.research_interval = args.research_interval
+        if args.local_tts and not re.fullmatch(r'http://127\.0\.0\.1:\d{4,5}', args.local_tts):
+            raise ValueError('Local speech must use a loopback endpoint')
+        live.local_tts = args.local_tts
     live.enabled = not args.paused
     threading.Thread(target=live.tick, daemon=True).start()
     web = ThreadingHTTPServer((args.web_bind, args.web_port), handler(live, True))

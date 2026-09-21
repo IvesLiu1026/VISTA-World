@@ -161,7 +161,7 @@ void AHomeActionsCharacter::PollLiveCommands()
                         HumanVoice->SetSound(HumanWave);HumanVoice->Play();
                     }
                     C->Reply=(Role==TEXT("assistant")?TEXT("Assistant: "):(Role==TEXT("human")?TEXT("You: "):TEXT("Phone: ")))+String(S,TEXT("text"));
-                    C->Status=TEXT("Live · Jev");C->NoticeUntil=GetWorld()->GetTimeSeconds()+PCM.Num()/(2.f*Rate);Code=TEXT("SPEECH_STARTED");
+                    C->Status=TEXT("Live assistant");C->NoticeUntil=GetWorld()->GetTimeSeconds()+PCM.Num()/(2.f*Rate);Code=TEXT("SPEECH_STARTED");
                 }
             }
         }
