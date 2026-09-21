@@ -15,8 +15,9 @@ import urllib.request
 
 from runtime.vista_jev.protocol import normalize_jev, openrouter_jev_request
 from runtime.vista_live.budget import Budget
-from runtime.vista_live.research_contract import model_request, validate_decision
-from runtime.vista_live.director_contract import SCENARIO_SCHEMA, SCENARIO_INSTRUCTIONS, validate_scenario
+from runtime.vista_live.research_contract import model_request, validate_decision, canonical_memory_selection
+from runtime.vista_live.director_contract import (SCENARIO_SCHEMA, SCENARIO_INSTRUCTIONS,
+    LONG_SCENARIO_SCHEMA, LONG_SCENARIO_INSTRUCTIONS, validate_scenario)
 from runtime.vista_live.forge import (RECIPE_INSTRUCTIONS, RECIPE_SCHEMA,
     recipe_questions, normalize_recipe, validate_recipe)
 from runtime.vista_live.contracts import (ACTIONS, LAYOUTS, PLAN_INSTRUCTIONS, PLAN_SCHEMA,
@@ -40,14 +41,28 @@ def strict_json(content):
     return json.loads(content, object_pairs_hook=pairs)
 
 
-def research_json(content):
+def research_json(content, normalizations=None):
     # Some routes wrap an otherwise schema-conforming object in one code fence.
     # Unwrap only an entire, single JSON block; still reject duplicate keys,
     # extra prose, partial documents and every unsupported action/field.
     if not isinstance(content, str):
         raise ValueError('Expected model JSON text')
     fenced = re.fullmatch(r'\s*```json\s*\n([^`]+)\n```\s*', content)
-    return strict_json(fenced.group(1) if fenced else content)
+    document = (fenced.group(1) if fenced else content).strip()
+    try:
+        return strict_json(document)
+    except json.JSONDecodeError as exc:
+        # Observed upstream adapter defect: exactly the same complete JSON
+        # document emitted twice. Accept ONE decision only when both byte-level
+        # texts match after boundary whitespace. Never choose among conflicting
+        # objects, ignore prose, tolerate duplicate keys or repair model intent.
+        if exc.msg != 'Extra data': raise
+        first, remainder = document[:exc.pos].strip(), document[exc.pos:].strip()
+        if first != remainder: raise
+        value = strict_json(first)
+        if not isinstance(value, dict): raise ValueError('Expected a decision object')
+        if normalizations is not None: normalizations.append('duplicate_identical_json_document_removed')
+        return value
 
 
 class Provider:
@@ -118,6 +133,9 @@ class Provider:
         elif kind == 'scenario':
             body = chat_request(SCENARIO_INSTRUCTIONS, SCENARIO_SCHEMA, {'request': text(value, 1600)})
             body['max_tokens'] = 3500
+        elif kind == 'scenario_long':
+            body = chat_request(LONG_SCENARIO_INSTRUCTIONS, LONG_SCENARIO_SCHEMA, {'request': text(value, 3200)})
+            body['max_tokens'] = 6500
         elif kind == 'author':
             body = chat_request(SCENE_INSTRUCTIONS, SCENE_SCHEMA, {'request': text(value, 1600)})
         elif kind == 'chat':
@@ -148,7 +166,7 @@ class Provider:
         if len(json.dumps(body).encode()) > (2_100_000 if kind == 'research' else 24000):
             raise ValueError('Provider input limit exceeded')
         bucket = ('decision' if kind in ('layout', 'intent', 'forge_jev') else
-                  'plan' if kind in ('author', 'chat', 'forge_qwen', 'scenario', 'research') else kind)
+                  'plan' if kind in ('author', 'chat', 'forge_qwen', 'scenario', 'scenario_long', 'research') else kind)
         # A blocked local attempt never reaches a provider and must not consume
         # another reservation. Keep the failed upstream request's receipt intact.
         if (self.root / 'circuit.json').exists():
@@ -209,16 +227,22 @@ class Provider:
                             raise ValueError('Invalid goal choice')
                         answer = {**answer, 'human_goal': goal['choice']}
                 elif kind == 'research':
-                    answer = validate_decision(research_json(raw['choices'][0]['message']['content']), value)
+                    normalizations = []
+                    parsed = research_json(raw['choices'][0]['message']['content'], normalizations)
+                    answer = validate_decision(canonical_memory_selection(parsed, value), value)
                 else:
                     content = raw['choices'][0]['message']['content']
-                    validator = (validate_scenario if kind == 'scenario' else validate_scene if kind == 'author' else validate_dialogue if kind == 'chat'
+                    validator = (validate_scenario if kind in ('scenario','scenario_long') else validate_scene if kind == 'author' else validate_dialogue if kind == 'chat'
                                  else validate_recipe if kind == 'forge_qwen' else validate_plan)
                     answer = validator(strict_json(content))
                 result = {'answer': answer, 'model': actual, 'provider': raw.get('provider'),
                           'usage': raw.get('usage'), 'latency_ms': latency, 'generation_id': raw.get('id')}
+                if kind == 'research':
+                    if parsed.get('remember_turn_ids') != answer.get('remember_turn_ids'):
+                        normalizations.append('duplicate_existing_memory_ids_removed')
+                    if normalizations: result['normalizations'] = normalizations
                 cost = (raw.get('usage') or {}).get('cost')
-                if isinstance(cost, (int, float)) and cost > self.budget.RESERVES[bucket]:
+                if isinstance(cost, (int, float)) and cost > self.budget.reservation(bucket, request):
                     (self.root / 'circuit.json').write_text(json.dumps({'reason': 'Cost exceeded reservation', 'id': ident}))
             self.budget.finish(ident, result)
             return result

@@ -10,6 +10,7 @@ from .contracts import text
 from .bridge import atomic, read
 from .research_capture import Capture
 from .research_contract import PHYSICAL_ACTIONS, target_for_action, validate_decision
+from .research_memory import EpisodicMemory
 from .service import Live
 
 
@@ -28,12 +29,15 @@ class ResearchLive(Live):
         self.research_inflight = {}
         self.research_due = 0
         self.research_requested = False
+        self.passive_dialogue_until = 0
         self.research_clock = 0
         self.research_interval = 12
         self.research_voice = True
         self.consumed_permissions = set()
         self.local_tts = None
         self.action_targets = {}
+        self.episodic_memory = EpisodicMemory()
+        self.research_memory = False
 
     def own_feedback(self, value):
         # The native component retains a cancelled action across scene resets.
@@ -94,6 +98,11 @@ class ResearchLive(Live):
             # but it must not block a new turn. Keep at most two actual calls.
             self.research_job = None
             self.research_requested = True
+            # Coalesce a short chain of caller/human-to-caller speech. A new
+            # direct request stays immediate; periodic visual scans and native
+            # completion feedback also bypass this one-second quiet window.
+            self.passive_dialogue_until = (0 if role == 'human' and audience == 'assistant'
+                                           else time.monotonic() + 1)
             if role == 'human' and audience == 'assistant':
                 self.error = ''  # A new direct request is a new decision, never a paid retry.
         self.log('research-dialogue', turn)
@@ -150,11 +159,13 @@ class ResearchLive(Live):
         self.revision += 1
         self.research_job = None
         self.research_requested = True
+        self.passive_dialogue_until = 0
         self.research_due = time.monotonic() + 2
         self.feedback = None
         self.last_speech = None
         self.consumed_permissions.clear()
         self.action_targets.clear()
+        self.episodic_memory.reset()
         self.capture.latest = None
         self.capture.last_lease = 0
         self.log('research-sessions', {'identity': identity, 'epoch': self.epoch})
@@ -188,6 +199,7 @@ class ResearchLive(Live):
                                 self.log('research-execution', row)
                                 if feedback['status'] not in ('approaching', 'reaching'):
                                     self.research_requested = True
+                                    self.passive_dialogue_until = 0
                         due = [s for s in self.schedule if s['at_wall'] <= now]
                         self.schedule = [s for s in self.schedule if s not in due]
                         queued = self.pending_speech.pop(0) if self.pending_speech and now >= self.speech_until else None
@@ -223,12 +235,16 @@ class ResearchLive(Live):
                     len(self.research_inflight) < 2 and
                     (self.research_requested or now >= self.research_due) and now >= self.speech_until):
                 return
+            if now < self.passive_dialogue_until and now < self.research_due:
+                return
             if self.executions and (not self.capture.latest or
                     self.capture.latest['clock_s'] < self.executions[-1]['clock_s']):
                 # A post-contact receipt must not be paired with a pre-contact
                 # image that still shows the old flame/stream. Wait one capture.
                 return
             packet = self.capture.observation(self.turns, self.feedback, self.memory, self.research_clock)
+            if self.research_memory:
+                packet = self.episodic_memory.observation(packet)
             job = uuid.uuid4().hex
             self.research_job = job
             self.research_inflight[job] = (self.epoch, self.revision)
@@ -282,6 +298,9 @@ class ResearchLive(Live):
                 self.memory.append({k: decision[k] for k in ('observed', 'action', 'speech', 'permission_turn_id')} |
                                    {'clock_s': self.research_clock, 'result': record['result'], 'target': target_for_action(action)})
                 self.memory = self.memory[-6:]
+                if self.research_memory:
+                    self.episodic_memory.update(packet, decision)
+                    self.log('research-recall', {'decision_id': job, **self.episodic_memory.state()})
                 self.log('research-decisions', record)
             line = decision['speech']
             if line and record['result'] == 'accepted':
@@ -316,10 +335,11 @@ class ResearchLive(Live):
                 'thinking': self.research_job is not None, 'clock_s': self.research_clock,
                 'capture': copy.deepcopy(self.capture.latest),
                 'turns': copy.deepcopy(self.turns[-12:]),
+                'episodic_memory': self.episodic_memory.state() if self.research_memory else None,
                 'decisions': copy.deepcopy(self.decisions[-12:]),
                 'executions': copy.deepcopy(self.executions[-20:]),
                 'voice': 'english_male' if self.research_voice else 'caption_only',
-                'recordings': [name for name in ('main', 'study', 'control') if all(
+                'recordings': [name for name in ('main', 'study', 'control', 'plans', 'permission') if all(
                     (self.root / 'media' / ((view if name == 'main' else name + '-' + view) + '.mp4')).is_file()
                     for view in ('first', 'third'))],
             }
