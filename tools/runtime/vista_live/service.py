@@ -129,6 +129,12 @@ class Live:
                 return
             if cause.startswith('jev:') and self.policy.active != cause[4:]:
                 return  # Resolved/preempted while this voice waited.
+            if cause.startswith('native_action_feedback:'):
+                _, ident, status = cause.split(':', 2)
+                current = self.bridge.feedback()
+                if not current or (current.get('id'), current.get('status')) != (ident, status):
+                    self.log('speech', {'discarded': 'superseded_native_action', 'cause': cause})
+                    return  # Someone moved, cancelled or finished while TTS/queue waited.
             if cause.startswith('chat:'):
                 ticket = int(cause[5:])
                 if not self.conversation.valid(ticket) or self.chat_blocked():
@@ -239,7 +245,7 @@ class Live:
                 if key and key != self.last_feedback:
                     self.last_feedback = key
                     self.log('execution', feedback)
-                    if feedback['status'] in ('committed', 'blocked_obstacle', 'blocked_timeout', 'unreachable_contact', 'contact_or_state_rejected'):
+                    if feedback['status'] in ('committed', 'waiting_clearance', 'blocked_clearance', 'blocked_obstacle', 'blocked_timeout', 'unreachable_contact', 'contact_or_state_rejected'):
                         self.pool.submit(self.execution_feedback, epoch, feedback)
                 if now - self.budget_at > 15:
                     self.budget_at = now
@@ -327,7 +333,7 @@ class Live:
                         return
                 if decision == 'explicit_help':
                     feedback = self.bridge.feedback()
-                    if feedback.get('target') == explicit_target and feedback.get('status') not in ('approaching', 'reaching'):
+                    if feedback.get('target') == explicit_target and feedback.get('status') not in ('approaching', 'reaching', 'waiting_clearance'):
                         return  # Native completion/failure voice supersedes an old intention.
                 self.speak(clip, epoch, cause='generated_plan')
         except Exception as exc:
@@ -338,9 +344,15 @@ class Live:
     def execution_feedback(self, epoch, feedback):
         try:
             target = 'stove' if feedback['target'] == 'stove' else 'bath tap'
-            line = (f'The {target} is off now.' if feedback['status'] == 'committed' else
-                    f'I cannot safely reach the {target}. Please give me some room or turn it off yourself.')
-            self.speak(self.voice(line), epoch, cause='native_action_feedback')
+            if feedback['status'] == 'committed':
+                line = f'The {target} is off now.'
+            elif feedback['status'] == 'waiting_clearance':
+                line = f'Please take a step to the side so I can reach the {target}.'
+            else:
+                line = f'I cannot safely reach the {target}. Please give me some room or turn it off yourself.'
+            cause = ('native_action_feedback:' + feedback['id'] + ':' + feedback['status']
+                     if feedback.get('id') else 'native_action_feedback')
+            self.speak(self.voice(line), epoch, cause=cause)
         except Exception as exc:
             with self.lock:
                 self.warning = 'Action feedback: ' + str(exc)[:150]

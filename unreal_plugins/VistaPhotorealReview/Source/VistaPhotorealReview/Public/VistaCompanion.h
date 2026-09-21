@@ -38,6 +38,7 @@ public:
     void CancelAssist();
     FString AssistStatus=TEXT("idle"),AssistTarget,AssistId;
     float ContactError=0;
+    TSharedPtr<FJsonObject> AssistDiagnostics() const;
     TWeakObjectPtr<ACharacter> Leader;
     bool bFollowing=true,bReady=false,bSpeaking=false,bBlocked=false;
     float AudioClock=0,MouthOpen=0,Travel=0;
@@ -59,9 +60,15 @@ private:
     void LoadMotion();
     void TickAssist(float Dt);
     void PoseAssist(float Dt);
+    bool PlanAssistApproach();
+    bool AssistChord(const FVector& Start,const FVector& End) const;
     TWeakObjectPtr<AActor> AssistEntity;
     FVector AssistControl,AssistGoal,AssistPrevious;
     float AssistClock=0,AssistReach=0,AssistContact=0,AssistStall=0;
+    float AssistReachClock=0,AssistCheckClock=0,AssistPlanMs=0,AssistWaitClock=0,AssistLeanDegrees=0;
+    TArray<FVector> AssistPath;
+    int32 AssistPathIndex=0,AssistReplans=0,AssistCandidates=0,AssistFloorRejected=0,
+        AssistBodyRejected=0,AssistReachRejected=0,AssistOccludedRejected=0,AssistExpanded=0,AssistHumanOccupied=0;
     bool bResumeFollow=true;
 };
 

@@ -118,5 +118,34 @@ class Runner(unittest.TestCase):
         restored=Director(self.live)
         self.assertEqual(restored.state()['items'][0]['prompt'],'study')
 
+    def test_intervention_tracks_actual_transitions_once(self):
+        self.d.job={'status':'running','steps':[]}
+        for clock,status in ((1,'approaching'),(2,'approaching'),(3,'reaching'),(4,'committed')):
+            self.d.record_intervention({'clock_s':clock,'companion_execution':{'id':'native-id',
+                'target':'faucet','status':status,'finger_error_cm':.3,'path_cm':[[0,0,0]]}})
+        rows=self.d.job['interventions'];self.assertEqual(len(rows),1)
+        self.assertEqual([x['status'] for x in rows[0]['transitions']],['approaching','reaching','committed'])
+        self.assertEqual(rows[0]['status'],'committed');self.assertNotIn('path_cm',rows[0])
+
+    def test_actor_completion_does_not_promote_failed_intervention(self):
+        self.d.job={'status':'completed','steps':[{'receipt':{'status':'succeeded'}}]}
+        self.d.record_intervention({'clock_s':10,'companion_execution':{'id':'failed-id',
+            'target':'faucet','status':'blocked_approach','finger_error_cm':0}})
+        self.assertEqual(self.d.job['interventions'][0]['status'],'blocked_approach')
+        self.d.record_intervention({'clock_s':11,'companion_execution':{'id':'failed-id',
+            'target':'','status':'cancelled','finger_error_cm':0}})
+        self.assertEqual(len(self.d.job['interventions']),1)
+        self.assertEqual(self.d.job['interventions'][0]['status'],'blocked_approach')
+
+    def test_cancel_records_active_intervention_even_after_native_clears_target(self):
+        self.d.job={'status':'running'}
+        self.d.record_intervention({'clock_s':1,'companion_execution':{'id':'one',
+            'target':'faucet','status':'waiting_clearance','finger_error_cm':0}})
+        self.d.record_intervention({'clock_s':2,'companion_execution':{'id':'one',
+            'target':'','status':'cancelled','finger_error_cm':0}})
+        row=self.d.job['interventions'][0]
+        self.assertEqual(row['target'],'faucet')
+        self.assertEqual(row['status'],'cancelled')
+
 
 if __name__=='__main__': unittest.main()

@@ -23,7 +23,9 @@ def main():
     p=argparse.ArgumentParser()
     for name in ('workspace','run','out'): p.add_argument('--'+name,type=Path,required=True)
     p.add_argument('--scenario',required=True); p.add_argument('--view',choices=['first','third'],required=True)
-    p.add_argument('--port',type=int,default=49117); a=p.parse_args()
+    p.add_argument('--port',type=int,default=49117)
+    p.add_argument('--require-off',action='append',choices=['faucet','stove'],default=[])
+    a=p.parse_args()
     a.out.mkdir(parents=True,exist_ok=False); probe=Probe(a.run)
     bridge=Bridge(a.workspace,a.run/'bridge'); base='http://127.0.0.1:'+str(a.port)
     def get():
@@ -41,6 +43,11 @@ def main():
                 raw=read(bridge.locate()/'state.json')
                 frames.append({k:raw.get(k) for k in ('session_id','scene_epoch','clock_s','player_cm','velocity_cm_s',
                     'third_person','director','active_command','held_id','human_phone_call','human_mouth_open','companion_execution','frame_time_s')})
+                # Evaluator-only evidence: actor completion is distinct from
+                # the companion's physical intervention and actual target state.
+                frames[-1]['companion']=read(a.run/'companion/state.json')
+                frames[-1]['targets']=[e for e in raw.get('entities',[]) if e.get('short_id') in ('faucet','stove')]
+                frames[-1]['events']=raw.get('concurrent_events',[])
                 if not recorder:
                     recorder=subprocess.Popen(['ffmpeg','-nostdin','-y','-f','x11grab','-video_size','1920x1080',
                         '-framerate','30','-i',probe.meta['display'],'-f','pulse','-i',probe.meta['audio_sink']+'.monitor',
@@ -61,6 +68,13 @@ def main():
                 x['session_id']==y['session_id'] and x['scene_epoch']==y['scene_epoch'] and
                 0<y['clock_s']-x['clock_s']<2 and math.dist(x['player_cm'],y['player_cm'])<170*(y['clock_s']-x['clock_s'])+5
                 for x,y in zip(frames,frames[1:]) if y['clock_s']!=x['clock_s'])}]
+        for target in a.require_off:
+            final=read(bridge.locate()/'state.json')
+            entity=next(e for e in final['entities'] if e['short_id']==target)
+            committed=any(x['target']==target and x['status']=='committed' for x in job.get('interventions',[]))
+            started_on=any(e['short_id']==target and e['state']['active'] for f in frames for e in f.get('targets',[]))
+            checks.append({'name':'actual_companion_shutoff_'+target,
+                           'passed':started_on and committed and not entity['state']['active']})
         print(json.dumps({'job':job,'checks':checks},ensure_ascii=False),flush=True)
         if not all(c['passed'] for c in checks): raise RuntimeError('Native acceptance failed')
     finally:
