@@ -1,5 +1,6 @@
 """RGB-driven research demo, separate from the legacy metadata/JeV policy."""
 import copy
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 import time
@@ -11,6 +12,7 @@ from .bridge import atomic, read
 from .research_capture import Capture
 from .research_contract import PHYSICAL_ACTIONS, target_for_action, validate_decision
 from .research_memory import EpisodicMemory
+from .streaming import speech_chunks
 from .service import Live
 
 
@@ -38,6 +40,13 @@ class ResearchLive(Live):
         self.action_targets = {}
         self.episodic_memory = EpisodicMemory()
         self.research_memory = False
+        self.research_stream = False
+        self.voice_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='vista-voice-prepare')
+        self.turn_wall = {}
+        self.research_timing = {}
+        self.last_latency = None
+        self.laya_shadow = None
+        self.answered_turn_ids = set()
 
     def own_feedback(self, value):
         # The native component retains a cancelled action across scene resets.
@@ -76,6 +85,18 @@ class ResearchLive(Live):
         super()._speak(clip, epoch, priority, cause)
         if self.last_speech is before or (self.last_speech or {}).get('cause') != cause:
             return  # Queued, discarded or interrupted before native start.
+        if cause.startswith('research:'):
+            timing = self.research_timing.get(cause[9:])
+            if timing and 'native_start_wall' not in timing:
+                timing['native_start_wall'] = time.time()
+                timing['request_to_audio_ms'] = round((timing['native_start_wall']-timing['request_wall'])*1000, 2)
+                if timing.get('turn_wall'):
+                    timing['turn_to_audio_ms'] = round((timing['native_start_wall']-timing['turn_wall'])*1000, 2)
+                    self.answered_turn_ids.add(timing['turn_id'])
+                    self.answered_turn_ids.intersection_update(self.turn_wall)
+                if timing.get('turn_wall'):
+                    self.last_latency = dict(timing)
+                self.log('latency', {'stage': 'first_native_audio', 'job': cause[9:], **timing})
         self.schedule = [s for s in self.schedule if s['kind'] != 'research_heard' or s['at_wall'] <= time.monotonic()]
         if clip['role'] == 'human':
             # The base class already schedules human text after actual playback.
@@ -92,6 +113,8 @@ class ResearchLive(Live):
                 'audience': audience, 'source': source, 'clock_s': self.research_clock}
         self.turns.append(turn)
         self.turns = self.turns[-64:]
+        self.turn_wall[turn['id']] = time.time()
+        self.turn_wall = {r['id']: self.turn_wall[r['id']] for r in self.turns}
         if role in ('human', 'phone'):
             self.revision += 1
             # An obsolete network request cannot be cancelled at the provider,
@@ -106,6 +129,11 @@ class ResearchLive(Live):
             if role == 'human' and audience == 'assistant':
                 self.error = ''  # A new direct request is a new decision, never a paid retry.
         self.log('research-dialogue', turn)
+        if self.laya_shadow and role in ('human', 'phone'):
+            try:
+                self.laya_shadow.submit(self.turns)
+            except (ValueError, RuntimeError) as exc:
+                self.log('laya-shadow-error', {'error': str(exc)[:200]})
         return turn
 
     def say(self, question, target=None):
@@ -168,6 +196,12 @@ class ResearchLive(Live):
         self.episodic_memory.reset()
         self.capture.latest = None
         self.capture.last_lease = 0
+        self.turn_wall.clear()
+        self.research_timing.clear()
+        self.last_latency = None
+        self.answered_turn_ids.clear()
+        if self.laya_shadow:
+            self.laya_shadow.latest = None
         self.log('research-sessions', {'identity': identity, 'epoch': self.epoch})
 
     def tick(self):
@@ -250,7 +284,64 @@ class ResearchLive(Live):
             self.research_inflight[job] = (self.epoch, self.revision)
             self.research_requested = False
             self.research_due = now + self.research_interval
+            external = [r for r in self.turns if r['role'] == 'human' and r['audience'] == 'assistant']
+            turn = external[-1] if external else {}
+            if turn.get('id') in self.answered_turn_ids:
+                turn = {}  # An appliance completion is not another answer latency.
+            timing = {'request_wall': time.time(), 'turn_id': turn.get('id'),
+                      'turn_wall': self.turn_wall.get(turn.get('id')), 'streaming': self.research_stream}
+            self.research_timing[job] = timing
+            self.research_timing = dict(list(self.research_timing.items())[-128:])
+            self.log('latency', {'stage': 'request_started', 'job': job, **timing})
             self.pool.submit(self.research_decide, self.epoch, self.revision, job, packet)
+
+    def research_api(self, packet, job, epoch, revision):
+        if not self.research_stream:
+            return self.api('research', packet), {}
+        ident = uuid.uuid4().hex
+        request = {'id': ident, 'kind': 'research', 'input': packet}
+        self.log('requests', request)
+        req = urllib.request.Request(self.provider + '/call-stream', data=json.dumps(request).encode(),
+                                     headers={'Content-Type': 'application/json'})
+        warm, result, received = {}, None, 0
+        try:
+            with urllib.request.urlopen(req, timeout=70) as response:
+                if 'application/x-ndjson' not in response.headers.get('Content-Type', ''):
+                    raise ValueError('Expected research event stream')
+                for raw in response:
+                    received += len(raw)
+                    if received > 24000:
+                        raise ValueError('Oversized research event stream')
+                    event = json.loads(raw)
+                    if result is not None:
+                        raise ValueError('Event after final result')
+                    if event.get('event') == 'error':
+                        raise RuntimeError(event.get('error', 'Provider stream failed'))
+                    if event.get('event') == 'result':
+                        result = event['result']
+                    elif event.get('event') == 'speech_preview':
+                        line = event.get('text')
+                        if (not isinstance(line, str) or not line or len(line)>240 or len(line.split())>32 or
+                                any(ord(c)<32 or ord(c)>126 for c in line)):
+                            raise ValueError('Invalid speech preparation preview')
+                        first = speech_chunks(line)[0]
+                        with self.lock:
+                            valid = self.enabled and self.epoch == epoch and self.revision == revision
+                        if not warm and valid and self.local_tts and self.research_voice:
+                            self.log('latency', {'stage': 'voice_preparation', 'job': job})
+                            warm[first] = self.voice_pool.submit(self.voice, first, 'assistant')
+                    else:
+                        raise ValueError('Unsupported research stream event')
+            if result is None:
+                raise ValueError('Missing final research result')
+            self.log('responses', {'id': ident, 'kind': 'research', **result})
+            self.log('latency', {'stage': 'model_complete', 'job': job,
+                                'provider_ms': result['latency_ms'], **result.get('stream_timing', {})})
+            return result, warm
+        except Exception as exc:
+            for future in warm.values(): future.cancel()
+            self.log('errors', {'id': ident, 'kind': 'research', 'error': str(exc)[:400]})
+            raise
 
     def current(self, epoch, revision, packet):
         before = packet.get('own_action') or {}
@@ -263,7 +354,7 @@ class ResearchLive(Live):
     def research_decide(self, epoch, revision, job, packet):
         started = time.monotonic()
         try:
-            result = self.api('research', packet)
+            result, warm = self.research_api(packet, job, epoch, revision)
             decision = validate_decision(result['answer'], packet)
             with self.world_lock, self.lock:
                 record = {'id': job, 'input_frame': packet['frame']['id'],
@@ -305,12 +396,18 @@ class ResearchLive(Live):
             line = decision['speech']
             if line and record['result'] == 'accepted':
                 if self.research_voice:
-                    clip = self.voice(line, 'assistant')
-                    with self.lock:
-                        # Speech may take longer to synthesize; a new human turn or stop invalidates it.
-                        valid = self.enabled and epoch == self.epoch and revision == self.revision
-                    if valid:
-                        self.speak(clip, epoch, 75 if decision['urgency'] == 'high' else 20, 'research:' + job)
+                    chunks = speech_chunks(line) if self.research_stream and self.local_tts else [line]
+                    for part in chunks:
+                        with self.lock:
+                            valid = self.enabled and epoch == self.epoch and revision == self.revision
+                        if not valid: break
+                        clip = warm[part].result(timeout=45) if part in warm else self.voice(part, 'assistant')
+                        with self.lock:
+                            # Prepared audio is never played before full validation, and a
+                            # new human turn or stop invalidates every queued sentence.
+                            valid = self.enabled and epoch == self.epoch and revision == self.revision
+                        if valid:
+                            self.speak(clip, epoch, 75 if decision['urgency'] == 'high' else 20, 'research:' + job)
                 else:
                     self.native('caption', {'text': line}, epoch)
                     self.log('research-speech', {'mode': 'caption_only', 'text': line})
@@ -339,6 +436,11 @@ class ResearchLive(Live):
                 'decisions': copy.deepcopy(self.decisions[-12:]),
                 'executions': copy.deepcopy(self.executions[-20:]),
                 'voice': 'english_male' if self.research_voice else 'caption_only',
+                'streaming': self.research_stream,
+                'speech_pending': len(self.pending_speech),
+                'speech_active': time.monotonic() < self.speech_until,
+                'last_latency': copy.deepcopy(self.last_latency),
+                'laya_shadow': copy.deepcopy(self.laya_shadow.latest) if self.laya_shadow else None,
                 'recordings': [name for name in ('main', 'study', 'control', 'plans', 'permission') if all(
                     (self.root / 'media' / ((view if name == 'main' else name + '-' + view) + '.mp4')).is_file()
                     for view in ('first', 'third'))],

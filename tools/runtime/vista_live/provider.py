@@ -15,6 +15,7 @@ import urllib.request
 
 from runtime.vista_jev.protocol import normalize_jev, openrouter_jev_request
 from runtime.vista_live.budget import Budget
+from runtime.vista_live.streaming import read_completion
 from runtime.vista_live.research_contract import model_request, validate_decision, canonical_memory_selection
 from runtime.vista_live.director_contract import (SCENARIO_SCHEMA, SCENARIO_INSTRUCTIONS,
     LONG_SCENARIO_SCHEMA, LONG_SCENARIO_INSTRUCTIONS, validate_scenario)
@@ -82,7 +83,7 @@ class Provider:
             raise ValueError('Unreviewed chat model')
         self.chat_model = chat_model
 
-    def call(self, request):
+    def call(self, request, on_preview=None):
         if set(request) != {'id', 'kind', 'input'} or not re.fullmatch(r'[a-zA-Z0-9_-]{1,90}', request['id']):
             raise ValueError('Invalid request envelope')
         ident, kind, value = request['id'], request['kind'], request['input']
@@ -179,6 +180,18 @@ class Provider:
                 body.pop('temperature', None)  # Not exposed on this reviewed route.
                 body['reasoning'] = {'effort': 'low'}
                 body['max_tokens'] = max(body['max_tokens'], 1400)
+        if on_preview is not None:
+            if kind != 'research':
+                raise ValueError('Streaming is only available for reviewed research observations')
+            body['stream'] = True
+            body['stream_options'] = {'include_usage': True}
+            # Key order only: decide the full response as before, but allow
+            # local TTS preparation while the remaining validated fields arrive.
+            schema = copy.deepcopy(body['response_format']['json_schema']['schema'])
+            schema['properties'] = {'speech': schema['properties']['speech'],
+                                    **schema['properties']}
+            body['response_format']['json_schema']['schema'] = schema
+            body['messages'][0]['content'] += '\nWrite speech as the first JSON field; all other required fields still follow. Do not omit evidence or permission checks.'
         cached = self.budget.reserve(ident, bucket, request)
         if cached is not None:
             return cached
@@ -188,10 +201,16 @@ class Provider:
         req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={
             'Authorization': 'Bearer ' + self.key, 'Content-Type': 'application/json'})
         try:
+            stream_timing = None
             with self.opener.open(req, timeout=60 if kind == 'tts' else 35) as response:
-                data = response.read(2_880_001)
                 content_type = response.headers.get('Content-Type', '')
                 gid = response.headers.get('X-Generation-Id')
+                if on_preview is not None:
+                    if 'text/event-stream' not in content_type:
+                        raise ValueError('Expected SSE response')
+                    raw, stream_timing = read_completion(response, on_preview, started=start)
+                else:
+                    data = response.read(2_880_001)
             latency = round((time.monotonic() - start) * 1000, 2)
             if kind == 'tts':
                 if not content_type.startswith('audio/pcm') or len(data) % 2 or not 4800 < len(data) <= 1_440_000:
@@ -207,7 +226,8 @@ class Provider:
                           'duration_s': len(data) / 48000, 'model': body['model'], 'generation_id': gid,
                           'source': 'runtime_synthetic_male_preset_not_cloned', 'latency_ms': latency}
             else:
-                raw = json.loads(data)
+                if on_preview is None:
+                    raw = json.loads(data)
                 (self.root / (ident + '.upstream.json')).write_text(json.dumps(raw))
                 actual = raw.get('model', '')
                 if not (actual == body['model'] or re.fullmatch(re.escape(body['model']) + r'(?:\.\d+|-\d{8})', actual)):
@@ -237,6 +257,8 @@ class Provider:
                     answer = validator(strict_json(content))
                 result = {'answer': answer, 'model': actual, 'provider': raw.get('provider'),
                           'usage': raw.get('usage'), 'latency_ms': latency, 'generation_id': raw.get('id')}
+                if stream_timing is not None:
+                    result['stream_timing'] = stream_timing
                 if kind == 'research':
                     if parsed.get('remember_turn_ids') != answer.get('remember_turn_ids'):
                         normalizations.append('duplicate_existing_memory_ids_removed')
@@ -294,13 +316,36 @@ def main():
             self.send(200, provider.budget.status())
 
         def do_POST(self):
+            streaming = False
             try:
                 size = int(self.headers.get('Content-Length', '0'))
                 if not 0 < size <= 2_100_000:
                     raise ValueError('Invalid input size')
-                self.send(200, provider.call(json.loads(self.rfile.read(size))))
+                value = json.loads(self.rfile.read(size))
+                if self.path == '/call-stream':
+                    if value.get('kind') != 'research':
+                        raise ValueError('Only research decisions may stream')
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/x-ndjson')
+                    self.send_header('Connection', 'close')
+                    self.end_headers()
+                    self.close_connection = True
+                    streaming = True
+                    def event(value):
+                        try:
+                            self.wfile.write((json.dumps(value) + '\n').encode())
+                            self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError):
+                            pass  # Finish accounting; a disconnect never retries inference.
+                    result = provider.call(value, lambda line: event({'event': 'speech_preview', 'text': line}))
+                    event({'event': 'result', 'result': result})
+                else:
+                    self.send(200, provider.call(value))
             except Exception as exc:
-                self.send(400, {'error': str(exc)[:400]})
+                if streaming:
+                    event({'event': 'error', 'error': str(exc)[:400]})
+                else:
+                    self.send(400, {'error': str(exc)[:400]})
 
     ThreadingHTTPServer(('127.0.0.1', args.port), Handler).serve_forever()
 

@@ -769,13 +769,15 @@ def main():
     p.add_argument('--paused', action='store_true', help='Start without background model decisions')
     p.add_argument('--research', action='store_true', help='Use ego RGB and the large model as the primary policy')
     p.add_argument('--research-memory', action='store_true', help='Use versioned, verbatim episodic recall in research mode')
+    p.add_argument('--research-stream', action='store_true', help='Stream model transport and prepare local speech before validated playback')
+    p.add_argument('--laya-shadow', help='Optional loopback local intent measurements; never controls the assistant')
     p.add_argument('--research-interval', type=float, default=12,
                    help='Seconds between periodic policy scans; new input and own-action feedback remain immediate')
     p.add_argument('--caption-only', action='store_true', help='Explicit development mode without paid assistant TTS')
     p.add_argument('--local-tts', help='Explicit local research TTS endpoint; no automatic cloud fallback')
     args = p.parse_args()
-    if args.research_memory and not args.research:
-        p.error('--research-memory requires --research')
+    if (args.research_memory or args.research_stream or args.laya_shadow) and not args.research:
+        p.error('--research-memory, --research-stream and --laya-shadow require --research')
     cls = Live
     if args.research:
         from runtime.vista_live.research import ResearchLive
@@ -783,6 +785,10 @@ def main():
     live = cls(args.root, Bridge(args.workspace, args.bridge, args.project), args.speech, args.provider)
     if args.research:
         live.research_memory = args.research_memory
+        live.research_stream = args.research_stream
+        if args.laya_shadow:
+            from runtime.vista_live.laya_shadow import ShadowClient
+            live.laya_shadow = ShadowClient(args.laya_shadow, live.log)
         live.research_voice = not args.caption_only
         if not 2 <= args.research_interval <= 120:
             p.error('--research-interval must be between 2 and 120 seconds')
