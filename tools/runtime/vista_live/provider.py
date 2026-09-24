@@ -15,7 +15,10 @@ import urllib.request
 
 from runtime.vista_jev.protocol import normalize_jev, openrouter_jev_request
 from runtime.vista_live.budget import Budget
-from runtime.vista_live.director_contract import SCENARIO_SCHEMA, SCENARIO_INSTRUCTIONS, validate_scenario
+from runtime.vista_live.streaming import read_completion
+from runtime.vista_live.research_contract import model_request, validate_decision, canonical_memory_selection
+from runtime.vista_live.director_contract import (SCENARIO_SCHEMA, SCENARIO_INSTRUCTIONS,
+    LONG_SCENARIO_SCHEMA, LONG_SCENARIO_INSTRUCTIONS, validate_scenario)
 from runtime.vista_live.forge import (RECIPE_INSTRUCTIONS, RECIPE_SCHEMA,
     recipe_questions, normalize_recipe, validate_recipe)
 from runtime.vista_live.contracts import (ACTIONS, LAYOUTS, PLAN_INSTRUCTIONS, PLAN_SCHEMA,
@@ -39,15 +42,48 @@ def strict_json(content):
     return json.loads(content, object_pairs_hook=pairs)
 
 
+def research_json(content, normalizations=None):
+    # Some routes wrap an otherwise schema-conforming object in one code fence.
+    # Unwrap only an entire, single JSON block; still reject duplicate keys,
+    # extra prose, partial documents and every unsupported action/field.
+    if not isinstance(content, str):
+        raise ValueError('Expected model JSON text')
+    fenced = re.fullmatch(r'\s*```json\s*\n([^`]+)\n```\s*', content)
+    document = (fenced.group(1) if fenced else content).strip()
+    try:
+        return strict_json(document)
+    except json.JSONDecodeError as exc:
+        # Observed upstream adapter defect: exactly the same complete JSON
+        # document emitted twice. Accept ONE decision only when both byte-level
+        # texts match after boundary whitespace. Never choose among conflicting
+        # objects, ignore prose, tolerate duplicate keys or repair model intent.
+        if exc.msg != 'Extra data': raise
+        first, remainder = document[:exc.pos].strip(), document[exc.pos:].strip()
+        if first != remainder: raise
+        value = strict_json(first)
+        if not isinstance(value, dict): raise ValueError('Expected a decision object')
+        if normalizations is not None: normalizations.append('duplicate_identical_json_document_removed')
+        return value
+
+
 class Provider:
-    def __init__(self, root, key_file, cap=2.0, limits=None):
+    CHAT_MODELS = ('qwen/qwen3.5-35b-a3b', 'qwen/qwen3.5-397b-a17b', 'openai/gpt-5.4-mini')
+
+    def __init__(self, root, key_file, cap=2.0, limits=None, chat_provider=None,
+                 chat_model='qwen/qwen3.5-35b-a3b'):
         self.root = root
         root.mkdir(parents=True, exist_ok=True)
         self.key = re.findall(r'sk-or-v1-[A-Za-z0-9_-]+', key_file.read_text())[0]
         self.budget = Budget(root / 'budget.sqlite', cap=cap, limits=limits)
         self.opener = urllib.request.build_opener(NoRedirect())
+        if chat_provider is not None and not re.fullmatch(r'[a-z0-9-]+(?:/[a-z0-9-]+)?', chat_provider):
+            raise ValueError('Invalid explicit provider endpoint')
+        self.chat_provider = chat_provider
+        if chat_model not in self.CHAT_MODELS:
+            raise ValueError('Unreviewed chat model')
+        self.chat_model = chat_model
 
-    def call(self, request):
+    def call(self, request, on_preview=None):
         if set(request) != {'id', 'kind', 'input'} or not re.fullmatch(r'[a-zA-Z0-9_-]{1,90}', request['id']):
             raise ValueError('Invalid request envelope')
         ident, kind, value = request['id'], request['kind'], request['input']
@@ -98,6 +134,9 @@ class Provider:
         elif kind == 'scenario':
             body = chat_request(SCENARIO_INSTRUCTIONS, SCENARIO_SCHEMA, {'request': text(value, 1600)})
             body['max_tokens'] = 3500
+        elif kind == 'scenario_long':
+            body = chat_request(LONG_SCENARIO_INSTRUCTIONS, LONG_SCENARIO_SCHEMA, {'request': text(value, 3200)})
+            body['max_tokens'] = 6500
         elif kind == 'author':
             body = chat_request(SCENE_INSTRUCTIONS, SCENE_SCHEMA, {'request': text(value, 1600)})
         elif kind == 'chat':
@@ -111,6 +150,8 @@ class Provider:
             if not value.get('explicit_help_target'):
                 schema['properties']['steps']['items']['properties']['skill']['enum'].remove('turn_off')
             body = chat_request(instructions, schema, value)
+        elif kind == 'research':
+            body = model_request(value)
         elif kind == 'tts':
             if set(value) != {'text', 'role'} or value['role'] not in ('human', 'assistant', 'phone'):
                 raise ValueError('Invalid speech role')
@@ -123,26 +164,53 @@ class Provider:
             endpoint = 'audio/speech'
         else:
             raise ValueError('Unknown provider operation')
-        if len(json.dumps(body).encode()) > 24000:
+        if len(json.dumps(body).encode()) > (2_100_000 if kind == 'research' else 24000):
             raise ValueError('Provider input limit exceeded')
         bucket = ('decision' if kind in ('layout', 'intent', 'forge_jev') else
-                  'plan' if kind in ('author', 'chat', 'forge_qwen', 'scenario') else kind)
+                  'plan' if kind in ('author', 'chat', 'forge_qwen', 'scenario', 'scenario_long', 'research') else kind)
+        # A blocked local attempt never reaches a provider and must not consume
+        # another reservation. Keep the failed upstream request's receipt intact.
+        if (self.root / 'circuit.json').exists():
+            raise RuntimeError('Provider circuit open; inspect receipt before manual recovery')
+        if self.chat_provider and endpoint == 'chat/completions':
+            body['provider'] = {**body.get('provider', {}), 'only': [self.chat_provider], 'allow_fallbacks': False}
+        if endpoint == 'chat/completions':
+            body['model'] = self.chat_model
+            if self.chat_model == 'openai/gpt-5.4-mini':
+                body.pop('temperature', None)  # Not exposed on this reviewed route.
+                body['reasoning'] = {'effort': 'low'}
+                body['max_tokens'] = max(body['max_tokens'], 1400)
+        if on_preview is not None:
+            if kind != 'research':
+                raise ValueError('Streaming is only available for reviewed research observations')
+            body['stream'] = True
+            body['stream_options'] = {'include_usage': True}
+            # Key order only: decide the full response as before, but allow
+            # local TTS preparation while the remaining validated fields arrive.
+            schema = copy.deepcopy(body['response_format']['json_schema']['schema'])
+            schema['properties'] = {'speech': schema['properties']['speech'],
+                                    **schema['properties']}
+            body['response_format']['json_schema']['schema'] = schema
+            body['messages'][0]['content'] += '\nWrite speech as the first JSON field; all other required fields still follow. Do not omit evidence or permission checks.'
         cached = self.budget.reserve(ident, bucket, request)
         if cached is not None:
             return cached
-        if (self.root / 'circuit.json').exists():
-            self.budget.finish(ident, {'error': 'Provider circuit open'}, False)
-            raise RuntimeError('Provider circuit open; inspect receipt before manual recovery')
         (self.root / (ident + '.request.json')).write_text(json.dumps(body, ensure_ascii=False))
         start = time.monotonic()
         url = 'https://openrouter.ai/api/' + (endpoint if endpoint.startswith('alpha/') else 'v1/' + endpoint)
         req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={
             'Authorization': 'Bearer ' + self.key, 'Content-Type': 'application/json'})
         try:
+            stream_timing = None
             with self.opener.open(req, timeout=60 if kind == 'tts' else 35) as response:
-                data = response.read(2_880_001)
                 content_type = response.headers.get('Content-Type', '')
                 gid = response.headers.get('X-Generation-Id')
+                if on_preview is not None:
+                    if 'text/event-stream' not in content_type:
+                        raise ValueError('Expected SSE response')
+                    raw, stream_timing = read_completion(response, on_preview, started=start)
+                else:
+                    data = response.read(2_880_001)
             latency = round((time.monotonic() - start) * 1000, 2)
             if kind == 'tts':
                 if not content_type.startswith('audio/pcm') or len(data) % 2 or not 4800 < len(data) <= 1_440_000:
@@ -158,7 +226,8 @@ class Provider:
                           'duration_s': len(data) / 48000, 'model': body['model'], 'generation_id': gid,
                           'source': 'runtime_synthetic_male_preset_not_cloned', 'latency_ms': latency}
             else:
-                raw = json.loads(data)
+                if on_preview is None:
+                    raw = json.loads(data)
                 (self.root / (ident + '.upstream.json')).write_text(json.dumps(raw))
                 actual = raw.get('model', '')
                 if not (actual == body['model'] or re.fullmatch(re.escape(body['model']) + r'(?:\.\d+|-\d{8})', actual)):
@@ -177,15 +246,25 @@ class Provider:
                         if goal['type'] != 'choice' or goal['choice'] not in ('none', 'leave', 'find_keys', 'leave_find_keys'):
                             raise ValueError('Invalid goal choice')
                         answer = {**answer, 'human_goal': goal['choice']}
+                elif kind == 'research':
+                    normalizations = []
+                    parsed = research_json(raw['choices'][0]['message']['content'], normalizations)
+                    answer = validate_decision(canonical_memory_selection(parsed, value), value)
                 else:
                     content = raw['choices'][0]['message']['content']
-                    validator = (validate_scenario if kind == 'scenario' else validate_scene if kind == 'author' else validate_dialogue if kind == 'chat'
+                    validator = (validate_scenario if kind in ('scenario','scenario_long') else validate_scene if kind == 'author' else validate_dialogue if kind == 'chat'
                                  else validate_recipe if kind == 'forge_qwen' else validate_plan)
                     answer = validator(strict_json(content))
                 result = {'answer': answer, 'model': actual, 'provider': raw.get('provider'),
                           'usage': raw.get('usage'), 'latency_ms': latency, 'generation_id': raw.get('id')}
+                if stream_timing is not None:
+                    result['stream_timing'] = stream_timing
+                if kind == 'research':
+                    if parsed.get('remember_turn_ids') != answer.get('remember_turn_ids'):
+                        normalizations.append('duplicate_existing_memory_ids_removed')
+                    if normalizations: result['normalizations'] = normalizations
                 cost = (raw.get('usage') or {}).get('cost')
-                if isinstance(cost, (int, float)) and cost > self.budget.RESERVES[bucket]:
+                if isinstance(cost, (int, float)) and cost > self.budget.reservation(bucket, request):
                     (self.root / 'circuit.json').write_text(json.dumps({'reason': 'Cost exceeded reservation', 'id': ident}))
             self.budget.finish(ident, result)
             return result
@@ -213,9 +292,13 @@ def main():
     parser.add_argument('--decision-limit', type=int, default=1000)
     parser.add_argument('--plan-limit', type=int, default=60)
     parser.add_argument('--tts-limit', type=int, default=30)
+    parser.add_argument('--chat-provider', help='Explicit OpenRouter endpoint slug; never an automatic fallback')
+    parser.add_argument('--chat-model', choices=Provider.CHAT_MODELS, default=Provider.CHAT_MODELS[0],
+                        help='Explicit reviewed vision/authoring model; never an automatic fallback')
     args = parser.parse_args()
     provider = Provider(args.root, args.key_file, args.cap,
-                        {'decision': args.decision_limit, 'plan': args.plan_limit, 'tts': args.tts_limit})
+                        {'decision': args.decision_limit, 'plan': args.plan_limit, 'tts': args.tts_limit},
+                        args.chat_provider, args.chat_model)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -233,13 +316,36 @@ def main():
             self.send(200, provider.budget.status())
 
         def do_POST(self):
+            streaming = False
             try:
                 size = int(self.headers.get('Content-Length', '0'))
-                if not 0 < size <= 24000:
+                if not 0 < size <= 2_100_000:
                     raise ValueError('Invalid input size')
-                self.send(200, provider.call(json.loads(self.rfile.read(size))))
+                value = json.loads(self.rfile.read(size))
+                if self.path == '/call-stream':
+                    if value.get('kind') != 'research':
+                        raise ValueError('Only research decisions may stream')
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/x-ndjson')
+                    self.send_header('Connection', 'close')
+                    self.end_headers()
+                    self.close_connection = True
+                    streaming = True
+                    def event(value):
+                        try:
+                            self.wfile.write((json.dumps(value) + '\n').encode())
+                            self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError):
+                            pass  # Finish accounting; a disconnect never retries inference.
+                    result = provider.call(value, lambda line: event({'event': 'speech_preview', 'text': line}))
+                    event({'event': 'result', 'result': result})
+                else:
+                    self.send(200, provider.call(value))
             except Exception as exc:
-                self.send(400, {'error': str(exc)[:400]})
+                if streaming:
+                    event({'event': 'error', 'error': str(exc)[:400]})
+                else:
+                    self.send(400, {'error': str(exc)[:400]})
 
     ThreadingHTTPServer(('127.0.0.1', args.port), Handler).serve_forever()
 

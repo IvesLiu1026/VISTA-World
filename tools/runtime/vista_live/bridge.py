@@ -28,7 +28,7 @@ def atomic(path, value):
 class Bridge:
     def __init__(self, workspace, root=None, project='six-room-companion-dev-live-a'):
         self.workspace, self.fixed = Path(workspace), Path(root) if root else None
-        if not re.fullmatch(r'six-room-companion-dev-(live|natural|forge|director)-[a-z0-9]+', project):
+        if not re.fullmatch(r'six-room-companion-dev-(live|natural|forge|director|responsive)-[a-z0-9]+', project):
             raise ValueError('Unsupported live project')
         self.project = project
 
