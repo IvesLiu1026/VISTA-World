@@ -9,6 +9,7 @@
 class UAudioComponent;
 class USoundWaveProcedural;
 class USpotLightComponent;
+class UMaterialInstanceDynamic;
 class SWidget;
 class SEditableTextBox;
 class IHttpRequest;
@@ -48,6 +49,8 @@ private:
     UPROPERTY() TObjectPtr<UAudioComponent> Speech;
     UPROPERTY() TObjectPtr<USpotLightComponent> FaceFill;
     UPROPERTY() TObjectPtr<USoundWaveProcedural> Wave;
+    UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> StatusMaterial;
+    bool bRobotAppearance=false;
     TArray<FTransform> Idle,CurrentPose,ReferenceGlobal;
     TArray<TArray<FTransform>> Walk;
     TArray<int32> Parents;

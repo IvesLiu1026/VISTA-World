@@ -16,6 +16,7 @@
 #include "Misc/Paths.h"
 #include "Misc/CommandLine.h"
 #include "Sound/SoundWaveProcedural.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 using namespace HomeJson;
 namespace {
@@ -66,8 +67,16 @@ void AVistaCompanion::BeginPlay()
     const TSharedPtr<FJsonObject>* Morphs;
     if(Config && Config->TryGetObjectField(TEXT("face_morphs"),Morphs))for(const auto& Row:(*Morphs)->Values)
         for(const auto& V:Row.Value->AsArray())if(Mesh->FindMorphTarget(FName(V->AsString())))FaceMorphs.FindOrAdd(FName(Row.Key)).Add(FName(V->AsString()));
-    bReady=Idle.Num()==53 && Walk.Num()>1 && FaceMorphs.Contains(TEXT("JawOpen")) && FaceMorphs.Contains(TEXT("Blink"));
-    UE_LOG(LogTemp,Display,TEXT("VISTA_COMPANION_READY bones=%d frames=%d face=%d"),Idle.Num(),Walk.Num(),bReady);
+    bRobotAppearance=String(Config,TEXT("appearance"))==TEXT("unitree_g1_adapted");
+    if(bRobotAppearance)
+    {
+        const int32 Slot=GetMesh()->GetMaterialIndex(TEXT("Robot_Status"));
+        if(Slot!=INDEX_NONE)StatusMaterial=GetMesh()->CreateDynamicMaterialInstance(Slot);
+    }
+    bReady=Idle.Num()==53 && Walk.Num()>1 && ((bRobotAppearance && StatusMaterial) ||
+        (FaceMorphs.Contains(TEXT("JawOpen")) && FaceMorphs.Contains(TEXT("Blink"))));
+    UE_LOG(LogTemp,Display,TEXT("VISTA_COMPANION_READY bones=%d frames=%d ready=%d face=%d robot=%d"),
+        Idle.Num(),Walk.Num(),bReady,FaceMorphs.Num()>0,bRobotAppearance);
 }
 void AVistaCompanion::LoadMotion()
 {
@@ -143,6 +152,7 @@ bool AVistaCompanion::PlaceNear(const AActor* Player)
 void AVistaCompanion::Tick(float Dt)
 {
     Super::Tick(Dt);if(!bReady)return;
+    if(StatusMaterial)StatusMaterial->SetScalarParameterValue(TEXT("Activity"),1.f+4.f*MouthOpen);
     const FVector Here=GetActorLocation();const float Moved=FVector::Dist2D(Here,Previous);Previous=Here;
     if(Moved<100){Travel+=Moved;Phase=FMath::Fmod(Phase+Moved/Cycle,1.f);}
     const bool Assisting=AssistStatus==TEXT("approaching") || AssistStatus==TEXT("reaching") || AssistStatus==TEXT("waiting_clearance");

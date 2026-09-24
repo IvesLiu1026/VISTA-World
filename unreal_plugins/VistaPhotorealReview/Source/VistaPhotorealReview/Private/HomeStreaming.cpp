@@ -99,7 +99,11 @@ void AHomeActionsCharacter::UpdateDailyMotion(float Dt)
     if (HumanFaceMorphs.IsEmpty())
     {
         FString Text;const TSharedPtr<FJsonObject>* Morphs;
-        if (FFileHelper::LoadFileToString(Text,*(FPaths::ProjectConfigDir()/TEXT("VistaCompanion.json"))))
+        // The human and assistant may now use different meshes. A robot has no
+        // facial morphs; it must not disable the human's blink and lip sync.
+        FString FacePath=FPaths::ProjectConfigDir()/TEXT("VistaHumanAppearance.json");
+        if (!FPaths::FileExists(FacePath)) FacePath=FPaths::ProjectConfigDir()/TEXT("VistaCompanion.json");
+        if (FFileHelper::LoadFileToString(Text,*FacePath))
         {
             const auto D=Decode(Text);
             if (D && D->TryGetObjectField(TEXT("face_morphs"),Morphs))
