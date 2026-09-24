@@ -12,9 +12,12 @@ for name in ['project','engine','out','ddc']:p.add_argument('--'+name,type=Path,
 p.add_argument('--display',default=':129');p.add_argument('--seconds',type=int,default=1800)
 p.add_argument('--gpu',type=int,choices=[0,1],default=0)
 p.add_argument('--fps',type=int,choices=[30,60],default=30)
+p.add_argument('--height',type=int,choices=[720,1080],default=1080,
+               help='Private 16:9 review resolution; live presentation is unchanged')
 p.add_argument('--live-port',type=int,default=49111)
 p.add_argument('--ego-sensor',action='store_true',help='Keep wearer observation independent of review view')
 p.add_argument('--motion-proof',action='store_true',help='Private finalized character bone trace')
+p.add_argument('--offscreen',action='store_true',help='Render evidence without presenting to X11')
 a=p.parse_args();a.project=a.project.resolve(strict=True);a.out=a.out.resolve();a.ddc=a.ddc.resolve()
 assert a.project.parent.parent.name.startswith('six-room-companion-dev-')
 assert a.display not in [':119',':119.0',':0',':2',':99',':100']
@@ -36,12 +39,14 @@ try:
     module=subprocess.check_output(['pactl','load-module','module-null-sink','sink_name='+sink,'sink_properties=device.description=VISTA_Companion_Private'],text=True).strip()
     record.update(audio_sink=sink,audio_module=module)
     cmd=[str(a.engine/'Engine/Binaries/Linux/UnrealEditor'),str(a.project),'/Game/VISTA/CampusR25/Maps/Home',
-         '-game','-vulkan','-graphicsadapter='+str(a.gpu),'-Windowed','-ForceRes','-ResX=1920','-ResY=1080','-NoVSync',
+         '-game','-vulkan','-graphicsadapter='+str(a.gpu),'-Windowed','-ForceRes',
+         '-ResX='+str(a.height*16//9),'-ResY='+str(a.height),'-NoVSync',
          '-UserDir='+str(a.out/'user'),'-SaveToUserDir','-VistaExplorerProof='+str(a.out/'proof'),
          '-VistaCompanionProof='+str(a.out/'companion'),'-VistaHomeBridge='+str(a.out/'bridge'),'-VistaWholeHome',
          '-Unattended','-NoSplash','-NoAnalytics','-notraceserver','-noexceptionhandler','-VistaPrivateReview',
          '-ini:Engine:[CrashReportClient]:bStartCRCFromEngineHandler=False',
          '-ini:EditorSettings:[/Script/UnrealEd.CrashReportsPrivacySettings]:bSendUnattendedBugReports=False',
+         '-ini:Engine:[Audio]:UnfocusedVolumeMultiplier=1.0',
          '-ddc=InstalledNoZenLocalFallback','-ini:Engine:[SystemSettings]:r.Shadow.Virtual.Cache=0',
          '-UDPMESSAGING_TRANSPORT_ENABLE=0','-ExecCmds=t.MaxFPS '+str(a.fps)]
     if (a.project.parent/'Config/VistaLive.json').exists():
@@ -51,8 +56,14 @@ try:
         (a.out/'motion').mkdir()
         cmd.append('-VistaCharacterMotionProof='+str(a.out/'motion'))
     if a.ego_sensor:cmd.append('-VistaEgoSensor')
+    if a.offscreen:cmd.append('-RenderOffscreen')
     env=dict(os.environ,DISPLAY=a.display,PULSE_SINK=sink,VK_ICD_FILENAMES='/usr/share/vulkan/icd.d/nvidia_icd.json',
              NODEVICE_SELECT='1',SDL_VIDEODRIVER='x11',UE_LocalDataCachePath=str(a.ddc),UE_SharedDataCachePath='None')
+    if a.offscreen:
+        # UE's SDL mixer explicitly chooses a dummy device for RenderOffScreen
+        # unless the legacy variable exists. Set both SDL 2/3 spellings so actual
+        # audio reaches the owned monitor sink and can be audited, not just timed.
+        env.update(SDL_AUDIODRIVER='pulseaudio', SDL_AUDIO_DRIVER='pulseaudio')
     ue=subprocess.Popen(cmd,env=env,stdout=(a.out/'native.log').open('w'),stderr=subprocess.STDOUT)
     procs.append(ue);record.update(pid=ue.pid,command=cmd,status='running');save()
     print(json.dumps(record),flush=True)

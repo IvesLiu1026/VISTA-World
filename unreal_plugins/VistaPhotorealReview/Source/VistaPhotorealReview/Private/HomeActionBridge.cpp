@@ -49,6 +49,11 @@ TSharedRef<FJsonObject> AHomeActionsCharacter::MakeState() const
         O->SetArrayField(TEXT("concurrent_events"),ConcurrentEventState());
         O->SetBoolField(TEXT("human_phone_call"),bPhoneCall);O->SetNumberField(TEXT("phone_blend"),PhoneBlend);
         O->SetNumberField(TEXT("human_mouth_open"),HumanMouthOpen);
+        // Reviewer evidence only: verify the human still has actual facial
+        // deformation when the companion is a separate robot mesh.
+        O->SetNumberField(TEXT("human_face_channels"),HumanFaceMorphs.Num());
+        if (const auto* Names=HumanFaceMorphs.Find(TEXT("JawOpen")); Names && Names->Num())
+            O->SetNumberField(TEXT("human_jaw_morph_weight"),GetMesh()->GetMorphTarget((*Names)[0]));
         O->SetStringField(TEXT("controlled_role"),TEXT("human_needing_assistance"));
     }
     O->SetArrayField(TEXT("player_cm"),Values(GetActorLocation()));O->SetArrayField(TEXT("velocity_cm_s"),Values(GetVelocity()));

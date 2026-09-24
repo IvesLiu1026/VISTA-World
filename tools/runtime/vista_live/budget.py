@@ -43,10 +43,19 @@ class Budget:
     def connect(self):
         return sqlite3.connect(self.path, timeout=10, isolation_level='IMMEDIATE')
 
+    def reservation(self, kind, body):
+        # The explicitly versioned long author can emit up to 6,500 tokens.
+        # Count it against the same plan limit, with a larger cost reservation;
+        # never change the durable allowance or reinterpret earlier rows.
+        if kind == 'plan' and isinstance(body, dict) and body.get('kind') == 'scenario_long':
+            return .04
+        return self.RESERVES[kind]
+
     def reserve(self, ident, kind, body):
         if kind not in self.LIMITS:
             raise ValueError('Unsupported provider operation')
         digest = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+        reserve = self.reservation(kind, body)
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT hash,status,result FROM requests WHERE id=?', (ident,)).fetchone()
@@ -58,10 +67,10 @@ class Budget:
                 return json.loads(row[2])
             used = db.execute('SELECT COALESCE(SUM(COALESCE(reported_cost,reserve)),0) FROM requests').fetchone()[0]
             count = db.execute('SELECT COUNT(*) FROM requests WHERE kind=?', (kind,)).fetchone()[0]
-            if count >= self.LIMITS[kind] or used + self.RESERVES[kind] > self.cap + 1e-9:
+            if count >= self.LIMITS[kind] or used + reserve > self.cap + 1e-9:
                 raise RuntimeError('Persistent model budget exhausted')
             db.execute('INSERT INTO requests (id,kind,hash,reserve,status,result,at) VALUES (?,?,?,?,?,?,?)',
-                       (ident, kind, digest, self.RESERVES[kind], 'started', None, time.time()))
+                       (ident, kind, digest, reserve, 'started', None, time.time()))
         return None
 
     def finish(self, ident, result, ok=True):
