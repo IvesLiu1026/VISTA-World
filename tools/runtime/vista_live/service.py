@@ -638,6 +638,12 @@ def handler(live, web=False):
         def do_GET(self):
             if self.path == '/favicon.ico':
                 self.send_response(204); self.end_headers(); return
+            if self.path in ('/preview.mjpg', '/preview.mjpg?fps=15'):
+                if getattr(live, 'preview', None):
+                    live.preview.serve(self, 15 if self.path.endswith('?fps=15') else 30)
+                else:
+                    self.send(404, {'error': 'Preview not enabled'})
+                return
             if self.path == '/':
                 page = 'research.html' if hasattr(live, 'capture') else 'index.html'
                 self.send(200, (Path(__file__).with_name(page).read_text().replace('__TOKEN__', live.token)), True)
@@ -687,7 +693,9 @@ def handler(live, web=False):
                 except (BrokenPipeError, ConnectionResetError):
                     pass
             elif self.path in ('/state', '/health'):
-                self.send(200, live.state())
+                state = live.state()
+                state['preview'] = live.preview.status() if getattr(live, 'preview', None) else {'enabled': False}
+                self.send(200, state)
             else:
                 self.send(404, {'error': 'Not found'})
 
@@ -771,6 +779,7 @@ def main():
     p.add_argument('--research-memory', action='store_true', help='Use versioned, verbatim episodic recall in research mode')
     p.add_argument('--research-stream', action='store_true', help='Stream model transport and prepare local speech before validated playback')
     p.add_argument('--laya-shadow', help='Optional loopback local intent measurements; never controls the assistant')
+    p.add_argument('--web-preview', action='store_true', help='On-demand 30 FPS preview of the owned VISTA window; separate from policy evidence')
     p.add_argument('--research-interval', type=float, default=12,
                    help='Seconds between periodic policy scans; new input and own-action feedback remain immediate')
     p.add_argument('--caption-only', action='store_true', help='Explicit development mode without paid assistant TTS')
@@ -783,6 +792,9 @@ def main():
         from runtime.vista_live.research import ResearchLive
         cls = ResearchLive
     live = cls(args.root, Bridge(args.workspace, args.bridge, args.project), args.speech, args.provider)
+    if args.web_preview:
+        from runtime.vista_live.preview import Preview, WindowSource
+        live.preview = Preview(WindowSource(live.bridge))
     if args.research:
         live.research_memory = args.research_memory
         live.research_stream = args.research_stream
