@@ -40,24 +40,27 @@ class Director:
 
     @staticmethod
     def summary(row):
-        return {k:copy.deepcopy(row[k]) for k in ('id','prompt','scenario','seed','micro','compiler_ms','scene_ms')}
+        result = {k:copy.deepcopy(row[k]) for k in ('id','prompt','scenario','seed','micro','compiler_ms','scene_ms')}
+        if row.get('title'): result['title'] = text(row['title'], 120)
+        return result
 
     def log(self, kind, value):
         self.live.log('scenario-'+kind, value)
 
-    def compile(self,prompt,seed=0):
-        prompt=text(prompt,1600)
+    def compile(self,prompt,seed=0,extended=False):
+        if type(extended) is not bool: raise ValueError('Invalid scenario profile')
+        prompt=text(prompt,3200 if extended else 1600)
         if type(seed) is not int or not 0<=seed<=999999: raise ValueError('Invalid seed')
         with self.lock:
             if self.busy(): raise ValueError('A scenario job is already active')
             self.stop_event.clear(); ident=uuid.uuid4().hex
             self.job={'id':ident,'status':'compiling','prompt':prompt,'steps':[]}
-            self.live.pool.submit(self._compile,ident,prompt,seed)
+            self.live.pool.submit(self._compile,ident,prompt,seed,extended)
             return copy.deepcopy(self.job)
 
-    def _compile(self,ident,prompt,seed):
+    def _compile(self,ident,prompt,seed,extended=False):
         try:
-            result=self.live.api('scenario',prompt); spec=validate_scenario(result['answer'])
+            result=self.live.api('scenario_long' if extended else 'scenario',prompt); spec=validate_scenario(result['answer'])
             if self.stop_event.is_set(): raise Stopped('Compilation stopped')
             if not spec['supported']:
                 with self.lock: self.job.update(status='unsupported',explanation=spec['explanation'])
@@ -75,7 +78,7 @@ class Director:
             with self.lock: self.job.update(status='voicing',scenario=spec)
             for index,step in enumerate(spec['steps']):
                 if self.stop_event.is_set(): raise Stopped('Voice preparation stopped')
-                if step['skill']=='say':
+                if step['skill'] in ('say','walk_say'):
                     clip=self.live.voice(step['line'],step['speaker'])
                     # PCM lives in the existing private voice cache, never in UI proposals.
                     row['clips'][str(index)]={'text':clip['text'],'role':clip['role']}
@@ -88,13 +91,14 @@ class Director:
         except Exception as exc:
             with self.lock: self.job.update(status='stopped' if isinstance(exc,Stopped) else 'failed',error=str(exc)[:400])
 
-    def play(self,ident,view='first'):
+    def play(self,ident,view='first',assistant='live'):
         with self.lock:
             if self.busy(): raise ValueError('Stop the current scenario before starting another')
             if ident not in self.items or view not in ('first','third'): raise ValueError('Unknown scenario or view')
+            if assistant not in ('live','off'): raise ValueError('Unknown assistant condition')
             self.stop_event.clear(); self.error=''; self.owner=uuid.uuid4().hex
-            self.job={'id':ident,'run_id':self.owner,'view':view,'status':'starting','steps':[],'events':[]}
-            self.live.pool.submit(self._play,copy.deepcopy(self.items[ident]),view,self.owner)
+            self.job={'id':ident,'run_id':self.owner,'view':view,'assistant':assistant,'requested_wall_time':time.time(),'status':'starting','steps':[],'events':[],'interventions':[]}
+            self.live.pool.submit(self._play,copy.deepcopy(self.items[ident]),view,self.owner,assistant)
             return copy.deepcopy(self.job)
 
     def cancel(self):
@@ -110,7 +114,29 @@ class Director:
         if (raw['session_id'],raw['scene_epoch'])!=identity: raise Stopped('Scene changed during actor observation')
         if identity!=self.identity: raise Stopped('Scene changed; old scenario stopped')
         if raw.get('director',{}).get('owner')!=self.owner: raise Stopped('Native actor control ended')
+        if self.started and raw['clock_s'] - self.started > 900:
+            raise RuntimeError('Scenario exceeded fifteen minutes')
+        self.record_intervention(raw)
         return raw
+
+    def record_intervention(self,raw):
+        feedback=raw.get('companion_execution',{})
+        if not feedback.get('id'): return
+        # This is a separate execution result, never inferred from actor steps.
+        # Only the assistant's existing own-action receipt fields are retained.
+        with self.lock:
+            entries=self.job.setdefault('interventions',[])
+            row=next((r for r in entries if r['id']==feedback['id']),None)
+            if feedback.get('target') not in ('stove','faucet'):
+                if not (row and feedback.get('status')=='cancelled' and
+                        row.get('status') in ('approaching','reaching','waiting_clearance')): return
+            if row is None:
+                row={'id':feedback['id'],'target':feedback['target'],'started_clock_s':raw['clock_s'],'transitions':[]}
+                entries.append(row)
+            if row.get('status')!=feedback.get('status'):
+                row['transitions'].append({'status':feedback.get('status'),'clock_s':raw['clock_s']})
+            row.update(status=feedback.get('status'),updated_clock_s=raw['clock_s'],
+                       finger_error_cm=feedback.get('finger_error_cm'))
 
     def command(self,control,**fields):
         self.check()
@@ -194,27 +220,62 @@ class Director:
                 s['director']['motion']=='arrived' and
                 (s['phone_blend']>.95 if enabled else s['phone_blend']<.02),8,'phone pose')
             return result
-        if skill=='say':
-            clip=clips[index]
-            cause=('authored_phone_exchange:' if step['audience']=='phone' else 'scenario_human:')+self.owner+':'+str(index)
-            with self.live.lock: epoch=self.live.epoch
-            self.live.speak(clip,epoch,priority=60,cause=cause)
-            self.until(lambda s:(self.live.last_speech or {}).get('cause')==cause,45,'in-world speech start')
-            duration=clip.get('duration_s',len(clip['pcm_b64'])*.75/(2*clip['sample_rate']))
-            self.wait(duration+.3)
-            interrupted=(self.live.last_speech or {}).get('cause')!=cause
+        if skill in ('say','walk_say'):
+            movement = None
+            if skill == 'walk_say':
+                if self.check()['crouch_alpha'] > .5: self.action('crouch')
+                movement = self.command('path', points_cm=route(self.check(), target))
+            result = self.dialogue(step,index,clips[index])
+            if movement:
+                arrived = self.until(lambda s:s['clock_s']>movement['clock_s']+.1 and
+                    s['director']['motion'] in ('arrived','blocked'),180,'walk and talk arrival')
+                if arrived['director']['motion'] != 'arrived':
+                    raise RuntimeError('Walking blocked during dialogue')
+                result['movement'] = {'started_clock_s':movement['clock_s'],
+                    'arrived_clock_s':arrived['clock_s'],'motion':'arrived',
+                    'player_cm':arrived['player_cm']}
             if step['seconds']: self.wait(step['seconds'])
-            return {'status':'interrupted' if interrupted else 'spoken','text':step['line']}
+            return result
         if skill=='wait': self.wait(step['seconds']); return {'status':'waited'}
         raise ValueError('Unsupported skill')
 
-    def _play(self,row,view,owner):
+    def dialogue(self,step,index,clip):
+        cause=('authored_phone_exchange:' if step['audience']=='phone' else 'scenario_human:')+self.owner+':'+str(index)
+        with self.live.lock: epoch=self.live.epoch
+        self.live.speak(clip,epoch,priority=60,cause=cause)
+        started=self.until(lambda s:(self.live.last_speech or {}).get('cause')==cause,45,'in-world speech start')
+        duration=clip.get('duration_s',len(clip['pcm_b64'])*.75/(2*clip['sample_rate']))
+        self.wait(duration+.3)
+        interrupted=(self.live.last_speech or {}).get('cause')!=cause
+        return {'status':'interrupted' if interrupted else 'spoken','text':step['line'],
+                'speech_started_clock_s':started['clock_s'],
+                'speech_finished_clock_s':self.check()['clock_s'],
+                'motion_at_speech_start':started['director'].get('motion'),
+                'position_at_speech_start':started.get('player_cm')}
+
+    def finish_dialogue(self, assistant):
+        if assistant != 'live': return
+        # Actor listening time can expire while a final reply is synthesizing
+        # or playing. Keep the episode/capture open until that existing work
+        # and its completed-speech callback settle; never issue a new request.
+        def settled(_):
+            with self.live.lock:
+                if not self.live.enabled or self.live.error: return True
+                pending = (getattr(self.live, 'research_job', None) or
+                           getattr(self.live, 'research_requested', False))
+                callbacks = any(s['kind'] in ('heard', 'research_heard')
+                                and s['epoch'] == self.live.epoch for s in self.live.schedule)
+                return not (pending or self.live.pending_speech or callbacks or
+                            time.monotonic() < self.live.speech_until)
+        self.until(settled, 45, 'final dialogue completion')
+
+    def _play(self,row,view,owner,assistant='live'):
         done=threading.Event(); monitor=None; previous_enabled=self.live.enabled
         terminal='completed'; failure=None
         try:
             spec=validate_scenario(row['scenario'])
             # Resolve cached clips BEFORE scene reset, event time or actor ownership.
-            clips={i:self.live.voice(step['line'],step['speaker']) for i,step in enumerate(spec['steps']) if step['skill']=='say'}
+            clips={i:self.live.voice(step['line'],step['speaker']) for i,step in enumerate(spec['steps']) if step['skill'] in ('say','walk_say')}
             if self.stop_event.is_set(): raise Stopped('Stopped before scene entry')
             ready_until=time.monotonic()+30
             while True:
@@ -232,13 +293,14 @@ class Director:
             if row['micro'] is not None: proposal['micro']=row['micro']
             with self.live.world_lock:
                 self.live.proposals[row['id']]=proposal; self.live.apply(row['id'])
+                with self.live.lock: self.live.enabled=assistant=='live'
                 self.folder,self.identity,_=self.live.bridge.snapshot()
                 result=self.live.bridge.command('actor',{'control':'begin','owner':owner,'view':view},self.identity)
                 if result['code']!='ACTOR_ACCEPTED': raise RuntimeError('Actor could not start: '+result['code'])
             self.started=result['clock_s']; self.events=copy.deepcopy(spec['events']); self.last_heartbeat=0
             monitor=threading.Thread(target=self.monitor,args=(done,),daemon=True); monitor.start()
             with self.lock: self.job.update(status='running',started_clock_s=self.started,scenario=spec)
-            self.log('start',{'run_id':owner,'scenario_id':row['id'],'identity':self.identity,'view':view})
+            self.log('start',{'run_id':owner,'scenario_id':row['id'],'identity':self.identity,'view':view,'assistant':assistant})
             self.wait(1.5)  # Settle the chosen camera before the first acting step.
             for index,step in enumerate(spec['steps']):
                 self.check()
@@ -250,6 +312,7 @@ class Director:
             if self.events:
                 last=max(e['at_s'] for e in self.events)
                 self.until(lambda s:all(e.get('result') for e in self.events),max(15,last+15),'scheduled events')
+            self.finish_dialogue(assistant)
         except Exception as exc:
             terminal='stopped' if isinstance(exc,Stopped) else 'failed'; failure=str(exc)[:400]
         finally:
@@ -265,9 +328,15 @@ class Director:
                     _,identity,_=self.live.bridge.snapshot()
                     if identity==self.identity: self.live.cancel()
                 except (RuntimeError,OSError,ValueError): pass
-            with self.live.lock: self.live.enabled=previous_enabled
+            try:
+                folder,identity,_=self.live.bridge.snapshot()
+                if identity==self.identity: self.record_intervention(read(folder/'state.json'))
+            except (RuntimeError,OSError,ValueError): pass
+            with self.live.lock:
+                self.live.enabled=previous_enabled if terminal=='completed' and assistant=='live' else False
             with self.lock:
                 self.job['status']=terminal
+                self.job['finished_wall_time']=time.time()
                 if failure: self.job['error']=failure
             self.log('finish',copy.deepcopy(self.job))
             atomic(self.root/(owner+'.run.json'),self.job)

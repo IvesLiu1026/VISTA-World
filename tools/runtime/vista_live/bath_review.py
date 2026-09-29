@@ -2,7 +2,7 @@
 # requires-python = ">=3.10"
 # dependencies = ["python-xlib==0.33", "pillow>=11,<13"]
 # ///
-"""Private native acceptance through the SAME director API used by the web UI."""
+"""Record bath conditions through the same controlled endpoint as the web UI."""
 import argparse
 import json
 import math
@@ -75,9 +75,8 @@ def main():
     runtime = p.add_mutually_exclusive_group(required=True)
     runtime.add_argument('--run',type=Path,help='Recorded private review runtime')
     runtime.add_argument('--selected-project',help='Explicitly owned selected DEV project; read-only X capture')
-    p.add_argument('--scenario',required=True); p.add_argument('--view',choices=['first','third'],required=True)
+    p.add_argument('--condition', choices=['control','timely','late','model'], required=True); p.add_argument('--view',choices=['first','third'],required=True)
     p.add_argument('--port',type=int,default=49117)
-    p.add_argument('--assistant',choices=['live','off'],default='live')
     p.add_argument('--duration-limit',type=int,default=400,choices=range(30,901),metavar='30..900')
     p.add_argument('--require-off',action='append',choices=['faucet','stove'],default=[])
     a=p.parse_args()
@@ -96,7 +95,7 @@ def main():
         with urllib.request.urlopen(req,timeout=10) as r:return json.load(r)
     frames=[]; recorder=None; previous=None; checks=[]; start=time.monotonic(); job={}
     try:
-        post('/director/play',{'id':a.scenario,'view':a.view,'assistant':a.assistant})
+        post('/bath/play',{'condition':a.condition,'view':a.view})
         while time.monotonic()-start<a.duration_limit:
             state=get();job=state['director']['job']
             if job['status']=='running':
@@ -116,7 +115,7 @@ def main():
                         '-t',str(a.duration_limit),'-c:v','libx264','-preset','veryfast','-crf','21','-threads','4','-pix_fmt','yuv420p',
                         '-c:a','aac','-b:a','160k','-movflags','+faststart',str(a.out/'native.mp4')],
                         stdout=(a.out/'capture.log').open('w'),stderr=subprocess.STDOUT)
-                key=job.get('step')
+                key=int(frames[-1]['clock_s']//20)
                 if key!=previous:
                     print(job['status'],'step',key,flush=True)
                     probe.screenshot(a.out/f'step-{key}.png'); previous=key

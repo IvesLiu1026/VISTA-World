@@ -46,7 +46,7 @@ void UVistaCompanionComponent::BeginPlay()
         int32 Port=49111;FParse::Value(FCommandLine::Get(),TEXT("VistaLivePort="),Port);
         if (Port<1024 || Port>65535) Port=49111;
         Endpoint=FString::Printf(TEXT("http://127.0.0.1:%d"),Port);
-        Reply=TEXT("I'm here if you need a hand.");Status=TEXT("Live · Jev");
+        Reply=TEXT("I'm here if you need a hand.");Status=TEXT("Live assistant");
     }
     FParse::Value(FCommandLine::Get(),TEXT("VistaCompanionProof="),ProofDir);
     if(!ProofDir.IsEmpty())IFileManager::Get().MakeDirectory(*ProofDir,true);
@@ -191,7 +191,11 @@ void UVistaCompanionComponent::Stop()
 }
 void UVistaCompanionComponent::Follow(bool Enabled)
 {
-    if(!Companion)return;Companion->bFollowing=Enabled;Status=Enabled?TEXT("我會跟著你"):TEXT("我在這裡等你");
+    if(!Companion)return;
+    // A new movement request supersedes an in-flight manipulation. Cancel first
+    // so its saved resume-follow flag cannot overwrite the user's new choice.
+    Companion->CancelAssist();Companion->bFollowing=Enabled;
+    Status=Enabled?TEXT("我會跟著你"):TEXT("我在這裡等你");
 }
 TSharedPtr<FJsonObject> UVistaCompanionComponent::State() const
 {
@@ -208,6 +212,8 @@ TSharedPtr<FJsonObject> UVistaCompanionComponent::State() const
         D->SetStringField(TEXT("assist_status"),Companion->AssistStatus);
         D->SetStringField(TEXT("assist_target"),Companion->AssistTarget);
         D->SetNumberField(TEXT("assist_finger_error_cm"),Companion->ContactError);
+        if (FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")))
+            D->SetObjectField(TEXT("assist_diagnostics"),Companion->AssistDiagnostics());
         const auto V=Companion->GetActorLocation();D->SetArrayField(TEXT("position_cm"),{MakeShared<FJsonValueNumber>(V.X),MakeShared<FJsonValueNumber>(V.Y),MakeShared<FJsonValueNumber>(V.Z)});
         D->SetNumberField(TEXT("distance_cm"),FVector::Dist2D(V,GetOwner()->GetActorLocation()));
     }
@@ -226,7 +232,7 @@ void UVistaCompanionComponent::LiveRequest(const FString& Route,const FString& T
     {
         if (auto* Self=Weak.Get())
         {
-            Self->Status=Ok && Response && Response->GetResponseCode()==200?TEXT("Live · Jev · request received"):TEXT("Live service unavailable");
+            Self->Status=Ok && Response && Response->GetResponseCode()==200?TEXT("Live assistant · request received"):TEXT("Live service unavailable");
             if (Response && Response->GetResponseCode()!=200) Self->Reply=TEXT("Request failed. Check the VISTA Live panel.");
         }
     });Request->ProcessRequest();

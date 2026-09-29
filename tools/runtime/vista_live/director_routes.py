@@ -42,10 +42,14 @@ def route(state, destination):
         chain(floor([(1200,-1000),(1200,-925),(1150,-925)],86))
         chain(floor([(382,-1082),(375,-1058)],406))
         chain(floor([(1260,-730),(1260,-900),(1245,-1015),(1250,-990)],406))
+        chain(floor([(1260,-900),(1245,-925),(1245,-1015)],406))
+        # Native-reviewed viewing space beside the tub. Keep the tap's operating
+        # position free for the companion; this is human staging, not AI success.
+        chain(floor([(1245,-1015),(1285,-1010),(1285,-1100)],406))
         chain(floor([(1260,-730),(1000,-730),(1000,-900),(850,-900),(820,-940)],406))
         places.update(entry_hall=(1130,-200,86),living_room=(440,-290,86),
             kitchen_dining=(1147,-1071,86),bedroom=(382,-1082,406),phone=(382,-1082,406),
-            office=(820,-940,406),bathroom_laundry=(1245,-1015,406))
+            office=(820,-940,406),bathroom_laundry=(1285,-1100,406),bathroom_doorway=(1245,-925,406))
     if destination not in places:
         raise ValueError('Destination unavailable in the active scene')
     start = min(graph, key=lambda p: math.dist(p,state['player_cm']))

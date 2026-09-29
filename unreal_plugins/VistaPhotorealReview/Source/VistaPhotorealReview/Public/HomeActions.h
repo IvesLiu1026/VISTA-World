@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Async/Future.h"
 #include "VistaVillaCharacter.h"
 #include "Dom/JsonObject.h"
 #include "HomeActions.generated.h"
@@ -8,6 +9,8 @@
 class ULightComponent;
 class UAudioComponent;
 class USoundWaveProcedural;
+class USceneCaptureComponent2D;
+class UTextureRenderTarget2D;
 
 struct FHomeEntity
 {
@@ -126,6 +129,16 @@ protected:
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) override;
     virtual bool IsSceneContactReady(FString& Reason) const override;
 private:
+    // Enabled by a short-lived backend lease. No HUD, labels or evaluator data.
+    void CaptureResearchViews();
+    UPROPERTY() TObjectPtr<USceneCaptureComponent2D> ResearchEgo;
+    UPROPERTY() TObjectPtr<USceneCaptureComponent2D> ResearchExo;
+    UPROPERTY() TObjectPtr<AActor> ResearchObserver;
+    UPROPERTY() TObjectPtr<UTextureRenderTarget2D> ResearchEgoTarget;
+    UPROPERTY() TObjectPtr<UTextureRenderTarget2D> ResearchExoTarget;
+    double ResearchNextCapture = 0;
+    uint64 ResearchCaptureSerial = 0;
+    TFuture<void> ResearchCaptureWrite;
     TSharedPtr<FJsonObject> Contract;
     TMap<FString,FHomeEntity> Entities;
     TMap<FString,FHomeBefore> Before;
