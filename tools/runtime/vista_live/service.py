@@ -655,7 +655,12 @@ def handler(live, web=False):
                 self.send(200, Path(__file__).with_name('themes.html').read_text().replace('__TOKEN__', live.token), True)
             elif self.path == '/director':
                 self.send(200, Path(__file__).with_name('director.html').read_text().replace('__TOKEN__', live.token), True)
-            elif (self.path in ('/demo/first.mp4', '/demo/third.mp4', '/demo/first.jpg', '/demo/third.jpg', '/demo/teacher-pack.zip') or
+            elif self.path == '/bath' and hasattr(live, 'bath'):
+                self.send(200, Path(__file__).with_name('bath.html').read_text().replace('__TOKEN__', live.token), True)
+            elif self.path == '/bath/results' and hasattr(live, 'bath'):
+                with live.lock: self.send(200, live.bath.state())
+            elif (self.path in ('/demo/first.mp4', '/demo/third.mp4', '/demo/first.jpg', '/demo/third.jpg', '/demo/teacher-pack.zip', '/demo/bath-results.png', '/demo/bath-pack.zip') or
+                  re.fullmatch(r'/demo/bath-(control|timely|late|model)\.(jpg|mp4)', self.path) or
                   re.fullmatch(r'/demo/(study|control|plans|permission)-(first|third)\.(jpg|mp4)', self.path) or
                   re.fullmatch(r'/theme-media/[a-z]+/(first|third|micro)\.(jpg|mp4)', self.path) or
                   re.fullmatch(r'/research/frames/[A-Za-z0-9_-]{1,140}_(ego|exo)\.png', self.path)):
@@ -709,6 +714,10 @@ def handler(live, web=False):
                 if not 0 <= size <= 10000:
                     raise ValueError('Request too large')
                 body = json.loads(self.rfile.read(size)) if size else {}
+                if (hasattr(live, 'bath') and live.bath.active and
+                        live.bath.active['phase'] in ('preparing','observing') and
+                        self.path in ('/say','/respond','/research/observe','/dialogue')):
+                    raise ValueError('Stop the controlled bath episode before adding input')
                 if live.director.busy() and self.path in ('/apply','/author','/forge/generate','/forge/opening','/toggle'):
                     raise ValueError('Stop the scenario before changing scenes')
                 if self.path in ('/say', '/respond'):
@@ -719,6 +728,8 @@ def handler(live, web=False):
                     result = live.director.compile(body.get('prompt'),body.get('seed',0),body.get('extended',False))
                 elif self.path == '/director/play':
                     result = live.director.play(body.get('id'),body.get('view','first'),body.get('assistant','live'))
+                elif self.path == '/bath/play' and hasattr(live, 'bath'):
+                    result = live.bath.play(body.get('condition'), body.get('view','third'))
                 elif self.path == '/director/stop':
                     result = live.director.cancel()
                 elif self.path == '/forge/generate':

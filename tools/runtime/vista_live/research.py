@@ -47,6 +47,8 @@ class ResearchLive(Live):
         self.last_latency = None
         self.laya_shadow = None
         self.answered_turn_ids = set()
+        from .bath import BathDemo
+        self.bath = BathDemo(self)
 
     def own_feedback(self, value):
         # The native component retains a cancelled action across scene resets.
@@ -103,10 +105,11 @@ class ResearchLive(Live):
             for item in self.schedule:
                 if item['kind'] == 'heard' and item['epoch'] == epoch and item['text'] == clip['text']:
                     item['audience'] = 'phone' if cause.startswith('authored_phone_exchange') else 'assistant'
+                    item['cause'] = cause
         else:
             self.schedule.append({'kind': 'research_heard', 'text': clip['text'],
                                   'role': clip['role'], 'audience': 'phone' if clip['role'] == 'phone' else 'human',
-                                  'epoch': epoch, 'at_wall': self.speech_until})
+                                  'epoch': epoch, 'at_wall': self.speech_until, 'cause': cause})
 
     def add_turn(self, line, role='human', audience='assistant', source='typed_user_input'):
         turn = {'id': uuid.uuid4().hex, 'role': role, 'text': text(line),
@@ -242,8 +245,9 @@ class ResearchLive(Live):
                         continue
                     if item['kind'] in ('heard', 'research_heard'):
                         with self.lock:
-                            self.add_turn(item['text'], item.get('role', 'human'), item.get('audience', 'assistant'),
-                                          'completed_in_world_speech')
+                            turn = self.add_turn(item['text'], item.get('role', 'human'), item.get('audience', 'assistant'),
+                                                 'completed_in_world_speech')
+                            self.bath.delivered(turn, item.get('cause', ''))
                     elif item['kind'] == 'event':
                         self.native('event', {'event_id': item['id']}, epoch)
                     elif item['kind'] == 'phone':
@@ -279,6 +283,8 @@ class ResearchLive(Live):
             packet = self.capture.observation(self.turns, self.feedback, self.memory, self.research_clock)
             if self.research_memory:
                 packet = self.episodic_memory.observation(packet)
+            if not self.bath.reserve_call():
+                return
             job = uuid.uuid4().hex
             self.research_job = job
             self.research_inflight[job] = (self.epoch, self.revision)
