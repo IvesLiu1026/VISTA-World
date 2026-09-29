@@ -18,7 +18,8 @@ def main():
     for file in sorted(a.root.glob('*/result.json'),key=lambda p:p.stat().st_mtime):
         r=json.loads(file.read_text())
         if r['status']=='completed':runs[r['condition']]=(r,json.loads((file.parent/'trace.json').read_text()))
-    fig,ax=plt.subplots(figsize=(10.5,5.8),layout='constrained')
+    plt.rcParams.update({'font.size':13,'axes.labelsize':15})
+    fig,ax=plt.subplots(figsize=(13.5,4.5),layout='constrained')
     fig.set_facecolor('#f4f3ef');ax.set_facecolor('#ffffff')
     for key,label,color,style in [('control','A No assistance','#a44635','-'),('timely','B Timely reference','#087e8b','-'),
                                   ('late','C Late reference','#bd8029','--'),('model','D Model rollout','#436ebd',':')]:

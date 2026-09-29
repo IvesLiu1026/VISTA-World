@@ -24,7 +24,7 @@ class BathDemo:
         self.root = live.root/'bath'; self.root.mkdir(exist_ok=True)
         self.active = None
         self.results = []
-        for path in sorted(self.root.glob('*/result.json')):
+        for path in sorted(self.root.glob('*/result.json'), key=lambda p:p.stat().st_mtime):
             try: self.results.append(read(path))
             except (OSError, ValueError): pass
 
