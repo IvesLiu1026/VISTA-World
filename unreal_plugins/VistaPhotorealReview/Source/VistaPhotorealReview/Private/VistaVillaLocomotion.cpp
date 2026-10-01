@@ -111,11 +111,11 @@ void AVistaVillaCharacter::UpdateBodyLook(float Dt)
 
 void AVistaVillaCharacter::RefineSceneBodyPose(TArray<FTransform>& Local)
 {
-    if (!bVillaEmbodiment || !Controller || bThirdPerson || Local.Num()!=Parents.Num()) return;
+    if (!bVillaEmbodiment || !Controller || BodyLook.Weight<=0.f || Local.Num()!=Parents.Num()) return;
     // Rotate the same neck/head that defines the eye position, so looking to
     // the side moves the eyes around the neck instead of around the pelvis.
     // Active contact keeps its established eye/contact calibration.
-    const float Free=(1-FMath::Max(ReachAlpha,LeftReachAlpha))*(1-FallAlpha);
+    const float Free=BodyLook.Weight*(1-FMath::Max(ReachAlpha,LeftReachAlpha))*(1-FallAlpha);
     const float Yaw=BodyLook.Yaw*Free;
     const float Pitch=BodyLook.Pitch*Free;
     for (const TCHAR* Name:{TEXT("neck_01"),TEXT("head")})

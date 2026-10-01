@@ -111,7 +111,9 @@ bool AVistaVillaCharacter::UpdateAlpineMotion(float Dt,FVillaMotionFrame& A,FVil
     Reset=!bFeetReady || FVector::Distance(PreviousLocation,GetActorLocation())>70.f;
     PreviousLocation=GetActorLocation();
     const bool Starting=Speed>8 && PreviousLocomotionSpeed<=8;
-    if (Reset || Starting) StepClock=.30f;
+    // A brief stop during a reversal must keep its support-foot phase.
+    const bool FromRest=Starting && MotionWeight<.08f;
+    if (Reset || FromRest) StepClock=.30f;
     PreviousLocomotionSpeed=Speed;
     const FVector V=GetMesh()->GetComponentTransform().InverseTransformVectorNoScale(GetVelocity()).GetSafeNormal2D();
     const float TargetDirection=FMath::RadiansToDegrees(FMath::Atan2(V.X,V.Y));
@@ -120,7 +122,7 @@ bool AVistaVillaCharacter::UpdateAlpineMotion(float Dt,FVillaMotionFrame& A,FVil
     // each resulting bone alone still allowed a 39-degree pelvis jump.
     // Select the initial direction before fading in from idle. Interpolating
     // zero to backward would unnecessarily pass through a sideways pose.
-    if (Reset || Starting) LocomotionDirectionYaw=TargetDirection;
+    if (Reset || FromRest) LocomotionDirectionYaw=TargetDirection;
     else if (Speed>8) LocomotionDirectionYaw=FMath::FixedTurn(LocomotionDirectionYaw,TargetDirection,Dt*180.f);
     const float Direction=FMath::Fmod(LocomotionDirectionYaw/45.f+8.f,8.f);
     const TCHAR* D[]={TEXT("fwd"),TEXT("fwd_left"),TEXT("left"),TEXT("bwd_left"),TEXT("bwd"),TEXT("bwd_right"),TEXT("right"),TEXT("fwd_right")};

@@ -111,6 +111,8 @@ public:
     TSharedPtr<FJsonObject> StreamingObservation() const;
     bool CommitCompanionOff(const FString& Target,AActor* Helper,const FVector& Finger,FString& Code);
 protected:
+    void JogOn();
+    void JogOff();
     virtual bool UsesHomeActions() const override {return true;}
     virtual void SetView(FVector Position,FRotator Rotation) override;
     virtual void SetPhase(EEmbodiedPhase NewPhase) override;
@@ -240,8 +242,6 @@ private:
     void NextEvent();
     void ToggleCrouch();
     void ToggleBackpack();
-    void JogOn();
-    void JogOff();
     FHomeEntity* Resolve(const FString& Name);
     const FHomeEntity* Resolve(const FString& Name) const;
     FVector ControlPoint(const FHomeEntity& Entity) const;
