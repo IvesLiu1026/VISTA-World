@@ -1,4 +1,12 @@
-# VISTA World browser preview
+# Archived lightweight browser prototype
+
+**Superseded on 2026-10-01. Do not publish this as the VISTA environment.**
+The user requires the existing Unreal world and full character appearance; this
+separate reconstruction and reduced hair do not meet that requirement. The active
+browser implementation is [`tools/runtime/vista_web`](../../tools/runtime/vista_web/README.md).
+The old export and checks below are retained only as historical prototype work.
+The former private preview has been replaced; no public domain is approved for
+this prototype. `wrangler.jsonc` deliberately contains no deployment routes.
 
 A portable Three.js interaction preview for a standalone website or `/demo/`
 subdirectory. Six lightweight furnished rooms, two rigged avatars, first/third
@@ -42,7 +50,7 @@ blender --background --threads 2 --python-exit-code 1 \
 
 Repeat with the G1 companion blend and `--name companion`. The exporter changes
 only its in-memory scene. It strips duplicate owner meshes, reduces geometry,
-keeps complete hair strands, omits facial morphs, bakes two clips and records
+retains a subset of intact hair strands (insufficient density), omits facial morphs, bakes two clips and records
 source/output hashes. It does not save over source blends.
 
 ## Hosting
@@ -53,21 +61,14 @@ No runtime server, server GPU, database or paid inference is required. A browser
 with WebGL2 and hardware acceleration is recommended; performance depends on
 the visitor's device. Test Safari on the actual Mac before a public presentation.
 
-Suggested public destination: `https://demo.ivesliu.org/`. Keep the existing
+The former suggested public destination has been withdrawn. Keep the existing
 Cloudflare Access-protected `vista.ivesliu.org` research service intact. The
 `_headers` file supplies compatible static-host caching/CSP rules and permits
 embedding from the owned ivesliu.org websites. Other hosts should apply equivalent
 headers themselves. This repository does not change DNS, Access or production.
 
-`wrangler.jsonc` prepares an assets-only Cloudflare Worker named
-`vista-world-demo`, with only `demo.ivesliu.org` as its custom domain. It disables
-workers.dev and version preview URLs. Before an approved publish, validate with
-`WRANGLER_SEND_METRICS=false npx wrangler deploy --dry-run`; after the owner confirms
-the public destination and authenticates the correct account, use
-`WRANGLER_SEND_METRICS=false npx wrangler deploy`. The latter uploads assets and
-configures the public custom domain, so it is deliberately not a build hook or CI
-job. Config follows the official [static assets guide](https://developers.cloudflare.com/workers/static-assets/get-started/)
-and [custom-domain guide](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+`wrangler.jsonc` has no routes, workers.dev or version preview URLs. No publication
+is intended. Use the native streaming implementation for further website work.
 
 Before a production publish, review the exact built artifact and confirm the
 target hosting project/domain. A release can be rolled back by restoring the

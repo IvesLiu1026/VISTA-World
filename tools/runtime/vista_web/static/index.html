@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>VISTA · Live world</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/style.css"></head>
+<body>
+<main id="world"><video id="screen" autoplay playsinline aria-label="Live Unreal environment"></video>
+  <header><a class="brand" href="/">VISTA <span>LIVE WORLD</span></a><div id="status" role="status">Ready to connect</div><button id="fullscreen" title="Full screen">⛶</button></header>
+  <section id="welcome"><div class="card"><span class="eyebrow">YOUR SIX ROOMS</span><h1>Step inside.</h1><p>The original environment. Full characters, materials and live sound.</p><button id="connect" class="primary">Enter environment <span>↗</span></button><small>Connect to Tailscale · One shared environment</small></div></section>
+  <div id="notice" role="alert" hidden></div>
+  <nav id="toolbar" aria-label="Environment controls" hidden>
+    <button id="control">Take control</button>
+    <button data-tap="Escape" id="room">Rooms</button>
+    <button data-tap="Tab" id="view">Switch view</button><button data-tap="KeyE">Interact <kbd>E</kbd></button><button data-tap="KeyQ">Actions <kbd>Q</kbd></button>
+    <button id="sound">Sound on</button><button id="disconnect">Leave</button>
+  </nav>
+  <footer id="hints" hidden><span><kbd>W A S D</kbd> Move</span><span>Drag to look · double-click to capture mouse</span><span><kbd>Shift</kbd> Jog</span><span><kbd>G</kbd> Put down</span><span id="quality"></span></footer>
+  <div id="touch" aria-label="Touch movement" hidden><button data-hold="KeyW" aria-label="Forward">↑</button><div><button data-hold="KeyA" aria-label="Left">←</button><button data-hold="KeyS" aria-label="Back">↓</button><button data-hold="KeyD" aria-label="Right">→</button></div></div>
+</main><script type="module" src="/client.js"></script></body></html>
