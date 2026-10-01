@@ -77,7 +77,8 @@ class Server:
             raise web.HTTPServiceUnavailable(text='All preview viewer slots are in use.')
         ident = secrets.token_urlsafe(24)
         pc = RTCPeerConnection(RTCConfiguration(iceServers=[]))
-        self.peers[ident] = {'pc': pc, 'tracks': [], 'created': time.monotonic(), 'channel': None}
+        self.peers[ident] = {'pc': pc, 'tracks': [], 'created': time.monotonic(),
+                             'last_seen': time.monotonic(), 'channel': None}
         @pc.on('connectionstatechange')
         async def changed():
             if pc.connectionState in ('failed', 'closed'):
@@ -112,6 +113,8 @@ class Server:
                         channel.send(json.dumps({'type': 'pong', 'at': row['at']}))
                     else:
                         raise ValueError('Unsupported control operation')
+                    if ident in self.peers:
+                        self.peers[ident]['last_seen'] = time.monotonic()
                 except (ValueError, KeyError, RuntimeError, OSError) as exc:
                     if self.control:
                         self.control.release(ident)
@@ -120,6 +123,7 @@ class Server:
             def channel_close():
                 if self.control:
                     self.control.release(ident)
+                asyncio.create_task(self.drop(ident))
         try:
             await self.ensure_media()
             video, audio = self.media.tracks()
@@ -153,7 +157,8 @@ class Server:
                 slow = any(getattr(track, '_queue', None) and track._queue.qsize()>60
                            for track in peer['tracks'])
                 changed = self.target is not None and not self.source.current(self.target)
-                if slow or changed or (peer['pc'].connectionState!='connected' and time.monotonic()-peer['created']>20):
+                silent = peer['pc'].connectionState=='connected' and time.monotonic()-peer['last_seen']>10
+                if slow or changed or silent or (peer['pc'].connectionState!='connected' and time.monotonic()-peer['created']>20):
                     await self.drop(ident)
 
     async def status(self, request):

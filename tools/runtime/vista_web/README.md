@@ -51,6 +51,8 @@ restrictions prevent pointer lock.
 - A controller sends full key snapshots with increasing sequence numbers. A
   missing heartbeat for 1.2 seconds releases held keys; stale messages cannot renew
   or revive a lease. Blur, hidden page, leave and disconnect release ownership.
+  Channel close tears down the peer immediately; a crashed viewer missing all
+  heartbeats is removed after ten seconds even if ICE still reports connected.
 - Only reviewed game keys and bounded relative mouse motion / viewport clicks are
   accepted. No console, command execution, clipboard, filesystem or arbitrary
   native bridge operation is exposed. Each input checks the selected native window.

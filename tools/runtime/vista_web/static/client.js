@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 const screen = $('screen'), keys = new Set(), taps = new Set();
 const allowed = new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowLeft','ArrowDown','ArrowRight','ShiftLeft','Space','KeyE','KeyG','KeyQ','KeyF','KeyC','KeyB','Tab','Escape',...Array.from({length:6},(_,i)=>`Digit${i+1}`)]);
-let pc, channel, active=false, seq=0, dx=0, dy=0, drag=false, lastX=0, lastY=0, statsTimer, inputTimer, noticeTimer;
+let pc, channel, active=false, seq=0, dx=0, dy=0, drag=false, lastX=0, lastY=0, statsTimer, inputTimer, heartbeatTimer, noticeTimer;
 let received = new MediaStream(), startX=0, startY=0;
 const send = packet => { if(channel?.readyState==='open') channel.send(JSON.stringify(packet)); };
 function notice(text){$('notice').textContent=text;$('notice').hidden=false;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('notice').hidden=true,6500);}
@@ -10,13 +10,13 @@ function packet(){if(!active)return;send({type:'input',seq:++seq,keys:[...new Se
 function release(){if(active){keys.clear();taps.clear();packet();send({type:'release'});}controlled(false);drag=false;if(document.pointerLockElement)document.exitPointerLock();}
 async function sound(){screen.muted=false;try{await screen.play();$('sound').textContent='Mute sound';}catch{notice('Click Sound on to hear the environment.');}}
 function tap(key){if(!active){notice('Click Take control first.');return;}taps.add(key);packet();setTimeout(()=>{taps.delete(key);packet();},140);}
-async function leave(){release();clearInterval(inputTimer);clearInterval(statsTimer);channel?.close();pc?.close();pc=null;channel=null;received=new MediaStream();screen.srcObject=null;$('welcome').hidden=false;$('toolbar').hidden=$('hints').hidden=$('touch').hidden=true;$('status').textContent='Disconnected';$('connect').disabled=false;}
+async function leave(){release();clearInterval(inputTimer);clearInterval(statsTimer);clearInterval(heartbeatTimer);channel?.close();pc?.close();pc=null;channel=null;received=new MediaStream();screen.srcObject=null;$('welcome').hidden=false;$('toolbar').hidden=$('hints').hidden=$('touch').hidden=true;$('status').textContent='Disconnected';$('connect').disabled=false;}
 async function connect(){
   $('connect').disabled=true;$('status').textContent='Connecting…';
   try{
     pc=new RTCPeerConnection({iceServers:[]});
     channel=pc.createDataChannel('vista-input',{ordered:true});
-    channel.onopen=()=>{send({type:'claim'});inputTimer=setInterval(packet,50);};
+    channel.onopen=()=>{send({type:'claim'});inputTimer=setInterval(packet,50);heartbeatTimer=setInterval(()=>send({type:'ping',at:Date.now()}),1000);};
     channel.onmessage=event=>{const data=JSON.parse(event.data);if(data.type==='control')controlled(data.active);if(data.type==='error'){controlled(false);notice(data.message);}};
     channel.onclose=()=>controlled(false);
     pc.ontrack=event=>{received.addTrack(event.track);screen.srcObject=received;screen.play().catch(()=>{$('sound').textContent='Sound on';});};
