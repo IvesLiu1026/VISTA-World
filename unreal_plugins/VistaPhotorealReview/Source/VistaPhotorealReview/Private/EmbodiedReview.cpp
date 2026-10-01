@@ -36,6 +36,8 @@ FString PhaseName(EEmbodiedPhase P) { return StaticEnum<EEmbodiedPhase>()->GetNa
 AEmbodiedReviewCharacter::AEmbodiedReviewCharacter()
 {
     GetCapsuleComponent()->InitCapsuleSize(27.f,82.f);
+    // Other characters must yield around a person, never step onto their capsule.
+    GetCapsuleComponent()->CanCharacterStepUpOn=ECB_No;
     GetCharacterMovement()->MaxWalkSpeed=125.f;
     GetCharacterMovement()->MaxAcceleration=430.f;
     GetCharacterMovement()->BrakingDecelerationWalking=650.f;

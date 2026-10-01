@@ -54,6 +54,8 @@ void AVistaVillaCharacter::CaptureCharacterMotionProof()
     O->SetArrayField(TEXT("velocity_cm_s"),Values(GetVelocity()));
     O->SetNumberField(TEXT("phase"),StepClock);O->SetNumberField(TEXT("motion_weight"),MotionWeight);
     O->SetStringField(TEXT("motion"),AlpineMotionName);O->SetNumberField(TEXT("run_blend"),RunBlend);
+    O->SetBoolField(TEXT("turn_feet"),bTurnFeet);O->SetNumberField(TEXT("turn_swing"),TurnFeet.Swing);
+    O->SetNumberField(TEXT("turn_steps"),TurnFeet.Count);
     O->SetArrayField(TEXT("mesh_world"),Row(GetMesh()->GetComponentTransform()));
     auto Final=MakeShared<FJsonObject>();auto FK=MakeShared<FJsonObject>();TArray<FTransform> Global;
     for (int32 I=0;I<MotionBlend.Num();++I) Global.Add(Parents[I]>=0?MotionBlend[I]*Global[Parents[I]]:MotionBlend[I]);

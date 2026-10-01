@@ -213,7 +213,10 @@ TSharedPtr<FJsonObject> UVistaCompanionComponent::State() const
         D->SetStringField(TEXT("assist_target"),Companion->AssistTarget);
         D->SetNumberField(TEXT("assist_finger_error_cm"),Companion->ContactError);
         if (FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")))
+        {
             D->SetObjectField(TEXT("assist_diagnostics"),Companion->AssistDiagnostics());
+            D->SetObjectField(TEXT("motion_diagnostics"),Companion->MotionDiagnostics());
+        }
         const auto V=Companion->GetActorLocation();D->SetArrayField(TEXT("position_cm"),{MakeShared<FJsonValueNumber>(V.X),MakeShared<FJsonValueNumber>(V.Y),MakeShared<FJsonValueNumber>(V.Z)});
         D->SetNumberField(TEXT("distance_cm"),FVector::Dist2D(V,GetOwner()->GetActorLocation()));
     }
