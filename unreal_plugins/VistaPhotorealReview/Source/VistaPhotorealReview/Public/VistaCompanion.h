@@ -4,6 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "GameFramework/Character.h"
 #include "Dom/JsonObject.h"
+#include "VistaGroundMotion.h"
 #include "VistaCompanion.generated.h"
 
 class UAudioComponent;
@@ -30,8 +31,9 @@ class VISTAPHOTOREALREVIEW_API AVistaCompanion : public ACharacter
 public:
     AVistaCompanion();
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type Reason) override;
     virtual void Tick(float Dt) override;
-    void BuildPose(TArray<FTransform>& Out) const;
+    void BuildPose(TArray<FTransform>& Out);
     void Speak(const TSharedPtr<FJsonObject>& Reply);
     void StopSpeech();
     bool PlaceNear(const AActor* Player);
@@ -41,6 +43,7 @@ public:
     FString AssistStatus=TEXT("idle"),AssistTarget,AssistId;
     float ContactError=0;
     TSharedPtr<FJsonObject> AssistDiagnostics() const;
+    TSharedPtr<FJsonObject> MotionDiagnostics() const;
     TWeakObjectPtr<ACharacter> Leader;
     bool bFollowing=true,bReady=false,bSpeaking=false,bBlocked=false;
     float AudioClock=0,MouthOpen=0,Travel=0;
@@ -53,11 +56,26 @@ private:
     bool bRobotAppearance=false;
     TArray<FTransform> Idle,CurrentPose,ReferenceGlobal;
     TArray<TArray<FTransform>> Walk;
+    TArray<FVector2D> WalkContacts;
     TArray<int32> Parents;
     TArray<FVector> Trail;
     TArray<FVector> Mouth;
     FVector Previous,LastLeader,YieldGoal;
     float Cycle=143,Phase=0,MoveBlend=0,BlinkClock=0,StuckTime=0,YieldTime=0;
+    double YawRate=0;
+    float PreviousSpeed=0,MotionDt=0;
+    bool bGroundReady=false,bTurnFeet=false;
+    FVector FootAnchor[2],FootGoal[2];
+    float FootContact[2]={0,0};
+    bool FootLocked[2]={false,false};
+    VistaMotion::TurnSteps TurnFeet;
+    FString MotionProofDir;
+    int32 MotionProofFrames=0;
+    FDelegateHandle MotionFinalizedHandle;
+    uint64 GroundPoseFrame=MAX_uint64;
+    void UpdateGroundMotion(float Dt);
+    void TurnToward(float Desired,float Dt);
+    void CaptureMotionProof();
     int32 AudioBytes=0,Rate=24000,Head=INDEX_NONE,Spine=INDEX_NONE;
     TMap<FName,TArray<FName>> FaceMorphs;
     void Face(FName Name,float Value);

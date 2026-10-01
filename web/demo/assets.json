@@ -1,0 +1,30 @@
+{
+  "schema": "vista.browser-assets/v1",
+  "assets": [
+    {
+      "file": "human.glb",
+      "bytes": 8834548,
+      "sha256": "346ad1767d778bf854c050ebc6959ad2235a981e25332ed411c7c05da689e6bd",
+      "source_sha256": "668758a864c978010295088691c6ccbd144f34fee7839e559d92b9e0d57b2a6a",
+      "motion_sha256": "f8542f6b73387d411665892c4a89822fbcc26ed8976dc60815b442b352b10e06",
+      "motion_source": "https://mocap.cs.cmu.edu/",
+      "walk_cycle_m": 1.4316400656909036,
+      "walk_duration_s": 1.0999956,
+      "bone_count": 53,
+      "provenance": "MakeHuman core CC0; original VISTA clothing/hair; CMU motion"
+    },
+    {
+      "file": "companion.glb",
+      "bytes": 1531820,
+      "sha256": "abd32ca922358c281ef263cb8ce2b69c69cb674493b61a5e78d0fc3820af79a5",
+      "source_sha256": "d5bac4ad4c858582223678a21ebb2f0e90c8a5fe5f65f9a55852b6fbfad03826",
+      "motion_sha256": "f8542f6b73387d411665892c4a89822fbcc26ed8976dc60815b442b352b10e06",
+      "motion_source": "https://mocap.cs.cmu.edu/",
+      "walk_cycle_m": 1.4316400656909036,
+      "walk_duration_s": 1.0999956,
+      "bone_count": 53,
+      "provenance": "Unitree BSD-3-Clause visual; CMU motion"
+    }
+  ],
+  "notes": "Source binaries and generated models remain outside Git; see THIRD_PARTY_NOTICES.txt."
+}

@@ -72,7 +72,7 @@ void AVistaCompanion::TickAssist(float Dt)
     const FVector Direction=(Waypoint-Here).GetSafeNormal2D();
     const float Desired=(Distance>5?Direction:(AssistControl-Here).GetSafeNormal2D()).Rotation().Yaw;
     const float Turn=FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Desired);
-    SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Desired,150*Dt),0));
+    TurnToward(Desired,Dt);
     if (Distance>5 || !Last)
     {
         AssistCheckClock+=Dt;
@@ -93,8 +93,8 @@ void AVistaCompanion::TickAssist(float Dt)
                 return;
             }
         }
-        const float Input=FMath::Clamp((80-FMath::Abs(Turn))/40.f,0.f,1.f)*
-            (Last?FMath::Clamp(Distance/45,.2f,1.f):.85f);
+        GetCharacterMovement()->MaxWalkSpeed=VistaMotion::ArrivalSpeed(Last?FMath::Max(0.f,Distance-3.f):500.f,160,Turn);
+        const float Input=FMath::Abs(Turn)<75?1.f:0.f;
         AddMovementInput(Direction,Input,true);
         AssistStall=Input>.1f && FVector::Dist2D(Here,AssistPrevious)<.015f?AssistStall+Dt:0;AssistPrevious=Here;
         if (AssistStall>2) End(TEXT("blocked_obstacle"));

@@ -4,6 +4,7 @@
 #include "VistaLiquidLedger.h"
 #include "VistaPourControl.h"
 #include "VistaBodyLook.h"
+#include "VistaGroundMotion.h"
 #include "VistaVillaCharacter.generated.h"
 class UNiagaraComponent;
 class ACameraActor;
@@ -65,7 +66,7 @@ protected:
     virtual float UnoccupiedFingerCurl() const override {return bVillaEmbodiment?.16f:Super::UnoccupiedFingerCurl();}
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) override;
     virtual void AdjustFirstPersonEyeTarget(FVector& EyeTarget) const override;
-    virtual bool PreserveMotionFootRotation() const override {return !Motions.IsEmpty();}
+    virtual bool PreserveMotionFootRotation() const override {return !Motions.IsEmpty() && !bTurnFeet;}
     virtual float ProceduralGaitWeight() const override {return Motions.IsEmpty()?1.f:0.f;}
     virtual void UpdateBodyFacing(float Dt) override;
     virtual void UpdateFeet(float Dt) override;
@@ -95,6 +96,8 @@ private:
     float ContactWeight[2]={0,0};
     bool FootLocked[2]={false,false};
     FVector FootAnchor[2];
+    VistaMotion::TurnSteps TurnFeet;
+    bool bTurnFeet=false;
     VistaLiquid::Ledger Liquid,TapLedger;
     VistaPour::Control PourControl;
     double InitialJugMl=600,InitialMugMl=0;

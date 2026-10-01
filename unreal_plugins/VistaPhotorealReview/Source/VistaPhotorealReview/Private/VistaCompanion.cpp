@@ -41,12 +41,16 @@ AVistaCompanion::AVistaCompanion()
 {
     PrimaryActorTick.bCanEverTick=true;AutoPossessPlayer=EAutoReceiveInput::Disabled;
     GetCapsuleComponent()->InitCapsuleSize(27,82);
+    GetCapsuleComponent()->CanCharacterStepUpOn=ECB_No;
     GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn,ECR_Block);
     auto* M=GetCharacterMovement();M->bRunPhysicsWithNoController=true;M->MaxWalkSpeed=145;
-    M->MaxAcceleration=430;M->BrakingDecelerationWalking=650;M->bOrientRotationToMovement=false;
+    M->MaxAcceleration=360;M->BrakingDecelerationWalking=300;M->bOrientRotationToMovement=false;
+    M->bUseSeparateBrakingFriction=true;M->BrakingFriction=2;M->BrakingFrictionFactor=1;
+    M->MaxStepHeight=22;
     GetMesh()->SetRelativeLocation(FVector(0,0,-82));GetMesh()->SetRelativeRotation(FRotator(0,-90,0));
     GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     GetMesh()->VisibilityBasedAnimTickOption=EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+    GetMesh()->PrimaryComponentTick.TickGroup=TG_PostPhysics;
     Speech=CreateDefaultSubobject<UAudioComponent>(TEXT("CompanionSpeech"));Speech->SetupAttachment(GetMesh(),TEXT("head"));
     Speech->bAutoActivate=false;Speech->bAllowSpatialization=true;Speech->bOverrideAttenuation=true;
     Speech->AttenuationOverrides.bAttenuate=true;Speech->AttenuationOverrides.AttenuationShapeExtents=FVector(180);
@@ -77,6 +81,15 @@ void AVistaCompanion::BeginPlay()
         (FaceMorphs.Contains(TEXT("JawOpen")) && FaceMorphs.Contains(TEXT("Blink"))));
     UE_LOG(LogTemp,Display,TEXT("VISTA_COMPANION_READY bones=%d frames=%d ready=%d face=%d robot=%d"),
         Idle.Num(),Walk.Num(),bReady,FaceMorphs.Num()>0,bRobotAppearance);
+    if(FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")) &&
+        FParse::Value(FCommandLine::Get(),TEXT("VistaCharacterMotionProof="),MotionProofDir))
+        MotionFinalizedHandle=GetMesh()->RegisterOnBoneTransformsFinalizedDelegate(
+            FOnBoneTransformsFinalizedMultiCast::FDelegate::CreateUObject(this,&AVistaCompanion::CaptureMotionProof));
+}
+void AVistaCompanion::EndPlay(const EEndPlayReason::Type Reason)
+{
+    if(MotionFinalizedHandle.IsValid())GetMesh()->UnregisterOnBoneTransformsFinalizedDelegate(MotionFinalizedHandle);
+    Super::EndPlay(Reason);
 }
 void AVistaCompanion::LoadMotion()
 {
@@ -104,7 +117,11 @@ void AVistaCompanion::LoadMotion()
             if(P->BoneNames[I]==TEXT("pelvis"))R[I].AddToTranslation(Src[I].GetTranslation()-Rest[I].GetTranslation());}return R;};
     Idle=Retarget(D->GetArrayField(TEXT("idle")));Cycle=Number(D,TEXT("cycle_distance_cm"));
     if(Cycle<30 || Cycle>200){Idle.Empty();return;}
-    for(const auto& V:D->GetArrayField(TEXT("frames")))Walk.Add(Retarget(V->AsObject()->GetArrayField(TEXT("pose"))));
+    for(const auto& V:D->GetArrayField(TEXT("frames")))
+    {
+        Walk.Add(Retarget(V->AsObject()->GetArrayField(TEXT("pose"))));
+        const auto& C=V->AsObject()->GetArrayField(TEXT("contacts"));WalkContacts.Add(FVector2D(C[0]->AsNumber(),C[1]->AsNumber()));
+    }
     CurrentPose=Idle;
 }
 bool AVistaCompanion::ResetForScene(const AActor* Player)
@@ -119,7 +136,8 @@ bool AVistaCompanion::ResetForScene(const AActor* Player)
     AssistPathIndex=AssistReplans=AssistCandidates=AssistFloorRejected=0;
     AssistBodyRejected=AssistReachRejected=AssistOccludedRejected=AssistExpanded=AssistHumanOccupied=0;
     bAssistHumanBlocksRoute=false;bResumeFollow=true;bFollowing=true;
-    Trail.Empty();StuckTime=YieldTime=MoveBlend=Phase=Travel=0;
+    Trail.Empty();StuckTime=YieldTime=MoveBlend=Phase=Travel=PreviousSpeed=0;YawRate=0;
+    bGroundReady=false;TurnFeet=VistaMotion::TurnSteps();
     AudioClock=MouthOpen=0;Subtitle.Empty();CurrentPose=Idle;
     GetCharacterMovement()->StopMovementImmediately();
     GetCharacterMovement()->SetMovementMode(MOVE_Walking);
@@ -145,7 +163,8 @@ bool AVistaCompanion::PlaceNear(const AActor* Player)
         if(GetWorld()->OverlapBlockingTestByChannel(P,FQuat::Identity,ECC_Pawn,FCollisionShape::MakeCapsule(28,82),Q))continue;
         FHitResult Wall;if(GetWorld()->LineTraceSingleByChannel(Wall,Player->GetActorLocation()+FVector(0,0,50),P+FVector(0,0,50),ECC_Visibility,Q))continue;
         SetActorLocation(P,false,nullptr,ETeleportType::TeleportPhysics);SetActorRotation(FRotator(0,(Player->GetActorLocation()-P).Rotation().Yaw,0));
-        GetCharacterMovement()->StopMovementImmediately();Previous=P;LastLeader=Player->GetActorLocation();Trail.Empty();YieldTime=0;bBlocked=false;return true;
+        GetCharacterMovement()->StopMovementImmediately();Previous=P;LastLeader=Player->GetActorLocation();Trail.Empty();YieldTime=0;bBlocked=false;
+        bGroundReady=false;YawRate=0;return true;
     }
     return false;
 }
@@ -154,7 +173,10 @@ void AVistaCompanion::Tick(float Dt)
     Super::Tick(Dt);if(!bReady)return;
     if(StatusMaterial)StatusMaterial->SetScalarParameterValue(TEXT("Activity"),1.f+4.f*MouthOpen);
     const FVector Here=GetActorLocation();const float Moved=FVector::Dist2D(Here,Previous);Previous=Here;
-    if(Moved<100){Travel+=Moved;Phase=FMath::Fmod(Phase+Moved/Cycle,1.f);}
+    const float Speed=GetVelocity().Size2D();
+    if(Speed>8 && PreviousSpeed<=8)Phase=.30f;
+    if(Moved<100){Travel+=Moved;Phase=FMath::Fmod(Phase+Moved/Cycle,1.f);}else bGroundReady=false;
+    PreviousSpeed=Speed;MotionDt=Dt;
     const bool Assisting=AssistStatus==TEXT("approaching") || AssistStatus==TEXT("reaching") || AssistStatus==TEXT("waiting_clearance");
     if(Assisting) TickAssist(Dt);
     if(Leader.IsValid() && !Assisting && AssistReach<=0)
@@ -206,8 +228,9 @@ void AVistaCompanion::Tick(float Dt)
             const float Turn=FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Desired);
             if (Delta.Size2D()>12)
             {
-                SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Desired,150*Dt),0));
-                if (FMath::Abs(Turn)<55) AddMovementInput(Direction,.85f,true);
+                TurnToward(Desired,Dt);
+                GetCharacterMovement()->MaxWalkSpeed=VistaMotion::ArrivalSpeed(FMath::Max(0.f,float(Delta.Size2D())-12.f),145,Turn);
+                if (FMath::Abs(Turn)<55) AddMovementInput(Direction,1,true);
             }
             else GetCharacterMovement()->StopMovementImmediately();
             StuckTime=0;bBlocked=false;
@@ -224,28 +247,30 @@ void AVistaCompanion::Tick(float Dt)
             if (Trail.Num()>1) Goal=VistaPathSteering::PreviewCorner(this,Trail[0],Trail[1],85,Leader.Get());
             Direction=VistaPathSteering::AvoidNearObstacle(this,Goal);
             float Desired=Direction.Rotation().Yaw;float Delta=FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Desired);
-            SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Desired,150*Dt),0));
+            TurnToward(Desired,Dt);
             const bool Live=FParse::Param(FCommandLine::Get(),TEXT("VistaLiveAssistant"));
             const float DesiredSpeed=Live?FMath::Clamp(Leader->GetVelocity().Size2D()+25.f+(Distance-230)*.12f,120.f,240.f):145.f;
-            GetCharacterMovement()->MaxWalkSpeed=FMath::FInterpTo(GetCharacterMovement()->MaxWalkSpeed,DesiredSpeed,Dt,3);
             const float Brake=FMath::Clamp(VistaPathSteering::ForwardClearance(this,Direction,95)/60.f,.22f,1.f);
-            if(FMath::Abs(Delta)<75)AddMovementInput(Direction,FMath::Clamp((80-FMath::Abs(Delta))/35.f,.1f,1.f)*Brake,true);
+            const float Remaining=Direct?FMath::Max(0.f,Distance-145.f):500.f;
+            GetCharacterMovement()->MaxWalkSpeed=VistaMotion::ArrivalSpeed(Remaining,DesiredSpeed*Brake,Delta);
+            if(FMath::Abs(Delta)<75)AddMovementInput(Direction,1,true);
             StuckTime=Moved<.03f?StuckTime+Dt:0;bBlocked=StuckTime>2;
         }
         else
         {
-            GetCharacterMovement()->StopMovementImmediately();StuckTime=0;bBlocked=false;
+            // No input lets CharacterMovement brake continuously. Explicit
+            // cancellation/contact still uses an immediate safety stop.
+            StuckTime=0;bBlocked=false;
             if(Direct && Distance<230)Trail.Empty();
             const float Look=(P-Here).Rotation().Yaw;
             const float Offset=FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw,Look);
-            if(FMath::Abs(Offset)>35)SetActorRotation(FRotator(0,FMath::FixedTurn(GetActorRotation().Yaw,Look,80*Dt),0));
+            TurnToward(FMath::Abs(Offset)>35?Look:GetActorRotation().Yaw,Dt);
         }
     }
     MoveBlend=FMath::FInterpTo(MoveBlend,FMath::Clamp(GetVelocity().Size2D()/90.f,0.f,1.f),Dt,7);
     const float Frame=Phase*(Walk.Num()-1);const int32 A=FMath::FloorToInt(Frame),B=FMath::Min(A+1,Walk.Num()-1);
     CurrentPose=Idle;
     for(int32 I=0;I<CurrentPose.Num();++I){FTransform W;W.Blend(Walk[A][I],Walk[B][I],Frame-A);CurrentPose[I].Blend(Idle[I],W,MoveBlend);}
-    PoseAssist(Dt);
     if(Leader.IsValid() && Head>=0)
     {
         TArray<FTransform> G;for(int32 I=0;I<CurrentPose.Num();++I)G.Add(Parents[I]>=0?CurrentPose[I]*G[Parents[I]]:CurrentPose[I]);
@@ -270,7 +295,14 @@ void AVistaCompanion::Tick(float Dt)
 }
 void AVistaCompanion::Face(FName Name,float Value)
 {if(const auto* Names=FaceMorphs.Find(Name))for(FName Target:*Names)GetMesh()->SetMorphTarget(Target,Value);}
-void AVistaCompanion::BuildPose(TArray<FTransform>& Out) const {Out=CurrentPose;}
+void AVistaCompanion::BuildPose(TArray<FTransform>& Out)
+{
+    // Animation PreUpdate runs on the game thread after movement/physics. Solve
+    // world-space contacts here, against the transform that will be rendered.
+    if(GroundPoseFrame!=GFrameCounter && bReady)
+    {GroundPoseFrame=GFrameCounter;UpdateGroundMotion(MotionDt);PoseAssist(MotionDt);}
+    Out=CurrentPose;
+}
 void AVistaCompanion::Speak(const TSharedPtr<FJsonObject>& R)
 {
     StopSpeech();TArray<uint8> PCM;if(!FBase64::Decode(String(R,TEXT("pcm_b64")),PCM) || PCM.Num()<2)return;
