@@ -1,0 +1,44 @@
+{
+  "schema": "vista.human-material-source/v1",
+  "license": "CC0-1.0",
+  "source": "https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html",
+  "archive_url": "https://files2.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip",
+  "archive_sha256": "b542127a8e25547c7c29c19f2d1d2adb9a664c80396ecd694095dbc8028a0107",
+  "original_authors": [
+    "Data Collection AB",
+    "Joel Palmius",
+    "Jonas Hauquier"
+  ],
+  "modifications": [
+    "Fit side-part mesh to native head, shorten front and enforce scalp clearance",
+    "Dark hair tint; opaque root layer; existing native head weights",
+    "Replace shared world and first-person skin texture with young_asian_male",
+    "Retain original clothing, 53-joint skeleton and seven facial morph groups"
+  ],
+  "files": {
+    "skins/young_asian_male/young_asian_male.mhmat": {
+      "sha256": "9fdfc9863cd15d1359311435f2da7de3906f81d6eea549fba6bf14cd82ceb6a0",
+      "bytes": 1452
+    },
+    "skins/young_asian_male/young_lightskinned_male_diffuse3.png": {
+      "sha256": "f50016a5507fc687dc8df06599c8ea48de950cd185de33a71cafc1319ddab4d5",
+      "bytes": 3593099
+    },
+    "hair/short04/short04.obj": {
+      "sha256": "676964a133ee35ffcea1195382bf75542da7a298931e4001bc7b0d7b707225de",
+      "bytes": 55152
+    },
+    "hair/short04/short04.mhmat": {
+      "sha256": "7a3ac74db8478aa0afdb8a596c6fe3997d1a8a09d12211d70e8f1e9f0b7e0e97",
+      "bytes": 1316
+    },
+    "hair/short04/short04.mhclo": {
+      "sha256": "d60640aa4c4ffce1aa269647ba436b6ee0bb21bb948f927b84e27a48d2107157",
+      "bytes": 59195
+    },
+    "hair/short04/short04_diffuse.png": {
+      "sha256": "0bef7fc0e403db5a40fabb2111ebfa6f7e8158e204c6e56b8da98e9ef527846e",
+      "bytes": 2308132
+    }
+  }
+}

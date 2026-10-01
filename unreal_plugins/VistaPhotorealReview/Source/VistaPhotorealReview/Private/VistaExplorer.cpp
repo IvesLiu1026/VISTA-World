@@ -267,13 +267,18 @@ void AVistaExplorerCharacter::BindExploreKeys(UInputComponent* Input)
     Input->BindKey(EKeys::LeftShift,IE_Released,this,&AVistaExplorerCharacter::ExplorerWalk);
     Input->BindKey(EKeys::F8,IE_Pressed,this,&AVistaExplorerCharacter::ExplorerState);
 }
-void AVistaExplorerCharacter::ExplorerRun() {if (!Menu) bRun=true;}
-void AVistaExplorerCharacter::ExplorerWalk() {bRun=false;}
+void AVistaExplorerCharacter::ExplorerRun()
+{
+    if (Menu) return;
+    bRun=true;
+    if (!bCampus) JogOn();
+}
+void AVistaExplorerCharacter::ExplorerWalk() {bRun=false;JogOff();}
 void AVistaExplorerCharacter::ExplorerJump() {if (!Menu && !Riding.IsValid()) StartAlpineJump();}
 void AVistaExplorerCharacter::ToggleExplorerView() {if (!Menu) ToggleView();}
 void AVistaExplorerCharacter::SetMenu(int32 Value)
 {
-    Menu=Value;bRun=false;GetCharacterMovement()->StopMovementImmediately();
+    Menu=Value;ExplorerWalk();GetCharacterMovement()->StopMovementImmediately();
     if (auto* PC=Cast<APlayerController>(Controller))
     {
         PC->ResetIgnoreMoveInput();PC->ResetIgnoreLookInput();PC->SetIgnoreMoveInput(Menu!=0);PC->SetIgnoreLookInput(Menu!=0);
