@@ -7,6 +7,7 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
+#include "Engine/World.h"
 
 namespace
 {
@@ -51,7 +52,8 @@ void RotateBranch(TArray<FTransform>& Global, const TArray<int32>& Parents, int3
 }
 
 void SolveLimb(TArray<FTransform>& Global, const TArray<int32>& Parents,
-               int32 Upper, int32 Lower, int32 End, FVector Target, FVector Pole, FQuat EndRotation)
+               int32 Upper, int32 Lower, int32 End, FVector Target, FVector Pole, FQuat EndRotation,
+               float ForearmTwistShare=0.f)
 {
     if (!Global.IsValidIndex(Upper) || !Global.IsValidIndex(Lower) || !Global.IsValidIndex(End)) return;
     const FVector A=Global[Upper].GetLocation(), B=Global[Lower].GetLocation(), C=Global[End].GetLocation();
@@ -67,6 +69,22 @@ void SolveLimb(TArray<FTransform>& Global, const TArray<int32>& Parents,
     RotateBranch(Global,Parents,Upper,FQuat::FindBetweenVectors(B-A,Joint-A)*Global[Upper].GetRotation());
     RotateBranch(Global,Parents,Lower,FQuat::FindBetweenVectors(
         Global[End].GetLocation()-Global[Lower].GetLocation(),Target-Global[Lower].GetLocation())*Global[Lower].GetRotation());
+    if (ForearmTwistShare>0.f)
+    {
+        // Pronation/supination belongs partly to the forearm. Assigning the
+        // entire grip rotation to the wrist made a straight arm look broken.
+        // Only axial twist is shared: the elbow, wrist and contact stay fixed.
+        const FVector Axis=(Global[End].GetLocation()-Global[Lower].GetLocation()).GetSafeNormal();
+        FQuat Delta=(EndRotation*Global[End].GetRotation().Inverse()).GetNormalized();
+        if (Delta.W<0) Delta=-Delta;
+        const double Projection=FVector::DotProduct(FVector(Delta.X,Delta.Y,Delta.Z),Axis);
+        const double Norm=FMath::Sqrt(Projection*Projection+Delta.W*Delta.W);
+        if (Norm>1.e-5)
+        {
+            const double Angle=2*FMath::Atan2(Projection/Norm,Delta.W/Norm);
+            RotateBranch(Global,Parents,Lower,FQuat(Axis,Angle*ForearmTwistShare)*Global[Lower].GetRotation());
+        }
+    }
     RotateBranch(Global,Parents,End,EndRotation);
 }
 }
@@ -106,7 +124,13 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     const float Low=FMath::Max(FMath::Clamp((110.f-GoalHeight)*.68f,0.f,65.f)*ReachAlpha, CrouchAlpha*38.f);
     const float Distance=FVector::Dist2D(GetActorLocation(),Goal);
     float Bend=FMath::Clamp((Distance-23.f)/55.f,.05f,1.f)*ReachAlpha;
-    if (Phase==EEmbodiedPhase::Held && GoalHeight>95.f && Distance<50.f) Bend*=.15f;
+    if (Phase==EEmbodiedPhase::Held || Phase==EEmbodiedPhase::Retracting)
+    {
+        // A held item crossing 95 cm / 50 cm used to change torso lean by 85%
+        // in a single frame, jerking both arms during phone lift/return.
+        const float Upright=FMath::SmoothStep(85.f,110.f,GoalHeight)*(1.f-FMath::SmoothStep(40.f,65.f,Distance));
+        Bend*=FMath::Lerp(1.f,.15f,Upright);
+    }
     float Lean=(.72f*Bend+FMath::Clamp((65.f-GoalHeight)/80.f,0.f,.5f)*ReachAlpha);
     if (SceneReachHipAdvance>0.f) Lean*=1.f-.85f*FMath::Clamp((GoalHeight-115.f)/40.f,0.f,1.f);
     const float FloorBlend=FMath::Clamp((45.f-GoalHeight)/20.f,0.f,1.f);
@@ -218,7 +242,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         // An inactive arm already has a calibrated animation. Re-solving its
         // wrist against a fixed elbow pole destroys the recorded elbow plane.
         if (PreserveUnoccupiedArmPose() && RestBlend<=0.f &&
-            (RightHand?ReachAlpha:LeftReachAlpha)<=0.f) continue;
+            (RightHand?ReachAlpha:LeftReachAlpha)<=0.f) {bArmBendReady[Side]=false;continue;}
         FVector Target=Global[E].GetLocation();
         const float Swing=FMath::Sin(StepClock*2.f*PI)*(RightHand?-1.f:1.f)*FMath::Min(Speed/125.f,1.f)*6.f*ProceduralGaitWeight();
         Target.Y+=Swing;
@@ -256,8 +280,50 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             Rotation=FQuat::Slerp(Rotation,CS.GetRotation(),LeftReachAlpha);
         }
         const float Sign=RightHand?-1.f:1.f;
-        const FVector Pole=Global[U].GetLocation()+FVector(Sign*24.f,-16.f-Swing*.18f,-25.f);
-        SolveLimb(Global,Parents,U,L,E,Target,Pole,Rotation);
+        const FVector Shoulder=Global[U].GetLocation();
+        const FVector Direction=(Target-Shoulder).GetSafeNormal(SMALL_NUMBER,FVector::DownVector);
+        const auto Project=[&](FVector V) {return V-Direction*FVector::DotProduct(V,Direction);};
+        const FQuat Torso=Global[Index(TEXT("spine_03"))].GetRotation()*ReferenceGlobal[Index(TEXT("spine_03"))].GetRotation().Inverse();
+        FVector Anatomical=Project(Torso.RotateVector(FVector(Sign*24.f,-16.f-Swing*.18f,-25.f))).GetSafeNormal();
+        if (Anatomical.IsNearlyZero()) Anatomical=Project(Torso.RotateVector(FVector(Sign,0,0))).GetSafeNormal();
+        // Continue from the captured elbow plane, including at the first tiny
+        // reach weight. A fixed mesh-space pole abruptly replaced that plane.
+        FVector Recorded=Project(Global[L].GetLocation()-Shoulder).GetSafeNormal();
+        if (Recorded.IsNearlyZero()) Recorded=Anatomical;
+        const float Active=FMath::Max(RestBlend,RightHand?ReachAlpha:LeftReachAlpha);
+        if (Active<=0.f) bArmBendReady[Side]=false;
+        const float Ease=Active*Active*(3.f-2.f*Active);
+        const FQuat Guide=FQuat::FindBetweenNormals(Recorded,Anatomical);
+        FVector BendDirection=FQuat::Slerp(FQuat::Identity,Guide,.65f*Ease).RotateVector(Recorded);
+        const int32 Middle=Index(RightHand?TEXT("middle_01_r"):TEXT("middle_01_l"));
+        if (Global.IsValidIndex(Middle))
+        {
+            // A reachable wrist can still be bent nearly 90 degrees. Choose
+            // an elbow on the IK circle that also suits the palm's long axis.
+            // The contact orientation stays exact; the arm adapts to it.
+            const FVector HandLocal=Global[E].GetRotation().Inverse().RotateVector(
+                Global[Middle].GetLocation()-Global[E].GetLocation()).GetSafeNormal();
+            const FVector PalmBend=-Project(Rotation.RotateVector(HandLocal)).GetSafeNormal();
+            if (!PalmBend.IsNearlyZero())
+                BendDirection=FQuat::Slerp(FQuat::Identity,FQuat::FindBetweenNormals(BendDirection,PalmBend),.85f*Ease).RotateVector(BendDirection);
+        }
+        if (bArmBendReady[Side])
+        {
+            const FVector Previous=Project(Torso.RotateVector(ArmBendTorso[Side])).GetSafeNormal();
+            if (!Previous.IsNearlyZero())
+            {
+                // Signed rotation in the current reach plane avoids a pole
+                // flip near straight arms and quaternion antipodes. Store it
+                // in torso coordinates so root/camera turns are not arm snaps.
+                const double Angle=FMath::Atan2(FVector::DotProduct(Direction,FVector::CrossProduct(Previous,BendDirection)),
+                    FVector::DotProduct(Previous,BendDirection));
+                const double Limit=FMath::DegreesToRadians(150.)*FMath::Clamp(double(GetWorld()->GetDeltaSeconds()),0.,.1);
+                BendDirection=FQuat(Direction,FMath::Clamp(Angle,-Limit,Limit)).RotateVector(Previous);
+            }
+        }
+        ArmBendTorso[Side]=Torso.Inverse().RotateVector(BendDirection);bArmBendReady[Side]=Active>0.f;
+        const FVector Pole=Shoulder+BendDirection*40.f;
+        SolveLimb(Global,Parents,U,L,E,Target,Pole,Rotation,.7f*Ease);
     }
     // Hand-local joint poses are shared by both presentations. Arm reach is
     // solved separately, so a different cup location does not stretch fingers.

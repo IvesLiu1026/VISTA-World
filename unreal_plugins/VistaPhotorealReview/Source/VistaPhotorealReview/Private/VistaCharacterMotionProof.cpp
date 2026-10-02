@@ -54,6 +54,9 @@ void AVistaVillaCharacter::CaptureCharacterMotionProof()
     O->SetArrayField(TEXT("velocity_cm_s"),Values(GetVelocity()));
     O->SetNumberField(TEXT("phase"),StepClock);O->SetNumberField(TEXT("motion_weight"),MotionWeight);
     O->SetStringField(TEXT("motion"),AlpineMotionName);O->SetNumberField(TEXT("run_blend"),RunBlend);
+    O->SetNumberField(TEXT("reference_walk_weight"),ReferenceWalkWeight);
+    O->SetNumberField(TEXT("reference_walk_phase_offset"),ReferenceWalkPhase);
+    O->SetNumberField(TEXT("left_reach"),LeftReachAlpha);O->SetNumberField(TEXT("right_reach"),ReachAlpha);
     O->SetBoolField(TEXT("turn_feet"),bTurnFeet);O->SetNumberField(TEXT("turn_swing"),TurnFeet.Swing);
     O->SetNumberField(TEXT("turn_steps"),TurnFeet.Count);
     O->SetArrayField(TEXT("mesh_world"),Row(GetMesh()->GetComponentTransform()));
@@ -62,7 +65,8 @@ void AVistaVillaCharacter::CaptureCharacterMotionProof()
     for (const TCHAR* Name:{TEXT("root"),TEXT("pelvis"),TEXT("spine_01"),TEXT("spine_02"),TEXT("spine_03"),
         TEXT("neck_01"),TEXT("head"),TEXT("clavicle_l"),TEXT("clavicle_r"),TEXT("upperarm_l"),TEXT("lowerarm_l"),
         TEXT("hand_l"),TEXT("upperarm_r"),TEXT("lowerarm_r"),TEXT("hand_r"),TEXT("thigh_l"),TEXT("calf_l"),
-        TEXT("foot_l"),TEXT("ball_l"),TEXT("thigh_r"),TEXT("calf_r"),TEXT("foot_r"),TEXT("ball_r")})
+        TEXT("foot_l"),TEXT("ball_l"),TEXT("thigh_r"),TEXT("calf_r"),TEXT("foot_r"),TEXT("ball_r"),
+        TEXT("middle_01_l"),TEXT("middle_01_r")})
     {
         const int32* I=BoneIndex.Find(FName(Name));if (!I) continue;
         Final->SetArrayField(Name,Row(GetMesh()->GetSocketTransform(Name,RTS_Component)));
