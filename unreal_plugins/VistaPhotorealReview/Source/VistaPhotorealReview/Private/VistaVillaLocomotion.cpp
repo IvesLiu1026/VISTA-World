@@ -56,6 +56,7 @@ void AVistaVillaCharacter::LoadMotionLibrary()
     MotionIdle=Retarget(Data->GetArrayField(TEXT("idle")));
     CycleDistance=Number(Data,TEXT("cycle_distance_cm"));
     if (CycleDistance<30 || CycleDistance>200) {MotionIdle.Empty();return;}
+    ReferenceWalkDistance=CycleDistance;
     for (const auto& Value:Data->GetArrayField(TEXT("frames")))
     {
         const auto F=Value->AsObject();FVillaMotionFrame Frame;
@@ -219,11 +220,11 @@ void AVistaVillaCharacter::UpdateFeet(float Dt)
         }
         if (Alpine)
         {
-            const float Warp=FMath::Lerp(.52f,.68f,RunBlend);
+            const float Warp=FMath::Lerp(FMath::Lerp(.52f,.68f,RunBlend),1.f,ReferenceWalkWeight);
             const float HipX=Side==0?12.f:-12.f;
             Local.X=HipX+(Local.X-HipX)*Warp;
             Local.Y=1.15f+(Local.Y-1.15f)*Warp;
-            Local.Z=6.22f+(Local.Z-6.22f)*FMath::Lerp(.70f,.85f,RunBlend);
+            Local.Z=6.22f+(Local.Z-6.22f)*FMath::Lerp(FMath::Lerp(.70f,.85f,RunBlend),1.f,ReferenceWalkWeight);
         }
         FVector Desired=Mesh.TransformPosition(Local);
         if (Alpine)

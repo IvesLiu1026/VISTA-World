@@ -92,6 +92,7 @@ private:
     TArray<FTransform> MotionBlend;
     TArray<FTransform> MotionIdle;
     float CycleDistance=65.f;
+    float ReferenceWalkDistance=0.f,ReferenceWalkPhase=0.f,ReferenceWalkWeight=0.f;
     float PreviousLocomotionSpeed=0.f;
     float ContactWeight[2]={0,0};
     bool FootLocked[2]={false,false};
