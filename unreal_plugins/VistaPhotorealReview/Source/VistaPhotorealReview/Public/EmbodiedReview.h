@@ -133,6 +133,8 @@ protected:
     int32 TransitionSerial = 0;
     FVector PreviousLocation = FVector::ZeroVector;
     FVector ReachStart = FVector::ZeroVector;
+    FVector ArmBendTorso[2];
+    bool bArmBendReady[2]={false,false};
     bool bAllowReachDetour = false;
     bool bReachDetour = false;
     bool bSceneCarryLift = false;

@@ -95,7 +95,7 @@ void AHomeActionsCharacter::UpdateDailyMotion(float Dt)
     DailyClock+=Dt;
     const auto* Held=Resolve(HeldId);
     if (!Held || Held->ShortId!=TEXT("phone")) bPhoneCall=false;
-    PhoneBlend=FMath::FInterpConstantTo(PhoneBlend,bPhoneCall?1.f:0.f,Dt,1.25f);
+    PhoneBlend=FMath::FInterpConstantTo(PhoneBlend,bPhoneCall?1.f:0.f,Dt,.6f);
     if (HumanFaceMorphs.IsEmpty())
     {
         FString Text;const TSharedPtr<FJsonObject>* Morphs;

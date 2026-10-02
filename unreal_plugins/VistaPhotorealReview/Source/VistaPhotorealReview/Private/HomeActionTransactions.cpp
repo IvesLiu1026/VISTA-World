@@ -89,7 +89,50 @@ FTransform AHomeActionsCharacter::CarryTarget() const
         const FVector Ear=Head+GetActorQuat().RotateVector(PhoneEarOffset);
         const FQuat Upright=GetActorQuat()*PhoneRotation;
         const FTransform Call(Upright,Ear);
-        Carry.Blend(Carry,Call,PhoneBlend*PhoneBlend*(3-2*PhoneBlend));
+        // Bring the handset close to the chest before raising it to the ear.
+        // A direct diagonal lift rotated the palm against the forearm midway
+        // through the motion, even with the optimal elbow on its IK circle.
+        const FVector Chest=GetActorLocation()+GetActorQuat().RotateVector(FVector(20,10,20-H));
+        const float Gather=FMath::SmoothStep(0.f,.35f,PhoneBlend);
+        const float Tilt=FMath::SmoothStep(.35f,.7f,PhoneBlend);
+        const float Lift=FMath::SmoothStep(.7f,1.f,PhoneBlend);
+        // Align heading while still flat, then tilt toward the head. A single
+        // compound yaw/roll slerp swept the palm away from the forearm when the
+        // table's phone heading differed greatly from the character heading.
+        const FQuat Flat=GetActorQuat();
+        Carry.SetLocation(PhoneBlend<.35f?FMath::Lerp(Carry.GetLocation(),Chest,Gather):FMath::Lerp(Chest,Ear,Lift));
+        Carry.SetRotation((PhoneBlend<.35f?FQuat::Slerp(Carry.GetRotation(),Flat,Gather):FQuat::Slerp(Flat,Call.GetRotation(),Tilt)).GetNormalized());
+        // The two-bone arm's reachable wrist circle also constrains the palm.
+        // Position-only IK cannot repair a handset orientation that requires
+        // the wrist to fold backwards. Project the PHYSICAL object's requested
+        // orientation instead; the original relative grip and contact remain
+        // exact. Recompute because rotating the prop also moves the wrist.
+        const int32 Upper=BoneIndex.FindChecked(TEXT("upperarm_r"));
+        const int32 Lower=BoneIndex.FindChecked(TEXT("lowerarm_r"));
+        const int32 Hand=BoneIndex.FindChecked(TEXT("hand_r"));
+        const int32 Middle=BoneIndex.FindChecked(TEXT("middle_01_r"));
+        const double L1=FVector::Distance(ReferenceGlobal[Upper].GetLocation(),ReferenceGlobal[Lower].GetLocation());
+        const double L2=FVector::Distance(ReferenceGlobal[Lower].GetLocation(),ReferenceGlobal[Hand].GetLocation());
+        const FVector PalmLocal=ReferenceGlobal[Hand].InverseTransformPosition(ReferenceGlobal[Middle].GetLocation()).GetSafeNormal();
+        const FVector Shoulder=GetMesh()->GetSocketLocation(TEXT("upperarm_r"));
+        for (int32 Iteration=0;Iteration<5;++Iteration)
+        {
+            const FTransform Wrist=HandRelativeToCup*Carry;
+            const FVector N=(Wrist.GetLocation()-Shoulder).GetSafeNormal();
+            const double D=FMath::Clamp(FVector::Distance(Wrist.GetLocation(),Shoulder),FMath::Abs(L1-L2)+.01,L1+L2-.04);
+            const double Along=(L1*L1-L2*L2+D*D)/(2*D);
+            const double Height=FMath::Sqrt(FMath::Max(0.,L1*L1-Along*Along));
+            const double Cone=FMath::Atan2(Height,D-Along);
+            const FVector Palm=Wrist.GetRotation().RotateVector(PalmLocal);
+            const double Angle=FMath::Acos(FMath::Clamp(FVector::DotProduct(Palm,N),-1.,1.));
+            const double Limit=FMath::DegreesToRadians(50.);
+            const double SafeAngle=FMath::Clamp(Angle,FMath::Max(0.,Cone-Limit),FMath::Min(double(PI),Cone+Limit));
+            if (FMath::Abs(Angle-SafeAngle)<.001) break;
+            FVector Tangent=Palm-N*FVector::DotProduct(Palm,N);
+            if (!Tangent.Normalize()) Tangent=FVector::VectorPlaneProject(GetActorRightVector(),N).GetSafeNormal();
+            const FVector SafePalm=N*FMath::Cos(SafeAngle)+Tangent*FMath::Sin(SafeAngle);
+            Carry.SetRotation((FQuat::FindBetweenNormals(Palm,SafePalm)*Carry.GetRotation()).GetNormalized());
+        }
     }
     return Carry;
 }

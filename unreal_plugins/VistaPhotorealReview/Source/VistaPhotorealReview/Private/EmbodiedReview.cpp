@@ -337,7 +337,10 @@ void AEmbodiedReviewCharacter::EmbodiedDrop()
 
 void AEmbodiedReviewCharacter::UpdateInteraction(float Dt)
 {
-    PhaseTime+=Dt;
+    // After release there is no object contact to track. A render hitch must
+    // not skip most of the hand's return gesture in one visible pose. Keep its
+    // animation clock bounded; action/event clocks still use real elapsed time.
+    PhaseTime+=Phase==EEmbodiedPhase::Retracting?FMath::Min(Dt,1.f/30.f):Dt;
     if (Phase==EEmbodiedPhase::Idle)
     { ReachAlpha=0;FingerAlpha=0;FString Reason;bHasCandidate=IsCupReachable(Reason);return; }
     bHasCandidate=false;
