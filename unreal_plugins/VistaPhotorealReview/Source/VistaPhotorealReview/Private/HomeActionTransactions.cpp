@@ -284,6 +284,19 @@ FVector AHomeActionsCharacter::ArmElbowHint(bool bRight,float& Weight) const
 
 void AHomeActionsCharacter::AdjustReachPosture(float& Low,float& Lean) const
 {
+    // Low tables are reached with a hip hinge, the floor with the body bent
+    // over the item. The generic low reach squatted instead: pelvis 36 cm for
+    // keys on the coffee table, with the forearm level and the wrist folded
+    // 128 degrees onto them; pelvis 14 cm for a slipper on the floor. The
+    // floor keeps a deeper crouch (a 48 cm cap left the hand short).
+    if (ReachAlpha>0.f && (ActiveId.IsEmpty() || ActionId!=TEXT("sit_down")))
+    {
+        const float GoalHeight=LastHandGoal.GetLocation().Z-(GetActorLocation().Z-GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+        const float Floor=FMath::Clamp((40.f-GoalHeight)/25.f,0.f,1.f)*ReachAlpha;
+        const float Table=FMath::Clamp((85.f-GoalHeight)/30.f,0.f,1.f)*ReachAlpha*(1.f-Floor);
+        if (Table>0.f) {Low*=1.f-.38f*Table;Lean=FMath::Max(Lean,.75f*Table);}
+        if (Floor>0.f) {Low=FMath::Lerp(Low,FMath::Min(Low,56.f),Floor);Lean=FMath::Max(Lean,.95f*Floor);}
+    }
     // Touching a seat before sitting is a hip hinge. The generic low-reach
     // squat put the pelvis 17 cm below the seat height, so the body had to
     // climb out of a deep squat to sit down.

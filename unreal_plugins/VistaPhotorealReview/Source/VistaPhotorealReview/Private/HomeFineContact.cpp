@@ -229,8 +229,12 @@ FTransform AHomeActionsCharacter::FinePinchWrist(const FHomeEntity& Entity) cons
     const FVector Index=Tip(TEXT("index_03_r")),Thumb=Tip(TEXT("thumb_03_r")),Middle=(Index+Thumb)*.5f;
     const FVector Across=(Thumb-Index).GetSafeNormal();
     const FVector Approach=(Middle-Across*FVector::DotProduct(Middle,Across)).GetSafeNormal();
+    // Thumb toward the right and the body: the fingers then cross the item
+    // from the near side. Choosing only by the right vector left the sign to
+    // noise for items lying along the facing direction, and a pinch with the
+    // fingers pointing back at the body twisted the wrist up to 174 deg.
     FVector Direction=Entity.Actor->GetActorForwardVector();
-    if (FVector::DotProduct(Direction,GetActorRightVector())<0) Direction=-Direction;
+    if (FVector::DotProduct(Direction,GetActorRightVector()-GetActorForwardVector())<0) Direction=-Direction;
     const FQuat Source=FRotationMatrix::MakeFromXY(Across,Approach).ToQuat();
     const FQuat Destination=FRotationMatrix::MakeFromXY(Direction,FVector::DownVector).ToQuat();
     const FQuat Rotation=(FQuat(Direction,FMath::DegreesToRadians(Surface.PinchRollDegrees))*Destination*Source.Inverse()).GetNormalized();
