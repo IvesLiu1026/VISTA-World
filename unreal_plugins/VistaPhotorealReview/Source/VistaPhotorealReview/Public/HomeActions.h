@@ -97,6 +97,10 @@ public:
     UFUNCTION(Exec) void HomeFocus(const FString& Target);
     UFUNCTION(Exec) void HomeCancel();
     UFUNCTION(Exec) void HomeObserve(bool Clean);
+    // Private review only: detached spectator camera that orbits the body.
+    UFUNCTION(Exec) void HomeReviewShot(float YawOffset,float Distance,float Height,float Elevation);
+    UFUNCTION(Exec) void HomeReviewShotOff();
+    UFUNCTION(Exec) void HomeReviewFocus(const FString& Bone);
     bool HasSceneReady() const { return bSceneReady; }
     FString GetEventHint() const;
     bool IsCleanObservation() const { return bCleanObservation; }
@@ -174,6 +178,10 @@ private:
     int32 ForgeSerial=0;
     UPROPERTY() TArray<TObjectPtr<AActor>> LiveDressing;
     void TickPrivateReview(float Dt);
+    void TickReviewShot();
+    TWeakObjectPtr<class ACameraActor> ReviewShot;
+    float ReviewShotYaw=0.f,ReviewShotDistance=220.f,ReviewShotHeight=40.f,ReviewShotElevation=10.f;
+    FName ReviewShotBone;
     void PrivateDialogue(const FString& Role,const FString& Code);
     void ActionView(FVector& Eye,FRotator& View) const;
     bool bPrivateHumanLipSync=true;

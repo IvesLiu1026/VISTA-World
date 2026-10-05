@@ -3,6 +3,7 @@
 #include "HomeActionsJson.h"
 #include "VistaCompanion.h"
 #include "VistaPathSteering.h"
+#include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Components/AudioComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -125,8 +126,56 @@ void AHomeActionsCharacter::PollPrivateReview()
     }
 }
 
+void AHomeActionsCharacter::HomeReviewShot(float YawOffset,float Distance,float Height,float Elevation)
+{
+    // Engineering inspection only. Actions read the ego sensor and the control
+    // rotation, so a detached spectator view cannot change any action outcome.
+    if (!FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview"))) return;
+    auto* PC=Cast<APlayerController>(Controller);if (!PC) return;
+    if (!ReviewShot.IsValid())
+    {
+        FActorSpawnParameters P;P.SpawnCollisionHandlingOverride=ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+        ReviewShot=GetWorld()->SpawnActor<ACameraActor>(ACameraActor::StaticClass(),GetActorTransform(),P);
+        if (!ReviewShot.IsValid()) return;
+        ReviewShot->GetCameraComponent()->SetFieldOfView(55.f);
+        ReviewShot->GetCameraComponent()->SetConstraintAspectRatio(false);
+    }
+    ReviewShotYaw=YawOffset;ReviewShotDistance=FMath::Clamp(Distance,50.f,700.f);
+    ReviewShotHeight=FMath::Clamp(Height,-90.f,120.f);ReviewShotElevation=FMath::Clamp(Elevation,-30.f,80.f);
+    TickReviewShot();PC->SetViewTarget(ReviewShot.Get());
+}
+
+void AHomeActionsCharacter::HomeReviewShotOff()
+{
+    if (auto* PC=Cast<APlayerController>(Controller)) PC->SetViewTarget(this);
+    if (ReviewShot.IsValid()) ReviewShot->Destroy();
+    ReviewShot.Reset();ReviewShotBone=NAME_None;
+}
+
+void AHomeActionsCharacter::HomeReviewFocus(const FString& Bone)
+{
+    // Optional close-up target (e.g. hand_r); "none" returns to the body.
+    if (!FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview"))) return;
+    ReviewShotBone=(Bone.IsEmpty() || Bone==TEXT("none") || !BoneIndex.Contains(FName(*Bone)))?NAME_None:FName(*Bone);
+    TickReviewShot();
+}
+
+void AHomeActionsCharacter::TickReviewShot()
+{
+    if (!ReviewShot.IsValid()) return;
+    const FVector Focus=ReviewShotBone.IsNone()?GetActorLocation()+FVector(0,0,ReviewShotHeight):
+        GetMesh()->GetSocketLocation(ReviewShotBone)+FVector(0,0,ReviewShotHeight);
+    const FVector Direction=FRotator(ReviewShotElevation,GetActorRotation().Yaw+ReviewShotYaw,0).Vector();
+    FVector Eye=Focus+Direction*ReviewShotDistance;
+    // Stay inside the room: pull the spectator in front of walls it would pass.
+    FCollisionQueryParams Q(SCENE_QUERY_STAT(VistaReviewShot),false,this);FHitResult Hit;
+    if (GetWorld()->LineTraceSingleByChannel(Hit,Focus,Eye,ECC_Visibility,Q)) Eye=Hit.ImpactPoint-Direction*12.f;
+    ReviewShot->SetActorLocationAndRotation(Eye,(Focus-Eye).Rotation());
+}
+
 void AHomeActionsCharacter::TickPrivateReview(float Dt)
 {
+    TickReviewShot();
     if (!DirectorOwner.IsEmpty())
     {
         if (FPlatformTime::Seconds()>DirectorUntil) {StopDirector();PrivateMotion=TEXT("lease_expired");}
