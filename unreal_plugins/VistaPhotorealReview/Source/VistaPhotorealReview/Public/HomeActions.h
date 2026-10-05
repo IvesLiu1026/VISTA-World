@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Async/Future.h"
 #include "VistaVillaCharacter.h"
 #include "Dom/JsonObject.h"
 #include "HomeActions.generated.h"
@@ -8,6 +9,8 @@
 class ULightComponent;
 class UAudioComponent;
 class USoundWaveProcedural;
+class USceneCaptureComponent2D;
+class UTextureRenderTarget2D;
 
 struct FHomeEntity
 {
@@ -94,6 +97,10 @@ public:
     UFUNCTION(Exec) void HomeFocus(const FString& Target);
     UFUNCTION(Exec) void HomeCancel();
     UFUNCTION(Exec) void HomeObserve(bool Clean);
+    // Private review only: detached spectator camera that orbits the body.
+    UFUNCTION(Exec) void HomeReviewShot(float YawOffset,float Distance,float Height,float Elevation);
+    UFUNCTION(Exec) void HomeReviewShotOff();
+    UFUNCTION(Exec) void HomeReviewFocus(const FString& Bone);
     bool HasSceneReady() const { return bSceneReady; }
     FString GetEventHint() const;
     bool IsCleanObservation() const { return bCleanObservation; }
@@ -104,9 +111,12 @@ public:
     TArray<TPair<FString,FString>> VisibleEvents() const;
     // A separate, visibility-filtered input for the conversational companion.
     // Never return the engineering state, task evaluator, or hidden event labels.
-    TSharedPtr<FJsonObject> CompanionObservation() const;
+    TSharedPtr<FJsonObject> CompanionObservation(bool WearerView=false) const;
     TSharedPtr<FJsonObject> StreamingObservation() const;
+    bool CommitCompanionOff(const FString& Target,AActor* Helper,const FVector& Finger,FString& Code);
 protected:
+    void JogOn();
+    void JogOff();
     virtual bool UsesHomeActions() const override {return true;}
     virtual void SetView(FVector Position,FRotator Rotation) override;
     virtual void SetPhase(EEmbodiedPhase NewPhase) override;
@@ -117,6 +127,7 @@ protected:
     virtual FTransform CarryTarget() const override;
     virtual bool FindPlacement(FVector& Location,FQuat& Rotation) const override;
     virtual FVector PickupAimPoint() const override;
+    virtual void InteractionView(FVector& Eye, FRotator& Rotation) const override { ActionView(Eye, Rotation); }
     virtual void RefreshScenePoseGoals() override;
     virtual void AdjustScenePoseGoals() override;
     virtual FTransform AdjustedSceneHandGoal(FTransform Goal,bool bLeft=false) const override;
@@ -124,6 +135,16 @@ protected:
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) override;
     virtual bool IsSceneContactReady(FString& Reason) const override;
 private:
+    // Enabled by a short-lived backend lease. No HUD, labels or evaluator data.
+    void CaptureResearchViews();
+    UPROPERTY() TObjectPtr<USceneCaptureComponent2D> ResearchEgo;
+    UPROPERTY() TObjectPtr<USceneCaptureComponent2D> ResearchExo;
+    UPROPERTY() TObjectPtr<AActor> ResearchObserver;
+    UPROPERTY() TObjectPtr<UTextureRenderTarget2D> ResearchEgoTarget;
+    UPROPERTY() TObjectPtr<UTextureRenderTarget2D> ResearchExoTarget;
+    double ResearchNextCapture = 0;
+    uint64 ResearchCaptureSerial = 0;
+    TFuture<void> ResearchCaptureWrite;
     TSharedPtr<FJsonObject> Contract;
     TMap<FString,FHomeEntity> Entities;
     TMap<FString,FHomeBefore> Before;
@@ -133,14 +154,57 @@ private:
     TMap<FName,TArray<FName>> HumanFaceMorphs;
     bool bPhoneCall=false,bStreamingEnabled=false;
     float PhoneBlend=0,DailyClock=0;
-    FQuat PhoneRotation=FRotator(0,0,-90).Quaternion();
-    FVector PhoneEarOffset=FVector(6,10,0);
+    // Speaker point on the outer ear, from the head joint in the head's bind
+    // frame (X forward, Y right, Z up; cm). The call pose is solved once per
+    // call for the actual grip and kept in the head frame.
+    FVector PhoneSpeakerOffset=FVector(-2.8f,8.4f,1.5f);
+    FTransform PhoneCallInHead;
+    FVector PhoneElbowHint=FVector::ZeroVector;
+    bool bPhoneCallSolved=false;
+    FTransform PhoneHeadFrame() const;
+    double PhoneArmCost(const FTransform& Hand,bool bReachable,FVector& Elbow,double& Flexion) const;
+    void SolvePhoneCall();
+    void UpdatePhoneElbow(float Dt);
+    virtual FVector ArmElbowHint(bool bRight,float& Weight) const override;
+    virtual void AdjustReachPosture(float& Low,float& Lean) const override;
+    bool DanglingCarry() const;
     UPROPERTY() TObjectPtr<UAudioComponent> HumanVoice;
     UPROPERTY() TObjectPtr<USoundWaveProcedural> HumanWave;
     TArray<float> HumanMouth;
     float HumanMouthOpen=0;
     int32 HumanAudioBytes=0,HumanAudioRate=24000;
     void UpdateDailyMotion(float Dt);
+    void PollPrivateReview();
+    void PollLiveCommands();
+    void DirectorCommand(const TSharedPtr<FJsonObject>& Request,FString& Code);
+    void StopDirector();
+    FString DirectorOwner,DirectorAction;
+    double DirectorUntil=0;
+    bool bDirectorThird=false,bDirectorWasClean=false;
+    bool ApplyLiveScene(const FString& Layout,int32 Room,FString& Code);
+    bool ApplyMicroScene(const TSharedPtr<FJsonObject>& Recipe,FString& Code);
+    void ClearMicroScene();
+    TMap<FString,FHomeEntity> ForgeOriginals;
+    TSharedPtr<FJsonObject> ForgeReceipt;
+    UPROPERTY() TArray<TObjectPtr<AActor>> ForgeActors;
+    int32 ForgeSerial=0;
+    UPROPERTY() TArray<TObjectPtr<AActor>> LiveDressing;
+    void TickPrivateReview(float Dt);
+    void TickReviewShot();
+    TWeakObjectPtr<class ACameraActor> ReviewShot;
+    float ReviewShotYaw=0.f,ReviewShotDistance=220.f,ReviewShotHeight=40.f,ReviewShotElevation=10.f;
+    FName ReviewShotBone;
+    void PrivateDialogue(const FString& Role,const FString& Code);
+    void ActionView(FVector& Eye,FRotator& View) const;
+    bool bPrivateHumanLipSync=true;
+    bool bPrivateMoving=false,bPrivateLooking=false;
+    FVector PrivateTarget=FVector::ZeroVector,PrivatePrevious=FVector::ZeroVector;
+    TArray<FVector> PrivatePath;
+    FRotator PrivateLook=FRotator::ZeroRotator;
+    float PrivateStall=0,PrivateMoveClock=0;
+    float PrivatePreviewCm=0,PrivateClearance=95;
+    int32 PrivateCornerFrames=0;
+    FString PrivateMotion=TEXT("idle");
     void UpdateConcurrentEvents(float Dt);
     TArray<TSharedPtr<FJsonValue>> ConcurrentEventState() const;
     UPROPERTY() TMap<FString,TObjectPtr<AStaticMeshActor>> Effects;
@@ -169,7 +233,7 @@ private:
     FString StandingOn;
     FString FocusId, LastCode, EventId, EventStatus=TEXT("inactive"), TerminalCondition;
     FString CommandSignature;
-    int32 Generation=0, SelectedAction=0, EventIndex=-1;
+    int32 Generation=0, SceneEpoch=0, SelectedAction=0, EventIndex=-1;
     float ActionTime=0.f, EventTime=0.f, BridgeClock=0.f, SceneClock=0.f;
     float ActionStartAperture=0.f, ActionEndAperture=0.f;
     float RightContactError=0.f, LeftContactError=0.f;
@@ -198,8 +262,6 @@ private:
     void NextEvent();
     void ToggleCrouch();
     void ToggleBackpack();
-    void JogOn();
-    void JogOff();
     FHomeEntity* Resolve(const FString& Name);
     const FHomeEntity* Resolve(const FString& Name) const;
     FVector ControlPoint(const FHomeEntity& Entity) const;

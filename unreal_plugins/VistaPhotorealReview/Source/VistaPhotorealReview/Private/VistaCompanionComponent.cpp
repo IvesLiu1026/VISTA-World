@@ -7,6 +7,7 @@
 #include "Engine/World.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Fonts/CompositeFont.h"
+#include "HAL/PlatformProcess.h"
 #include "GameFramework/PlayerController.h"
 #include "HttpModule.h"
 #include "Interfaces/IHttpRequest.h"
@@ -21,6 +22,7 @@
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
 #include "Widgets/SBoxPanel.h"
+#include "Widgets/SOverlay.h"
 #include "Widgets/Text/STextBlock.h"
 
 using namespace HomeJson;
@@ -38,6 +40,14 @@ void UVistaCompanionComponent::BeginPlay()
     Super::BeginPlay();
     if(!FPaths::FileExists(FPaths::ProjectConfigDir()/TEXT("VistaCompanion.json")))return;
     Session=FGuid::NewGuid().ToString(EGuidFormats::Digits);
+    bLive=FParse::Param(FCommandLine::Get(),TEXT("VistaLiveAssistant"));
+    if (bLive)
+    {
+        int32 Port=49111;FParse::Value(FCommandLine::Get(),TEXT("VistaLivePort="),Port);
+        if (Port<1024 || Port>65535) Port=49111;
+        Endpoint=FString::Printf(TEXT("http://127.0.0.1:%d"),Port);
+        Reply=TEXT("I'm here if you need a hand.");Status=TEXT("Live assistant");
+    }
     FParse::Value(FCommandLine::Get(),TEXT("VistaCompanionProof="),ProofDir);
     if(!ProofDir.IsEmpty())IFileManager::Get().MakeDirectory(*ProofDir,true);
     FTimerHandle Timer;GetWorld()->GetTimerManager().SetTimer(Timer,FTimerDelegate::CreateUObject(this,&UVistaCompanionComponent::Start),2.6f,false);
@@ -54,10 +64,16 @@ void UVistaCompanionComponent::Start()
     LastRoom=String(Player->CompanionObservation(),TEXT("room"));
     if(GEngine && GEngine->GameViewport)
     {
-        Captions=SNew(SVerticalBox)
-        +SVerticalBox::Slot().FillHeight(1)
-        +SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(50,0,50,116)
-        [SNew(SBox).MaxDesiredWidth(1060)
+        Captions=SNew(SOverlay)
+        +SOverlay::Slot().VAlign(VAlign_Bottom).HAlign(HAlign_Center).Padding(50,0,50,80)
+        // Give wrapping text an actual width. An auto-sized centered box can
+        // collapse to a single word and cover the middle of the scene.
+        [SNew(SBox).WidthOverride_Lambda([]
+         {
+             FVector2D Size(1920,1080);
+             if (GEngine && GEngine->GameViewport) GEngine->GameViewport->GetViewportSize(Size);
+             return FOptionalSize(FMath::Clamp(float(Size.X)-100.f,280.f,1060.f));
+         })
          [SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).Padding(FMargin(24,14)).BorderBackgroundColor(FLinearColor(.015,.025,.035,.94))
           .Visibility_Lambda([this]{return !bOpen && Companion && (Companion->bSpeaking || bBusy || GetWorld()->GetTimeSeconds()<NoticeUntil)?EVisibility::HitTestInvisible:EVisibility::Collapsed;})
           [SNew(STextBlock).Font(CompanionFont(22)).ColorAndOpacity(FLinearColor(.94,.97,1)).AutoWrapText(true)
@@ -71,7 +87,8 @@ void UVistaCompanionComponent::TogglePanel()
     auto* P=Cast<AVistaExplorerCharacter>(GetOwner());if(!P)return;P->SetMenu(4);bOpen=true;
     PanelObservation=P->CompanionObservation();ObservationTime=GetWorld()->GetTimeSeconds();
     auto* PC=Cast<APlayerController>(P->GetController());
-    if(PC)
+    // Keep the manual player's view/evidence stable while asking for help.
+    if(PC && !bLive)
     {
         FVector Eye;FRotator View;PC->GetPlayerViewPoint(Eye,View);
         const FVector Face=Companion->GetMesh()->GetBoneLocation(TEXT("head"));
@@ -86,7 +103,10 @@ void UVistaCompanionComponent::TogglePanel()
     Rows->AddSlot().AutoHeight().Padding(0,0,0,16)
         [SNew(STextBlock).Font(CompanionFont(20)).AutoWrapText(true).Text_Lambda([this]{return FText::FromString(Reply);})];
     Rows->AddSlot().AutoHeight().Padding(0,0,0,12)
-        [SAssignNew(Entry,SEditableTextBox).Font(CompanionFont(18)).HintText(FText::FromString(TEXT("想問什麼？輸入後按 Enter")))
+        [SAssignNew(Entry,SEditableTextBox).Font(CompanionFont(18)).ClearKeyboardFocusOnCommit(false)
+         .HintText(FText::FromString(TEXT("想問什麼？輸入後按 Enter")))
+         .OnKeyDownHandler_Lambda([this](const FGeometry&,const FKeyEvent& Event)
+         {if(Event.GetKey()==EKeys::Escape){ClosePanel();return FReply::Handled();}return FReply::Unhandled();})
          .OnTextCommitted_Lambda([this](const FText& Text,ETextCommit::Type Type){if(Type==ETextCommit::OnEnter){Ask(Text.ToString());if(Entry)Entry->SetText(FText::GetEmpty());}})];
     const auto Button=[&](const FString& Text,TFunction<void()> Action)
     {
@@ -97,6 +117,12 @@ void UVistaCompanionComponent::TogglePanel()
     Button(TEXT("送出訊息"),[this]{if(Entry){Ask(Entry->GetText().ToString());Entry->SetText(FText::GetEmpty());}});
     Button(TEXT("介紹剛才看到的物件"),[this]{Ask(TEXT("請介紹我剛才看到的物件。"));});
     Button(TEXT("提醒我目前的任務"),[this]{Ask(TEXT("我目前有什麼任務？下一步可以怎麼做？"));});
+    if (bLive)
+    {
+        Button(TEXT("請助手關爐火"),[this]{LiveRequest(TEXT("/say"),TEXT("Please turn off the stove for me."),TEXT("stove"));ClosePanel();});
+        Button(TEXT("請助手關浴缸水"),[this]{LiveRequest(TEXT("/say"),TEXT("Please turn off the bath tap for me."),TEXT("faucet"));ClosePanel();});
+        Button(TEXT("自然語言建立情境"),[]{FPlatformProcess::LaunchURL(TEXT("http://100.114.231.122:48999/"),nullptr,nullptr);});
+    }
     Button(TEXT("跟著我"),[this]{Follow(true);});
     Button(TEXT("在這裡等我"),[this]{Follow(false);});
     Button(TEXT("停止說話"),[this]{Stop();});
@@ -119,6 +145,7 @@ void UVistaCompanionComponent::ClosePanel()
 void UVistaCompanionComponent::Ask(const FString& Text)
 {
     const FString Question=Text.TrimStartAndEnd().Left(600);if(Question.IsEmpty() || !Companion)return;
+    if (bLive) {LastQuestion=Question;LiveRequest(TEXT("/say"),Question);return;}
     if(bBusy){Status=TEXT("正在回應；可先按「停止說話」");return;}
     auto* P=Cast<AVistaExplorerCharacter>(GetOwner());if(!P)return;
     if(Question==TEXT("跟著我") || Question==TEXT("請跟著我"))Follow(true);
@@ -152,6 +179,7 @@ void UVistaCompanionComponent::Ask(const FString& Text)
 }
 void UVistaCompanionComponent::Stop()
 {
+    if (bLive) LiveRequest(TEXT("/stop"));
     ++Serial;
     if(Pending){Pending->OnProcessRequestComplete().Unbind();Pending->CancelRequest();Pending.Reset();}
     if(bBusy)
@@ -163,7 +191,11 @@ void UVistaCompanionComponent::Stop()
 }
 void UVistaCompanionComponent::Follow(bool Enabled)
 {
-    if(!Companion)return;Companion->bFollowing=Enabled;Status=Enabled?TEXT("我會跟著你"):TEXT("我在這裡等你");
+    if(!Companion)return;
+    // A new movement request supersedes an in-flight manipulation. Cancel first
+    // so its saved resume-follow flag cannot overwrite the user's new choice.
+    Companion->CancelAssist();Companion->bFollowing=Enabled;
+    Status=Enabled?TEXT("我會跟著你"):TEXT("我在這裡等你");
 }
 TSharedPtr<FJsonObject> UVistaCompanionComponent::State() const
 {
@@ -177,11 +209,36 @@ TSharedPtr<FJsonObject> UVistaCompanionComponent::State() const
         D->SetNumberField(TEXT("audio_clock"),Companion->AudioClock);D->SetNumberField(TEXT("mouth_open"),Companion->MouthOpen);
         D->SetNumberField(TEXT("travel_cm"),Companion->Travel);D->SetNumberField(TEXT("yaw"),Companion->GetActorRotation().Yaw);
         D->SetNumberField(TEXT("speed_cm_s"),Companion->GetVelocity().Size2D());
+        D->SetStringField(TEXT("assist_status"),Companion->AssistStatus);
+        D->SetStringField(TEXT("assist_target"),Companion->AssistTarget);
+        D->SetNumberField(TEXT("assist_finger_error_cm"),Companion->ContactError);
+        if (FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")))
+        {
+            D->SetObjectField(TEXT("assist_diagnostics"),Companion->AssistDiagnostics());
+            D->SetObjectField(TEXT("motion_diagnostics"),Companion->MotionDiagnostics());
+        }
         const auto V=Companion->GetActorLocation();D->SetArrayField(TEXT("position_cm"),{MakeShared<FJsonValueNumber>(V.X),MakeShared<FJsonValueNumber>(V.Y),MakeShared<FJsonValueNumber>(V.Z)});
         D->SetNumberField(TEXT("distance_cm"),FVector::Dist2D(V,GetOwner()->GetActorLocation()));
     }
     if(auto* P=Cast<AHomeActionsCharacter>(GetOwner()))D->SetObjectField(TEXT("observation"),P->CompanionObservation());
     return D;
+}
+void UVistaCompanionComponent::LiveRequest(const FString& Route,const FString& Text,const FString& Target)
+{
+    if (!bLive) return;
+    auto Body=MakeShared<FJsonObject>();Body->SetStringField(TEXT("text"),Text);
+    if (!Target.IsEmpty()) Body->SetStringField(TEXT("target"),Target);
+    auto Request=FHttpModule::Get().CreateRequest();Request->SetURL(Endpoint+Route);Request->SetVerb(TEXT("POST"));
+    Request->SetHeader(TEXT("Content-Type"),TEXT("application/json"));Request->SetContentAsString(Encode(Body));Request->SetTimeout(10);
+    TWeakObjectPtr<UVistaCompanionComponent> Weak(this);
+    Request->OnProcessRequestComplete().BindLambda([Weak](FHttpRequestPtr Req,FHttpResponsePtr Response,bool Ok)
+    {
+        if (auto* Self=Weak.Get())
+        {
+            Self->Status=Ok && Response && Response->GetResponseCode()==200?TEXT("Live assistant · request received"):TEXT("Live service unavailable");
+            if (Response && Response->GetResponseCode()!=200) Self->Reply=TEXT("Request failed. Check the VISTA Live panel.");
+        }
+    });Request->ProcessRequest();
 }
 void UVistaCompanionComponent::TickComponent(float Dt,ELevelTick Tick,FActorComponentTickFunction* ThisTick)
 {

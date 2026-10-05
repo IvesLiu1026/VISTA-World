@@ -56,6 +56,7 @@ void AVistaVillaCharacter::LoadMotionLibrary()
     MotionIdle=Retarget(Data->GetArrayField(TEXT("idle")));
     CycleDistance=Number(Data,TEXT("cycle_distance_cm"));
     if (CycleDistance<30 || CycleDistance>200) {MotionIdle.Empty();return;}
+    ReferenceWalkDistance=CycleDistance;
     for (const auto& Value:Data->GetArrayField(TEXT("frames")))
     {
         const auto F=Value->AsObject();FVillaMotionFrame Frame;
@@ -111,11 +112,11 @@ void AVistaVillaCharacter::UpdateBodyLook(float Dt)
 
 void AVistaVillaCharacter::RefineSceneBodyPose(TArray<FTransform>& Local)
 {
-    if (!bVillaEmbodiment || !Controller || bThirdPerson || Local.Num()!=Parents.Num()) return;
+    if (!bVillaEmbodiment || !Controller || BodyLook.Weight<=0.f || Local.Num()!=Parents.Num()) return;
     // Rotate the same neck/head that defines the eye position, so looking to
     // the side moves the eyes around the neck instead of around the pelvis.
     // Active contact keeps its established eye/contact calibration.
-    const float Free=(1-FMath::Max(ReachAlpha,LeftReachAlpha))*(1-FallAlpha);
+    const float Free=BodyLook.Weight*(1-FMath::Max(ReachAlpha,LeftReachAlpha))*(1-FallAlpha);
     const float Yaw=BodyLook.Yaw*Free;
     const float Pitch=BodyLook.Pitch*Free;
     for (const TCHAR* Name:{TEXT("neck_01"),TEXT("head")})
@@ -159,13 +160,13 @@ void AVistaVillaCharacter::AdjustFirstPersonEyeTarget(FVector& EyeTarget) const
 
 void AVistaVillaCharacter::UpdateFeet(float Dt)
 {
-    if (bSceneFeetOverride || SeatedAlpha>.01f) {Super::UpdateFeet(Dt);return;}
+    if (bSceneFeetOverride || SeatedAlpha>.01f) {bTurnFeet=false;TurnFeet.Ready=false;Super::UpdateFeet(Dt);return;}
     if (Motions.Num()<2 || MotionIdle.Num()!=Parents.Num()) {Super::UpdateFeet(Dt);return;}
     const FVector Velocity=GetVelocity();
     const float Speed=Velocity.Size2D();
     bool Reset=false;FVillaMotionFrame A,B;float Fraction=0;
     const bool Alpine=UpdateAlpineMotion(Dt,A,B,Fraction,Reset);
-    if (Alpine && !UsesGroundFootIK()) return;
+    if (Alpine && !UsesGroundFootIK()) {bTurnFeet=false;TurnFeet.Ready=false;return;}
     if (!Alpine)
     {
         Reset=!bFeetReady || FVector::Distance(PreviousLocation,GetActorLocation())>70.f;
@@ -204,6 +205,7 @@ void AVistaVillaCharacter::UpdateFeet(float Dt)
             return Hit.ImpactPoint.Z+6.22;
         return Mesh.GetLocation().Z+6.22;
     };
+    VistaMotion::GroundPoint TurnGoals[2];
     for (int32 Side=0;Side<2;++Side)
     {
         const int32 E=BoneIndex.FindChecked(Side==0?TEXT("foot_l"):TEXT("foot_r"));
@@ -218,11 +220,11 @@ void AVistaVillaCharacter::UpdateFeet(float Dt)
         }
         if (Alpine)
         {
-            const float Warp=FMath::Lerp(.52f,.68f,RunBlend);
+            const float Warp=FMath::Lerp(FMath::Lerp(.52f,.68f,RunBlend),1.f,ReferenceWalkWeight);
             const float HipX=Side==0?12.f:-12.f;
             Local.X=HipX+(Local.X-HipX)*Warp;
             Local.Y=1.15f+(Local.Y-1.15f)*Warp;
-            Local.Z=6.22f+(Local.Z-6.22f)*FMath::Lerp(.70f,.85f,RunBlend);
+            Local.Z=6.22f+(Local.Z-6.22f)*FMath::Lerp(FMath::Lerp(.70f,.85f,RunBlend),1.f,ReferenceWalkWeight);
         }
         FVector Desired=Mesh.TransformPosition(Local);
         if (Alpine)
@@ -237,15 +239,12 @@ void AVistaVillaCharacter::UpdateFeet(float Dt)
         ContactWeight[Side]=Alpine && !Reset?FMath::Lerp(ContactWeight[Side],TargetContact,
             1-FMath::Exp(-Dt*18.f)):TargetContact;
         const double Ground=Floor(Desired);
+        TurnGoals[Side]={Desired.X,Desired.Y,Ground};
         const double Lift=FMath::Max(0.,Local.Z-6.22);
         Desired.Z=Ground+Lift*(1.f-ContactWeight[Side]);
         const float Lock=FMath::SmoothStep(.3f,.85f,ContactWeight[Side]);
         const bool Planted=Lock>0.f;
         if (Reset || (Planted && !FootLocked[Side])) FootAnchor[Side]=FVector(Desired.X,Desired.Y,Ground);
-        // A stationary turn has no recorded translational stride. Release a
-        // stale anchor smoothly instead of wrenching the knee backwards.
-        if (Speed<8.f && FVector::Dist2D(FootAnchor[Side],Desired)>5.f)
-            FootAnchor[Side]=FMath::VInterpTo(FootAnchor[Side],FVector(Desired.X,Desired.Y,Ground),Dt,7.f);
         // Terrain IK is a correction to the measured trajectory. Never hold
         // an anchor far behind the capsule until a leg becomes unreachable.
         // A bounded horizontal correction also releases a foot during turns.
@@ -256,6 +255,15 @@ void AVistaVillaCharacter::UpdateFeet(float Dt)
         Feet[Side].Current=Feet[Side].Goal=Desired;
         Feet[Side].Planted=FootAnchor[Side];Feet[Side].Progress=Planted?1.f:StepClock;
         Feet[Side].Yaw=GetActorRotation().Yaw;Feet[Side].Roll=0.f;
+    }
+    bTurnFeet=Speed<8 && MotionWeight<.18f;
+    TurnFeet.Update(Dt,TurnGoals,GetActorRotation().Yaw,Reset || !bTurnFeet);
+    if(bTurnFeet)for(int32 Side=0;Side<2;++Side)
+    {
+        const auto P=TurnFeet.Feet[Side];
+        Feet[Side].Current=Feet[Side].Goal=FVector(P.X,P.Y,P.Z);
+        Feet[Side].Yaw=TurnFeet.Yaw[Side];
+        Feet[Side].Progress=TurnFeet.Swing==Side?TurnFeet.Clock/VistaMotion::TurnSteps::Duration:1.f;
     }
     bFeetReady=true;
 }

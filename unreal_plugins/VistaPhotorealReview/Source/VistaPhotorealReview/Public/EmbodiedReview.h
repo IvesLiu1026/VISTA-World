@@ -133,6 +133,8 @@ protected:
     int32 TransitionSerial = 0;
     FVector PreviousLocation = FVector::ZeroVector;
     FVector ReachStart = FVector::ZeroVector;
+    FVector ArmBendTorso[2];
+    bool bArmBendReady[2]={false,false};
     bool bAllowReachDetour = false;
     bool bReachDetour = false;
     bool bSceneCarryLift = false;
@@ -180,6 +182,7 @@ protected:
     virtual void CancelReach(const FString& Reason);
     bool IsCupReachable(FString& Reason) const;
     virtual FVector PickupAimPoint() const;
+    virtual void InteractionView(FVector& Eye, FRotator& Rotation) const;
     virtual bool FindPlacement(FVector& Location, FQuat& Rotation) const;
     virtual FTransform DesiredGrip() const;
     virtual FTransform CarryTarget() const;
@@ -187,10 +190,16 @@ protected:
     virtual void OnPoseFinalized();
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) {}
     virtual float ReachTorsoLeanScale() const { return 1.f; }
+    // Final say over the reach crouch depth (cm) and torso lean (rad).
+    virtual void AdjustReachPosture(float& Low,float& Lean) const {}
     virtual void ModifyBaseBodyPose(TArray<FTransform>& LocalPose) {}
     virtual bool WantsFirstPersonReadyPose() const { return true; }
     virtual bool PreserveUnoccupiedArmPose() const { return false; }
     virtual float UnoccupiedFingerCurl() const { return 0.f; }
+    // Elbow direction from the shoulder for an occupied arm, in the bind
+    // component frame (the torso rotation is applied by the solver). Weight 0
+    // keeps the anatomical and palm-derived elbow plane.
+    virtual FVector ArmElbowHint(bool bRight,float& Weight) const { Weight=0.f; return FVector::ZeroVector; }
     virtual void AdjustFirstPersonEyeTarget(FVector& EyeTarget) const {}
     virtual bool PreserveMotionFootRotation() const { return false; }
     virtual float ProceduralGaitWeight() const { return 1.f; }
@@ -199,6 +208,12 @@ protected:
     virtual FVector FirstPersonReadyOffset(float Sign,float Swing) const
     {return FVector(Sign*22.f,30.f+Swing*.18f,-10.f+.15f*FMath::Sin(Clock*1.4f+(Sign<0?.35f:0.f)));}
     virtual bool IsSceneContactReady(FString& Reason) const { return true; }
+    // Final-pose guard: per-bone angular/translation speed limits so state
+    // switches (cancel, rollback, view or posture changes) blend instead of pop.
+    void LimitPoseRate(TArray<FTransform>& Local);
+    TArray<FTransform> PreviousPose;
+    FVector PreviousPoseLocation=FVector::ZeroVector;
+    bool bPreviousPose=false;
 };
 
 UCLASS()

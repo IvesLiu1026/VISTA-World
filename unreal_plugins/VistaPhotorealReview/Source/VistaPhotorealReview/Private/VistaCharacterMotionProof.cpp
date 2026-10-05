@@ -54,17 +54,20 @@ void AVistaVillaCharacter::CaptureCharacterMotionProof()
     O->SetArrayField(TEXT("velocity_cm_s"),Values(GetVelocity()));
     O->SetNumberField(TEXT("phase"),StepClock);O->SetNumberField(TEXT("motion_weight"),MotionWeight);
     O->SetStringField(TEXT("motion"),AlpineMotionName);O->SetNumberField(TEXT("run_blend"),RunBlend);
+    O->SetNumberField(TEXT("reference_walk_weight"),ReferenceWalkWeight);
+    O->SetNumberField(TEXT("reference_walk_phase_offset"),ReferenceWalkPhase);
+    O->SetNumberField(TEXT("left_reach"),LeftReachAlpha);O->SetNumberField(TEXT("right_reach"),ReachAlpha);
+    O->SetBoolField(TEXT("turn_feet"),bTurnFeet);O->SetNumberField(TEXT("turn_swing"),TurnFeet.Swing);
+    O->SetNumberField(TEXT("turn_steps"),TurnFeet.Count);
     O->SetArrayField(TEXT("mesh_world"),Row(GetMesh()->GetComponentTransform()));
     auto Final=MakeShared<FJsonObject>();auto FK=MakeShared<FJsonObject>();TArray<FTransform> Global;
     for (int32 I=0;I<MotionBlend.Num();++I) Global.Add(Parents[I]>=0?MotionBlend[I]*Global[Parents[I]]:MotionBlend[I]);
-    for (const TCHAR* Name:{TEXT("root"),TEXT("pelvis"),TEXT("spine_01"),TEXT("spine_02"),TEXT("spine_03"),
-        TEXT("neck_01"),TEXT("head"),TEXT("clavicle_l"),TEXT("clavicle_r"),TEXT("upperarm_l"),TEXT("lowerarm_l"),
-        TEXT("hand_l"),TEXT("upperarm_r"),TEXT("lowerarm_r"),TEXT("hand_r"),TEXT("thigh_l"),TEXT("calf_l"),
-        TEXT("foot_l"),TEXT("ball_l"),TEXT("thigh_r"),TEXT("calf_r"),TEXT("foot_r"),TEXT("ball_r")})
+    // Every bone, fingers included: finger and wrist joints must be auditable.
+    for (int32 I=0;I<Poses->BoneNames.Num();++I)
     {
-        const int32* I=BoneIndex.Find(FName(Name));if (!I) continue;
-        Final->SetArrayField(Name,Row(GetMesh()->GetSocketTransform(Name,RTS_Component)));
-        if (Global.IsValidIndex(*I)) FK->SetArrayField(Name,Row(Global[*I]));
+        const FName Bone=Poses->BoneNames[I];const FString Name=Bone.ToString();
+        Final->SetArrayField(Name,Row(GetMesh()->GetSocketTransform(Bone,RTS_Component)));
+        if (Global.IsValidIndex(I)) FK->SetArrayField(Name,Row(Global[I]));
     }
     O->SetObjectField(TEXT("final_cs"),Final);O->SetObjectField(TEXT("motion_cs"),FK);
     for (int32 S=0;S<2;++S)

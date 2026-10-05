@@ -17,6 +17,7 @@ from mathutils import Matrix, Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from retarget_mocap import read_bvh
+from contact_reference import cycle_contacts
 
 
 def main():
@@ -28,7 +29,11 @@ def main():
         raise RuntimeError('Fresh output required')
     a.out.mkdir(parents=True)
     bpy.ops.wm.open_mainfile(filepath=str(a.character))
-    arm = bpy.data.objects['VISTA_CC0_Hero_Rig_export']
+    candidates = [o for o in bpy.data.objects if o.type == 'ARMATURE' and
+                  all(name in o.data.bones for name in ['pelvis', 'spine_03', 'hand_l', 'hand_r', 'foot_l', 'foot_r'])]
+    if len(candidates) != 1:
+        raise RuntimeError('One compatible fitted armature required: '+str([o.name for o in candidates]))
+    arm = candidates[0]
     bones = list(arm.data.bones)
     nodes, frames, dt, evaluate = read_bvh(a.source)
     idx = {n['name']: i for i, n in enumerate(nodes)}
@@ -159,23 +164,34 @@ def main():
             if b.name.endswith('_'+side) and any(b.name.startswith(s) for s in ['thumb_', 'index_', 'middle_', 'ring_', 'pinky_']):
                 idle[b.name] = idle[b.parent.name] @ (b.parent.matrix_local.inverted() @ b.matrix_local)
 
+    support = []
+    for side in ['Left', 'Right']:
+        observations = []
+        for k in range(samples):
+            frame = round(lo+(hi-lo)*k/(samples-1))
+            foot = source[frame][idx[side+'Foot']].translation
+            before = source[max(1, frame-1)][idx[side+'Foot']].translation
+            after = source[min(len(frames)-1, frame+1)][idx[side+'Foot']].translation
+            toe = source[frame][idx[side+'ToeBase']].translation
+            # BVH Y is vertical; use world travel including captured root motion.
+            height = min(foot.y, toe.y)*scale*100
+            velocity = after-before
+            speed = math.hypot(velocity.x, velocity.z)*scale*100/(2*dt)
+            observations.append((height, speed))
+        support.append(observations)
+    contacts = cycle_contacts(support)
     output = []
-    # 60% stance, including double support. Phase zero is left heel strike;
-    # measured transforms, rather than a sine curve, provide the swing path.
     for k, g in enumerate(globals_):
         phase = k/(samples-1)
-        contacts = []
-        for offset in [0, .5]:
-            t = (phase+offset) % 1
-            contacts.append(max(0, min(1, t/.07, (.61-t)/.07)))
-        output.append({'pose': rows(g), 'phase': phase, 'contacts': contacts,
+        output.append({'pose': rows(g), 'phase': phase, 'contacts': contacts[k],
                        'source_frame': round(lo+(hi-lo)*phase),
                        'speed_cm_s': distance_cm/((hi-lo)*dt)})
     result = {'schema': 'vista.continuous-walk/v2', 'bone_names': [b.name for b in bones],
               'rest': rows({b.name: b.matrix_local for b in bones}), 'idle': rows(idle),
               'cycle_distance_cm': distance_cm, 'cycle_duration_s': (hi-lo)*dt,
               'source_frames': [lo, hi], 'meters_per_source_unit': scale,
-              'target_leg_m': target_leg, 'source_leg_units': source_leg, 'contact_policy': 'phase-based stance estimate, runtime floor IK',
+              'target_leg_m': target_leg, 'source_leg_units': source_leg,
+              'contact_policy': 'kinematic estimate from captured sole height and world foot speed; circular smoothing; runtime floor IK; no force labels',
               'source': str(a.source), 'source_sha256': hashlib.sha256(a.source.read_bytes()).hexdigest(),
               'source_url': 'https://mocap.cs.cmu.edu/', 'frames': output}
     (a.out/'mocap.json').write_text(json.dumps(result, separators=(',', ':'))+'\n')

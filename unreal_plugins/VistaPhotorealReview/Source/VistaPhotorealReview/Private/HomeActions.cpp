@@ -1,4 +1,6 @@
 #include "HomeActions.h"
+#include "Misc/App.h"
+#include "Camera/CameraComponent.h"
 #include "HomeActionsJson.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -34,6 +36,7 @@ FString ActionLabel(const FString& Action)
         {TEXT("pick_up"),TEXT("Pick up")},{TEXT("place"),TEXT("Place on surface")},{TEXT("drop"),TEXT("Drop")},
         {TEXT("equip"),TEXT("Put on backpack")},{TEXT("unequip"),TEXT("Take off backpack")},
         {TEXT("pour"),TEXT("Pour into container")},{TEXT("spill"),TEXT("Tip out liquid")},
+        {TEXT("phone.answer"),TEXT("Answer phone")},{TEXT("phone.hang_up"),TEXT("End phone call")},
         {TEXT("step_up"),TEXT("Climb ladder")},{TEXT("step_down"),TEXT("Climb down")},
         {TEXT("sit_down"),TEXT("Sit down")},{TEXT("stand_up"),TEXT("Stand up")},
         {TEXT("pull_drag"),TEXT("Pull")},{TEXT("contact.brace"),TEXT("Hold ladder rail")},
@@ -79,6 +82,10 @@ const FHomeEntity* AHomeActionsCharacter::Resolve(const FString& Name) const
 
 void AHomeActionsCharacter::BeginPlay()
 {
+    // The operator may use the web director while the game has no window focus.
+    // Speech must remain audible through this instance's dedicated audio sink.
+    if (FParse::Param(FCommandLine::Get(),TEXT("VistaLiveAssistant")))
+        FApp::SetUnfocusedVolumeMultiplier(1.f);
     if (FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")))
     {
         bool StartCrashReporter=true;
@@ -221,6 +228,7 @@ TArray<FString> AHomeActionsCharacter::AvailableActions() const
     const FHomeEntity* E=Resolve(FocusId);
     if (const auto* Held=Resolve(HeldId))
     {
+        if (bStreamingEnabled && Held->ShortId==TEXT("phone")) Result.Add(bPhoneCall?TEXT("phone.hang_up"):TEXT("phone.answer"));
         if (E && E->Id!=HeldId && E->Kind==TEXT("container") && Bool(E->State,TEXT("open")) &&
             E->State->GetArrayField(TEXT("contents")).IsEmpty()) Result.Add(TEXT("storage.insert"));
         if (E && E->Id!=HeldId && E->Spec->HasField(TEXT("capacity_ml")) &&
@@ -318,6 +326,7 @@ void AHomeActionsCharacter::SetView(FVector Position,FRotator Rotation)
 }
 void AHomeActionsCharacter::HomeRoom(int32 Index)
 {
+    if (ForgeReceipt.IsValid()) {FString Code;if (!ResetScene(Code)) return;}
     const TArray<TSharedPtr<FJsonValue>>* Rooms;
     if (Contract && Contract->TryGetArrayField(TEXT("rooms"),Rooms))
     {
@@ -349,6 +358,7 @@ void AHomeActionsCharacter::EmbodiedInteract()
     const auto Actions=AvailableActions();
     if (!Actions.Num()) {FeedbackMessage(TEXT("Look at an object within reach"));return;}
     const FString A=Actions[FMath::Clamp(SelectedAction,0,Actions.Num()-1)];
+    if (A==TEXT("phone.answer") || A==TEXT("phone.hang_up")) {HomePhone(A==TEXT("phone.answer"));return;}
     if (A==TEXT("step_down")) HomeAction(A,StandingOn,TEXT(""));
     else if (A==TEXT("storage.insert")) HomeAction(A,HeldId,FocusId);
     else if (A==TEXT("storage.remove"))
@@ -382,18 +392,27 @@ void AHomeActionsCharacter::Tick(float Dt)
     Super::Tick(Dt);if (!bSceneReady) return;
     SceneClock+=Dt;BridgeClock+=Dt;
     if (bStreamingEnabled) {UpdateDailyMotion(Dt);UpdateConcurrentEvents(Dt);}
+    TickPrivateReview(Dt);
     const bool ContactReach=!ActiveId.IsEmpty() && !TargetId.IsEmpty() &&
         ActionId!=TEXT("step_up") && ActionId!=TEXT("step_down") && ActionId!=TEXT("equip") && ActionId!=TEXT("unequip") && ActionId!=TEXT("inspect") && ActionId!=TEXT("look_at");
     SceneReachHipAdvance=FMath::FInterpTo(SceneReachHipAdvance,ContactReach?9.f:0.f,Dt,6.f);
     UpdateFocus();UpdatePhysicalConsequences(Dt);UpdatePresentation(Dt);UpdateEvent(Dt);
     GetCharacterMovement()->bOrientRotationToMovement=bThirdPerson && Phase==EEmbodiedPhase::Idle && !bSceneActionBusy && SeatId.IsEmpty();
     if (!bSceneActionBusy && SeatId.IsEmpty() && (Phase==EEmbodiedPhase::Idle || Phase==EEmbodiedPhase::Held))
+    {
         GetCharacterMovement()->MaxWalkSpeed=HeldId.IsEmpty()?(CrouchAlpha>.1f?62.f:(bJog?210.f:125.f)):85.f;
+        if (FParse::Param(FCommandLine::Get(),TEXT("VistaLiveAssistant")))
+        {
+            const auto* Item=Resolve(HeldId);
+            const bool Light=Item && (Item->ShortId==TEXT("phone") || Item->ShortId==TEXT("keys"));
+            if (CrouchAlpha<.1f && (HeldId.IsEmpty() || Light)) GetCharacterMovement()->MaxWalkSpeed=bJog?225.f:150.f;
+        }
+    }
     if (FallAlpha>.5f || (bSceneCarryLift && Phase==EEmbodiedPhase::Held)) GetCharacterMovement()->MaxWalkSpeed=0.f;
     if (bSceneActionBusy && (ActionId==TEXT("walk") || ActionId==TEXT("jog") || ActionId==TEXT("sprint")))
         GetCharacterMovement()->MaxWalkSpeed=ActionId==TEXT("sprint")?300.f:(ActionId==TEXT("jog")?210.f:125.f);
     if (!StandingOn.IsEmpty() || (bSceneActionBusy && (ActionId==TEXT("step_up") || ActionId==TEXT("step_down")))) GetCharacterMovement()->MaxWalkSpeed=0.f;
-    if (BridgeClock>=.2f) {BridgeClock=0;PollBridge();PublishState();}
+    if (BridgeClock>=.2f) {BridgeClock=0;PollPrivateReview();PollLiveCommands();PollBridge();PublishState();}
 }
 
 void AHomeActionsCharacter::OnPoseFinalized()
@@ -407,6 +426,7 @@ void AHomeActionsCharacter::OnPoseFinalized()
             ContactMaximum=FMath::Max(ContactMaximum,FMath::Max(RightContactError,LeftContactError));
     }
     Super::OnPoseFinalized();
+    if (bSceneReady) CaptureResearchViews();
 }
 
 FString AHomeActionsCharacter::GetInteractionHint() const
@@ -429,7 +449,7 @@ FString AHomeActionsCharacter::GetEventHint() const
             Goal=String(V->AsObject()->GetArrayField(TEXT("public_goals"))[0]->AsObject(),TEXT("description"));
     return FString::Printf(TEXT("%s  [%s]  %s"),*EventId,*EventStatus,*Goal);
 }
-TSharedPtr<FJsonObject> AHomeActionsCharacter::CompanionObservation() const
+TSharedPtr<FJsonObject> AHomeActionsCharacter::CompanionObservation(bool WearerView) const
 {
     auto Out=MakeShared<FJsonObject>();
     const FString Room=RoomAt(GetActorLocation()).Replace(TEXT("home.r1/room."),TEXT(""));
@@ -437,9 +457,11 @@ TSharedPtr<FJsonObject> AHomeActionsCharacter::CompanionObservation() const
         {TEXT("kitchen_dining"),TEXT("廚房與餐廳")},{TEXT("bedroom"),TEXT("臥室")},
         {TEXT("office"),TEXT("書房")},{TEXT("bathroom_laundry"),TEXT("浴室與洗衣區")}};
     Out->SetStringField(TEXT("room"),Labels.Contains(Room)?Labels[Room]:Room);
+    if (ForgeReceipt.IsValid()) Out->SetStringField(TEXT("room"),TEXT("Small ")+String(ForgeReceipt,TEXT("family")));
     Out->SetStringField(TEXT("focused"),TEXT(""));Out->SetStringField(TEXT("public_goal"),TEXT(""));
     FVector Eye;FRotator View;GetActorEyesViewPoint(Eye,View);
     if(const auto* PC=Cast<APlayerController>(Controller))PC->GetPlayerViewPoint(Eye,View);
+    if(WearerView) {Eye=ReviewCamera->GetComponentLocation();View=GetControlRotation();}
     TArray<TPair<float,const FHomeEntity*>> Visible;
     for(const auto& Pair:Entities)
     {

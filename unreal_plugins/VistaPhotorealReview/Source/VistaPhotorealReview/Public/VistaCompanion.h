@@ -4,11 +4,13 @@
 #include "Components/ActorComponent.h"
 #include "GameFramework/Character.h"
 #include "Dom/JsonObject.h"
+#include "VistaGroundMotion.h"
 #include "VistaCompanion.generated.h"
 
 class UAudioComponent;
 class USoundWaveProcedural;
 class USpotLightComponent;
+class UMaterialInstanceDynamic;
 class SWidget;
 class SEditableTextBox;
 class IHttpRequest;
@@ -29,11 +31,19 @@ class VISTAPHOTOREALREVIEW_API AVistaCompanion : public ACharacter
 public:
     AVistaCompanion();
     virtual void BeginPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type Reason) override;
     virtual void Tick(float Dt) override;
-    void BuildPose(TArray<FTransform>& Out) const;
+    void BuildPose(TArray<FTransform>& Out);
     void Speak(const TSharedPtr<FJsonObject>& Reply);
     void StopSpeech();
     bool PlaceNear(const AActor* Player);
+    bool ResetForScene(const AActor* Player);
+    bool BeginAssist(const FString& Target,AActor* Entity,FVector Control);
+    void CancelAssist();
+    FString AssistStatus=TEXT("idle"),AssistTarget,AssistId;
+    float ContactError=0;
+    TSharedPtr<FJsonObject> AssistDiagnostics() const;
+    TSharedPtr<FJsonObject> MotionDiagnostics() const;
     TWeakObjectPtr<ACharacter> Leader;
     bool bFollowing=true,bReady=false,bSpeaking=false,bBlocked=false;
     float AudioClock=0,MouthOpen=0,Travel=0;
@@ -42,17 +52,47 @@ private:
     UPROPERTY() TObjectPtr<UAudioComponent> Speech;
     UPROPERTY() TObjectPtr<USpotLightComponent> FaceFill;
     UPROPERTY() TObjectPtr<USoundWaveProcedural> Wave;
+    UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> StatusMaterial;
+    bool bRobotAppearance=false;
     TArray<FTransform> Idle,CurrentPose,ReferenceGlobal;
     TArray<TArray<FTransform>> Walk;
+    TArray<FVector2D> WalkContacts;
     TArray<int32> Parents;
     TArray<FVector> Trail;
     TArray<FVector> Mouth;
     FVector Previous,LastLeader,YieldGoal;
     float Cycle=143,Phase=0,MoveBlend=0,BlinkClock=0,StuckTime=0,YieldTime=0;
+    double YawRate=0;
+    float PreviousSpeed=0,MotionDt=0;
+    bool bGroundReady=false,bTurnFeet=false;
+    FVector FootAnchor[2],FootGoal[2];
+    float FootContact[2]={0,0};
+    bool FootLocked[2]={false,false};
+    VistaMotion::TurnSteps TurnFeet;
+    FString MotionProofDir;
+    int32 MotionProofFrames=0;
+    FDelegateHandle MotionFinalizedHandle;
+    uint64 GroundPoseFrame=MAX_uint64;
+    void UpdateGroundMotion(float Dt);
+    void TurnToward(float Desired,float Dt);
+    void CaptureMotionProof();
     int32 AudioBytes=0,Rate=24000,Head=INDEX_NONE,Spine=INDEX_NONE;
     TMap<FName,TArray<FName>> FaceMorphs;
     void Face(FName Name,float Value);
     void LoadMotion();
+    void TickAssist(float Dt);
+    void PoseAssist(float Dt);
+    bool PlanAssistApproach();
+    bool AssistChord(const FVector& Start,const FVector& End) const;
+    bool HumanBlocksAssistChord(const FVector& Start,const FVector& End) const;
+    TWeakObjectPtr<AActor> AssistEntity;
+    FVector AssistControl,AssistGoal,AssistPrevious;
+    float AssistClock=0,AssistReach=0,AssistContact=0,AssistStall=0;
+    float AssistReachClock=0,AssistCheckClock=0,AssistPlanMs=0,AssistWaitClock=0,AssistLeanDegrees=0;
+    TArray<FVector> AssistPath;
+    int32 AssistPathIndex=0,AssistReplans=0,AssistCandidates=0,AssistFloorRejected=0,
+        AssistBodyRejected=0,AssistReachRejected=0,AssistOccludedRejected=0,AssistExpanded=0,AssistHumanOccupied=0;
+    bool bResumeFollow=true,bAssistHumanBlocksRoute=false;
 };
 
 UCLASS(ClassGroup=VISTA)
@@ -69,6 +109,7 @@ public:
     void Ask(const FString& Text);
     void Stop();
     void Follow(bool Enabled);
+    void LiveRequest(const FString& Route,const FString& Text=TEXT(""),const FString& Target=TEXT(""));
     bool IsOpen() const {return bOpen;}
     bool IsEnabled() const {return Companion!=nullptr;}
     TSharedPtr<FJsonObject> State() const;
@@ -82,7 +123,7 @@ private:
     TSharedPtr<IHttpRequest,ESPMode::ThreadSafe> Pending;
     TSharedPtr<FJsonObject> PanelObservation;
     FString Session,Endpoint=TEXT("http://127.0.0.1:49010"),ProofDir,LastRoom;
-    bool bOpen=false,bBusy=false;
+    bool bOpen=false,bBusy=false,bLive=false;
     int32 Serial=0;
     float PublishClock=0;
     double ObservationTime=0;

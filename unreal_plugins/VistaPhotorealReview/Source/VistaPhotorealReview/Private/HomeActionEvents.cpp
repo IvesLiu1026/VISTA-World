@@ -1,5 +1,6 @@
 #include "HomeActions.h"
 #include "HomeActionsJson.h"
+#include "VistaCompanion.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -71,9 +72,11 @@ bool AHomeActionsCharacter::EvaluateCondition(const TSharedPtr<FJsonObject>& C,c
 bool AHomeActionsCharacter::ResetScene(FString& Code)
 {
     if (!bSceneReady) {Code=TEXT("SCENE_NOT_READY");return false;}
+    StopDirector();
     if (!ActiveId.IsEmpty()) FinishAction(false,TEXT("RESET_CANCELLED_ACTION"));
     bSuppressReceipt=true;GripHandle->ReleaseComponent();
     if (Cup) GetCapsuleComponent()->IgnoreActorWhenMoving(Cup,false);
+    ClearMicroScene();
     for (auto& Pair:Entities)
     {
         auto& E=Pair.Value;E.State=Copy(E.Spec->GetObjectField(TEXT("initial_state")));
@@ -101,7 +104,10 @@ bool AHomeActionsCharacter::ResetScene(FString& Code)
     StandingOn.Empty();bSceneFeetOverride=false;GetCapsuleComponent()->SetCapsuleRadius(27.f);GetCharacterMovement()->MaxStepHeight=22.f;
     PreviousVelocities.Empty();PendingImpacts.Empty();HazardCooldown=2.f;
     SelectPickup(*Resolve(TEXT("coffee_cup")));GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-    bSuppressReceipt=false;++Generation;if (Contract->HasField(TEXT("rooms"))) HomeRoom(1);else EmbodiedInspect(0);Code=TEXT("SCENE_RESET");PublishState();return true;
+    bSuppressReceipt=false;++Generation;++SceneEpoch;if (Contract->HasField(TEXT("rooms"))) HomeRoom(1);else EmbodiedInspect(0);
+    if (auto* C=FindComponentByClass<UVistaCompanionComponent>();C && C->Companion)
+        if (!C->Companion->ResetForScene(this)) {Code=TEXT("COMPANION_RESET_BLOCKED");PublishState();return false;}
+    Code=TEXT("SCENE_RESET");PublishState();return true;
 }
 
 bool AHomeActionsCharacter::StartEvent(const FString& Id,FString& Code,bool bReset)

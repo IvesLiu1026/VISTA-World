@@ -1,4 +1,5 @@
 #include "HomeActions.h"
+#include "Camera/CameraComponent.h"
 #include "HomeActionsJson.h"
 #include "VistaCompanion.h"
 #include "Components/AudioComponent.h"
@@ -11,6 +12,8 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Base64.h"
 #include "Misc/Paths.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Sound/SoundWaveProcedural.h"
 
 using namespace HomeJson;
@@ -78,12 +81,9 @@ void AHomeActionsCharacter::HomePhone(bool Enabled)
     {
         const auto D=Decode(Text);
         if (D)
-        {
-            const FVector R=Vector(D,TEXT("phone_rotation_deg"),FVector(0,0,-90));
-            PhoneRotation=FRotator(R.X,R.Y,R.Z).Quaternion();
-            PhoneEarOffset=Vector(D,TEXT("phone_ear_offset_cm"),FVector(6,10,0)).GetClampedToMaxSize(24);
-        }
+            PhoneSpeakerOffset=Vector(D,TEXT("phone_speaker_cm"),FVector(-2.8f,8.4f,1.5f)).GetClampedToMaxSize(20);
     }
+    if (Enabled) SolvePhoneCall();
     bPhoneCall=Enabled;LastCode=Enabled?TEXT("PHONE_CALL_STARTED"):TEXT("PHONE_CALL_ENDED");PublishState();
 }
 
@@ -92,11 +92,16 @@ void AHomeActionsCharacter::UpdateDailyMotion(float Dt)
     DailyClock+=Dt;
     const auto* Held=Resolve(HeldId);
     if (!Held || Held->ShortId!=TEXT("phone")) bPhoneCall=false;
-    PhoneBlend=FMath::FInterpConstantTo(PhoneBlend,bPhoneCall?1.f:0.f,Dt,1.25f);
+    PhoneBlend=FMath::FInterpConstantTo(PhoneBlend,bPhoneCall?1.f:0.f,Dt,.6f);
+    UpdatePhoneElbow(Dt);
     if (HumanFaceMorphs.IsEmpty())
     {
         FString Text;const TSharedPtr<FJsonObject>* Morphs;
-        if (FFileHelper::LoadFileToString(Text,*(FPaths::ProjectConfigDir()/TEXT("VistaCompanion.json"))))
+        // The human and assistant may now use different meshes. A robot has no
+        // facial morphs; it must not disable the human's blink and lip sync.
+        FString FacePath=FPaths::ProjectConfigDir()/TEXT("VistaHumanAppearance.json");
+        if (!FPaths::FileExists(FacePath)) FacePath=FPaths::ProjectConfigDir()/TEXT("VistaCompanion.json");
+        if (FFileHelper::LoadFileToString(Text,*FacePath))
         {
             const auto D=Decode(Text);
             if (D && D->TryGetObjectField(TEXT("face_morphs"),Morphs))
@@ -111,7 +116,7 @@ void AHomeActionsCharacter::UpdateDailyMotion(float Dt)
     if (const auto* Names=HumanFaceMorphs.Find(TEXT("Blink")))
         for (FName Name:*Names) GetMesh()->SetMorphTarget(Name,Blink);
     float Mouth=0;
-    if (HumanVoice && HumanVoice->IsPlaying() && HumanWave)
+    if (bPrivateHumanLipSync && HumanVoice && HumanVoice->IsPlaying() && HumanWave)
     {
         const float Clock=(HumanAudioBytes-HumanWave->GetAvailableAudioByteCount())/(2.f*HumanAudioRate);
         const int32 Frame=FMath::FloorToInt(Clock*50);
@@ -125,6 +130,7 @@ void AHomeActionsCharacter::UpdateDailyMotion(float Dt)
 
 void AHomeActionsCharacter::HomeHumanSay(const FString& Code)
 {
+    bPrivateHumanLipSync=true;
     const TSet<FString> Allowed={TEXT("human_call"),TEXT("human_request"),TEXT("walk_entry"),TEXT("walk_living"),
         TEXT("walk_kitchen"),TEXT("walk_stairs"),TEXT("walk_bedroom"),TEXT("walk_office"),TEXT("walk_bathroom")};
     if (!bStreamingEnabled || !Allowed.Contains(Code)) return;
@@ -152,14 +158,17 @@ void AHomeActionsCharacter::HomeHumanSay(const FString& Code)
 
 TSharedPtr<FJsonObject> AHomeActionsCharacter::StreamingObservation() const
 {
-    auto D=CompanionObservation();D->RemoveField(TEXT("public_goal"));
+    const bool EgoReview=FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")) &&
+        FParse::Param(FCommandLine::Get(),TEXT("VistaEgoSensor"));
+    auto D=CompanionObservation(EgoReview);D->RemoveField(TEXT("public_goal"));
     D->SetStringField(TEXT("schema"),TEXT("vista.streaming-observation/v1"));
     D->SetStringField(TEXT("source"),TEXT("engine_visible_metadata_not_vlm"));
     D->SetStringField(TEXT("wearer_role"),TEXT("human_needing_assistance"));
-    D->SetStringField(TEXT("view"),bThirdPerson?TEXT("third_person_review"):TEXT("human_ego"));
+    D->SetStringField(TEXT("view"),bThirdPerson && !EgoReview?TEXT("third_person_review"):TEXT("human_ego"));
     D->SetNumberField(TEXT("clock_s"),SceneClock);
     FVector Eye;FRotator View;GetActorEyesViewPoint(Eye,View);
     if (const auto* PC=Cast<APlayerController>(Controller)) PC->GetPlayerViewPoint(Eye,View);
+    if (EgoReview) {Eye=ReviewCamera->GetComponentLocation();View=GetControlRotation();}
     auto Visible=[&](AStaticMeshActor* A)
     {
         if (!A || A->IsHidden() || !A->GetStaticMeshComponent()->IsVisible()) return false;
@@ -183,6 +192,8 @@ TSharedPtr<FJsonObject> AHomeActionsCharacter::StreamingObservation() const
         Cue(Bool(E->State,TEXT("active"))?TEXT("visible_stove_on_control"):TEXT("visible_stove_off"));
     if (const auto* E=Resolve(TEXT("faucet"));E && Visible(E->Actor.Get()) && !Bool(E->State,TEXT("active"))) Cue(TEXT("visible_bath_tap_off"));
     if (const auto* E=Resolve(TEXT("keys"));E && Visible(E->Actor.Get())) Cue(TEXT("visible_keys"));
+    if (FParse::Param(FCommandLine::Get(),TEXT("VistaLiveAssistant")))
+        if (const auto* E=Resolve(HeldId);E && E->ShortId==TEXT("keys")) Cue(TEXT("proprioceptive_keys_in_hand"));
     // Wearer's own hand activity is proprioception, explicitly separate from vision.
     D->SetStringField(TEXT("human_activity"),bPhoneCall && PhoneBlend>.8f?TEXT("phone_at_ear"):TEXT("unspecified"));
     D->SetArrayField(TEXT("cues"),Cues);return D;

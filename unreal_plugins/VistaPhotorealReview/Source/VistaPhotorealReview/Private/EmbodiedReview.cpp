@@ -36,6 +36,8 @@ FString PhaseName(EEmbodiedPhase P) { return StaticEnum<EEmbodiedPhase>()->GetNa
 AEmbodiedReviewCharacter::AEmbodiedReviewCharacter()
 {
     GetCapsuleComponent()->InitCapsuleSize(27.f,82.f);
+    // Other characters must yield around a person, never step onto their capsule.
+    GetCapsuleComponent()->CanCharacterStepUpOn=ECB_No;
     GetCharacterMovement()->MaxWalkSpeed=125.f;
     GetCharacterMovement()->MaxAcceleration=430.f;
     GetCharacterMovement()->BrakingDecelerationWalking=650.f;
@@ -201,11 +203,17 @@ FTransform AEmbodiedReviewCharacter::DesiredGrip() const
 
 FVector AEmbodiedReviewCharacter::PickupAimPoint() const { return CupMesh?CupMesh->Bounds.Origin:FVector::ZeroVector; }
 
+void AEmbodiedReviewCharacter::InteractionView(FVector& Eye,FRotator& Rotation) const
+{
+    GetActorEyesViewPoint(Eye,Rotation);
+    if (const auto* PC=Cast<APlayerController>(Controller)) PC->GetPlayerViewPoint(Eye,Rotation);
+}
+
 bool AEmbodiedReviewCharacter::IsCupReachable(FString& Reason) const
 {
     if (!CupMesh || !bReady) {Reason=TEXT("Cup unavailable");return false;}
     FVector Eye;FRotator LookRotation;
-    if (const APlayerController* PC=Cast<APlayerController>(Controller)) PC->GetPlayerViewPoint(Eye,LookRotation);
+    if (Cast<APlayerController>(Controller)) InteractionView(Eye,LookRotation);
     else {Reason=TEXT("View unavailable");return false;}
     const FVector Center=CupMesh->Bounds.Origin;
     const float ReachLimit=Center.Z-GetMesh()->GetComponentLocation().Z<35.f?46.f:86.f;
@@ -278,7 +286,7 @@ bool AEmbodiedReviewCharacter::FindPlacement(FVector& Location,FQuat& Rotation) 
 {
     FVector Eye;FRotator LookRotation;
     const APlayerController* PC=Cast<APlayerController>(Controller);if (!PC) return false;
-    PC->GetPlayerViewPoint(Eye,LookRotation);
+    InteractionView(Eye,LookRotation);
     FCollisionQueryParams Params(SCENE_QUERY_STAT(EmbodiedPlacement),true,this);Params.AddIgnoredActor(Cup);
     FHitResult Hit;
     if (!GetWorld()->LineTraceSingleByChannel(Hit,Eye,Eye+LookRotation.Vector()*330.f,ECC_Visibility,Params)) return false;
@@ -329,7 +337,10 @@ void AEmbodiedReviewCharacter::EmbodiedDrop()
 
 void AEmbodiedReviewCharacter::UpdateInteraction(float Dt)
 {
-    PhaseTime+=Dt;
+    // After release there is no object contact to track. A render hitch must
+    // not skip most of the hand's return gesture in one visible pose. Keep its
+    // animation clock bounded; action/event clocks still use real elapsed time.
+    PhaseTime+=Phase==EEmbodiedPhase::Retracting?FMath::Min(Dt,1.f/30.f):Dt;
     if (Phase==EEmbodiedPhase::Idle)
     { ReachAlpha=0;FingerAlpha=0;FString Reason;bHasCandidate=IsCupReachable(Reason);return; }
     bHasCandidate=false;

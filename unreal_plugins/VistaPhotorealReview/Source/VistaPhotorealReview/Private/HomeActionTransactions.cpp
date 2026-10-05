@@ -8,6 +8,8 @@
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "PhysicsEngine/PhysicsHandleComponent.h"
 
 using namespace HomeJson;
@@ -74,6 +76,18 @@ FVector AHomeActionsCharacter::PickupAimPoint() const
     return E && E->ShortId!=TEXT("coffee_cup")?ControlPoint(*E):Super::PickupAimPoint();
 }
 
+bool AHomeActionsCharacter::DanglingCarry() const
+{
+    // The held hand points down when its grip came from above a flat item on
+    // the floor (two-handed items and the phone have their own carry).
+    const auto* E=Resolve(HeldId.IsEmpty()?TargetId:HeldId);
+    if (!E || Bool(E->Spec,TEXT("two_hands")) || E->ShortId==TEXT("phone")) return false;
+    const int32 Hand=BoneIndex.FindChecked(TEXT("hand_r")),Middle=BoneIndex.FindChecked(TEXT("middle_01_r"));
+    const FVector Axis=(GetActorQuat()*HoldRelativeRotation*HandRelativeToCup.GetRotation()).RotateVector(
+        ReferenceGlobal[Hand].GetRotation().UnrotateVector((ReferenceGlobal[Middle].GetLocation()-ReferenceGlobal[Hand].GetLocation()).GetSafeNormal()));
+    return FVector::DotProduct(Axis,-GetActorUpVector())>.6f;
+}
+
 FTransform AHomeActionsCharacter::CarryTarget() const
 {
     const auto* E=Resolve(HeldId.IsEmpty()?TargetId:HeldId);
@@ -81,17 +95,255 @@ FTransform AHomeActionsCharacter::CarryTarget() const
     const float H=E?Number(E->Spec,TEXT("grip_height"),6.2):6.2;
     FTransform Carry(GetActorQuat()*HoldRelativeRotation,
         GetActorLocation()+GetActorQuat().RotateVector(FVector(Two?38:32,Two?0:18,26-H)));
+    if (DanglingCarry())
+    {
+        // A hand that took a flat item off the floor points down. Held in
+        // front of the chest that forced the elbow up and out and spun the
+        // forearm; carry it at the side with the arm hanging, as people carry
+        // a slipper.
+        const FVector Wrist=GetActorLocation()+GetActorQuat().RotateVector(FVector(4,18,-10));
+        Carry.SetLocation(Wrist-Carry.GetRotation().RotateVector(HandRelativeToCup.GetLocation()));
+    }
     if (E && E->ShortId==TEXT("phone") && PhoneBlend>0)
     {
         // Keep the same physical grip/IK authority. Lift the held handset using
         // a bounded blend; do not teleport an unheld prop into the hand.
-        const FVector Head=GetMesh()->GetSocketLocation(TEXT("head"));
-        const FVector Ear=Head+GetActorQuat().RotateVector(PhoneEarOffset);
-        const FQuat Upright=GetActorQuat()*PhoneRotation;
-        const FTransform Call(Upright,Ear);
-        Carry.Blend(Carry,Call,PhoneBlend*PhoneBlend*(3-2*PhoneBlend));
+        // The solved call pose follows the head. Without a solution (no
+        // grip measured yet), hold the handset upright beside the ear.
+        const FTransform Call=bPhoneCallSolved?PhoneCallInHead*PhoneHeadFrame():
+            FTransform(GetActorQuat()*FRotator(0,0,-90).Quaternion(),PhoneHeadFrame().TransformPosition(PhoneSpeakerOffset+FVector(6,1.5f,-5)));
+        const FVector Ear=Call.GetLocation();
+        // Bring the handset close to the chest before raising it to the ear.
+        // A direct diagonal lift rotated the palm against the forearm midway
+        // through the motion, even with the optimal elbow on its IK circle.
+        const FVector Chest=GetActorLocation()+GetActorQuat().RotateVector(FVector(20,10,20-H));
+        const float Gather=FMath::SmoothStep(0.f,.3f,PhoneBlend);
+        const float Tilt=FMath::SmoothStep(.3f,.65f,PhoneBlend);
+        const float Lift=FMath::SmoothStep(.5f,1.f,PhoneBlend);
+        // Align heading while still flat, then tilt toward the head. A single
+        // compound yaw/roll slerp swept the palm away from the forearm when the
+        // table's phone heading differed greatly from the character heading.
+        const FQuat Flat=GetActorQuat();
+        // Rise in front of the chin, then in to the ear. The straight chord
+        // passed 10 cm from the shoulder and folded the elbow to 155 degrees.
+        const FVector Arc=GetActorQuat().RotateVector(FVector(9,0,0))*FMath::Sin(PI*Lift);
+        Carry.SetLocation(PhoneBlend<.3f?FMath::Lerp(Carry.GetLocation(),Chest,Gather):FMath::Lerp(Chest,Ear,Lift)+Arc);
+        Carry.SetRotation((PhoneBlend<.3f?FQuat::Slerp(Carry.GetRotation(),Flat,Gather):FQuat::Slerp(Flat,Call.GetRotation(),Tilt)).GetNormalized());
+        // The two-bone arm's reachable wrist circle also constrains the palm.
+        // Position-only IK cannot repair a handset orientation that requires
+        // the wrist to fold backwards. Project the PHYSICAL object's requested
+        // orientation instead; the original relative grip and contact remain
+        // exact. Recompute because rotating the prop also moves the wrist.
+        const int32 Upper=BoneIndex.FindChecked(TEXT("upperarm_r"));
+        const int32 Lower=BoneIndex.FindChecked(TEXT("lowerarm_r"));
+        const int32 Hand=BoneIndex.FindChecked(TEXT("hand_r"));
+        const int32 Middle=BoneIndex.FindChecked(TEXT("middle_01_r"));
+        const double L1=FVector::Distance(ReferenceGlobal[Upper].GetLocation(),ReferenceGlobal[Lower].GetLocation());
+        const double L2=FVector::Distance(ReferenceGlobal[Lower].GetLocation(),ReferenceGlobal[Hand].GetLocation());
+        const FVector PalmLocal=ReferenceGlobal[Hand].InverseTransformPosition(ReferenceGlobal[Middle].GetLocation()).GetSafeNormal();
+        const FVector Shoulder=GetMesh()->GetSocketLocation(TEXT("upperarm_r"));
+        for (int32 Iteration=0;Iteration<5;++Iteration)
+        {
+            const FTransform Wrist=HandRelativeToCup*Carry;
+            const FVector N=(Wrist.GetLocation()-Shoulder).GetSafeNormal();
+            const double D=FMath::Clamp(FVector::Distance(Wrist.GetLocation(),Shoulder),FMath::Abs(L1-L2)+.01,L1+L2-.04);
+            const double Along=(L1*L1-L2*L2+D*D)/(2*D);
+            const double Height=FMath::Sqrt(FMath::Max(0.,L1*L1-Along*Along));
+            const double Cone=FMath::Atan2(Height,D-Along);
+            const FVector Palm=Wrist.GetRotation().RotateVector(PalmLocal);
+            const double Angle=FMath::Acos(FMath::Clamp(FVector::DotProduct(Palm,N),-1.,1.));
+            const double Limit=FMath::DegreesToRadians(50.);
+            const double SafeAngle=FMath::Clamp(Angle,FMath::Max(0.,Cone-Limit),FMath::Min(double(PI),Cone+Limit));
+            if (FMath::Abs(Angle-SafeAngle)<.001) break;
+            FVector Tangent=Palm-N*FVector::DotProduct(Palm,N);
+            if (!Tangent.Normalize()) Tangent=FVector::VectorPlaneProject(GetActorRightVector(),N).GetSafeNormal();
+            const FVector SafePalm=N*FMath::Cos(SafeAngle)+Tangent*FMath::Sin(SafeAngle);
+            Carry.SetRotation((FQuat::FindBetweenNormals(Palm,SafePalm)*Carry.GetRotation()).GetNormalized());
+        }
     }
     return Carry;
+}
+
+FTransform AHomeActionsCharacter::PhoneHeadFrame() const
+{
+    // The head's current frame with the actor's bind axes (X forward, Y right,
+    // Z up). Ear offsets measured on the bind mesh stay on the same anatomy
+    // when the head pitches or turns.
+    const FTransform World=GetMesh()->GetSocketTransform(TEXT("head"));
+    const FQuat Axes=World.GetRotation()*ReferenceGlobal[BoneIndex.FindChecked(TEXT("head"))].GetRotation().Inverse()*
+        GetMesh()->GetRelativeTransform().GetRotation().Inverse();
+    return FTransform(Axes.GetNormalized(),World.GetLocation());
+}
+
+double AHomeActionsCharacter::PhoneArmCost(const FTransform& Hand,bool bReachable,FVector& Elbow,double& Flexion) const
+{
+    // Elbow on the right arm's IK circle for this wrist goal that a person
+    // holding a phone would use: in front of the chest, below the shoulder,
+    // right of the midline, wrist bend within 45 degrees.
+    const int32 HandIndex=BoneIndex.FindChecked(TEXT("hand_r")),Middle=BoneIndex.FindChecked(TEXT("middle_01_r"));
+    const int32 Upper=BoneIndex.FindChecked(TEXT("upperarm_r")),Lower=BoneIndex.FindChecked(TEXT("lowerarm_r"));
+    const double L1=FVector::Distance(ReferenceGlobal[Upper].GetLocation(),ReferenceGlobal[Lower].GetLocation());
+    const double L2=FVector::Distance(ReferenceGlobal[Lower].GetLocation(),ReferenceGlobal[HandIndex].GetLocation());
+    const FVector HandAxis=Hand.GetRotation().RotateVector(ReferenceGlobal[HandIndex].GetRotation().UnrotateVector(
+        (ReferenceGlobal[Middle].GetLocation()-ReferenceGlobal[HandIndex].GetLocation()).GetSafeNormal()));
+    const FVector Shoulder=GetMesh()->GetSocketLocation(TEXT("upperarm_r")),Midline=GetMesh()->GetSocketLocation(TEXT("head"));
+    const FVector BodyFwd=GetActorForwardVector(),BodyRight=GetActorRightVector(),BodyUp=GetActorUpVector();
+    const FVector W=Hand.GetLocation();
+    double D=FVector::Distance(W,Shoulder);
+    if (bReachable && (D<FMath::Abs(L1-L2)+1. || D>L1+L2-1.)) return TNumericLimits<double>::Max();
+    D=FMath::Clamp(D,FMath::Abs(L1-L2)+1.,L1+L2-1.);
+    Flexion=180.-FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp((L1*L1+L2*L2-D*D)/(2*L1*L2),-1.,1.)));
+    const FVector N=(W-Shoulder).GetSafeNormal(SMALL_NUMBER,-BodyUp);
+    const FVector Reached=Shoulder+N*D;
+    const double Along=(L1*L1-L2*L2+D*D)/(2*D),Radius=FMath::Sqrt(FMath::Max(0.,L1*L1-Along*Along));
+    FVector E1=FVector::CrossProduct(N,BodyUp);if (!E1.Normalize()) E1=BodyFwd;
+    const FVector E2=FVector::CrossProduct(N,E1);
+    double Best=TNumericLimits<double>::Max();
+    for (int32 A=0;A<360;A+=10)
+    {
+        const double R=FMath::DegreesToRadians(double(A));
+        const FVector J=Shoulder+N*Along+(E1*FMath::Cos(R)+E2*FMath::Sin(R))*Radius;
+        const double Bend=FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct((Reached-J).GetSafeNormal(),HandAxis),-1.,1.)));
+        const double Lateral=FVector::DotProduct(J-Midline,BodyRight);
+        const double Ahead=FVector::DotProduct(J-Shoulder,BodyFwd),Rise=FVector::DotProduct(J-Shoulder,BodyUp);
+        const double Cost=FMath::Square(FMath::Max(0.,Bend-45.))+5.*FMath::Square(FMath::Max(0.,6.-Lateral))+
+            FMath::Square(FMath::Max(0.,10.-Ahead))+2.*FMath::Square(FMath::Max(0.,Rise+3.));
+        if (Cost<Best) {Best=Cost;Elbow=J;}
+    }
+    return Best;
+}
+
+void AHomeActionsCharacter::SolvePhoneCall()
+{
+    // The pickup pinch holds the handset across its width with the palm over
+    // one face. An upright handset at the ear therefore put the palm between
+    // phone and cheek and the elbow straight out in front. Choose, for the
+    // grip actually held, the handset pose with the speaker on the ear, the
+    // palm outside, and an arm a person would use (PhoneArmCost) with elbow
+    // flexion below 150 degrees.
+    bPhoneCallSolved=false;
+    const auto* E=Resolve(HeldId);
+    if (!E || E->ShortId!=TEXT("phone") || !E->Mesh.IsValid() || !E->Mesh->GetStaticMesh()) return;
+    const FBox Box=E->Mesh->GetStaticMesh()->GetBoundingBox();
+    const FVector Scale=E->Mesh->GetComponentScale(),Center=Box.GetCenter()*Scale,Half=Box.GetExtent()*Scale;
+    int32 Long=0,Thin=0;
+    for (int32 A=1;A<3;++A) {if (Half[A]>Half[Long]) Long=A;if (Half[A]<Half[Thin]) Thin=A;}
+    if (Long==Thin) return;
+    const int32 Width=3-Long-Thin;
+    const float Palm=HandRelativeToCup.GetLocation()[Thin]>=Center[Thin]?1.f:-1.f;
+    const FTransform Head=PhoneHeadFrame();
+    const FVector Fwd=Head.GetUnitAxis(EAxis::X),Right=Head.GetUnitAxis(EAxis::Y),Up=Head.GetUnitAxis(EAxis::Z);
+    const FVector Speaker=Head.TransformPosition(PhoneSpeakerOffset);
+    const int32 Hand=BoneIndex.FindChecked(TEXT("hand_r")),Middle=BoneIndex.FindChecked(TEXT("middle_01_r"));
+    const FVector KnuckleLocal=ReferenceGlobal[Hand].InverseTransformPosition(ReferenceGlobal[Middle].GetLocation());
+    double Best=TNumericLimits<double>::Max();FTransform Chosen;
+    for (const float SpeakerEnd:{1.f,-1.f})
+    for (int32 Tilt=60;Tilt<=82;Tilt+=2)
+    for (int32 Roll=-10;Roll<=20;Roll+=5)
+    for (int32 Yaw=0;Yaw<=15;Yaw+=5)
+    {
+        // Tilt: microphone end forward of the ear, degrees from vertical.
+        const double T=FMath::DegreesToRadians(double(Tilt));
+        const FVector Down=(Fwd*FMath::Sin(T)-Up*FMath::Cos(T)).GetSafeNormal();
+        const FQuat Adjust=FQuat(Up,FMath::DegreesToRadians(double(Yaw)))*FQuat(Down,FMath::DegreesToRadians(double(Roll)));
+        FVector Axes[3];
+        Axes[Long]=Adjust.RotateVector(-Down*SpeakerEnd);
+        Axes[Thin]=Adjust.RotateVector(Right*Palm);
+        Axes[Width]=(Width+1)%3==Long?FVector::CrossProduct(Axes[Long],Axes[Thin]):FVector::CrossProduct(Axes[Thin],Axes[Long]);
+        const FQuat Rotation=FQuat(FMatrix(Axes[0],Axes[1],Axes[2],FVector::ZeroVector)).GetNormalized();
+        FVector SpeakerLocal=Center;
+        SpeakerLocal[Long]+=SpeakerEnd*FMath::Max(0.,Half[Long]-1.5);
+        SpeakerLocal[Thin]-=Palm*Half[Thin];
+        const FTransform Candidate(Rotation,Speaker-Rotation.RotateVector(SpeakerLocal));
+        const FTransform Wrist=HandRelativeToCup*Candidate;
+        FVector Elbow;double Flexion=0.;
+        const double ArmCost=PhoneArmCost(Wrist,true,Elbow,Flexion);
+        if (ArmCost==TNumericLimits<double>::Max()) continue;
+        // Wrist and knuckles stay outside the cheek and jaw.
+        double Clear=0.;
+        for (const FVector& P:{Wrist.GetLocation(),Wrist.TransformPosition(KnuckleLocal)})
+            Clear+=FMath::Square(FMath::Max(0.,7.5-FVector::DotProduct(P-Head.GetLocation(),Right)));
+        const double Cost=ArmCost+30.*Clear+3.*FMath::Square(FMath::Max(0.,Flexion-150.))+
+            .03*FMath::Square(Tilt-70.)+.02*(Roll*Roll+Yaw*Yaw);
+        if (Cost<Best) {Best=Cost;Chosen=Candidate;}
+    }
+    if (Best==TNumericLimits<double>::Max()) return;
+    PhoneCallInHead=Chosen.GetRelativeTransform(Head);
+    PhoneElbowHint=FVector::ZeroVector;
+    bPhoneCallSolved=true;
+    if (FParse::Param(FCommandLine::Get(),TEXT("VistaPrivateReview")))
+        UE_LOG(LogTemp,Display,TEXT("HOME_PHONE_CALL_POSE cost=%.2f speaker=%s"),Best,*Speaker.ToString());
+}
+
+void AHomeActionsCharacter::UpdatePhoneElbow(float Dt)
+{
+    // Follow the handset's whole path, not only its pose at the ear: a carry
+    // elbow plane swung the elbow behind the head while the phone turned.
+    const auto* E=Resolve(HeldId);
+    if (!bPhoneCallSolved || PhoneBlend<=0.f || !E || E->ShortId!=TEXT("phone")) {PhoneElbowHint=FVector::ZeroVector;return;}
+    FVector Elbow;double Flexion=0.;
+    if (PhoneArmCost(HandRelativeToCup*CarryTarget(),false,Elbow,Flexion)==TNumericLimits<double>::Max()) return;
+    // Bind torso frame; the arm solver re-applies the torso's rotation.
+    const FQuat Torso=GetMesh()->GetSocketTransform(TEXT("spine_03"),RTS_Component).GetRotation()*
+        ReferenceGlobal[BoneIndex.FindChecked(TEXT("spine_03"))].GetRotation().Inverse();
+    const FVector Hint=Torso.UnrotateVector(GetMesh()->GetComponentTransform().InverseTransformVectorNoScale(
+        Elbow-GetMesh()->GetSocketLocation(TEXT("upperarm_r")))).GetSafeNormal();
+    if (PhoneElbowHint.IsNearlyZero() || Hint.IsNearlyZero()) {PhoneElbowHint=Hint;return;}
+    const FQuat Turn=FQuat::FindBetweenNormals(PhoneElbowHint,Hint);
+    const double Angle=Turn.GetAngle(),Limit=FMath::DegreesToRadians(240.)*FMath::Clamp(double(Dt),0.,.1);
+    PhoneElbowHint=FQuat::Slerp(FQuat::Identity,Turn,Angle>Limit?Limit/Angle:1.).RotateVector(PhoneElbowHint).GetSafeNormal();
+}
+
+FVector AHomeActionsCharacter::ArmElbowHint(bool bRight,float& Weight) const
+{
+    Weight=0.f;
+    const auto* E=Resolve(HeldId);
+    if (!bRight || !bPhoneCallSolved || PhoneElbowHint.IsNearlyZero() || !E || E->ShortId!=TEXT("phone")) return FVector::ZeroVector;
+    Weight=FMath::SmoothStep(0.f,.2f,PhoneBlend);
+    return PhoneElbowHint;
+}
+
+void AHomeActionsCharacter::AdjustReachPosture(float& Low,float& Lean) const
+{
+    // Low tables are reached with a hip hinge, the floor with the body bent
+    // over the item. The generic low reach squatted instead: pelvis 36 cm for
+    // keys on the coffee table, with the forearm level and the wrist folded
+    // 128 degrees onto them; pelvis 14 cm for a slipper on the floor. The
+    // floor keeps a deeper crouch (a 48 cm cap left the hand short).
+    // Only while taking, lifting or putting down an item: articulated handles
+    // (the washer door at 42 cm) need the deeper crouch to follow their arc.
+    // Held keeps the posture continuous while the item leaves a low table.
+    const bool ItemReach=Phase==EEmbodiedPhase::Reaching || Phase==EEmbodiedPhase::Closing ||
+        Phase==EEmbodiedPhase::Held || Phase==EEmbodiedPhase::Placing || Phase==EEmbodiedPhase::Releasing;
+    if (ReachAlpha>0.f && ItemReach)
+    {
+        const float GoalHeight=LastHandGoal.GetLocation().Z-(GetActorLocation().Z-GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+        const float Floor=FMath::Clamp((40.f-GoalHeight)/25.f,0.f,1.f)*ReachAlpha;
+        const float Table=FMath::Clamp((85.f-GoalHeight)/30.f,0.f,1.f)*ReachAlpha*(1.f-Floor);
+        if (Table>0.f) {Low*=1.f-.38f*Table;Lean=FMath::Max(Lean,.75f*Table);}
+        if (Floor>0.f) {Low=FMath::Lerp(Low,FMath::Min(Low,56.f),Floor);Lean=FMath::Max(Lean,.95f*Floor);}
+    }
+    // Holding a dangling item at the side is not a reach: the crouch and bow
+    // fade out while it leaves the floor (the hip-height hand would otherwise
+    // keep the body crouched).
+    if (Phase==EEmbodiedPhase::Held && DanglingCarry())
+    {
+        const float Stand=FMath::SmoothStep(.25f,.95f,PhaseTime);
+        Low*=1.f-Stand;Lean*=1.f-Stand;
+        return;
+    }
+    // Touching a seat before sitting is a hip hinge. The generic low-reach
+    // squat put the pelvis 17 cm below the seat height, so the body had to
+    // climb out of a deep squat to sit down.
+    // A third less crouch with a deeper bow keeps the pelvis near the seat
+    // height and the cushion within reach (half the crouch could not reach
+    // the office chair's cushion from the approach stance).
+    if (ActiveId.IsEmpty() || ActionId!=TEXT("sit_down")) return;
+    Low*=.62f;
+    Lean=FMath::Max(Lean,.75f*ReachAlpha);
+    // Stay bent while turning onto the seat; releasing the crouch with the
+    // hand lifted the pelvis 22 cm before it came back down onto the seat.
+    if (ActionStage>=1) Low=FMath::Max(Low,16.f*(1.f-SeatedAlpha));
 }
 
 bool AHomeActionsCharacter::FindPlacement(FVector& Location,FQuat& Rotation) const
@@ -99,7 +351,7 @@ bool AHomeActionsCharacter::FindPlacement(FVector& Location,FQuat& Rotation) con
     const auto* E=Resolve(HeldId);
     if (!E || E->ShortId==TEXT("coffee_cup")) return Super::FindPlacement(Location,Rotation);
     const auto* PC=Cast<APlayerController>(Controller);if (!PC || !E->Mesh.IsValid()) return false;
-    FVector Eye;FRotator Look;PC->GetPlayerViewPoint(Eye,Look);
+    FVector Eye;FRotator Look;ActionView(Eye,Look);
     FCollisionQueryParams P(SCENE_QUERY_STAT(HomePlacement),true,this);P.AddIgnoredActor(E->Actor.Get());
     FHitResult Hit;
     auto Reject=[&](const FString& Why)
@@ -170,7 +422,7 @@ bool AHomeActionsCharacter::CheckReach(const FHomeEntity& E,const FVector& Point
     {Code=TEXT("OUT_OF_REACH");return false;}
     FVector Eye;FRotator Look;
     const auto* PC=Cast<APlayerController>(Controller);if (!PC) {Code=TEXT("NO_VIEW");return false;}
-    PC->GetPlayerViewPoint(Eye,Look);
+    ActionView(Eye,Look);
     if (RequireView && FVector::DotProduct((Point-Eye).GetSafeNormal(),Look.Vector())<.90f)
     {Code=TEXT("LOOK_AT_TARGET");return false;}
     FCollisionQueryParams P(SCENE_QUERY_STAT(HomeActionReach),true,this);FHitResult Hit;
@@ -340,7 +592,7 @@ bool AHomeActionsCharacter::BeginAction(const FString& Command,const FString& Re
     if ((A==TEXT("inspect") || A==TEXT("look_at")) && E)
     {
         FVector Eye;FRotator Look;const auto* PC=Cast<APlayerController>(Controller);
-        if (!PC) {Code=TEXT("NO_VIEW");return false;}PC->GetPlayerViewPoint(Eye,Look);
+        if (!PC) {Code=TEXT("NO_VIEW");return false;}ActionView(Eye,Look);
         const FVector Point=ControlPoint(*E);const FVector Delta=Point-Eye;
         if (Delta.Size()>330.f) {Code=TEXT("OUT_OF_VIEW_RANGE");return false;}
         if (A==TEXT("inspect") && FVector::DotProduct(Delta.GetSafeNormal(),Look.Vector())<.9f) {Code=TEXT("LOOK_AT_TARGET");return false;}

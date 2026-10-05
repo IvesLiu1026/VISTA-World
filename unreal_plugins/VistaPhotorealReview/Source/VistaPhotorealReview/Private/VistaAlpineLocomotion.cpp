@@ -60,6 +60,25 @@ void AVistaVillaCharacter::LoadAlpineMotion()
     for (const TCHAR* D:Directions) for (const TCHAR* G:{TEXT("walk_"),TEXT("run_")})
         if (!AlpineClips.Contains(FString(G)+D)) {AlpineClips.Empty();return;}
     for (const TCHAR* Key:{TEXT("jump"),TEXT("fall"),TEXT("land")}) if (!AlpineClips.Contains(Key)) {AlpineClips.Empty();return;}
+    if (Motions.Num()>2)
+    {
+        // Align support phase from the actual retargeted left-foot trajectory.
+        // The CMU cycle begins at heel strike; the UE clips begin near toe-off.
+        const int32 Foot=BoneIndex.FindChecked(TEXT("foot_l"));
+        const auto RearPhase=[&](const TArray<FVillaMotionFrame>& Frames)
+        {
+            double Rear=DBL_MAX;float Phase=0;
+            for (int32 K=0;K<Frames.Num()-1;++K)
+            {
+                TArray<FTransform> Global;
+                for (int32 I=0;I<=Foot;++I) Global.Add(Parents[I]>=0?Frames[K].Pose[I]*Global[Parents[I]]:Frames[K].Pose[I]);
+                if (Global[Foot].GetLocation().Y<Rear) {Rear=Global[Foot].GetLocation().Y;Phase=float(K)/(Frames.Num()-1);}
+            }
+            return Phase;
+        };
+        ReferenceWalkPhase=FMath::Fmod(RearPhase(Motions)-RearPhase(AlpineClips.FindChecked(TEXT("walk_fwd")).Frames)+1.f,1.f);
+        UE_LOG(LogTemp,Display,TEXT("VILLA_REFERENCE_WALK phase_offset=%.4f distance_cm=%.3f"),ReferenceWalkPhase,ReferenceWalkDistance);
+    }
     GetCharacterMovement()->JumpZVelocity=360.f;GetCharacterMovement()->AirControl=.28f;
     GetCharacterMovement()->MaxAcceleration=650.f;GetCharacterMovement()->BrakingDecelerationWalking=900.f;
     for (TActorIterator<AStaticMeshActor> It(GetWorld());It;++It) if (It->ActorHasTag(TEXT("AlpineGardenPanel")))
@@ -111,7 +130,9 @@ bool AVistaVillaCharacter::UpdateAlpineMotion(float Dt,FVillaMotionFrame& A,FVil
     Reset=!bFeetReady || FVector::Distance(PreviousLocation,GetActorLocation())>70.f;
     PreviousLocation=GetActorLocation();
     const bool Starting=Speed>8 && PreviousLocomotionSpeed<=8;
-    if (Reset || Starting) StepClock=.30f;
+    // A brief stop during a reversal must keep its support-foot phase.
+    const bool FromRest=Starting && MotionWeight<.08f;
+    if (Reset || FromRest) StepClock=.30f;
     PreviousLocomotionSpeed=Speed;
     const FVector V=GetMesh()->GetComponentTransform().InverseTransformVectorNoScale(GetVelocity()).GetSafeNormal2D();
     const float TargetDirection=FMath::RadiansToDegrees(FMath::Atan2(V.X,V.Y));
@@ -120,7 +141,7 @@ bool AVistaVillaCharacter::UpdateAlpineMotion(float Dt,FVillaMotionFrame& A,FVil
     // each resulting bone alone still allowed a 39-degree pelvis jump.
     // Select the initial direction before fading in from idle. Interpolating
     // zero to backward would unnecessarily pass through a sideways pose.
-    if (Reset || Starting) LocomotionDirectionYaw=TargetDirection;
+    if (Reset || FromRest) LocomotionDirectionYaw=TargetDirection;
     else if (Speed>8) LocomotionDirectionYaw=FMath::FixedTurn(LocomotionDirectionYaw,TargetDirection,Dt*180.f);
     const float Direction=FMath::Fmod(LocomotionDirectionYaw/45.f+8.f,8.f);
     const TCHAR* D[]={TEXT("fwd"),TEXT("fwd_left"),TEXT("left"),TEXT("bwd_left"),TEXT("bwd"),TEXT("bwd_right"),TEXT("right"),TEXT("fwd_right")};
@@ -130,10 +151,12 @@ bool AVistaVillaCharacter::UpdateAlpineMotion(float Dt,FVillaMotionFrame& A,FVil
     const auto& WB=AlpineClips.FindChecked(FString(TEXT("walk_"))+D[Second]);
     const auto& RA=AlpineClips.FindChecked(FString(TEXT("run_"))+D[First]);
     const auto& RB=AlpineClips.FindChecked(FString(TEXT("run_"))+D[Second]);
-    CycleDistance=FMath::Lerp(FMath::Lerp(WA.Distance,WB.Distance,Turn),FMath::Lerp(RA.Distance,RB.Distance,Turn),RunBlend);
+    const float ForwardWeight=Motions.Num()>2?1.f-FMath::SmoothStep(15.f,45.f,float(FMath::Abs(FRotator::NormalizeAxis(LocomotionDirectionYaw)))):0.f;
+    ReferenceWalkWeight=Air?0.f:ForwardWeight*(1.f-RunBlend);
     // Recorded sprint strides are too long for a slow indoor walk. Shorten
     // both foot travel and travelled distance per cycle by the same factor.
-    CycleDistance*=FMath::Lerp(.52f,.68f,RunBlend);
+    CycleDistance=FMath::Lerp(FMath::Lerp(FMath::Lerp(WA.Distance,WB.Distance,Turn)*.52f,
+        ReferenceWalkDistance,ForwardWeight),FMath::Lerp(RA.Distance,RB.Distance,Turn)*.68f,RunBlend);
     StepClock=FMath::Frac(StepClock+Dt*Speed/FMath::Max(CycleDistance,30.f));
     MotionWeight=FMath::FInterpTo(MotionWeight,FMath::Clamp(Speed/75.f,0.f,1.f),Dt,8.f);
     const auto Sample=[](const FAlpineMotionClip& Clip,float T)
@@ -149,7 +172,14 @@ bool AVistaVillaCharacter::UpdateAlpineMotion(float Dt,FVillaMotionFrame& A,FVil
         auto Result=X;for (int32 I=0;I<Result.Pose.Num();++I) Result.Pose[I].Blend(X.Pose[I],Y.Pose[I],F);
         for (int32 S=0;S<2;++S) Result.Contact[S]=FMath::Lerp(X.Contact[S],Y.Contact[S],F);return Result;
     };
-    A=Blend(Blend(Sample(WA,StepClock),Sample(WB,StepClock),Turn),Blend(Sample(RA,StepClock),Sample(RB,StepClock),Turn),RunBlend);
+    auto Walking=Blend(Sample(WA,StepClock),Sample(WB,StepClock),Turn);
+    if (ForwardWeight>0)
+    {
+        const float Frame=FMath::Frac(StepClock+ReferenceWalkPhase)*(Motions.Num()-1);
+        const int32 K=FMath::Min(FMath::FloorToInt(Frame),Motions.Num()-2);
+        Walking=Blend(Walking,Blend(Motions[K],Motions[K+1],Frame-K),ForwardWeight);
+    }
+    A=Blend(Walking,Blend(Sample(RA,StepClock),Sample(RB,StepClock),Turn),RunBlend);
     AlpineMotionName=FString(RunBlend>.5?TEXT("run_"):TEXT("walk_"))+D[First];
     if (Air)
     {
@@ -166,7 +196,8 @@ bool AVistaVillaCharacter::UpdateAlpineMotion(float Dt,FVillaMotionFrame& A,FVil
     for (int32 I=0;I<MotionBlend.Num();++I)
     {
         const FString Name=Poses->BoneNames[I].ToString();
-        const float Arm=Name.StartsWith(TEXT("upperarm_"))?.65f:Name.StartsWith(TEXT("lowerarm_"))?.45f:Name.StartsWith(TEXT("hand_"))?0.f:1.f;
+        const float RecordedArm=Name.StartsWith(TEXT("upperarm_"))?.65f:Name.StartsWith(TEXT("lowerarm_"))?.45f:Name.StartsWith(TEXT("hand_"))?0.f:1.f;
+        const float Arm=FMath::Lerp(RecordedArm,1.f,ForwardWeight);
         FTransform Target;Target.Blend(MotionIdle[I],A.Pose[I],Air?1.f:MotionWeight*FMath::Lerp(Arm,1.f,RunBlend));
         if (!Air && LandClock<.35f)
         {

@@ -189,6 +189,7 @@ void AVistaExplorerCharacter::CompanionStop(){if(Companion)Companion->Stop();}
 void AVistaExplorerCharacter::HomeRoom(int32 Index)
 {
     const FVector Before=GetActorLocation();Super::HomeRoom(Index);
+    if (Index>=1 && Index<=6) SetMenu(0);
     if(FVector::Distance(Before,GetActorLocation())>1 && Companion && Companion->Companion && Companion->Companion->bFollowing)
         Companion->Companion->bBlocked=!Companion->Companion->PlaceNear(this);
 }
@@ -266,13 +267,18 @@ void AVistaExplorerCharacter::BindExploreKeys(UInputComponent* Input)
     Input->BindKey(EKeys::LeftShift,IE_Released,this,&AVistaExplorerCharacter::ExplorerWalk);
     Input->BindKey(EKeys::F8,IE_Pressed,this,&AVistaExplorerCharacter::ExplorerState);
 }
-void AVistaExplorerCharacter::ExplorerRun() {if (!Menu) bRun=true;}
-void AVistaExplorerCharacter::ExplorerWalk() {bRun=false;}
+void AVistaExplorerCharacter::ExplorerRun()
+{
+    if (Menu) return;
+    bRun=true;
+    if (!bCampus) JogOn();
+}
+void AVistaExplorerCharacter::ExplorerWalk() {bRun=false;JogOff();}
 void AVistaExplorerCharacter::ExplorerJump() {if (!Menu && !Riding.IsValid()) StartAlpineJump();}
 void AVistaExplorerCharacter::ToggleExplorerView() {if (!Menu) ToggleView();}
 void AVistaExplorerCharacter::SetMenu(int32 Value)
 {
-    Menu=Value;bRun=false;GetCharacterMovement()->StopMovementImmediately();
+    Menu=Value;ExplorerWalk();GetCharacterMovement()->StopMovementImmediately();
     if (auto* PC=Cast<APlayerController>(Controller))
     {
         PC->ResetIgnoreMoveInput();PC->ResetIgnoreLookInput();PC->SetIgnoreMoveInput(Menu!=0);PC->SetIgnoreLookInput(Menu!=0);
@@ -394,6 +400,8 @@ void AVistaExplorerCharacter::Tick(float Dt)
         else TickRideTransition(Dt);
     }
     Super::Tick(Dt);
+    // A hidden menu must not keep consuming game input during clean observation.
+    if (IsCleanObservation() && Menu) SetMenu(0);
     if (bCampus && !Riding.IsValid()) GetCharacterMovement()->MaxWalkSpeed=bRun?350:180;
     if (!Menu && !Riding.IsValid() && bCampus)
     {

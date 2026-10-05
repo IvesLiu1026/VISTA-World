@@ -1,5 +1,6 @@
 #include "HomeActions.h"
 #include "HomeActionsJson.h"
+#include "VistaCompanion.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/StaticMeshActor.h"
@@ -15,9 +16,28 @@ TSharedRef<FJsonObject> AHomeActionsCharacter::MakeState() const
     auto O=MakeShared<FJsonObject>();O->SetStringField(TEXT("schema"),TEXT("vista.home-runtime-state/v1"));
     O->SetStringField(TEXT("audience"),TEXT("privileged_runtime_review_only"));O->SetStringField(TEXT("session_id"),SessionId);
     O->SetStringField(TEXT("revision"),Revision);O->SetNumberField(TEXT("generation"),Generation);
+    O->SetNumberField(TEXT("scene_epoch"),SceneEpoch);
+    if (ForgeReceipt.IsValid()) O->SetObjectField(TEXT("micro_room"),ForgeReceipt);
     O->SetNumberField(TEXT("clock_s"),SceneClock);O->SetNumberField(TEXT("frame_time_s"),GetWorld()->GetDeltaSeconds());
     O->SetBoolField(TEXT("ready"),bSceneReady);O->SetBoolField(TEXT("third_person"),bThirdPerson);
     O->SetBoolField(TEXT("clean_observation"),bCleanObservation);
+    if (const auto* C=FindComponentByClass<UVistaCompanionComponent>();C && C->Companion)
+    {
+        auto Own=MakeShared<FJsonObject>();Own->SetStringField(TEXT("id"),C->Companion->AssistId);
+        Own->SetStringField(TEXT("status"),C->Companion->AssistStatus);Own->SetStringField(TEXT("target"),C->Companion->AssistTarget);
+        Own->SetNumberField(TEXT("finger_error_cm"),C->Companion->ContactError);O->SetObjectField(TEXT("companion_execution"),Own);
+    }
+    O->SetStringField(TEXT("review_motion"),PrivateMotion);
+    auto Director=MakeShared<FJsonObject>();Director->SetStringField(TEXT("owner"),DirectorOwner);
+    Director->SetStringField(TEXT("motion"),PrivateMotion);Director->SetStringField(TEXT("action_id"),DirectorAction);
+    O->SetObjectField(TEXT("director"),Director); // Privileged state only; never StreamingObservation.
+    O->SetNumberField(TEXT("review_corner_preview_cm"),PrivatePreviewCm);
+    O->SetNumberField(TEXT("review_clearance_cm"),PrivateClearance);
+    O->SetArrayField(TEXT("review_target_cm"),Values(PrivateTarget));
+    O->SetNumberField(TEXT("review_corner_frames"),PrivateCornerFrames);
+    O->SetNumberField(TEXT("view_yaw_deg"),GetControlRotation().Yaw);
+    FVector ActionEye;FRotator ActionLook;ActionView(ActionEye,ActionLook);
+    O->SetArrayField(TEXT("action_eye_cm"),Values(ActionEye));
     O->SetStringField(TEXT("active_command"),ActiveId);O->SetStringField(TEXT("action"),ActiveId.IsEmpty()?TEXT(""):ActionId);
     O->SetStringField(TEXT("held_id"),HeldId);O->SetStringField(TEXT("seat_id"),SeatId);
     O->SetStringField(TEXT("standing_on"),StandingOn);
@@ -29,6 +49,11 @@ TSharedRef<FJsonObject> AHomeActionsCharacter::MakeState() const
         O->SetArrayField(TEXT("concurrent_events"),ConcurrentEventState());
         O->SetBoolField(TEXT("human_phone_call"),bPhoneCall);O->SetNumberField(TEXT("phone_blend"),PhoneBlend);
         O->SetNumberField(TEXT("human_mouth_open"),HumanMouthOpen);
+        // Reviewer evidence only: verify the human still has actual facial
+        // deformation when the companion is a separate robot mesh.
+        O->SetNumberField(TEXT("human_face_channels"),HumanFaceMorphs.Num());
+        if (const auto* Names=HumanFaceMorphs.Find(TEXT("JawOpen")); Names && Names->Num())
+            O->SetNumberField(TEXT("human_jaw_morph_weight"),GetMesh()->GetMorphTarget((*Names)[0]));
         O->SetStringField(TEXT("controlled_role"),TEXT("human_needing_assistance"));
     }
     O->SetArrayField(TEXT("player_cm"),Values(GetActorLocation()));O->SetArrayField(TEXT("velocity_cm_s"),Values(GetVelocity()));
