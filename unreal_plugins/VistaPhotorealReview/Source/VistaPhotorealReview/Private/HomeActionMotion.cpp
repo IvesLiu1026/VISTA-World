@@ -348,9 +348,14 @@ void AHomeActionsCharacter::UpdateSemanticAction(float Dt)
         }
         else if (A==TEXT("sit_down"))
         {
-            SeatedAlpha=Ease(ActionTime/1.35f);FingerAlpha=0;ReachAlpha=1-Ease(ActionTime/1.35f);
+            // Let go of the cushion as the turn starts; holding it through a
+            // half turn wrapped the arm around the body.
+            SeatedAlpha=Ease(ActionTime/1.35f);FingerAlpha=0;ReachAlpha=1-Ease(ActionTime/.45f);
             const float Facing=Number(E->Spec,TEXT("facing"));
-            const float Yaw=ActorBefore.Rotator().Yaw+FMath::FindDeltaAngleDegrees(ActorBefore.Rotator().Yaw,Facing)*Ease(ActionTime/.9f);
+            // Turn from where the seat touch left the body; the pre-action
+            // heading snapped it back 13 degrees when this stage began.
+            const float From=ActionBodyStart.Rotator().Yaw;
+            const float Yaw=From+FMath::FindDeltaAngleDegrees(From,Facing)*Ease(ActionTime/.9f);
             if (Controller) Controller->SetControlRotation(FRotator(-12,Yaw,0));
             SetActorRotation(FRotator(0,Yaw,0));
         }
@@ -415,6 +420,8 @@ void AHomeActionsCharacter::UpdateSemanticAction(float Dt)
         return;
     }
     if (A==TEXT("unequip")) {ReachAlpha=FingerAlpha=1;LeftReachAlpha=LeftFingerAlpha=0;FinishAction(true,TEXT("EQUIPMENT_REMOVED"));return;}
-    ReachAlpha=1-Ease(ActionTime/.6f);FingerAlpha*=1-Ease(ActionTime/.4f);
+    // Never re-extend a hand the motion stage already withdrew (sit_down
+    // lets go of the cushion early; restarting at 1 popped the arm back).
+    ReachAlpha=FMath::Min(ReachAlpha,1-Ease(ActionTime/.6f));FingerAlpha*=1-Ease(ActionTime/.4f);
     if (ActionTime>.65f) FinishAction(true,TEXT("ACTION_COMPLETE"));
 }

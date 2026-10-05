@@ -190,6 +190,8 @@ protected:
     virtual void OnPoseFinalized();
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) {}
     virtual float ReachTorsoLeanScale() const { return 1.f; }
+    // Final say over the reach crouch depth (cm) and torso lean (rad).
+    virtual void AdjustReachPosture(float& Low,float& Lean) const {}
     virtual void ModifyBaseBodyPose(TArray<FTransform>& LocalPose) {}
     virtual bool WantsFirstPersonReadyPose() const { return true; }
     virtual bool PreserveUnoccupiedArmPose() const { return false; }

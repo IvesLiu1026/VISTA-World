@@ -282,6 +282,22 @@ FVector AHomeActionsCharacter::ArmElbowHint(bool bRight,float& Weight) const
     return PhoneElbowHint;
 }
 
+void AHomeActionsCharacter::AdjustReachPosture(float& Low,float& Lean) const
+{
+    // Touching a seat before sitting is a hip hinge. The generic low-reach
+    // squat put the pelvis 17 cm below the seat height, so the body had to
+    // climb out of a deep squat to sit down.
+    // A third less crouch with a deeper bow keeps the pelvis near the seat
+    // height and the cushion within reach (half the crouch could not reach
+    // the office chair's cushion from the approach stance).
+    if (ActiveId.IsEmpty() || ActionId!=TEXT("sit_down")) return;
+    Low*=.62f;
+    Lean=FMath::Max(Lean,.75f*ReachAlpha);
+    // Stay bent while turning onto the seat; releasing the crouch with the
+    // hand lifted the pelvis 22 cm before it came back down onto the seat.
+    if (ActionStage>=1) Low=FMath::Max(Low,16.f*(1.f-SeatedAlpha));
+}
+
 bool AHomeActionsCharacter::FindPlacement(FVector& Location,FQuat& Rotation) const
 {
     const auto* E=Resolve(HeldId);

@@ -172,7 +172,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     const float Stride=FMath::Sin(StepClock*2.f*PI);
     const FVector Goal=LastHandGoal.GetLocation();
     const float GoalHeight=Goal.Z-(GetActorLocation().Z-GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
-    const float Low=FMath::Max(FMath::Clamp((110.f-GoalHeight)*.68f,0.f,65.f)*ReachAlpha, CrouchAlpha*38.f);
+    float Low=FMath::Max(FMath::Clamp((110.f-GoalHeight)*.68f,0.f,65.f)*ReachAlpha, CrouchAlpha*38.f);
     const float Distance=FVector::Dist2D(GetActorLocation(),Goal);
     float Bend=FMath::Clamp((Distance-23.f)/55.f,.05f,1.f)*ReachAlpha;
     if (Phase==EEmbodiedPhase::Held || Phase==EEmbodiedPhase::Retracting)
@@ -195,6 +195,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         Lean+=FMath::Clamp((-Pitch-55.f)/34.f,0.f,1.f)*PassiveLookLean*(1.f-ReachAlpha);
     }
     Lean*=ReachTorsoLeanScale();
+    AdjustReachPosture(Low,Lean);
     const int32 Pelvis=Index(TEXT("pelvis"));
     TArray<FTransform> Global;Global.SetNum(Local.Num());
     for (int32 I=0;I<Local.Num();++I) Global[I]=Parents[I]>=0 ? Local[I]*Global[Parents[I]] : Local[I];
@@ -251,8 +252,10 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     // whole lean at one lumbar joint read as a broken back on low reaches.
     // The hinge is used only while foot IK re-solves the legs afterwards.
     const bool LegsSolved=((bFeetReady && UsesGroundFootIK()) || bSceneFeetOverride) && FallAlpha<.05f;
-    // Seated: a slight recline instead of a rigid upright torso.
-    const float Bow=-Lean*(1-FallAlpha)+.12f*SeatedAlpha*(1-FallAlpha);
+    // Seated: a slight recline instead of a rigid upright torso. Sitting
+    // down and standing up lean forward mid-way, over the feet, instead of
+    // the upright torso sliding straight down onto (or up off) the seat.
+    const float Bow=-Lean*(1-FallAlpha)+(.12f*SeatedAlpha-.5f*FMath::Sin(PI*SeatedAlpha))*(1-FallAlpha);
     const float HipShare=LegsSolved?.32f*(1.f-SeatedAlpha):0.f;
     if (Global.IsValidIndex(Pelvis) && HipShare>0.f && FMath::Abs(Bow)>1.e-4f)
         RotateBranch(Global,Parents,Pelvis,FQuat(FVector::ForwardVector,Bow*HipShare)*Global[Pelvis].GetRotation());
@@ -340,9 +343,13 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         const int32 U=Index(RightHand?TEXT("upperarm_r"):TEXT("upperarm_l"));
         const int32 L=Index(RightHand?TEXT("lowerarm_r"):TEXT("lowerarm_l"));
         const int32 E=Index(RightHand?TEXT("hand_r"):TEXT("hand_l"));
+        // Seated with a free hand: rest it on the thigh. The standing arm
+        // otherwise hung straight down beside the seat with the hand planted
+        // on the cushion.
+        const float SeatRest=SeatedAlpha*SeatedAlpha*(3.f-2.f*SeatedAlpha)*(1.f-(RightHand?ReachAlpha:LeftReachAlpha))*(1.f-FallAlpha);
         // An inactive arm already has a calibrated animation. Re-solving its
         // wrist against a fixed elbow pole destroys the recorded elbow plane.
-        if (PreserveUnoccupiedArmPose() && RestBlend<=0.f &&
+        if (PreserveUnoccupiedArmPose() && RestBlend<=0.f && SeatRest<=0.f &&
             (RightHand?ReachAlpha:LeftReachAlpha)<=0.f) {bArmBendReady[Side]=false;continue;}
         FVector Target=Global[E].GetLocation();
         const float Swing=FMath::Sin(StepClock*2.f*PI)*(RightHand?-1.f:1.f)*FMath::Min(Speed/125.f,1.f)*6.f*ProceduralGaitWeight();
@@ -368,6 +375,42 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             Target=FMath::Lerp(Target,Ready,RestBlend);
             Rotation=FQuat::Slerp(Rotation,ReadyRotation,RestBlend);
         }
+        const int32 Thigh=Index(RightHand?TEXT("thigh_r"):TEXT("thigh_l")),Calf=Index(RightHand?TEXT("calf_r"):TEXT("calf_l"));
+        if (SeatRest>0.f && Global.IsValidIndex(Thigh) && Global.IsValidIndex(Calf))
+        {
+            // Palm on the top of the thigh a little past its middle, fingers
+            // along it and slightly inward; the thigh is about 6 cm thick
+            // above the bone. The elbow keeps the anatomical guide below.
+            const float Sign=RightHand?-1.f:1.f;
+            const FVector Hip=Global[Thigh].GetLocation(),Knee=Global[Calf].GetLocation();
+            const FVector Along=(Knee-Hip).GetSafeNormal();
+            const FQuat Facing=Global[Pelvis].GetRotation()*ReferenceGlobal[Pelvis].GetRotation().Inverse();
+            const FVector Lateral=(Facing.RotateVector(FVector(Sign,0,0))-Along*FVector::DotProduct(Facing.RotateVector(FVector(Sign,0,0)),Along)).GetSafeNormal();
+            const FVector Top=FVector::CrossProduct(Along,Lateral).GetSafeNormal()*(FVector::DotProduct(FVector::CrossProduct(Along,Lateral),FVector::UpVector)<0?-1.f:1.f);
+            // Along the thigh, pick the rest point that leaves the elbow bent
+            // about 55 degrees: a high seat slopes the thigh down and a fixed
+            // point straightened the arm.
+            const double UpperLength=FVector::Distance(Global[U].GetLocation(),Global[L].GetLocation());
+            const double LowerLength=FVector::Distance(Global[L].GetLocation(),Global[E].GetLocation());
+            const double Relaxed=FMath::Sqrt(UpperLength*UpperLength+LowerLength*LowerLength+2.*UpperLength*LowerLength*FMath::Cos(FMath::DegreesToRadians(55.)));
+            float Along01=.36f;double Best=TNumericLimits<double>::Max();
+            for (float F=.18f;F<=.52f;F+=.02f)
+            {
+                const double Cost=FMath::Square(FVector::Distance(Hip+(Knee-Hip)*F+Top*8.f+Lateral*1.5f,Global[U].GetLocation())-Relaxed)+400.*FMath::Square(F-.36f);
+                if (Cost<Best) {Best=Cost;Along01=F;}
+            }
+            const FVector Rest=Hip+(Knee-Hip)*Along01+Top*8.f+Lateral*1.5f;
+            const int32 Middle=Index(RightHand?TEXT("middle_01_r"):TEXT("middle_01_l"));
+            const int32 FingerIndex=Index(RightHand?TEXT("index_01_r"):TEXT("index_01_l"));
+            const int32 Pinky=Index(RightHand?TEXT("pinky_01_r"):TEXT("pinky_01_l"));
+            const FVector Long=(Global[Middle].GetLocation()-Global[E].GetLocation()).GetSafeNormal();
+            const FVector Across=Global[FingerIndex].GetLocation()-Global[Pinky].GetLocation();
+            const FQuat From=FRotationMatrix::MakeFromXY(Long,Across).ToQuat();
+            const FVector Fingers=(Along-Lateral*.2f-Top*.18f).GetSafeNormal();
+            const FQuat To=FRotationMatrix::MakeFromXY(Fingers,-Lateral).ToQuat();
+            Target=FMath::Lerp(Target,Rest,SeatRest);
+            Rotation=FQuat::Slerp(Rotation,(To*From.Inverse()*Rotation).GetNormalized(),SeatRest);
+        }
         if (RightHand && ReachAlpha>0.f)
         {
             const FTransform CS=LastHandGoal.GetRelativeTransform(MeshWorld);
@@ -391,7 +434,7 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         // reach weight. A fixed mesh-space pole abruptly replaced that plane.
         FVector Recorded=Project(Global[L].GetLocation()-Shoulder).GetSafeNormal();
         if (Recorded.IsNearlyZero()) Recorded=Anatomical;
-        const float Active=FMath::Max(RestBlend,RightHand?ReachAlpha:LeftReachAlpha);
+        const float Active=FMath::Max(FMath::Max(RestBlend,SeatRest),RightHand?ReachAlpha:LeftReachAlpha);
         if (Active<=0.f) bArmBendReady[Side]=false;
         const float Ease=Active*Active*(3.f-2.f*Active);
         const FQuat Guide=FQuat::FindBetweenNormals(Recorded,Anatomical);
