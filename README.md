@@ -41,6 +41,15 @@ PYTHONPATH=tools uv run python tools/worlds/playable_home.py validate \
   --events-dir world_packs/vista_playable_home_r1/events
 ```
 
+Run every test (pytest also runs the `unittest` cases):
+
+```bash
+uv run pytest
+```
+
+Tests that only pass on the original research host run as strict xfails;
+see [`tools/tests/known_failures.json`](tools/tests/known_failures.json).
+
 Compile a deterministic build plan:
 
 ```bash
