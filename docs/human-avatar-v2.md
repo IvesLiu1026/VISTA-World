@@ -94,7 +94,16 @@ and `BrowOuterUp*`, `MouthSmile*`) and writes `appearance.json` and
   Pinch grips put the thumb toward the right-and-near side: choosing only by the
   right vector left the sign to noise for items lying along the facing
   direction, and fingers pointing back at the body twisted the wrist up to 174
-  degrees.
+  degrees. The hinge applies only while taking, lifting or putting down an
+  item; articulated handles (the washer door at 42 cm) keep the deeper crouch
+  that follows their arc.
+- **Elbow swivel and dangling carry.** The swivel search also scores the twist
+  the wrist would keep after the forearm's 88-degree share; near 180 degrees
+  the forearm used to flip sides between frames. Items gripped from above off
+  the floor (hand pointing down, e.g. the slipper) are carried at the side with
+  the arm hanging instead of in front of the chest, where the elbow went up and
+  out (slipper wrist twist 172-174 degrees, now 31-38), and the crouch fades out
+  while the item leaves the floor.
 
 ## Review tooling
 
