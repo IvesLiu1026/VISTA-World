@@ -99,6 +99,25 @@ FVector ArmJoint(const FVector& A,const FVector& Target,double L1,double L2,FVec
     return A+N*Along+Bend*FMath::Sqrt(FMath::Max(0.,L1*L1-Along*Along));
 }
 
+// Twist about the forearm (degrees, -180..180) that the hand rotation needs
+// for this elbow, measured as SolveArm measures it before sharing it between
+// forearm and wrist.
+double ForearmTwist(const TArray<FTransform>& Reference,int32 Upper,int32 Lower,int32 End,
+                    const FVector& Shoulder,const FVector& Joint,const FVector& Reached,const FQuat& EndRotation)
+{
+    const FVector A0=Reference[Upper].GetLocation(),B0=Reference[Lower].GetLocation(),C0=Reference[End].GetLocation();
+    const FVector F0=(C0-B0).GetSafeNormal(),H0=FVector::CrossProduct((B0-A0).GetSafeNormal(),F0).GetSafeNormal();
+    const FVector U=(Joint-Shoulder).GetSafeNormal(),F=(Reached-Joint).GetSafeNormal();
+    FVector H=FVector::CrossProduct(U,F);
+    if (H0.IsNearlyZero() || !H.Normalize()) return 0.;
+    const FQuat RL=Reference[Lower].GetRotation(),RE=Reference[End].GetRotation();
+    const FQuat QL=(FRotationMatrix::MakeFromXY(F,H).ToQuat()*FRotationMatrix::MakeFromXY(RL.UnrotateVector(F0),RL.UnrotateVector(H0)).ToQuat().Inverse()).GetNormalized();
+    FQuat Delta=(EndRotation*(QL*(RL.Inverse()*RE)).Inverse()).GetNormalized();
+    if (Delta.W<0) Delta=-Delta;
+    const double P=FVector::DotProduct(FVector(Delta.X,Delta.Y,Delta.Z),F),Norm=FMath::Sqrt(P*P+Delta.W*Delta.W);
+    return Norm>1.e-5?FMath::RadiansToDegrees(2*FMath::Atan2(P/Norm,Delta.W/Norm)):0.;
+}
+
 // Two-bone arm IK whose twists follow the elbow hinge. Plain swing-only IK left
 // the upper arm's roll from the base pose, so a changed elbow plane bent the
 // forearm sideways and twisted the skin ("broken elbow"). Here the upper arm
@@ -483,7 +502,13 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
                 const double Height=FVector::DotProduct(J-SpineA,SpineAxis);
                 const double Radial=(J-SpineA-SpineAxis*Height).Size();
                 const double Inside=(Height>-8. && Height<FVector::Distance(SpineA,SpineB)+4.)?FMath::Max(0.,17.-Radial):0.;
-                const double Cost=FMath::Square(FMath::Max(0.,Wrist-40.))+60.*FMath::Square(Inside)+.6*FMath::Abs(Degrees);
+                // The forearm takes up to 88 deg of the hand's twist; beyond
+                // that the wrist would twist, and near 180 the forearm flips
+                // sides between frames (a floor slipper spun the wrist 174 deg).
+                const double Twist=ForearmTwist(ReferenceGlobal,U,L,E,Shoulder,J,Reached,Rotation);
+                const double Remainder=FMath::Abs(Twist-FMath::Clamp(Twist*.75,-88.,88.));
+                const double Cost=FMath::Square(FMath::Max(0.,Wrist-40.))+60.*FMath::Square(Inside)+.6*FMath::Abs(Degrees)+
+                    1.5*FMath::Square(FMath::Max(0.,Remainder-45.));
                 if (Cost<Best) {Best=Cost;Chosen=Candidate;}
             }
             BendDirection=FQuat::Slerp(FQuat::Identity,FQuat::FindBetweenNormals(BendDirection,Chosen),Ease).RotateVector(BendDirection);

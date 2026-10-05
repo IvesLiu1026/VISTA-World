@@ -167,6 +167,7 @@ private:
     void UpdatePhoneElbow(float Dt);
     virtual FVector ArmElbowHint(bool bRight,float& Weight) const override;
     virtual void AdjustReachPosture(float& Low,float& Lean) const override;
+    bool DanglingCarry() const;
     UPROPERTY() TObjectPtr<UAudioComponent> HumanVoice;
     UPROPERTY() TObjectPtr<USoundWaveProcedural> HumanWave;
     TArray<float> HumanMouth;

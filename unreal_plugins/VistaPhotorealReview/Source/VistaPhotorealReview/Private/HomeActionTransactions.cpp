@@ -76,6 +76,18 @@ FVector AHomeActionsCharacter::PickupAimPoint() const
     return E && E->ShortId!=TEXT("coffee_cup")?ControlPoint(*E):Super::PickupAimPoint();
 }
 
+bool AHomeActionsCharacter::DanglingCarry() const
+{
+    // The held hand points down when its grip came from above a flat item on
+    // the floor (two-handed items and the phone have their own carry).
+    const auto* E=Resolve(HeldId.IsEmpty()?TargetId:HeldId);
+    if (!E || Bool(E->Spec,TEXT("two_hands")) || E->ShortId==TEXT("phone")) return false;
+    const int32 Hand=BoneIndex.FindChecked(TEXT("hand_r")),Middle=BoneIndex.FindChecked(TEXT("middle_01_r"));
+    const FVector Axis=(GetActorQuat()*HoldRelativeRotation*HandRelativeToCup.GetRotation()).RotateVector(
+        ReferenceGlobal[Hand].GetRotation().UnrotateVector((ReferenceGlobal[Middle].GetLocation()-ReferenceGlobal[Hand].GetLocation()).GetSafeNormal()));
+    return FVector::DotProduct(Axis,-GetActorUpVector())>.6f;
+}
+
 FTransform AHomeActionsCharacter::CarryTarget() const
 {
     const auto* E=Resolve(HeldId.IsEmpty()?TargetId:HeldId);
@@ -83,6 +95,15 @@ FTransform AHomeActionsCharacter::CarryTarget() const
     const float H=E?Number(E->Spec,TEXT("grip_height"),6.2):6.2;
     FTransform Carry(GetActorQuat()*HoldRelativeRotation,
         GetActorLocation()+GetActorQuat().RotateVector(FVector(Two?38:32,Two?0:18,26-H)));
+    if (DanglingCarry())
+    {
+        // A hand that took a flat item off the floor points down. Held in
+        // front of the chest that forced the elbow up and out and spun the
+        // forearm; carry it at the side with the arm hanging, as people carry
+        // a slipper.
+        const FVector Wrist=GetActorLocation()+GetActorQuat().RotateVector(FVector(4,18,-10));
+        Carry.SetLocation(Wrist-Carry.GetRotation().RotateVector(HandRelativeToCup.GetLocation()));
+    }
     if (E && E->ShortId==TEXT("phone") && PhoneBlend>0)
     {
         // Keep the same physical grip/IK authority. Lift the held handset using
@@ -289,13 +310,27 @@ void AHomeActionsCharacter::AdjustReachPosture(float& Low,float& Lean) const
     // keys on the coffee table, with the forearm level and the wrist folded
     // 128 degrees onto them; pelvis 14 cm for a slipper on the floor. The
     // floor keeps a deeper crouch (a 48 cm cap left the hand short).
-    if (ReachAlpha>0.f && (ActiveId.IsEmpty() || ActionId!=TEXT("sit_down")))
+    // Only while taking, lifting or putting down an item: articulated handles
+    // (the washer door at 42 cm) need the deeper crouch to follow their arc.
+    // Held keeps the posture continuous while the item leaves a low table.
+    const bool ItemReach=Phase==EEmbodiedPhase::Reaching || Phase==EEmbodiedPhase::Closing ||
+        Phase==EEmbodiedPhase::Held || Phase==EEmbodiedPhase::Placing || Phase==EEmbodiedPhase::Releasing;
+    if (ReachAlpha>0.f && ItemReach)
     {
         const float GoalHeight=LastHandGoal.GetLocation().Z-(GetActorLocation().Z-GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
         const float Floor=FMath::Clamp((40.f-GoalHeight)/25.f,0.f,1.f)*ReachAlpha;
         const float Table=FMath::Clamp((85.f-GoalHeight)/30.f,0.f,1.f)*ReachAlpha*(1.f-Floor);
         if (Table>0.f) {Low*=1.f-.38f*Table;Lean=FMath::Max(Lean,.75f*Table);}
         if (Floor>0.f) {Low=FMath::Lerp(Low,FMath::Min(Low,56.f),Floor);Lean=FMath::Max(Lean,.95f*Floor);}
+    }
+    // Holding a dangling item at the side is not a reach: the crouch and bow
+    // fade out while it leaves the floor (the hip-height hand would otherwise
+    // keep the body crouched).
+    if (Phase==EEmbodiedPhase::Held && DanglingCarry())
+    {
+        const float Stand=FMath::SmoothStep(.25f,.95f,PhaseTime);
+        Low*=1.f-Stand;Lean*=1.f-Stand;
+        return;
     }
     // Touching a seat before sitting is a hip hinge. The generic low-reach
     // squat put the pelvis 17 cm below the seat height, so the body had to
