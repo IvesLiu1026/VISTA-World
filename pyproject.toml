@@ -8,5 +8,22 @@ dependencies = [
   "numpy>=2.0,<3",
 ]
 
+[dependency-groups]
+dev = [
+  "pytest>=9.1,<10",
+]
+# Same pins as tools/runtime/vista_web/requirements.txt (the live browser stream).
+web = [
+  "aiohttp==3.14.3",
+  "aiortc==1.15.0",
+  "python-xlib==0.33",
+]
+
 [tool.uv]
 package = false
+default-groups = ["dev", "web"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "tools"]
+testpaths = ["tools"]
+addopts = "-p no:cacheprovider"
