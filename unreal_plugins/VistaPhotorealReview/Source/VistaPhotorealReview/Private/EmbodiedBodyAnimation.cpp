@@ -87,6 +87,57 @@ void SolveLimb(TArray<FTransform>& Global, const TArray<int32>& Parents,
     }
     RotateBranch(Global,Parents,End,EndRotation);
 }
+// Elbow position on the two-bone IK circle for a given bend direction.
+FVector ArmJoint(const FVector& A,const FVector& Target,double L1,double L2,FVector Bend,FVector& Reached)
+{
+    const FVector N=(Target-A).GetSafeNormal(SMALL_NUMBER,FVector::DownVector);
+    const double D=FMath::Clamp(FVector::Distance(Target,A),FMath::Abs(L1-L2)+.01,L1+L2-.04);
+    Reached=A+N*D;
+    Bend-=N*FVector::DotProduct(Bend,N);
+    if (!Bend.Normalize()) Bend=FVector::CrossProduct(N,FVector::RightVector).GetSafeNormal();
+    const double Along=(L1*L1-L2*L2+D*D)/(2*D);
+    return A+N*Along+Bend*FMath::Sqrt(FMath::Max(0.,L1*L1-Along*Along));
+}
+
+// Two-bone arm IK whose twists follow the elbow hinge. Plain swing-only IK left
+// the upper arm's roll from the base pose, so a changed elbow plane bent the
+// forearm sideways and twisted the skin ("broken elbow"). Here the upper arm
+// rolls so the elbow flexes in its anatomical plane, the forearm takes most of
+// the pronation the hand needs and the wrist the remainder. Joint positions and
+// the final hand transform are identical to SolveLimb, so contacts are unchanged.
+bool SolveArm(TArray<FTransform>& Global,const TArray<int32>& Parents,const TArray<FTransform>& Reference,
+              int32 Upper,int32 Lower,int32 End,const FVector& Target,const FVector& BendDirection,
+              const FQuat& EndRotation,float PronationShare)
+{
+    if (!Global.IsValidIndex(Upper) || !Global.IsValidIndex(Lower) || !Global.IsValidIndex(End)) return false;
+    const FVector A=Global[Upper].GetLocation();
+    const double L1=FVector::Distance(A,Global[Lower].GetLocation()),L2=FVector::Distance(Global[Lower].GetLocation(),Global[End].GetLocation());
+    if (L1<.1 || L2<.1) return false;
+    FVector Reached;const FVector Joint=ArmJoint(A,Target,L1,L2,BendDirection,Reached);
+    const FVector A0=Reference[Upper].GetLocation(),B0=Reference[Lower].GetLocation(),C0=Reference[End].GetLocation();
+    const FVector U0=(B0-A0).GetSafeNormal(),F0=(C0-B0).GetSafeNormal(),H0=FVector::CrossProduct(U0,F0).GetSafeNormal();
+    if (H0.IsNearlyZero()) return false;
+    const FQuat RU=Reference[Upper].GetRotation(),RL=Reference[Lower].GetRotation(),RE=Reference[End].GetRotation();
+    const FVector U=(Joint-A).GetSafeNormal(),F=(Reached-Joint).GetSafeNormal();
+    FVector H=FVector::CrossProduct(U,F);
+    if (H.SizeSquared()<1.e-6) H=FVector::CrossProduct(BendDirection-U*FVector::DotProduct(BendDirection,U),U);
+    if (!H.Normalize()) return false;
+    const auto Frame=[](const FVector& X,const FVector& Y) {return FRotationMatrix::MakeFromXY(X,Y).ToQuat();};
+    const FQuat QU=(Frame(U,H)*Frame(RU.UnrotateVector(U0),RU.UnrotateVector(H0)).Inverse()).GetNormalized();
+    FQuat QL=(Frame(F,H)*Frame(RL.UnrotateVector(F0),RL.UnrotateVector(H0)).Inverse()).GetNormalized();
+    FQuat Delta=(EndRotation*(QL*(RL.Inverse()*RE)).Inverse()).GetNormalized();
+    if (Delta.W<0) Delta=-Delta;
+    const double P=FVector::DotProduct(FVector(Delta.X,Delta.Y,Delta.Z),F),Norm=FMath::Sqrt(P*P+Delta.W*Delta.W);
+    if (Norm>1.e-5)
+    {
+        const double Limit=FMath::DegreesToRadians(88.);
+        QL=(FQuat(F,FMath::Clamp(2*FMath::Atan2(P/Norm,Delta.W/Norm)*PronationShare,-Limit,Limit))*QL).GetNormalized();
+    }
+    RotateBranch(Global,Parents,Upper,QU);
+    RotateBranch(Global,Parents,Lower,QL);
+    RotateBranch(Global,Parents,End,EndRotation);
+    return true;
+}
 }
 
 FAnimInstanceProxy* UEmbodiedBodyAnimInstance::CreateAnimInstanceProxy() { return new FEmbodiedBodyProxy(this); }
@@ -196,9 +247,24 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
     if (Global.IsValidIndex(Pelvis) && FallAlpha>0.f)
         RotateBranch(Global,Parents,Pelvis,FQuat(FVector::ForwardVector,-FallAlpha*PI*.445f)*Global[Pelvis].GetRotation());
     const int32 Spine=Index(TEXT("spine_01"));
+    // A forward reach is a hip hinge plus a spread spinal curve. Folding the
+    // whole lean at one lumbar joint read as a broken back on low reaches.
+    // The hinge is used only while foot IK re-solves the legs afterwards.
+    const bool LegsSolved=((bFeetReady && UsesGroundFootIK()) || bSceneFeetOverride) && FallAlpha<.05f;
+    // Seated: a slight recline instead of a rigid upright torso.
+    const float Bow=-Lean*(1-FallAlpha)+.12f*SeatedAlpha*(1-FallAlpha);
+    const float HipShare=LegsSolved?.32f*(1.f-SeatedAlpha):0.f;
+    if (Global.IsValidIndex(Pelvis) && HipShare>0.f && FMath::Abs(Bow)>1.e-4f)
+        RotateBranch(Global,Parents,Pelvis,FQuat(FVector::ForwardVector,Bow*HipShare)*Global[Pelvis].GetRotation());
     if (Global.IsValidIndex(Spine)) RotateBranch(Global,Parents,Spine,
         FQuat(FVector::UpVector,Stride*Walking*Unoccupied*.04f+FMath::Sin(Clock*.61f)*Quiet*.003f)*
-        FQuat(FVector::ForwardVector,-Lean*(1-FallAlpha)+.003f*FMath::Sin(Clock*1.4f)*(1-FallAlpha))*Global[Spine].GetRotation());
+        FQuat(FVector::ForwardVector,Bow*(1-HipShare)*.45f+.003f*FMath::Sin(Clock*1.4f)*(1-FallAlpha))*Global[Spine].GetRotation());
+    for (const auto& Part:{TPair<const TCHAR*,float>(TEXT("spine_02"),.32f),TPair<const TCHAR*,float>(TEXT("spine_03"),.23f)})
+    {
+        const int32 J=Index(Part.Key);
+        if (Global.IsValidIndex(J) && FMath::Abs(Bow)>1.e-4f)
+            RotateBranch(Global,Parents,J,FQuat(FVector::ForwardVector,Bow*(1-HipShare)*Part.Value)*Global[J].GetRotation());
+    }
     for (int32 Side=0;Side<2;++Side)
     {
         const TCHAR* Upper=Side==0?TEXT("thigh_l"):TEXT("thigh_r");
@@ -207,8 +273,26 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         const int32 U=Index(Upper), L=Index(Lower), E=Index(End);
         if (((bFeetReady && UsesGroundFootIK()) || bSceneFeetOverride) && Global.IsValidIndex(E) && FallAlpha<.05f)
         {
-            const FVector Target=MeshWorld.InverseTransformPosition(bSceneFeetOverride?SceneFootWorld[Side]:Feet[Side].Current);
-            const float Yaw=bSceneFeetOverride?GetActorRotation().Yaw:Feet[Side].Yaw;
+            FVector FootWorld=bSceneFeetOverride?SceneFootWorld[Side]:Feet[Side].Current;
+            float Yaw=bSceneFeetOverride?GetActorRotation().Yaw:Feet[Side].Yaw;
+            if (SeatedAlpha>0.f && !bSceneFeetOverride)
+            {
+                // Seated feet go under the knees. Leaving them at the standing
+                // stance straightened the legs into a slide off the seat front.
+                const FVector Hip=MeshWorld.TransformPosition(Global[U].GetLocation());
+                const float Thigh=FVector::Distance(Global[U].GetLocation(),Global[L].GetLocation());
+                const float Shank=FVector::Distance(Global[L].GetLocation(),Global[E].GetLocation());
+                const float AnkleZ=Feet[Side].Current.Z;
+                const float Drop=FMath::Clamp(float(SeatPelvisWorld.Z-AnkleZ)-Shank,-Thigh*.6f,Thigh*.8f);
+                const FVector Forward=GetActorForwardVector();
+                FVector Lateral=Hip-SeatPelvisWorld;Lateral.Z=0;Lateral-=Forward*FVector::DotProduct(Lateral,Forward);
+                FVector Seated=SeatPelvisWorld+Forward*(FMath::Sqrt(FMath::Max(Thigh*Thigh-Drop*Drop,1.f))+4.f)+Lateral*1.3f;
+                Seated.Z=AnkleZ;
+                const float Settle=SeatedAlpha*SeatedAlpha*(3.f-2.f*SeatedAlpha);
+                FootWorld=FMath::Lerp(FootWorld,Seated,Settle);
+                Yaw+=FMath::FindDeltaAngleDegrees(Yaw,GetActorRotation().Yaw)*Settle;
+            }
+            const FVector Target=MeshWorld.InverseTransformPosition(FootWorld);
             const FQuat YawDelta=MeshWorld.GetRotation().Inverse()*FRotator(0,Yaw,0).Quaternion()*FRotator(0,-90,0).Quaternion();
             const FVector RollAxis=MeshWorld.GetRotation().Inverse().RotateVector(
                 FRotator(0,Yaw,0).Quaternion().RotateVector(FVector::RightVector));
@@ -231,6 +315,23 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
                 Pole=Hip+KneeBend.GetSafeNormal()*55.f;
             }
             SolveLimb(Global,Parents,U,L,E,Target,Pole,EndRotation);
+            // Deep crouches raise the heel instead of folding the ankle past
+            // human dorsiflexion. The ball of the foot stays where it was.
+            const int32 B=Index(Side==0?TEXT("ball_l"):TEXT("ball_r"));
+            if (Global.IsValidIndex(B))
+            {
+                const FVector Knee=Global[L].GetLocation(),Ankle=Global[E].GetLocation(),Ball=Global[B].GetLocation();
+                const double AnkleAngle=FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(
+                    FVector::DotProduct((Knee-Ankle).GetSafeNormal(),(Ball-Ankle).GetSafeNormal()),-1.,1.)));
+                const double Excess=FMath::Min(62.-AnkleAngle,40.);
+                const FVector Axis=FVector::CrossProduct(Ball-Ankle,FVector::UpVector).GetSafeNormal();
+                if (Excess>0. && !Axis.IsNearlyZero())
+                {
+                    FQuat Lift(Axis,FMath::DegreesToRadians(Excess));
+                    if (Lift.RotateVector(Ankle-Ball).Z<(Ankle-Ball).Z) Lift=Lift.Inverse();
+                    SolveLimb(Global,Parents,U,L,E,Ball+Lift.RotateVector(Ankle-Ball),Pole,(Lift*Global[E].GetRotation()).GetNormalized());
+                }
+            }
         }
     }
     for (int32 Side=0;Side<2;++Side)
@@ -307,6 +408,30 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             if (!PalmBend.IsNearlyZero())
                 BendDirection=FQuat::Slerp(FQuat::Identity,FQuat::FindBetweenNormals(BendDirection,PalmBend),.85f*Ease).RotateVector(BendDirection);
         }
+        if (Active>0.f && Global.IsValidIndex(Middle))
+        {
+            // Choose the elbow swivel near the anatomical guide that keeps the
+            // wrist within its range and the elbow outside the torso. Candidate
+            // planes rotate about the shoulder-to-hand line; positions are exact.
+            const int32 Neck=Index(TEXT("neck_01")),SpineRoot=Index(TEXT("spine_01"));
+            const double L1=FVector::Distance(Shoulder,Global[L].GetLocation()),L2=FVector::Distance(Global[L].GetLocation(),Global[E].GetLocation());
+            const FVector HandAxis=Rotation.RotateVector(ReferenceGlobal[E].GetRotation().UnrotateVector(
+                (ReferenceGlobal[Middle].GetLocation()-ReferenceGlobal[E].GetLocation()).GetSafeNormal()));
+            const FVector SpineA=Global[SpineRoot].GetLocation(),SpineB=Global[Neck].GetLocation(),SpineAxis=(SpineB-SpineA).GetSafeNormal();
+            double Best=TNumericLimits<double>::Max();FVector Chosen=BendDirection;
+            for (const double Degrees:{0.,-20.,20.,-40.,40.,-60.,60.})
+            {
+                const FVector Candidate=FQuat(Direction,FMath::DegreesToRadians(Degrees)).RotateVector(BendDirection);
+                FVector Reached;const FVector J=ArmJoint(Shoulder,Target,L1,L2,Candidate,Reached);
+                const double Wrist=FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct((Reached-J).GetSafeNormal(),HandAxis),-1.,1.)));
+                const double Height=FVector::DotProduct(J-SpineA,SpineAxis);
+                const double Radial=(J-SpineA-SpineAxis*Height).Size();
+                const double Inside=(Height>-8. && Height<FVector::Distance(SpineA,SpineB)+4.)?FMath::Max(0.,17.-Radial):0.;
+                const double Cost=FMath::Square(FMath::Max(0.,Wrist-40.))+60.*FMath::Square(Inside)+.6*FMath::Abs(Degrees);
+                if (Cost<Best) {Best=Cost;Chosen=Candidate;}
+            }
+            BendDirection=FQuat::Slerp(FQuat::Identity,FQuat::FindBetweenNormals(BendDirection,Chosen),Ease).RotateVector(BendDirection);
+        }
         if (bArmBendReady[Side])
         {
             const FVector Previous=Project(Torso.RotateVector(ArmBendTorso[Side])).GetSafeNormal();
@@ -323,7 +448,8 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         }
         ArmBendTorso[Side]=Torso.Inverse().RotateVector(BendDirection);bArmBendReady[Side]=Active>0.f;
         const FVector Pole=Shoulder+BendDirection*40.f;
-        SolveLimb(Global,Parents,U,L,E,Target,Pole,Rotation,.7f*Ease);
+        if (!SolveArm(Global,Parents,ReferenceGlobal,U,L,E,Target,BendDirection,Rotation,.75f*Ease))
+            SolveLimb(Global,Parents,U,L,E,Target,Pole,Rotation,.7f*Ease);
     }
     // Hand-local joint poses are shared by both presentations. Arm reach is
     // solved separately, so a different cup location does not stretch fingers.
@@ -352,4 +478,30 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
         Local[I].NormalizeRotation();
     }
     RefineSceneBodyPose(Local);
+    LimitPoseRate(Local);
+}
+
+void AEmbodiedReviewCharacter::LimitPoseRate(TArray<FTransform>& Local)
+{
+    const float Dt=FMath::Clamp(GetWorld()->GetDeltaSeconds(),1.f/240.f,.1f);
+    const bool Teleport=!bPreviousPose || PreviousPose.Num()!=Local.Num() ||
+        FVector::Dist(PreviousPoseLocation,GetActorLocation())>60.f;
+    PreviousPoseLocation=GetActorLocation();
+    if (!Teleport)
+        for (int32 I=0;I<Local.Num();++I)
+        {
+            const FString Name=Poses->BoneNames[I].ToString();
+            const bool Finger=Name.StartsWith(TEXT("index_")) || Name.StartsWith(TEXT("middle_")) ||
+                Name.StartsWith(TEXT("ring_")) || Name.StartsWith(TEXT("pinky_")) || Name.StartsWith(TEXT("thumb_"));
+            // Fast human reaches stay below ~700 deg/s per joint; only single-
+            // frame snaps exceed this. Fingers close faster during a grasp.
+            const double MaxAngle=FMath::DegreesToRadians(Finger?1500.:720.)*Dt;
+            const FQuat From=PreviousPose[I].GetRotation(),To=Local[I].GetRotation();
+            const double Angle=From.AngularDistance(To);
+            if (Angle>MaxAngle) Local[I].SetRotation(FQuat::Slerp(From,To,MaxAngle/Angle).GetNormalized());
+            const FVector Move=Local[I].GetTranslation()-PreviousPose[I].GetTranslation();
+            const double MaxMove=300.*Dt;
+            if (Move.Size()>MaxMove) Local[I].SetTranslation(PreviousPose[I].GetTranslation()+Move.GetClampedToMaxSize(MaxMove));
+        }
+    PreviousPose=Local;bPreviousPose=true;
 }

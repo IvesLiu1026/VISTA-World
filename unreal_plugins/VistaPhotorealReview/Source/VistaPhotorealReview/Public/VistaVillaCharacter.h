@@ -63,7 +63,7 @@ protected:
     virtual void OnPoseFinalized() override;
     virtual bool WantsFirstPersonReadyPose() const override {return bVillaEmbodiment?false:Super::WantsFirstPersonReadyPose();}
     virtual bool PreserveUnoccupiedArmPose() const override {return bVillaEmbodiment?true:Super::PreserveUnoccupiedArmPose();}
-    virtual float UnoccupiedFingerCurl() const override {return bVillaEmbodiment?.16f:Super::UnoccupiedFingerCurl();}
+    virtual float UnoccupiedFingerCurl() const override {return bVillaEmbodiment?.30f:Super::UnoccupiedFingerCurl();}
     virtual void RefineSceneBodyPose(TArray<FTransform>& LocalPose) override;
     virtual void AdjustFirstPersonEyeTarget(FVector& EyeTarget) const override;
     virtual bool PreserveMotionFootRotation() const override {return !Motions.IsEmpty() && !bTurnFeet;}

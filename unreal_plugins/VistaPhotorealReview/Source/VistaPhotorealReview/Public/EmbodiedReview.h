@@ -202,6 +202,12 @@ protected:
     virtual FVector FirstPersonReadyOffset(float Sign,float Swing) const
     {return FVector(Sign*22.f,30.f+Swing*.18f,-10.f+.15f*FMath::Sin(Clock*1.4f+(Sign<0?.35f:0.f)));}
     virtual bool IsSceneContactReady(FString& Reason) const { return true; }
+    // Final-pose guard: per-bone angular/translation speed limits so state
+    // switches (cancel, rollback, view or posture changes) blend instead of pop.
+    void LimitPoseRate(TArray<FTransform>& Local);
+    TArray<FTransform> PreviousPose;
+    FVector PreviousPoseLocation=FVector::ZeroVector;
+    bool bPreviousPose=false;
 };
 
 UCLASS()
