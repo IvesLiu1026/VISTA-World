@@ -74,6 +74,19 @@ and `BrowOuterUp*`, `MouthSmile*`) and writes `appearance.json` and
   along its whole path, and the lift arcs in front of the chin; the straight
   chord had passed 10 cm from the shoulder (elbow 155 degrees).
 
+- **Seated hands and sitting (`EmbodiedBodyAnimation.cpp`,
+  `HomeActionMotion.cpp`).** Free hands rest on the top of the thighs at the
+  point that leaves the elbow bent about 55 degrees (the standing arm used to
+  hang beside the seat with the hand planted on the cushion). The seat touch
+  before sitting is a hip hinge (`AdjustReachPosture`) instead of the generic
+  low-reach squat that dropped the pelvis 17 cm below the seat height; the hand
+  lets go as the turn starts, the body stays bent through the turn, and both
+  sitting down and standing up lean forward mid-way. The turn now starts from
+  the heading the touch left (it snapped back 13 degrees), and the generic
+  completion stage never re-extends a hand the motion already withdrew (it had
+  swung the arm back to the cushion behind the seated body, bending the wrist
+  up to 143 degrees).
+
 ## Review tooling
 
 - `HomeReviewShot yaw distance height elevation`, `HomeReviewFocus bone` and
