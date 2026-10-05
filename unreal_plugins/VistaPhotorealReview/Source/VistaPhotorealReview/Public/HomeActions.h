@@ -154,8 +154,18 @@ private:
     TMap<FName,TArray<FName>> HumanFaceMorphs;
     bool bPhoneCall=false,bStreamingEnabled=false;
     float PhoneBlend=0,DailyClock=0;
-    FQuat PhoneRotation=FRotator(0,0,-90).Quaternion();
-    FVector PhoneEarOffset=FVector(6,10,0);
+    // Speaker point on the outer ear, from the head joint in the head's bind
+    // frame (X forward, Y right, Z up; cm). The call pose is solved once per
+    // call for the actual grip and kept in the head frame.
+    FVector PhoneSpeakerOffset=FVector(-2.8f,8.4f,1.5f);
+    FTransform PhoneCallInHead;
+    FVector PhoneElbowHint=FVector::ZeroVector;
+    bool bPhoneCallSolved=false;
+    FTransform PhoneHeadFrame() const;
+    double PhoneArmCost(const FTransform& Hand,bool bReachable,FVector& Elbow,double& Flexion) const;
+    void SolvePhoneCall();
+    void UpdatePhoneElbow(float Dt);
+    virtual FVector ArmElbowHint(bool bRight,float& Weight) const override;
     UPROPERTY() TObjectPtr<UAudioComponent> HumanVoice;
     UPROPERTY() TObjectPtr<USoundWaveProcedural> HumanWave;
     TArray<float> HumanMouth;

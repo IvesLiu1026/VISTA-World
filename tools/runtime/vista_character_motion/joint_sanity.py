@@ -228,7 +228,9 @@ def main():
             flag('spine_twist', abs(tw), LIMITS['spine_twist'], 'spine')
         if sw > LIMITS['spine_bend']:
             flag('spine_bend', sw, LIMITS['spine_bend'], 'spine')
-        if prev is not None and 0 < f['dt'] < .1:
+        # Compare only consecutive frames of one trace segment; separate
+        # EmbodiedTrace windows are seconds apart.
+        if prev is not None and 0 < f['dt'] < .1 and 0 < f['time_s']-prev['time_s'] < .1:
             for n in ('head', 'hand_l', 'hand_r', 'lowerarm_l', 'lowerarm_r', 'calf_l', 'calf_r', 'spine_03'):
                 q = q_mul(q_inv(rot(prev, n)), rot(f, n))
                 d = 2*math.degrees(math.acos(max(-1.0, min(1.0, abs(q[3])))))

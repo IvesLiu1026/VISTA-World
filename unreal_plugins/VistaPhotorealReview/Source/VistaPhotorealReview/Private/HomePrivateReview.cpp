@@ -168,8 +168,10 @@ void AHomeActionsCharacter::TickReviewShot()
     const FVector Direction=FRotator(ReviewShotElevation,GetActorRotation().Yaw+ReviewShotYaw,0).Vector();
     FVector Eye=Focus+Direction*ReviewShotDistance;
     // Stay inside the room: pull the spectator in front of walls it would pass.
+    // Only static geometry counts; a held phone or the companion beside the
+    // head pulled the camera onto them.
     FCollisionQueryParams Q(SCENE_QUERY_STAT(VistaReviewShot),false,this);FHitResult Hit;
-    if (GetWorld()->LineTraceSingleByChannel(Hit,Focus,Eye,ECC_Visibility,Q)) Eye=Hit.ImpactPoint-Direction*12.f;
+    if (GetWorld()->LineTraceSingleByObjectType(Hit,Focus,Eye,FCollisionObjectQueryParams(ECC_WorldStatic),Q)) Eye=Hit.ImpactPoint-Direction*12.f;
     ReviewShot->SetActorLocationAndRotation(Eye,(Focus-Eye).Rotation());
 }
 

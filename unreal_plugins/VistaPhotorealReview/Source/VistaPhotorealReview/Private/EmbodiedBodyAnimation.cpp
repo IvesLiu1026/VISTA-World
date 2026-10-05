@@ -408,6 +408,17 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
             if (!PalmBend.IsNearlyZero())
                 BendDirection=FQuat::Slerp(FQuat::Identity,FQuat::FindBetweenNormals(BendDirection,PalmBend),.85f*Ease).RotateVector(BendDirection);
         }
+        float HintWeight=0.f;
+        const FVector Hint=ArmElbowHint(RightHand,HintWeight);
+        HintWeight=FMath::Clamp(HintWeight,0.f,1.f);
+        if (HintWeight>0.f)
+        {
+            // A task that already chose the whole arm (the phone call) supplies
+            // its elbow; the search below then only refines it locally.
+            const FVector HintBend=Project(Torso.RotateVector(Hint)).GetSafeNormal();
+            if (!HintBend.IsNearlyZero())
+                BendDirection=FQuat::Slerp(FQuat::Identity,FQuat::FindBetweenNormals(BendDirection,HintBend),HintWeight).RotateVector(BendDirection);
+        }
         if (Active>0.f && Global.IsValidIndex(Middle))
         {
             // Choose the elbow swivel near the anatomical guide that keeps the
@@ -419,8 +430,10 @@ void AEmbodiedReviewCharacter::BuildBodyPose(TArray<FTransform>& Local)
                 (ReferenceGlobal[Middle].GetLocation()-ReferenceGlobal[E].GetLocation()).GetSafeNormal()));
             const FVector SpineA=Global[SpineRoot].GetLocation(),SpineB=Global[Neck].GetLocation(),SpineAxis=(SpineB-SpineA).GetSafeNormal();
             double Best=TNumericLimits<double>::Max();FVector Chosen=BendDirection;
-            for (const double Degrees:{0.,-20.,20.,-40.,40.,-60.,60.})
+            const double Range=1.-.75*HintWeight;
+            for (const double Step:{0.,-20.,20.,-40.,40.,-60.,60.})
             {
+                const double Degrees=Step*Range;
                 const FVector Candidate=FQuat(Direction,FMath::DegreesToRadians(Degrees)).RotateVector(BendDirection);
                 FVector Reached;const FVector J=ArmJoint(Shoulder,Target,L1,L2,Candidate,Reached);
                 const double Wrist=FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct((Reached-J).GetSafeNormal(),HandAxis),-1.,1.)));

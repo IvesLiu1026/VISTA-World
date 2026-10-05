@@ -81,12 +81,9 @@ void AHomeActionsCharacter::HomePhone(bool Enabled)
     {
         const auto D=Decode(Text);
         if (D)
-        {
-            const FVector R=Vector(D,TEXT("phone_rotation_deg"),FVector(0,0,-90));
-            PhoneRotation=FRotator(R.X,R.Y,R.Z).Quaternion();
-            PhoneEarOffset=Vector(D,TEXT("phone_ear_offset_cm"),FVector(6,10,0)).GetClampedToMaxSize(24);
-        }
+            PhoneSpeakerOffset=Vector(D,TEXT("phone_speaker_cm"),FVector(-2.8f,8.4f,1.5f)).GetClampedToMaxSize(20);
     }
+    if (Enabled) SolvePhoneCall();
     bPhoneCall=Enabled;LastCode=Enabled?TEXT("PHONE_CALL_STARTED"):TEXT("PHONE_CALL_ENDED");PublishState();
 }
 
@@ -96,6 +93,7 @@ void AHomeActionsCharacter::UpdateDailyMotion(float Dt)
     const auto* Held=Resolve(HeldId);
     if (!Held || Held->ShortId!=TEXT("phone")) bPhoneCall=false;
     PhoneBlend=FMath::FInterpConstantTo(PhoneBlend,bPhoneCall?1.f:0.f,Dt,.6f);
+    UpdatePhoneElbow(Dt);
     if (HumanFaceMorphs.IsEmpty())
     {
         FString Text;const TSharedPtr<FJsonObject>* Morphs;

@@ -61,12 +61,25 @@ and `BrowOuterUp*`, `MouthSmile*`) and writes `appearance.json` and
   fingers) and translation to 300 cm/s, except after teleports, so cancelled or
   rolled-back actions blend instead of popping.
 - Relaxed idle fingers curl a little more (0.30 instead of 0.16).
+- **Phone call (`HomeActionTransactions.cpp`).** The pickup pinch holds the
+  handset across its width with the palm over one face, so the old upright
+  handset at a fixed actor offset put the palm between phone and cheek, the
+  wrist in front of the face and the elbow straight out at shoulder height.
+  When a call starts, `SolvePhoneCall` searches handset poses for the grip
+  actually held: speaker on the outer ear (`phone_speaker_cm`, measured on the
+  Rocketbox head in its bind frame), palm outside, wrist and knuckles clear of
+  the jaw, elbow flexion under 150 degrees, and an elbow in front of the chest
+  with the wrist bend within 45 degrees (`PhoneArmCost`). The pose is kept in
+  the head frame. A per-tick elbow hint (`ArmElbowHint`) follows the handset
+  along its whole path, and the lift arcs in front of the chin; the straight
+  chord had passed 10 cm from the shoulder (elbow 155 degrees).
 
 ## Review tooling
 
 - `HomeReviewShot yaw distance height elevation`, `HomeReviewFocus bone` and
   `HomeReviewShotOff`: private-review-only spectator camera. Actions read the
-  ego sensor and control rotation, so it cannot change any outcome.
+  ego sensor and control rotation, so it cannot change any outcome. It stops
+  only at static geometry (a held phone used to pull it onto the prop).
 - The private motion trace records all 53 finalized bones.
 - `tools/runtime/vista_character_motion/joint_sanity.py` flags hinge joints
   bending the wrong way or sideways, wrist/forearm/neck/spine excess, limbs

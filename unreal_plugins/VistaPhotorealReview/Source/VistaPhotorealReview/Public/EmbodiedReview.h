@@ -194,6 +194,10 @@ protected:
     virtual bool WantsFirstPersonReadyPose() const { return true; }
     virtual bool PreserveUnoccupiedArmPose() const { return false; }
     virtual float UnoccupiedFingerCurl() const { return 0.f; }
+    // Elbow direction from the shoulder for an occupied arm, in the bind
+    // component frame (the torso rotation is applied by the solver). Weight 0
+    // keeps the anatomical and palm-derived elbow plane.
+    virtual FVector ArmElbowHint(bool bRight,float& Weight) const { Weight=0.f; return FVector::ZeroVector; }
     virtual void AdjustFirstPersonEyeTarget(FVector& EyeTarget) const {}
     virtual bool PreserveMotionFootRotation() const { return false; }
     virtual float ProceduralGaitWeight() const { return 1.f; }
