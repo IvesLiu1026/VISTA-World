@@ -87,6 +87,15 @@ and `BrowOuterUp*`, `MouthSmile*`) and writes `appearance.json` and
   swung the arm back to the cushion behind the seated body, bending the wrist
   up to 143 degrees).
 
+- **Low reaches (`HomeActionTransactions.cpp`, `HomeFineContact.cpp`).** Low
+  tables are reached with a hip hinge instead of the generic squat (keys on the
+  coffee table: pelvis 52 cm instead of 36, wrist no longer folded 128 degrees);
+  floor items keep a deeper crouch but not a full squat (pelvis 22 cm, was 14).
+  Pinch grips put the thumb toward the right-and-near side: choosing only by the
+  right vector left the sign to noise for items lying along the facing
+  direction, and fingers pointing back at the body twisted the wrist up to 174
+  degrees.
+
 ## Review tooling
 
 - `HomeReviewShot yaw distance height elevation`, `HomeReviewFocus bone` and
