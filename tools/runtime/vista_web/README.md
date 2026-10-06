@@ -32,7 +32,8 @@ Choose **Enter environment**. WASD moves, drag looks, Shift jogs, Space jumps;
 menu; click a room in the streamed picture. **Actions** opens the native activity
 menu, **Interact / E** executes the visible action and G puts an object down.
 Menu clicks account for video letterboxing. The touch pad provides movement on
-small screens. Sound may require a second click because of browser autoplay rules.
+small screens. Sound may require a second click because of browser autoplay rules; the picture
+then plays muted rather than paused.
 Pointer lock/fullscreen are optional; drag works when insecure-origin browser
 restrictions prevent pointer lock.
 
@@ -48,9 +49,17 @@ restrictions prevent pointer lock.
 - Encoded interframes are buffered in order, never discarded with a latest-only
   relay. Disconnect a viewer exceeding 60 queued video packets, instead of growing
   latency/memory without bound or silently corrupting prediction frames.
-- A controller sends full key snapshots with increasing sequence numbers. A
-  missing heartbeat for 1.2 seconds releases held keys; stale messages cannot renew
-  or revive a lease. Blur, hidden page, leave and disconnect release ownership.
+- A controller sends full key snapshots every 50 ms with increasing sequence
+  numbers. An input gap of 1.2 seconds releases held keys but keeps the controller,
+  so a relay hiccup (Tailscale starts on DERP before its direct path) cannot hand
+  the world away; the next fresh snapshot presses what is still held. Eight
+  seconds without input ends the lease. Stale messages cannot renew a lease or
+  press keys, including after the same viewer re-claims. Blur only lifts held keys;
+  a hidden page, leave and disconnect release ownership.
+- The page re-claims on a game key, a click in the picture or a toolbar action,
+  and on returning to the tab or after its lease lapsed unless the viewer chose
+  Release control. A claim never overrides another controller; `/health` records
+  `input_stalled`, `control_expired` and `claim_rejected` for diagnosis.
   Channel close tears down the peer immediately; a crashed viewer missing all
   heartbeats is removed after ten seconds even if ICE still reports connected.
 - Only reviewed game keys and bounded relative mouse motion / viewport clicks are
@@ -70,9 +79,9 @@ PYTHONPATH=tools python -m unittest tools.tests.test_vista_web_control -v
 PYTHONPATH=tools python -m unittest runtime.vista_web.test_server -v
 ```
 
-The first suite covers lease expiry, disconnect-equivalent release, exclusive
-ownership, stale packets, native selection changes, key validation and viewport
-bounds. The second exercises HTTP origin/schema/file guards and real WebRTC offer
+The first suite covers input stalls, lease expiry, disconnect-equivalent release,
+exclusive ownership, stale and replayed packets, native selection changes, key
+validation and viewport bounds. The second exercises HTTP origin/schema/file guards and real WebRTC offer
 negotiation, asserting that only H.264 is negotiated for packet passthrough.
 
 Actual browser acceptance must additionally check decoded frames, native movement

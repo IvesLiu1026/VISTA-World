@@ -37,24 +37,51 @@ class InputLeaseTests(unittest.TestCase):
         self.control.input('one', self.packet(3))
         self.assertEqual(self.device.keys, set())
 
-    def test_expiry_releases_and_does_not_accept_delayed_packets(self):
+    def test_input_stall_lifts_keys_but_keeps_controller(self):
         self.control.input('one', self.packet(keys=['KeyW']))
         self.now = 1.3
+        self.assertEqual(self.control.expire(), 'keys')
+        self.assertFalse(self.device.keys)
+        self.assertEqual(self.control.owner, 'one')
+        with self.assertRaises(ValueError):
+            self.control.claim('two')
+        self.control.input('one', self.packet(2, ['KeyW']))
+        self.assertEqual(self.device.keys, {'w'})
+
+    def test_lease_expiry_releases_and_does_not_accept_delayed_packets(self):
+        self.control.input('one', self.packet(keys=['KeyW']))
+        self.now = 7.9
         self.control.expire()
+        self.assertEqual(self.control.owner, 'one')
+        self.now = 8.1
+        self.assertEqual(self.control.expire(), 'lease')
         self.assertFalse(self.device.keys)
         with self.assertRaises(ValueError):
             self.control.input('one', self.packet(2, ['KeyW']))
         self.assertIsNone(self.control.owner)
+        self.control.claim('two')
 
     def test_duplicate_cannot_reverse_release_or_extend_lease(self):
         self.control.input('one', self.packet(1,['KeyW']))
         self.control.input('one', self.packet(2))
         self.now = 1
         self.assertFalse(self.control.input('one',self.packet(1,['KeyW'])))
-        self.now = 1.3
+        self.assertFalse(self.device.keys)
+        self.now = 8.1
         self.control.expire()
         self.assertFalse(self.device.keys)
         self.assertIsNone(self.control.owner)
+
+    def test_returning_viewer_cannot_replay_old_packets(self):
+        self.control.input('one', self.packet(5, ['KeyW']))
+        self.control.release('one')
+        self.control.claim('one')
+        self.assertFalse(self.control.input('one', self.packet(3, ['KeyW'])))
+        self.assertFalse(self.device.keys)
+        self.assertTrue(self.control.input('one', self.packet(6, ['KeyW'])))
+        self.control.release('one')
+        self.control.claim('two')
+        self.assertTrue(self.control.input('two', self.packet(1)))
 
     def test_another_viewer_cannot_interrupt_controller(self):
         self.control.input('one', self.packet(keys=['KeyW']))
