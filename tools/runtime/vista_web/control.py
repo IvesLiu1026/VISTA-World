@@ -12,11 +12,13 @@ KEYS = {
 
 
 class Control:
-    def __init__(self, backend, current, clock=time.monotonic, ttl=1.2):
-        self.backend, self.current, self.clock, self.ttl = backend, current, clock, ttl
-        self.owner = None
+    # A short input gap only lifts held keys; the controller survives relay hiccups.
+    def __init__(self, backend, current, clock=time.monotonic, hold=1.2, lease=8):
+        self.backend, self.current, self.clock = backend, current, clock
+        self.hold, self.lease = hold, lease
+        self.owner = self.previous = None
         self.held = set()
-        self.deadline = 0
+        self.seen = 0
         self.sequence = -1
 
     def claim(self, owner):
@@ -26,8 +28,9 @@ class Control:
         if not self.current():
             raise ValueError('The selected native environment changed. Reconnect.')
         self.backend.focus()
-        self.owner, self.sequence = owner, -1
-        self.deadline = self.clock()+self.ttl
+        if owner != self.previous:  # A returning viewer keeps its sequence; replays stay stale.
+            self.previous, self.sequence = owner, -1
+        self.owner, self.seen = owner, self.clock()
 
     def input(self, owner, message):
         self.expire()
@@ -55,18 +58,20 @@ class Control:
         self.backend.motion(round(message['dx']), round(message['dy']))
         self.backend.flush()
         self.sequence = seq
-        self.deadline = self.clock()+self.ttl
+        self.seen = self.clock()
         return True
 
-    def release(self, owner=None):
-        if owner is not None and owner != self.owner:
-            return
+    def lift(self):
         for key in self.held:
             self.backend.key(key, False)
         self.backend.flush()
         self.held.clear()
+
+    def release(self, owner=None):
+        if owner is not None and owner != self.owner:
+            return
+        self.lift()
         self.owner = None
-        self.deadline = 0
 
     def click(self, owner, message):
         self.expire()
@@ -78,11 +83,19 @@ class Control:
             raise ValueError('Invalid menu position')
         self.backend.focus()
         self.backend.click(message['x'], message['y'])
-        self.deadline = self.clock()+self.ttl
+        self.seen = self.clock()
 
     def expire(self):
-        if self.owner and (self.clock()>self.deadline or not self.current()):
+        if not self.owner:
+            return None
+        quiet = self.clock()-self.seen
+        if quiet>self.lease or not self.current():
             self.release()
+            return 'lease'
+        if self.held and quiet>self.hold:
+            self.lift()  # The next fresh snapshot presses whatever is still held.
+            return 'keys'
+        return None
 
 
 class NativeInput:

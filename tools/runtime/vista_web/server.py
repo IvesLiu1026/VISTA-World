@@ -90,6 +90,7 @@ class Server:
             self.peers[ident]['channel'] = channel
             @channel.on('message')
             def message(raw):
+                op = None
                 try:
                     if not isinstance(raw, str) or len(raw)>2048:
                         raise ValueError('Invalid control packet')
@@ -116,6 +117,8 @@ class Server:
                     if ident in self.peers:
                         self.peers[ident]['last_seen'] = time.monotonic()
                 except (ValueError, KeyError, RuntimeError, OSError) as exc:
+                    if op=='claim':
+                        self.event('claim_rejected')
                     if self.control:
                         self.control.release(ident)
                     channel.send(json.dumps({'type': 'error', 'message': str(exc)[:160]}))
@@ -147,8 +150,10 @@ class Server:
             await asyncio.sleep(.1)
             if self.control:
                 previous = self.control.owner
-                self.control.expire()
-                if previous and not self.control.owner:
+                lapse = self.control.expire()
+                if lapse=='keys':
+                    self.event('input_stalled')
+                elif previous and not self.control.owner:
                     self.event('control_expired')
                     peer = self.peers.get(previous)
                     if peer and peer['channel'] and peer['channel'].readyState=='open':
